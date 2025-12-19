@@ -1,0 +1,35 @@
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Builder;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using VolunteerCheckin.Functions.Services;
+
+var builder = FunctionsApplication.CreateBuilder(args);
+
+builder.ConfigureFunctionsWebApplication();
+
+builder.Services
+    .AddApplicationInsightsTelemetryWorkerService()
+    .ConfigureFunctionsApplicationInsights();
+
+// Register services
+builder.Services.AddSingleton(sp =>
+{
+    string connectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage")
+        ?? "UseDevelopmentStorage=true";
+    return new TableStorageService(connectionString);
+});
+
+builder.Services.AddSingleton(sp =>
+{
+    string smtpHost = Environment.GetEnvironmentVariable("SMTP_HOST") ?? "smtp.gmail.com";
+    int smtpPort = int.Parse(Environment.GetEnvironmentVariable("SMTP_PORT") ?? "587");
+    string smtpUsername = Environment.GetEnvironmentVariable("SMTP_USERNAME") ?? "";
+    string smtpPassword = Environment.GetEnvironmentVariable("SMTP_PASSWORD") ?? "";
+    string fromEmail = Environment.GetEnvironmentVariable("FROM_EMAIL") ?? "noreply@volunteercheckin.com";
+    string fromName = Environment.GetEnvironmentVariable("FROM_NAME") ?? "Volunteer Check-in";
+
+    return new EmailService(smtpHost, smtpPort, smtpUsername, smtpPassword, fromEmail, fromName);
+});
+
+builder.Build().Run();

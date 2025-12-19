@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "VolunteerCheckin.Functions": {
+      "commandName": "Project",
+      "commandLineArgs": "--port 7071 --cors http://localhost:5173",
+      "launchBrowser": false
+    }
+  }
+}

@@ -1,0 +1,16 @@
+### Create Admin User
+### Replace YOUR_EMAIL with your actual admin email address
+POST http://localhost:7071/api/auth/create-admin
+Content-Type: application/json
+
+{
+  "email": "YOUR_EMAIL@example.com"
+}
+
+### Request Magic Link (for testing)
+POST http://localhost:7071/api/auth/request-magic-link
+Content-Type: application/json
+
+{
+  "email": "YOUR_EMAIL@example.com"
+}

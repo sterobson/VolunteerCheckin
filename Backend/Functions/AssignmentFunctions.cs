@@ -167,7 +167,7 @@ public class AssignmentFunctions
 
     [Function("GetEventStatus")]
     public async Task<IActionResult> GetEventStatus(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "assignments/status/{eventId}")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/{eventId}/status")] HttpRequest req,
         string eventId)
     {
         try

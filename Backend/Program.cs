@@ -32,4 +32,7 @@ builder.Services.AddSingleton(sp =>
     return new EmailService(smtpHost, smtpPort, smtpUsername, smtpPassword, fromEmail, fromName);
 });
 
+builder.Services.AddSingleton<GpxParserService>();
+builder.Services.AddSingleton<CsvParserService>();
+
 builder.Build().Run();

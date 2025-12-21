@@ -6,14 +6,9 @@ export const useAuthStore = defineStore('auth', () => {
   const adminEmail = ref(localStorage.getItem('adminEmail') || null);
   const isAuthenticated = ref(!!adminEmail.value);
 
-  const requestMagicLink = async (email) => {
-    const response = await authApi.requestMagicLink(email);
-    return response.data;
-  };
-
-  const validateToken = async (token) => {
-    const response = await authApi.validateToken(token);
-    if (response.data.isValid) {
+  const instantLogin = async (email) => {
+    const response = await authApi.instantLogin(email);
+    if (response.data.success) {
       adminEmail.value = response.data.email;
       isAuthenticated.value = true;
       localStorage.setItem('adminEmail', response.data.email);
@@ -30,8 +25,7 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     adminEmail,
     isAuthenticated,
-    requestMagicLink,
-    validateToken,
+    instantLogin,
     logout,
   };
 });

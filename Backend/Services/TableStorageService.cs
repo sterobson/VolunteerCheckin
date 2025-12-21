@@ -10,7 +10,7 @@ public class TableStorageService
     private const string LocationsTable = "Locations";
     private const string AssignmentsTable = "Assignments";
     private const string AdminUsersTable = "AdminUsers";
-    private const string MagicLinksTable = "MagicLinks";
+    private const string UserEventMappingsTable = "UserEventMappings";
 
     public TableStorageService(string connectionString)
     {
@@ -24,12 +24,12 @@ public class TableStorageService
         await _tableServiceClient.CreateTableIfNotExistsAsync(LocationsTable);
         await _tableServiceClient.CreateTableIfNotExistsAsync(AssignmentsTable);
         await _tableServiceClient.CreateTableIfNotExistsAsync(AdminUsersTable);
-        await _tableServiceClient.CreateTableIfNotExistsAsync(MagicLinksTable);
+        await _tableServiceClient.CreateTableIfNotExistsAsync(UserEventMappingsTable);
     }
 
     public TableClient GetEventsTable() => _tableServiceClient.GetTableClient(EventsTable);
     public TableClient GetLocationsTable() => _tableServiceClient.GetTableClient(LocationsTable);
     public TableClient GetAssignmentsTable() => _tableServiceClient.GetTableClient(AssignmentsTable);
     public TableClient GetAdminUsersTable() => _tableServiceClient.GetTableClient(AdminUsersTable);
-    public TableClient GetMagicLinksTable() => _tableServiceClient.GetTableClient(MagicLinksTable);
+    public TableClient GetUserEventMappingsTable() => _tableServiceClient.GetTableClient(UserEventMappingsTable);
 }

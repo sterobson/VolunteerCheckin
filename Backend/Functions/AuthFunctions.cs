@@ -13,25 +13,21 @@ public class AuthFunctions
 {
     private readonly ILogger<AuthFunctions> _logger;
     private readonly TableStorageService _tableStorage;
-    private readonly EmailService _emailService;
-    private readonly string _frontendUrl;
 
-    public AuthFunctions(ILogger<AuthFunctions> logger, TableStorageService tableStorage, EmailService emailService)
+    public AuthFunctions(ILogger<AuthFunctions> logger, TableStorageService tableStorage)
     {
         _logger = logger;
         _tableStorage = tableStorage;
-        _emailService = emailService;
-        _frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:5173";
     }
 
-    [Function("RequestMagicLink")]
-    public async Task<IActionResult> RequestMagicLink(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/request-magic-link")] HttpRequest req)
+    [Function("InstantLogin")]
+    public async Task<IActionResult> InstantLogin(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/instant-login")] HttpRequest req)
     {
         try
         {
             var body = await new StreamReader(req.Body).ReadToEndAsync();
-            var request = JsonSerializer.Deserialize<RequestMagicLinkRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            var request = JsonSerializer.Deserialize<InstantLoginRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (request == null || string.IsNullOrWhiteSpace(request.Email))
             {
@@ -40,87 +36,30 @@ public class AuthFunctions
 
             var adminTable = _tableStorage.GetAdminUsersTable();
 
-            // Check if email exists in admin users
+            // Try to get existing admin, or create new one
+            AdminUserEntity admin;
             try
             {
-                await adminTable.GetEntityAsync<AdminUserEntity>("ADMIN", request.Email);
+                admin = await adminTable.GetEntityAsync<AdminUserEntity>("ADMIN", request.Email);
+                _logger.LogInformation($"Existing admin logged in: {request.Email}");
             }
             catch
             {
-                // Email not found - don't reveal this to prevent email enumeration
-                _logger.LogWarning($"Magic link requested for non-admin email: {request.Email}");
-                return new OkObjectResult(new MagicLinkResponse(true, "If your email is registered as an admin, you will receive a login link shortly."));
+                // Admin doesn't exist, create new one
+                admin = new AdminUserEntity
+                {
+                    RowKey = request.Email,
+                    Email = request.Email
+                };
+                await adminTable.AddEntityAsync(admin);
+                _logger.LogInformation($"New admin created and logged in: {request.Email}");
             }
 
-            // Generate magic link token
-            var token = Guid.NewGuid().ToString("N");
-            var magicLink = new MagicLinkEntity
-            {
-                RowKey = token,
-                Email = request.Email,
-                ExpiryDate = DateTime.UtcNow.AddMinutes(15),
-                IsUsed = false
-            };
-
-            var magicLinkTable = _tableStorage.GetMagicLinksTable();
-            await magicLinkTable.AddEntityAsync(magicLink);
-
-            // Send email with magic link
-            var loginUrl = $"{_frontendUrl}/admin/login?token={token}";
-            await _emailService.SendMagicLinkEmailAsync(request.Email, loginUrl);
-
-            _logger.LogInformation($"Magic link sent to {request.Email}");
-
-            return new OkObjectResult(new MagicLinkResponse(true, "If your email is registered as an admin, you will receive a login link shortly."));
+            return new OkObjectResult(new InstantLoginResponse(true, admin.Email, "Login successful"));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error requesting magic link");
-            return new StatusCodeResult(500);
-        }
-    }
-
-    [Function("ValidateToken")]
-    public async Task<IActionResult> ValidateToken(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/validate-token")] HttpRequest req)
-    {
-        try
-        {
-            var body = await new StreamReader(req.Body).ReadToEndAsync();
-            var request = JsonSerializer.Deserialize<ValidateTokenRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-            if (request == null || string.IsNullOrWhiteSpace(request.Token))
-            {
-                return new BadRequestObjectResult(new { message = "Token is required" });
-            }
-
-            var magicLinkTable = _tableStorage.GetMagicLinksTable();
-
-            MagicLinkEntity? magicLink;
-            try
-            {
-                magicLink = await magicLinkTable.GetEntityAsync<MagicLinkEntity>("MAGICLINK", request.Token);
-            }
-            catch
-            {
-                return new OkObjectResult(new ValidateTokenResponse(false, string.Empty));
-            }
-
-            // Validate token
-            if (magicLink.IsUsed || magicLink.ExpiryDate < DateTime.UtcNow)
-            {
-                return new OkObjectResult(new ValidateTokenResponse(false, string.Empty));
-            }
-
-            // Mark token as used
-            magicLink.IsUsed = true;
-            await magicLinkTable.UpdateEntityAsync(magicLink, magicLink.ETag);
-
-            return new OkObjectResult(new ValidateTokenResponse(true, magicLink.Email));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error validating token");
+            _logger.LogError(ex, "Error during instant login");
             return new StatusCodeResult(500);
         }
     }
@@ -132,7 +71,7 @@ public class AuthFunctions
         try
         {
             var body = await new StreamReader(req.Body).ReadToEndAsync();
-            var request = JsonSerializer.Deserialize<RequestMagicLinkRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            var request = JsonSerializer.Deserialize<InstantLoginRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (request == null || string.IsNullOrWhiteSpace(request.Email))
             {

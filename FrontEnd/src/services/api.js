@@ -8,10 +8,18 @@ const api = axios.create({
   },
 });
 
+// Add interceptor to include admin email header
+api.interceptors.request.use((config) => {
+  const adminEmail = localStorage.getItem('adminEmail');
+  if (adminEmail) {
+    config.headers['X-Admin-Email'] = adminEmail;
+  }
+  return config;
+});
+
 // Auth API
 export const authApi = {
-  requestMagicLink: (email) => api.post('/auth/request-magic-link', { email }),
-  validateToken: (token) => api.post('/auth/validate-token', { token }),
+  instantLogin: (email) => api.post('/auth/instant-login', { email }),
   createAdmin: (email) => api.post('/auth/create-admin', { email }),
 };
 
@@ -22,15 +30,29 @@ export const eventsApi = {
   getById: (id) => api.get(`/events/${id}`),
   update: (id, data) => api.put(`/events/${id}`, data),
   delete: (id) => api.delete(`/events/${id}`),
+  uploadGpx: (eventId, file) => {
+    const formData = new FormData();
+    formData.append('gpx', file);
+    return api.post(`/events/${eventId}/upload-gpx`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 // Locations API
 export const locationsApi = {
   create: (data) => api.post('/locations', data),
   getById: (eventId, locationId) => api.get(`/locations/${eventId}/${locationId}`),
-  getByEvent: (eventId) => api.get(`/locations/event/${eventId}`),
+  getByEvent: (eventId) => api.get(`/events/${eventId}/locations`),
   update: (eventId, locationId, data) => api.put(`/locations/${eventId}/${locationId}`, data),
   delete: (eventId, locationId) => api.delete(`/locations/${eventId}/${locationId}`),
+  importCsv: (eventId, file, deleteExisting) => {
+    const formData = new FormData();
+    formData.append('csv', file);
+    return api.post(`/locations/import/${eventId}?deleteExisting=${deleteExisting}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 // Assignments API
@@ -39,13 +61,20 @@ export const assignmentsApi = {
   getById: (eventId, assignmentId) => api.get(`/assignments/${eventId}/${assignmentId}`),
   getByEvent: (eventId) => api.get(`/assignments/event/${eventId}`),
   delete: (eventId, assignmentId) => api.delete(`/assignments/${eventId}/${assignmentId}`),
-  getEventStatus: (eventId) => api.get(`/assignments/status/${eventId}`),
+  getEventStatus: (eventId) => api.get(`/events/${eventId}/status`),
 };
 
 // Check-in API
 export const checkInApi = {
   checkIn: (data) => api.post('/checkin', data),
   adminCheckIn: (assignmentId) => api.post(`/checkin/admin/${assignmentId}`),
+};
+
+// Event Admins API
+export const eventAdminsApi = {
+  getAdmins: (eventId) => api.get(`/events/${eventId}/admins`),
+  addAdmin: (eventId, userEmail) => api.post(`/events/${eventId}/admins`, { userEmail }),
+  removeAdmin: (eventId, userEmail) => api.delete(`/events/${eventId}/admins/${userEmail}`),
 };
 
 export default api;

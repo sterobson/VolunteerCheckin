@@ -15,6 +15,11 @@ public record CreateEventRequest(
     List<EmergencyContact> EmergencyContacts
 );
 
+public record RoutePoint(
+    double Lat,
+    double Lng
+);
+
 public record EventResponse(
     string Id,
     string Name,
@@ -23,6 +28,7 @@ public record EventResponse(
     string TimeZoneId,
     string AdminEmail,
     List<EmergencyContact> EmergencyContacts,
+    List<RoutePoint> Route,
     bool IsActive,
     DateTime CreatedDate
 );
@@ -72,22 +78,14 @@ public record CheckInRequest(
     bool ManualCheckIn
 );
 
-public record RequestMagicLinkRequest(
+public record InstantLoginRequest(
     string Email
 );
 
-public record MagicLinkResponse(
+public record InstantLoginResponse(
     bool Success,
+    string Email,
     string Message
-);
-
-public record ValidateTokenRequest(
-    string Token
-);
-
-public record ValidateTokenResponse(
-    bool IsValid,
-    string Email
 );
 
 public record EventStatusResponse(
@@ -103,4 +101,25 @@ public record LocationStatusResponse(
     int RequiredMarshals,
     int CheckedInCount,
     List<AssignmentResponse> Assignments
+);
+
+public record UserEventMappingResponse(
+    string EventId,
+    string UserEmail,
+    string Role,
+    DateTime CreatedDate
+);
+
+public record AddEventAdminRequest(
+    string UserEmail
+);
+
+public record RemoveEventAdminRequest(
+    string UserEmail
+);
+
+public record ImportLocationsResponse(
+    int LocationsCreated,
+    int AssignmentsCreated,
+    List<string> Errors
 );

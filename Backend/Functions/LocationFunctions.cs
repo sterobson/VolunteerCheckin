@@ -13,11 +13,13 @@ public class LocationFunctions
 {
     private readonly ILogger<LocationFunctions> _logger;
     private readonly TableStorageService _tableStorage;
+    private readonly CsvParserService _csvParser;
 
-    public LocationFunctions(ILogger<LocationFunctions> logger, TableStorageService tableStorage)
+    public LocationFunctions(ILogger<LocationFunctions> logger, TableStorageService tableStorage, CsvParserService csvParser)
     {
         _logger = logger;
         _tableStorage = tableStorage;
+        _csvParser = csvParser;
     }
 
     [Function("CreateLocation")]
@@ -108,7 +110,7 @@ public class LocationFunctions
 
     [Function("GetLocationsByEvent")]
     public async Task<IActionResult> GetLocationsByEvent(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "locations/event/{eventId}")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/{eventId}/locations")] HttpRequest req,
         string eventId)
     {
         try
@@ -214,6 +216,114 @@ public class LocationFunctions
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deleting location");
+            return new StatusCodeResult(500);
+        }
+    }
+
+    [Function("ImportLocations")]
+    public async Task<IActionResult> ImportLocations(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "locations/import/{eventId}")] HttpRequest req,
+        string eventId)
+    {
+        try
+        {
+            // Get deleteExisting parameter from query string
+            bool deleteExisting = req.Query["deleteExisting"].ToString().Equals("true", StringComparison.OrdinalIgnoreCase);
+
+            // Get the uploaded file
+            if (req.Form.Files.Count == 0)
+            {
+                return new BadRequestObjectResult(new { message = "No file uploaded" });
+            }
+
+            var csvFile = req.Form.Files[0];
+            if (!csvFile.FileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+            {
+                return new BadRequestObjectResult(new { message = "File must be a .csv file" });
+            }
+
+            // Parse the CSV file
+            CsvParserService.CsvParseResult parseResult;
+            using (var stream = csvFile.OpenReadStream())
+            {
+                parseResult = _csvParser.ParseLocationsCsv(stream);
+            }
+
+            if (parseResult.Locations.Count == 0 && parseResult.Errors.Count > 0)
+            {
+                return new BadRequestObjectResult(new ImportLocationsResponse(0, 0, parseResult.Errors));
+            }
+
+            var locationsTable = _tableStorage.GetLocationsTable();
+            var assignmentsTable = _tableStorage.GetAssignmentsTable();
+
+            // Delete existing locations if requested
+            if (deleteExisting)
+            {
+                await foreach (var location in locationsTable.QueryAsync<LocationEntity>(l => l.PartitionKey == eventId))
+                {
+                    await locationsTable.DeleteEntityAsync(eventId, location.RowKey);
+                }
+
+                await foreach (var assignment in assignmentsTable.QueryAsync<AssignmentEntity>(a => a.PartitionKey == eventId))
+                {
+                    await assignmentsTable.DeleteEntityAsync(eventId, assignment.RowKey);
+                }
+            }
+
+            // Create locations and assignments
+            int locationsCreated = 0;
+            int assignmentsCreated = 0;
+
+            foreach (var row in parseResult.Locations)
+            {
+                try
+                {
+                    // Create location
+                    var locationEntity = new LocationEntity
+                    {
+                        PartitionKey = eventId,
+                        RowKey = Guid.NewGuid().ToString(),
+                        EventId = eventId,
+                        Name = row.Name,
+                        Description = string.Empty,
+                        Latitude = row.Latitude,
+                        Longitude = row.Longitude,
+                        RequiredMarshals = row.MarshalNames.Count > 0 ? row.MarshalNames.Count : 1
+                    };
+
+                    await locationsTable.AddEntityAsync(locationEntity);
+                    locationsCreated++;
+
+                    // Create assignments for each marshal
+                    foreach (var marshalName in row.MarshalNames)
+                    {
+                        var assignmentEntity = new AssignmentEntity
+                        {
+                            PartitionKey = eventId,
+                            RowKey = Guid.NewGuid().ToString(),
+                            EventId = eventId,
+                            LocationId = locationEntity.RowKey,
+                            MarshalName = marshalName
+                        };
+
+                        await assignmentsTable.AddEntityAsync(assignmentEntity);
+                        assignmentsCreated++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    parseResult.Errors.Add($"Failed to create location '{row.Name}': {ex.Message}");
+                }
+            }
+
+            _logger.LogInformation($"Imported {locationsCreated} locations and {assignmentsCreated} assignments for event {eventId}");
+
+            return new OkObjectResult(new ImportLocationsResponse(locationsCreated, assignmentsCreated, parseResult.Errors));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error importing locations");
             return new StatusCodeResult(500);
         }
     }

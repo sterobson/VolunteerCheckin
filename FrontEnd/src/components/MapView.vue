@@ -12,6 +12,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  route: {
+    type: Array,
+    default: () => [],
+  },
   center: {
     type: Object,
     default: () => ({ lat: 51.505, lng: -0.09 }),
@@ -31,6 +35,7 @@ const emit = defineEmits(['location-click', 'map-click']);
 const mapContainer = ref(null);
 let map = null;
 const markers = ref([]);
+let routePolyline = null;
 
 const initMap = () => {
   if (!mapContainer.value) return;
@@ -52,6 +57,24 @@ const initMap = () => {
   }
 
   updateMarkers();
+  updateRoute();
+};
+
+const updateRoute = () => {
+  if (routePolyline) {
+    routePolyline.remove();
+    routePolyline = null;
+  }
+
+  if (!map || props.route.length === 0) return;
+
+  const routeCoordinates = props.route.map((point) => [point.lat, point.lng]);
+
+  routePolyline = L.polyline(routeCoordinates, {
+    color: 'blue',
+    weight: 4,
+    opacity: 0.7,
+  }).addTo(map);
 };
 
 const updateMarkers = () => {
@@ -107,11 +130,23 @@ const updateMarkers = () => {
     markers.value.push(marker);
   });
 
-  if (props.locations.length > 0 && map) {
-    const bounds = L.latLngBounds(
-      props.locations.map((loc) => [loc.latitude, loc.longitude])
-    );
-    map.fitBounds(bounds, { padding: [50, 50] });
+  if (map) {
+    const allPoints = [];
+
+    // Add location points
+    if (props.locations.length > 0) {
+      allPoints.push(...props.locations.map((loc) => [loc.latitude, loc.longitude]));
+    }
+
+    // Add route points
+    if (props.route.length > 0) {
+      allPoints.push(...props.route.map((point) => [point.lat, point.lng]));
+    }
+
+    if (allPoints.length > 0) {
+      const bounds = L.latLngBounds(allPoints);
+      map.fitBounds(bounds, { padding: [50, 50] });
+    }
   }
 };
 
@@ -134,6 +169,15 @@ watch(
       map.setView([newCenter.lat, newCenter.lng], props.zoom);
     }
   }
+);
+
+watch(
+  () => props.route,
+  () => {
+    updateRoute();
+    updateMarkers(); // Re-fit bounds to include route
+  },
+  { deep: true }
 );
 </script>
 

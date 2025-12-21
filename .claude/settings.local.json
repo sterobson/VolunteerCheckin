@@ -13,7 +13,10 @@
       "Bash(cat:*)",
       "Bash(netstat:*)",
       "Bash(findstr:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(del \"C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\Backend\\\\Models\\\\MagicLinkEntity.cs\")",
+      "Bash(dotnet clean:*)",
+      "Bash(tasklist:*)"
     ]
   }
 }

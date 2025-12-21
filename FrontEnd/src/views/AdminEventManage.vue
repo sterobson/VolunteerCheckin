@@ -9,6 +9,7 @@
         </div>
       </div>
       <div class="header-actions">
+        <button @click="showUploadRoute = true" class="btn btn-secondary">Upload Route</button>
         <button @click="shareEvent" class="btn btn-primary">Share Marshal Link</button>
       </div>
     </header>
@@ -18,6 +19,7 @@
         <div class="map-section">
           <MapView
             :locations="locationStatuses"
+            :route="event?.route || []"
             :clickable="true"
             @map-click="handleMapClick"
             @location-click="handleLocationClick"
@@ -27,9 +29,14 @@
         <div class="sidebar">
           <div class="section">
             <h3>Locations ({{ locations.length }})</h3>
-            <button @click="showAddLocation = true" class="btn btn-small btn-primary">
-              Add Location
-            </button>
+            <div class="button-group">
+              <button @click="showAddLocation = true" class="btn btn-small btn-primary">
+                Add Location
+              </button>
+              <button @click="showImportLocations = true" class="btn btn-small btn-secondary">
+                Import CSV
+              </button>
+            </div>
 
             <div class="locations-list">
               <div
@@ -58,6 +65,33 @@
                     {{ assignment.marshalName }}
                   </span>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>Event Administrators</h3>
+            <button @click="showAddAdmin = true" class="btn btn-small btn-primary">
+              Add Administrator
+            </button>
+
+            <div class="admins-list">
+              <div
+                v-for="admin in eventAdmins"
+                :key="admin.userEmail"
+                class="admin-item"
+              >
+                <div class="admin-info">
+                  <strong>{{ admin.userEmail }}</strong>
+                  <span class="admin-role">{{ admin.role }}</span>
+                </div>
+                <button
+                  v-if="eventAdmins.length > 1"
+                  @click="removeAdmin(admin.userEmail)"
+                  class="btn btn-small btn-danger"
+                >
+                  Remove
+                </button>
               </div>
             </div>
           </div>
@@ -105,10 +139,16 @@
     </div>
 
     <!-- Add Location Modal -->
-    <div v-if="showAddLocation" class="modal" @click.self="closeLocationModal">
-      <div class="modal-content">
+    <div v-if="showAddLocation" class="modal-sidebar">
+      <div class="modal-sidebar-content">
         <h2>Add Location</h2>
-        <p class="instruction">Click on the map to set the location, or enter coordinates manually</p>
+        <p class="instruction">
+          <strong>👆 Click on the map</strong> to set the location, or enter coordinates manually
+        </p>
+
+        <div v-if="locationForm.latitude !== 0 && locationForm.longitude !== 0" class="location-set-notice">
+          ✓ Location set on map
+        </div>
 
         <form @submit.prevent="handleSaveLocation">
           <div class="form-group">
@@ -225,6 +265,121 @@
         </div>
       </div>
     </div>
+
+    <!-- Add Admin Modal -->
+    <div v-if="showAddAdmin" class="modal" @click.self="closeAdminModal">
+      <div class="modal-content">
+        <h2>Add Event Administrator</h2>
+        <p class="instruction">Enter the email address of the administrator to add</p>
+
+        <form @submit.prevent="handleAddAdmin">
+          <div class="form-group">
+            <label>Email Address</label>
+            <input
+              v-model="adminForm.email"
+              type="email"
+              required
+              class="form-input"
+              placeholder="admin@example.com"
+            />
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" @click="closeAdminModal" class="btn btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary">Add Administrator</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Upload Route Modal -->
+    <div v-if="showUploadRoute" class="modal" @click.self="closeRouteModal">
+      <div class="modal-content">
+        <h2>Upload GPX Route</h2>
+        <p class="instruction">Upload a GPX file to display the event route on the map</p>
+
+        <form @submit.prevent="handleUploadRoute">
+          <div class="form-group">
+            <label>GPX File</label>
+            <input
+              type="file"
+              accept=".gpx"
+              @change="handleFileChange"
+              required
+              class="form-input"
+            />
+          </div>
+
+          <div v-if="uploadError" class="error">{{ uploadError }}</div>
+
+          <div class="modal-actions">
+            <button type="button" @click="closeRouteModal" class="btn btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary" :disabled="uploading">
+              {{ uploading ? 'Uploading...' : 'Upload Route' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Import Locations Modal -->
+    <div v-if="showImportLocations" class="modal" @click.self="closeImportModal">
+      <div class="modal-content">
+        <h2>Import Locations from CSV</h2>
+        <p class="instruction">Upload a CSV file with columns: Label, Lat/Latitude, Long/Longitude, Marshals (optional)</p>
+
+        <div class="csv-example">
+          <strong>Example CSV format:</strong>
+          <pre>Label,Latitude,Longitude,Marshals
+Checkpoint 1,51.505,-0.09,"John Doe, Jane Smith"
+Checkpoint 2,51.510,-0.10,Bob Wilson</pre>
+        </div>
+
+        <form @submit.prevent="handleImportLocations">
+          <div class="form-group">
+            <label>CSV File</label>
+            <input
+              type="file"
+              accept=".csv"
+              @change="handleCsvFileChange"
+              required
+              class="form-input"
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" v-model="deleteExistingLocations" />
+              Delete existing locations before import
+            </label>
+          </div>
+
+          <div v-if="importError" class="error">{{ importError }}</div>
+          <div v-if="importResult" class="import-result">
+            <p>Created {{ importResult.locationsCreated }} locations and {{ importResult.assignmentsCreated }} assignments</p>
+            <div v-if="importResult.errors.length > 0" class="import-errors">
+              <strong>Errors:</strong>
+              <ul>
+                <li v-for="(error, index) in importResult.errors" :key="index">{{ error }}</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" @click="closeImportModal" class="btn btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary" :disabled="importing">
+              {{ importing ? 'Importing...' : 'Import Locations' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -232,7 +387,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useEventsStore } from '../stores/events';
-import { checkInApi } from '../services/api';
+import { checkInApi, eventAdminsApi, eventsApi, locationsApi } from '../services/api';
 import { startSignalRConnection, stopSignalRConnection } from '../services/signalr';
 import MapView from '../components/MapView.vue';
 
@@ -249,6 +404,18 @@ const showAddAssignment = ref(false);
 const showShareLink = ref(false);
 const linkCopied = ref(false);
 const linkInput = ref(null);
+const eventAdmins = ref([]);
+const showAddAdmin = ref(false);
+const showUploadRoute = ref(false);
+const selectedGpxFile = ref(null);
+const uploading = ref(false);
+const uploadError = ref(null);
+const showImportLocations = ref(false);
+const selectedCsvFile = ref(null);
+const deleteExistingLocations = ref(false);
+const importing = ref(false);
+const importError = ref(null);
+const importResult = ref(null);
 
 const locationForm = ref({
   name: '',
@@ -260,6 +427,10 @@ const locationForm = ref({
 
 const assignmentForm = ref({
   marshalName: '',
+});
+
+const adminForm = ref({
+  email: '',
 });
 
 const marshalLink = computed(() => {
@@ -276,9 +447,120 @@ const loadEventData = async () => {
 
     await eventsStore.fetchEventStatus(route.params.eventId);
     locationStatuses.value = eventsStore.eventStatus.locations;
+
+    await loadEventAdmins();
   } catch (error) {
     console.error('Failed to load event data:', error);
   }
+};
+
+const loadEventAdmins = async () => {
+  try {
+    const response = await eventAdminsApi.getAdmins(route.params.eventId);
+    eventAdmins.value = response.data;
+  } catch (error) {
+    console.error('Failed to load event admins:', error);
+  }
+};
+
+const handleAddAdmin = async () => {
+  try {
+    await eventAdminsApi.addAdmin(route.params.eventId, adminForm.value.email);
+    await loadEventAdmins();
+    closeAdminModal();
+  } catch (error) {
+    console.error('Failed to add admin:', error);
+    alert(error.response?.data?.message || 'Failed to add administrator. Please try again.');
+  }
+};
+
+const removeAdmin = async (userEmail) => {
+  if (confirm(`Remove ${userEmail} as an administrator?`)) {
+    try {
+      await eventAdminsApi.removeAdmin(route.params.eventId, userEmail);
+      await loadEventAdmins();
+    } catch (error) {
+      console.error('Failed to remove admin:', error);
+      alert(error.response?.data?.message || 'Failed to remove administrator. Please try again.');
+    }
+  }
+};
+
+const closeAdminModal = () => {
+  showAddAdmin.value = false;
+  adminForm.value = { email: '' };
+};
+
+const handleFileChange = (event) => {
+  selectedGpxFile.value = event.target.files[0];
+  uploadError.value = null;
+};
+
+const handleUploadRoute = async () => {
+  if (!selectedGpxFile.value) {
+    uploadError.value = 'Please select a GPX file';
+    return;
+  }
+
+  uploading.value = true;
+  uploadError.value = null;
+
+  try {
+    await eventsApi.uploadGpx(route.params.eventId, selectedGpxFile.value);
+    await loadEventData();
+    closeRouteModal();
+  } catch (error) {
+    console.error('Failed to upload route:', error);
+    uploadError.value = error.response?.data?.message || 'Failed to upload route. Please try again.';
+  } finally {
+    uploading.value = false;
+  }
+};
+
+const closeRouteModal = () => {
+  showUploadRoute.value = false;
+  selectedGpxFile.value = null;
+  uploadError.value = null;
+};
+
+const handleCsvFileChange = (event) => {
+  selectedCsvFile.value = event.target.files[0];
+  importError.value = null;
+  importResult.value = null;
+};
+
+const handleImportLocations = async () => {
+  if (!selectedCsvFile.value) {
+    importError.value = 'Please select a CSV file';
+    return;
+  }
+
+  importing.value = true;
+  importError.value = null;
+  importResult.value = null;
+
+  try {
+    const response = await locationsApi.importCsv(
+      route.params.eventId,
+      selectedCsvFile.value,
+      deleteExistingLocations.value
+    );
+    importResult.value = response.data;
+    await loadEventData();
+  } catch (error) {
+    console.error('Failed to import locations:', error);
+    importError.value = error.response?.data?.message || 'Failed to import locations. Please try again.';
+  } finally {
+    importing.value = false;
+  }
+};
+
+const closeImportModal = () => {
+  showImportLocations.value = false;
+  selectedCsvFile.value = null;
+  deleteExistingLocations.value = false;
+  importError.value = null;
+  importResult.value = null;
 };
 
 const handleMapClick = (coords) => {
@@ -509,7 +791,8 @@ onUnmounted(() => {
 }
 
 .locations-list,
-.assignments-list {
+.assignments-list,
+.admins-list {
   margin-top: 1rem;
   display: flex;
   flex-direction: column;
@@ -599,6 +882,83 @@ onUnmounted(() => {
 .assignment-actions {
   display: flex;
   gap: 0.5rem;
+}
+
+.admin-item {
+  padding: 1rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.admin-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.admin-role {
+  font-size: 0.75rem;
+  color: #667eea;
+  font-weight: 600;
+}
+
+.button-group {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.csv-example {
+  background: #f5f7fa;
+  padding: 1rem;
+  border-radius: 6px;
+  margin-bottom: 1.5rem;
+}
+
+.csv-example pre {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.75rem;
+  color: #333;
+  overflow-x: auto;
+}
+
+.import-result {
+  background: #f1f8f4;
+  border: 1px solid #4caf50;
+  padding: 1rem;
+  border-radius: 6px;
+  margin-top: 1rem;
+}
+
+.import-result p {
+  margin: 0 0 0.5rem 0;
+  color: #4caf50;
+  font-weight: 600;
+}
+
+.import-errors {
+  margin-top: 0.5rem;
+}
+
+.import-errors ul {
+  margin: 0.5rem 0 0 0;
+  padding-left: 1.5rem;
+  font-size: 0.875rem;
+  color: #c33;
 }
 
 .btn {
@@ -724,6 +1084,41 @@ onUnmounted(() => {
 
 .share-link-container .form-input {
   flex: 1;
+}
+
+.modal-sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 400px;
+  background: white;
+  box-shadow: -2px 0 10px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  overflow-y: auto;
+}
+
+.modal-sidebar-content {
+  padding: 2rem;
+}
+
+.location-set-notice {
+  background: #f1f8f4;
+  color: #4caf50;
+  padding: 0.5rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.instruction {
+  background: #f5f7fa;
+  padding: 0.75rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  color: #666;
 }
 
 @media (max-width: 1024px) {

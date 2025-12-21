@@ -16,6 +16,7 @@ public class EventEntity : ITableEntity
     public string TimeZoneId { get; set; } = "UTC";
     public string AdminEmail { get; set; } = string.Empty;
     public string EmergencyContactsJson { get; set; } = "[]";
+    public string GpxRouteJson { get; set; } = "[]";
     public bool IsActive { get; set; } = true;
     public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
 }

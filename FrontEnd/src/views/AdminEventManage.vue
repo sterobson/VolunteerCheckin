@@ -48,72 +48,20 @@
 
           <div class="sidebar">
             <div class="section">
-              <h3>Checkpoints ({{ locations.length }})</h3>
-              <div class="button-group">
-                <button @click="showAddLocation = true" class="btn btn-small btn-primary">
-                  Add checkpoint
-                </button>
-                <button @click="showImportLocations = true" class="btn btn-small btn-secondary">
-                  Import CSV
-                </button>
-              </div>
-
-              <div class="locations-list">
-                <div
-                  v-for="location in locationStatuses"
-                  :key="location.id"
-                  class="location-item"
-                  :class="{
-                    'location-full': location.checkedInCount >= location.requiredMarshals,
-                    'location-missing': location.checkedInCount === 0
-                  }"
-                  @click="selectLocation(location)"
-                >
-                  <div class="location-info">
-                    <strong>{{ location.name }}</strong>
-                    <span class="location-status">
-                      {{ location.checkedInCount }}/{{ location.requiredMarshals }}
-                    </span>
-                  </div>
-                  <div class="location-assignments">
-                    <span
-                      v-for="assignment in location.assignments"
-                      :key="assignment.id"
-                      class="assignment-badge"
-                      :class="{ 'checked-in': assignment.isCheckedIn }"
-                    >
-                      {{ assignment.marshalName }}
-                    </span>
-                  </div>
-                </div>
-              </div>
+              <CheckpointsList
+                :locations="locationStatuses"
+                @add-checkpoint="showAddLocation = true"
+                @import-checkpoints="showImportLocations = true"
+                @select-location="selectLocation"
+              />
             </div>
 
             <div class="section">
-              <h3>Event administrators</h3>
-              <button @click="showAddAdmin = true" class="btn btn-small btn-primary">
-                Add administrator
-              </button>
-
-              <div class="admins-list">
-                <div
-                  v-for="admin in eventAdmins"
-                  :key="admin.userEmail"
-                  class="admin-item"
-                >
-                  <div class="admin-info">
-                    <strong>{{ admin.userEmail }}</strong>
-                    <span class="admin-role">{{ admin.role }}</span>
-                  </div>
-                  <button
-                    v-if="eventAdmins.length > 1"
-                    @click="removeAdmin(admin.userEmail)"
-                    class="btn btn-small btn-danger"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
+              <AdminsList
+                :admins="eventAdmins"
+                @add-admin="showAddAdmin = true"
+                @remove-admin="removeAdmin"
+              />
             </div>
           </div>
         </div>
@@ -528,148 +476,44 @@
     </div>
 
     <!-- Share Link Modal -->
-    <div v-if="showShareLink" class="modal" @click.self="tryCloseModal(() => { showShareLink = false })">
-      <div class="modal-content">
-        <button @click="tryCloseModal(() => { showShareLink = false })" class="modal-close-btn">✕</button>
-        <h2>Marshal check-in link</h2>
-        <p class="instruction">Share this link with marshals so they can check in:</p>
-
-        <div class="share-link-container">
-          <input
-            :value="marshalLink"
-            readonly
-            class="form-input"
-            ref="linkInput"
-          />
-          <button @click="copyLink" class="btn btn-primary">
-            {{ linkCopied ? 'Copied!' : 'Copy' }}
-          </button>
-        </div>
-
-        <div class="modal-actions">
-          <button @click="showShareLink = false" class="btn btn-secondary">Close</button>
-        </div>
-      </div>
-    </div>
+    <ShareLinkModal
+      :show="showShareLink"
+      :link="marshalLink"
+      :isDirty="false"
+      @close="showShareLink = false"
+    />
 
     <!-- Add Admin Modal -->
-    <div v-if="showAddAdmin" class="modal" @click.self="tryCloseModal(closeAdminModal)">
-      <div class="modal-content">
-        <button @click="tryCloseModal(closeAdminModal)" class="modal-close-btn">✕</button>
-        <h2>Add event administrator</h2>
-        <p class="instruction">Enter the email address of the administrator to add</p>
-
-        <form @submit.prevent="handleAddAdmin">
-          <div class="form-group">
-            <label>Email address</label>
-            <input
-              v-model="adminForm.email"
-              type="email"
-              required
-              class="form-input"
-              placeholder="admin@example.com"
-              @input="markFormDirty"
-            />
-          </div>
-
-          <div class="modal-actions">
-            <button type="button" @click="tryCloseModal(closeAdminModal)" class="btn btn-secondary">
-              Cancel
-            </button>
-            <button type="submit" class="btn btn-primary">Add administrator</button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <AddAdminModal
+      :show="showAddAdmin"
+      :isDirty="formDirty"
+      @close="closeAdminModal"
+      @submit="handleAddAdminSubmit"
+      @update:isDirty="markFormDirty"
+    />
 
     <!-- Upload Route Modal -->
-    <div v-if="showUploadRoute" class="modal" @click.self="tryCloseModal(closeRouteModal)">
-      <div class="modal-content">
-        <button @click="tryCloseModal(closeRouteModal)" class="modal-close-btn">✕</button>
-        <h2>Upload GPX route</h2>
-        <p class="instruction">Upload a GPX file to display the event route on the map</p>
-
-        <form @submit.prevent="handleUploadRoute">
-          <div class="form-group">
-            <label>GPX file</label>
-            <input
-              type="file"
-              accept=".gpx"
-              @change="handleFileChange"
-              required
-              class="form-input"
-            />
-          </div>
-
-          <div v-if="uploadError" class="error">{{ uploadError }}</div>
-
-          <div class="modal-actions">
-            <button type="button" @click="tryCloseModal(closeRouteModal)" class="btn btn-secondary">
-              Cancel
-            </button>
-            <button type="submit" class="btn btn-primary" :disabled="uploading">
-              {{ uploading ? 'Uploading...' : 'Upload route' }}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <UploadRouteModal
+      :show="showUploadRoute"
+      :uploading="uploading"
+      :error="uploadError"
+      :isDirty="formDirty"
+      @close="closeRouteModal"
+      @submit="handleUploadRouteSubmit"
+      @update:isDirty="markFormDirty"
+    />
 
     <!-- Import Locations Modal -->
-    <div v-if="showImportLocations" class="modal" @click.self="tryCloseModal(closeImportModal)">
-      <div class="modal-content">
-        <button @click="tryCloseModal(closeImportModal)" class="modal-close-btn">✕</button>
-        <h2>Import locations from CSV</h2>
-        <p class="instruction">Upload a CSV file with columns: Label, Lat/Latitude, Long/Longitude, What3Words (optional), Marshals (optional)</p>
-
-        <div class="csv-example">
-          <strong>Example CSV format:</strong>
-          <pre>Label,Latitude,Longitude,What3Words,Marshals
-Checkpoint 1,51.505,-0.09,filled.count.soap,"John Doe, Jane Smith"
-Checkpoint 2,51.510,-0.10,index.home.raft,Bob Wilson</pre>
-        </div>
-
-        <form @submit.prevent="handleImportLocations">
-          <div class="form-group">
-            <label>CSV file</label>
-            <input
-              type="file"
-              accept=".csv"
-              @change="handleCsvFileChange"
-              required
-              class="form-input"
-            />
-          </div>
-
-          <div class="form-group">
-            <label class="checkbox-label">
-              <input type="checkbox" v-model="deleteExistingLocations" />
-              Delete existing locations before import
-            </label>
-          </div>
-
-          <div v-if="importError" class="error">{{ importError }}</div>
-          <div v-if="importResult" class="import-result">
-            <p>Created {{ importResult.locationsCreated }} locations and {{ importResult.assignmentsCreated }} assignments</p>
-            <div v-if="importResult.errors.length > 0" class="import-errors">
-              <strong>Errors:</strong>
-              <ul>
-                <li v-for="(error, index) in importResult.errors" :key="index">{{ error }}</li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="modal-actions">
-            <button type="button" @click="tryCloseModal(closeImportModal)" class="btn btn-secondary">
-              Cancel
-            </button>
-            <button type="submit" class="btn btn-primary" :disabled="importing">
-              {{ importing ? 'Importing...' : 'Import locations' }}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <ImportLocationsModal
+      :show="showImportLocations"
+      :importing="importing"
+      :error="importError"
+      :result="importResult"
+      :isDirty="formDirty"
+      @close="closeImportModal"
+      @submit="handleImportLocationsSubmit"
+      @update:isDirty="markFormDirty"
+    />
 
     <!-- Edit Marshal Modal -->
     <div v-if="showEditMarshal" class="modal" @click.self="tryCloseModal(closeEditMarshalModal)">
@@ -857,53 +701,16 @@ Checkpoint 2,51.510,-0.10,index.home.raft,Bob Wilson</pre>
     </div>
 
     <!-- Import Marshals Modal -->
-    <div v-if="showImportMarshals" class="modal" @click.self="tryCloseModal(closeImportMarshalsModal)">
-      <div class="modal-content">
-        <button @click="tryCloseModal(closeImportMarshalsModal)" class="modal-close-btn">✕</button>
-        <h2>Import marshals from CSV</h2>
-        <p class="instruction">Upload a CSV file with columns: Name, Email (optional), Phone (optional), Checkpoint (optional)</p>
-
-        <div class="csv-example">
-          <strong>Example CSV format:</strong>
-          <pre>Name,Email,Phone,Checkpoint
-John Doe,john@example.com,555-1234,Checkpoint 1
-Jane Smith,jane@example.com,555-5678,Checkpoint 2</pre>
-        </div>
-
-        <form @submit.prevent="handleImportMarshals">
-          <div class="form-group">
-            <label>CSV file</label>
-            <input
-              type="file"
-              accept=".csv"
-              @change="handleMarshalsCsvFileChange"
-              required
-              class="form-input"
-            />
-          </div>
-
-          <div v-if="importError" class="error">{{ importError }}</div>
-          <div v-if="importMarshalsResult" class="import-result">
-            <p>Imported {{ importMarshalsResult.marshalsCreated }} marshals and {{ importMarshalsResult.assignmentsCreated }} assignments</p>
-            <div v-if="importMarshalsResult.errors && importMarshalsResult.errors.length > 0" class="import-errors">
-              <strong>Errors:</strong>
-              <ul>
-                <li v-for="(error, index) in importMarshalsResult.errors" :key="index">{{ error }}</li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="modal-actions">
-            <button type="button" @click="tryCloseModal(closeImportMarshalsModal)" class="btn btn-secondary">
-              Cancel
-            </button>
-            <button type="submit" class="btn btn-primary" :disabled="importingMarshals">
-              {{ importingMarshals ? 'Importing...' : 'Import marshals' }}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <ImportMarshalsModal
+      :show="showImportMarshals"
+      :importing="importingMarshals"
+      :error="importError"
+      :result="importMarshalsResult"
+      :isDirty="formDirty"
+      @close="closeImportMarshalsModal"
+      @submit="handleImportMarshalsSubmit"
+      @update:isDirty="markFormDirty"
+    />
 
     <!-- Marshal Assignment Conflict Modal -->
     <div v-if="showAssignmentConflict" class="modal" @click.self="showAssignmentConflict = false">
@@ -1032,6 +839,13 @@ import { useEventsStore } from '../stores/events';
 import { checkInApi, eventAdminsApi, eventsApi, locationsApi, marshalsApi } from '../services/api';
 import { startSignalRConnection, stopSignalRConnection } from '../services/signalr';
 import MapView from '../components/MapView.vue';
+import ShareLinkModal from '../components/event-manage/modals/ShareLinkModal.vue';
+import AddAdminModal from '../components/event-manage/modals/AddAdminModal.vue';
+import UploadRouteModal from '../components/event-manage/modals/UploadRouteModal.vue';
+import ImportLocationsModal from '../components/event-manage/modals/ImportLocationsModal.vue';
+import ImportMarshalsModal from '../components/event-manage/modals/ImportMarshalsModal.vue';
+import CheckpointsList from '../components/event-manage/lists/CheckpointsList.vue';
+import AdminsList from '../components/event-manage/lists/AdminsList.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -1046,8 +860,6 @@ const locationStatuses = ref([]);
 const selectedLocation = ref(null);
 const showAddLocation = ref(false);
 const showShareLink = ref(false);
-const linkCopied = ref(false);
-const linkInput = ref(null);
 const eventAdmins = ref([]);
 const showAddAdmin = ref(false);
 const showUploadRoute = ref(false);
@@ -1258,6 +1070,17 @@ const handleAddAdmin = async () => {
   }
 };
 
+const handleAddAdminSubmit = async (email) => {
+  try {
+    await eventAdminsApi.addAdmin(route.params.eventId, email);
+    await loadEventAdmins();
+    closeAdminModal();
+  } catch (error) {
+    console.error('Failed to add admin:', error);
+    alert(error.response?.data?.message || 'Failed to add administrator. Please try again.');
+  }
+};
+
 const removeAdmin = async (userEmail) => {
   if (confirm(`Remove ${userEmail} as an administrator?`)) {
     try {
@@ -1292,6 +1115,27 @@ const handleUploadRoute = async () => {
 
   try {
     await eventsApi.uploadGpx(route.params.eventId, selectedGpxFile.value);
+    await loadEventData();
+    closeRouteModal();
+  } catch (error) {
+    console.error('Failed to upload route:', error);
+    uploadError.value = error.response?.data?.message || 'Failed to upload route. Please try again.';
+  } finally {
+    uploading.value = false;
+  }
+};
+
+const handleUploadRouteSubmit = async (file) => {
+  if (!file) {
+    uploadError.value = 'Please select a GPX file';
+    return;
+  }
+
+  uploading.value = true;
+  uploadError.value = null;
+
+  try {
+    await eventsApi.uploadGpx(route.params.eventId, file);
     await loadEventData();
     closeRouteModal();
   } catch (error) {
@@ -1340,6 +1184,32 @@ const handleImportLocations = async () => {
   }
 };
 
+const handleImportLocationsSubmit = async ({ file, deleteExisting }) => {
+  if (!file) {
+    importError.value = 'Please select a CSV file';
+    return;
+  }
+
+  importing.value = true;
+  importError.value = null;
+  importResult.value = null;
+
+  try {
+    const response = await locationsApi.importCsv(
+      route.params.eventId,
+      file,
+      deleteExisting
+    );
+    importResult.value = response.data;
+    await loadEventData();
+  } catch (error) {
+    console.error('Failed to import locations:', error);
+    importError.value = error.response?.data?.message || 'Failed to import locations. Please try again.';
+  } finally {
+    importing.value = false;
+  }
+};
+
 const closeImportModal = () => {
   showImportLocations.value = false;
   selectedCsvFile.value = null;
@@ -1359,6 +1229,25 @@ const handleMapClick = (coords) => {
     isMovingLocation.value = false;
     showEditLocation.value = true;
     markFormDirty();
+  } else {
+    // Check if click is within 25m of any existing checkpoint
+    const nearbyCheckpoint = locationStatuses.value.find(location => {
+      const distance = calculateDistance(
+        coords.lat,
+        coords.lng,
+        location.latitude,
+        location.longitude
+      );
+      return distance <= 25;
+    });
+
+    // If not near any checkpoint, open Add Checkpoint modal
+    if (!nearbyCheckpoint) {
+      locationForm.value.latitude = coords.lat;
+      locationForm.value.longitude = coords.lng;
+      showAddLocation.value = true;
+      markFormDirty();
+    }
   }
 };
 
@@ -1587,19 +1476,6 @@ const isPendingDelete = (assignmentId) => {
 
 const shareEvent = () => {
   showShareLink.value = true;
-  linkCopied.value = false;
-};
-
-const copyLink = () => {
-  if (linkInput.value) {
-    linkInput.value.select();
-    document.execCommand('copy');
-    linkCopied.value = true;
-
-    setTimeout(() => {
-      linkCopied.value = false;
-    }, 2000);
-  }
 };
 
 const goBack = () => {
@@ -2153,6 +2029,31 @@ const handleImportMarshals = async () => {
     const response = await marshalsApi.importCsv(
       route.params.eventId,
       selectedMarshalsCsvFile.value
+    );
+    importMarshalsResult.value = response.data;
+    await loadEventData();
+  } catch (error) {
+    console.error('Failed to import marshals:', error);
+    importError.value = error.response?.data?.message || 'Failed to import marshals. Please try again.';
+  } finally {
+    importingMarshals.value = false;
+  }
+};
+
+const handleImportMarshalsSubmit = async (file) => {
+  if (!file) {
+    importError.value = 'Please select a CSV file';
+    return;
+  }
+
+  importingMarshals.value = true;
+  importError.value = null;
+  importMarshalsResult.value = null;
+
+  try {
+    const response = await marshalsApi.importCsv(
+      route.params.eventId,
+      file
     );
     importMarshalsResult.value = response.data;
     await loadEventData();

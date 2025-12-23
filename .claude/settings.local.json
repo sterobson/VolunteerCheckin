@@ -16,7 +16,9 @@
       "Bash(taskkill:*)",
       "Bash(del \"C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\Backend\\\\Models\\\\MagicLinkEntity.cs\")",
       "Bash(dotnet clean:*)",
-      "Bash(tasklist:*)"
+      "Bash(tasklist:*)",
+      "Bash(find:*)",
+      "Bash(wc:*)"
     ]
   }
 }

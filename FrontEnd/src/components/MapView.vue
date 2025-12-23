@@ -36,6 +36,7 @@ const mapContainer = ref(null);
 let map = null;
 const markers = ref([]);
 let routePolyline = null;
+let isInitialLoad = true;
 
 const initMap = () => {
   if (!mapContainer.value) return;
@@ -78,6 +79,11 @@ const updateRoute = () => {
 };
 
 const updateMarkers = () => {
+  // Don't update markers during map animations to prevent positioning bugs
+  if (map && map._animatingZoom) {
+    return;
+  }
+
   markers.value.forEach((marker) => marker.remove());
   markers.value = [];
 
@@ -145,7 +151,8 @@ const updateMarkers = () => {
     markers.value.push(marker);
   });
 
-  if (map) {
+  // Only fit bounds on initial load, not on subsequent updates
+  if (map && isInitialLoad) {
     const allPoints = [];
 
     // Add location points
@@ -161,6 +168,7 @@ const updateMarkers = () => {
     if (allPoints.length > 0) {
       const bounds = L.latLngBounds(allPoints);
       map.fitBounds(bounds, { padding: [50, 50] });
+      isInitialLoad = false;
     }
   }
 };
@@ -203,5 +211,14 @@ watch(
   min-height: 400px;
   border-radius: 8px;
   overflow: hidden;
+}
+</style>
+
+<style>
+/* Global styles for custom markers - not scoped so Leaflet can use them */
+.leaflet-marker-icon.custom-marker {
+  /* Ensure the marker doesn't have conflicting positioning */
+  background: transparent;
+  border: none;
 }
 </style>

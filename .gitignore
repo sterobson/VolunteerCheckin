@@ -62,3 +62,4 @@ FrontEnd/node_modules/
 
 # Backend local settings
 Backend/local.settings.json
+/nul

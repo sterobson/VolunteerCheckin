@@ -1,9 +1,10 @@
+using Azure;
+using Azure.Data.Tables;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
-using Azure;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Services;
 
@@ -27,19 +28,19 @@ public class CheckInFunctions
     {
         try
         {
-            var body = await new StreamReader(req.Body).ReadToEndAsync();
-            var request = JsonSerializer.Deserialize<CheckInRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            string body = await new StreamReader(req.Body).ReadToEndAsync();
+            CheckInRequest? request = JsonSerializer.Deserialize<CheckInRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (request == null || string.IsNullOrWhiteSpace(request.AssignmentId))
             {
                 return new BadRequestObjectResult(new { message = "Invalid request" });
             }
 
-            var assignmentsTable = _tableStorage.GetAssignmentsTable();
+            TableClient assignmentsTable = _tableStorage.GetAssignmentsTable();
 
             // Find the assignment
             AssignmentEntity? assignment = null;
-            await foreach (var a in assignmentsTable.QueryAsync<AssignmentEntity>(a => a.RowKey == request.AssignmentId))
+            await foreach (AssignmentEntity a in assignmentsTable.QueryAsync<AssignmentEntity>(a => a.RowKey == request.AssignmentId))
             {
                 assignment = a;
                 break;
@@ -56,8 +57,8 @@ public class CheckInFunctions
             }
 
             // Get the location to verify GPS if needed
-            var locationsTable = _tableStorage.GetLocationsTable();
-            var location = await locationsTable.GetEntityAsync<LocationEntity>(assignment.EventId, assignment.LocationId);
+            TableClient locationsTable = _tableStorage.GetLocationsTable();
+            Response<LocationEntity> location = await locationsTable.GetEntityAsync<LocationEntity>(assignment.EventId, assignment.LocationId);
 
             string checkInMethod;
 
@@ -68,7 +69,7 @@ public class CheckInFunctions
             else if (request.Latitude.HasValue && request.Longitude.HasValue)
             {
                 // Verify GPS coordinates
-                var distance = GpsService.CalculateDistance(
+                double distance = GpsService.CalculateDistance(
                     location.Value.Latitude,
                     location.Value.Longitude,
                     request.Latitude.Value,
@@ -105,7 +106,7 @@ public class CheckInFunctions
             location.Value.CheckedInCount++;
             await locationsTable.UpdateEntityAsync(location.Value, location.Value.ETag);
 
-            var response = new AssignmentResponse(
+            AssignmentResponse response = new(
                 assignment.RowKey,
                 assignment.EventId,
                 assignment.LocationId,
@@ -139,11 +140,11 @@ public class CheckInFunctions
     {
         try
         {
-            var assignmentsTable = _tableStorage.GetAssignmentsTable();
+            TableClient assignmentsTable = _tableStorage.GetAssignmentsTable();
 
             // Find the assignment
             AssignmentEntity? assignment = null;
-            await foreach (var a in assignmentsTable.QueryAsync<AssignmentEntity>(a => a.RowKey == assignmentId))
+            await foreach (AssignmentEntity a in assignmentsTable.QueryAsync<AssignmentEntity>(a => a.RowKey == assignmentId))
             {
                 assignment = a;
                 break;
@@ -155,8 +156,8 @@ public class CheckInFunctions
             }
 
             // Get the location to update count
-            var locationsTable = _tableStorage.GetLocationsTable();
-            var location = await locationsTable.GetEntityAsync<LocationEntity>(assignment.EventId, assignment.LocationId);
+            TableClient locationsTable = _tableStorage.GetLocationsTable();
+            Response<LocationEntity> location = await locationsTable.GetEntityAsync<LocationEntity>(assignment.EventId, assignment.LocationId);
 
             // If already checked in, undo the check-in
             if (assignment.IsCheckedIn)
@@ -180,7 +181,7 @@ public class CheckInFunctions
             await assignmentsTable.UpdateEntityAsync(assignment, assignment.ETag);
             await locationsTable.UpdateEntityAsync(location.Value, location.Value.ETag);
 
-            var response = new AssignmentResponse(
+            AssignmentResponse response = new(
                 assignment.RowKey,
                 assignment.EventId,
                 assignment.LocationId,

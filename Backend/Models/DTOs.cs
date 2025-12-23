@@ -39,7 +39,8 @@ public record CreateLocationRequest(
     string Description,
     double Latitude,
     double Longitude,
-    int RequiredMarshals
+    int RequiredMarshals,
+    string? What3Words
 );
 
 public record LocationResponse(
@@ -50,13 +51,15 @@ public record LocationResponse(
     double Latitude,
     double Longitude,
     int RequiredMarshals,
-    int CheckedInCount
+    int CheckedInCount,
+    string What3Words
 );
 
 public record CreateAssignmentRequest(
     string EventId,
     string LocationId,
-    string MarshalName
+    string? MarshalId,
+    string? MarshalName
 );
 
 public record AssignmentResponse(
@@ -100,7 +103,8 @@ public record LocationStatusResponse(
     double Longitude,
     int RequiredMarshals,
     int CheckedInCount,
-    List<AssignmentResponse> Assignments
+    List<AssignmentResponse> Assignments,
+    string What3Words
 );
 
 public record UserEventMappingResponse(
@@ -122,4 +126,37 @@ public record ImportLocationsResponse(
     int LocationsCreated,
     int AssignmentsCreated,
     List<string> Errors
+);
+
+public record ImportMarshalsResponse(
+    int MarshalsCreated,
+    int AssignmentsCreated,
+    List<string> Errors
+);
+
+public record CreateMarshalRequest(
+    string EventId,
+    string Name,
+    string Email,
+    string PhoneNumber,
+    string Notes
+);
+
+public record UpdateMarshalRequest(
+    string Name,
+    string Email,
+    string PhoneNumber,
+    string Notes
+);
+
+public record MarshalResponse(
+    string Id,
+    string EventId,
+    string Name,
+    string Email,
+    string PhoneNumber,
+    string Notes,
+    List<string> AssignedLocationIds,
+    bool IsCheckedIn,
+    DateTime CreatedDate
 );

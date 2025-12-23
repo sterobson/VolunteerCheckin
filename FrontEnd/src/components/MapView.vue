@@ -94,25 +94,40 @@ const updateMarkers = () => {
     const icon = L.divIcon({
       className: 'custom-marker',
       html: `
-        <div style="
-          background-color: ${color};
-          width: 30px;
-          height: 30px;
-          border-radius: 50%;
-          border: 3px solid white;
-          box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          font-weight: bold;
-          font-size: 12px;
-        ">
-          ${checkedInCount}/${requiredMarshals}
+        <div style="display: flex; flex-direction: column; align-items: center;">
+          <div style="
+            background-color: ${color};
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+          ">
+            ${checkedInCount}/${requiredMarshals}
+          </div>
+          <div style="
+            background-color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+            color: #333;
+            white-space: nowrap;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            margin-top: 2px;
+          ">
+            ${location.name}
+          </div>
         </div>
       `,
-      iconSize: [30, 30],
-      iconAnchor: [15, 15],
+      iconSize: [30, 50],
+      iconAnchor: [15, 25],
     });
 
     const marker = L.marker([location.latitude, location.longitude], { icon })

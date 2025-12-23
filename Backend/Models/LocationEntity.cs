@@ -18,4 +18,5 @@ public class LocationEntity : ITableEntity
     public double Longitude { get; set; }
     public int RequiredMarshals { get; set; } = 1;
     public int CheckedInCount { get; set; } = 0;
+    public string What3Words { get; set; } = string.Empty;
 }

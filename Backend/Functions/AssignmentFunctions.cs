@@ -1,9 +1,10 @@
+using Azure;
+using Azure.Data.Tables;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
-using Azure;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Services;
 
@@ -26,27 +27,81 @@ public class AssignmentFunctions
     {
         try
         {
-            var body = await new StreamReader(req.Body).ReadToEndAsync();
-            var request = JsonSerializer.Deserialize<CreateAssignmentRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            string body = await new StreamReader(req.Body).ReadToEndAsync();
+            CreateAssignmentRequest? request = JsonSerializer.Deserialize<CreateAssignmentRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (request == null)
             {
                 return new BadRequestObjectResult(new { message = "Invalid request" });
             }
 
-            var assignmentEntity = new AssignmentEntity
+            TableClient marshalsTable = _tableStorage.GetMarshalsTable();
+            string marshalId;
+            string marshalName;
+
+            // If MarshalId is provided, use the existing marshal
+            if (!string.IsNullOrEmpty(request.MarshalId))
+            {
+                Response<MarshalEntity> marshal = await marshalsTable.GetEntityAsync<MarshalEntity>(request.EventId, request.MarshalId);
+                marshalId = marshal.Value.MarshalId;
+                marshalName = marshal.Value.Name;
+            }
+            // If MarshalName is provided, find or create a marshal
+            else if (!string.IsNullOrEmpty(request.MarshalName))
+            {
+                // Try to find existing marshal by name
+                MarshalEntity? existingMarshal = null;
+                await foreach (MarshalEntity m in marshalsTable.QueryAsync<MarshalEntity>(
+                    m => m.PartitionKey == request.EventId))
+                {
+                    if (m.Name.Equals(request.MarshalName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        existingMarshal = m;
+                        break;
+                    }
+                }
+
+                if (existingMarshal != null)
+                {
+                    marshalId = existingMarshal.MarshalId;
+                    marshalName = existingMarshal.Name;
+                }
+                else
+                {
+                    // Create new marshal
+                    marshalId = Guid.NewGuid().ToString();
+                    MarshalEntity newMarshal = new()
+                    {
+                        PartitionKey = request.EventId,
+                        RowKey = marshalId,
+                        EventId = request.EventId,
+                        MarshalId = marshalId,
+                        Name = request.MarshalName
+                    };
+                    await marshalsTable.AddEntityAsync(newMarshal);
+                    marshalName = request.MarshalName;
+                    _logger.LogInformation($"Created new marshal: {marshalId} - {marshalName}");
+                }
+            }
+            else
+            {
+                return new BadRequestObjectResult(new { message = "Either MarshalId or MarshalName must be provided" });
+            }
+
+            AssignmentEntity assignmentEntity = new()
             {
                 PartitionKey = request.EventId,
                 RowKey = Guid.NewGuid().ToString(),
                 EventId = request.EventId,
                 LocationId = request.LocationId,
-                MarshalName = request.MarshalName
+                MarshalId = marshalId,
+                MarshalName = marshalName
             };
 
-            var table = _tableStorage.GetAssignmentsTable();
+            TableClient table = _tableStorage.GetAssignmentsTable();
             await table.AddEntityAsync(assignmentEntity);
 
-            var response = new AssignmentResponse(
+            AssignmentResponse response = new(
                 assignmentEntity.RowKey,
                 assignmentEntity.EventId,
                 assignmentEntity.LocationId,
@@ -77,10 +132,10 @@ public class AssignmentFunctions
     {
         try
         {
-            var table = _tableStorage.GetAssignmentsTable();
-            var assignmentEntity = await table.GetEntityAsync<AssignmentEntity>(eventId, assignmentId);
+            TableClient table = _tableStorage.GetAssignmentsTable();
+            Response<AssignmentEntity> assignmentEntity = await table.GetEntityAsync<AssignmentEntity>(eventId, assignmentId);
 
-            var response = new AssignmentResponse(
+            AssignmentResponse response = new(
                 assignmentEntity.Value.RowKey,
                 assignmentEntity.Value.EventId,
                 assignmentEntity.Value.LocationId,
@@ -112,10 +167,10 @@ public class AssignmentFunctions
     {
         try
         {
-            var table = _tableStorage.GetAssignmentsTable();
-            var assignments = new List<AssignmentResponse>();
+            TableClient table = _tableStorage.GetAssignmentsTable();
+            List<AssignmentResponse> assignments = [];
 
-            await foreach (var assignmentEntity in table.QueryAsync<AssignmentEntity>(a => a.PartitionKey == eventId))
+            await foreach (AssignmentEntity assignmentEntity in table.QueryAsync<AssignmentEntity>(a => a.PartitionKey == eventId))
             {
                 assignments.Add(new AssignmentResponse(
                     assignmentEntity.RowKey,
@@ -147,7 +202,7 @@ public class AssignmentFunctions
     {
         try
         {
-            var table = _tableStorage.GetAssignmentsTable();
+            TableClient table = _tableStorage.GetAssignmentsTable();
             await table.DeleteEntityAsync(eventId, assignmentId);
 
             _logger.LogInformation($"Assignment deleted: {assignmentId}");
@@ -172,26 +227,26 @@ public class AssignmentFunctions
     {
         try
         {
-            var locationsTable = _tableStorage.GetLocationsTable();
-            var assignmentsTable = _tableStorage.GetAssignmentsTable();
+            TableClient locationsTable = _tableStorage.GetLocationsTable();
+            TableClient assignmentsTable = _tableStorage.GetAssignmentsTable();
 
-            var locations = new List<LocationEntity>();
-            await foreach (var location in locationsTable.QueryAsync<LocationEntity>(l => l.PartitionKey == eventId))
+            List<LocationEntity> locations = [];
+            await foreach (LocationEntity location in locationsTable.QueryAsync<LocationEntity>(l => l.PartitionKey == eventId))
             {
                 locations.Add(location);
             }
 
-            var assignments = new List<AssignmentEntity>();
-            await foreach (var assignment in assignmentsTable.QueryAsync<AssignmentEntity>(a => a.PartitionKey == eventId))
+            List<AssignmentEntity> assignments = [];
+            await foreach (AssignmentEntity assignment in assignmentsTable.QueryAsync<AssignmentEntity>(a => a.PartitionKey == eventId))
             {
                 assignments.Add(assignment);
             }
 
-            var locationStatuses = new List<LocationStatusResponse>();
+            List<LocationStatusResponse> locationStatuses = [];
 
-            foreach (var location in locations)
+            foreach (LocationEntity location in locations)
             {
-                var locationAssignments = assignments
+                List<AssignmentResponse> locationAssignments = assignments
                     .Where(a => a.LocationId == location.RowKey)
                     .Select(a => new AssignmentResponse(
                         a.RowKey,
@@ -206,7 +261,7 @@ public class AssignmentFunctions
                     ))
                     .ToList();
 
-                var checkedInCount = locationAssignments.Count(a => a.IsCheckedIn);
+                int checkedInCount = locationAssignments.Count(a => a.IsCheckedIn);
 
                 locationStatuses.Add(new LocationStatusResponse(
                     location.RowKey,
@@ -215,11 +270,12 @@ public class AssignmentFunctions
                     location.Longitude,
                     location.RequiredMarshals,
                     checkedInCount,
-                    locationAssignments
+                    locationAssignments,
+                    location.What3Words
                 ));
             }
 
-            var response = new EventStatusResponse(eventId, locationStatuses);
+            EventStatusResponse response = new(eventId, locationStatuses);
 
             return new OkObjectResult(response);
         }

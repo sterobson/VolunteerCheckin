@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="VolunteerCheckin.Functions.csproj" />
+  <Project Path="VolunteerCheckin.Functions.Tests/VolunteerCheckin.Functions.Tests.csproj" />
 </Solution>

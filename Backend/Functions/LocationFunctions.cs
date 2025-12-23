@@ -1,9 +1,11 @@
+using Azure;
+using Azure.Data.Tables;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
-using Azure;
+using System.Text.RegularExpressions;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Services;
 
@@ -22,21 +24,46 @@ public class LocationFunctions
         _csvParser = csvParser;
     }
 
+    private static bool IsValidWhat3Words(string? what3Words)
+    {
+        if (string.IsNullOrWhiteSpace(what3Words))
+        {
+            return true; // Optional field
+        }
+
+        // Pattern: word.word.word or word/word/word where word is lowercase alpha 1-20 chars
+        string pattern = @"^[a-z]{1,20}[./][a-z]{1,20}[./][a-z]{1,20}$";
+        if (!Regex.IsMatch(what3Words, pattern))
+        {
+            return false;
+        }
+
+        // Ensure consistent separator (all dots or all slashes)
+        bool hasDots = what3Words.Contains('.');
+        bool hasSlashes = what3Words.Contains('/');
+        return hasDots != hasSlashes; // XOR - can't have both
+    }
+
     [Function("CreateLocation")]
     public async Task<IActionResult> CreateLocation(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "locations")] HttpRequest req)
     {
         try
         {
-            var body = await new StreamReader(req.Body).ReadToEndAsync();
-            var request = JsonSerializer.Deserialize<CreateLocationRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            string body = await new StreamReader(req.Body).ReadToEndAsync();
+            CreateLocationRequest? request = JsonSerializer.Deserialize<CreateLocationRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (request == null)
             {
                 return new BadRequestObjectResult(new { message = "Invalid request" });
             }
 
-            var locationEntity = new LocationEntity
+            if (!IsValidWhat3Words(request.What3Words))
+            {
+                return new BadRequestObjectResult(new { message = "Invalid What3Words format. Must be in format word.word.word or word/word/word where each word is lowercase letters (1-20 characters)" });
+            }
+
+            LocationEntity locationEntity = new()
             {
                 PartitionKey = request.EventId,
                 RowKey = Guid.NewGuid().ToString(),
@@ -45,13 +72,14 @@ public class LocationFunctions
                 Description = request.Description,
                 Latitude = request.Latitude,
                 Longitude = request.Longitude,
-                RequiredMarshals = request.RequiredMarshals
+                RequiredMarshals = request.RequiredMarshals,
+                What3Words = request.What3Words ?? string.Empty
             };
 
-            var table = _tableStorage.GetLocationsTable();
+            TableClient table = _tableStorage.GetLocationsTable();
             await table.AddEntityAsync(locationEntity);
 
-            var response = new LocationResponse(
+            LocationResponse response = new(
                 locationEntity.RowKey,
                 locationEntity.EventId,
                 locationEntity.Name,
@@ -59,7 +87,8 @@ public class LocationFunctions
                 locationEntity.Latitude,
                 locationEntity.Longitude,
                 locationEntity.RequiredMarshals,
-                locationEntity.CheckedInCount
+                locationEntity.CheckedInCount,
+                locationEntity.What3Words
             );
 
             _logger.LogInformation($"Location created: {locationEntity.RowKey}");
@@ -81,10 +110,10 @@ public class LocationFunctions
     {
         try
         {
-            var table = _tableStorage.GetLocationsTable();
-            var locationEntity = await table.GetEntityAsync<LocationEntity>(eventId, locationId);
+            TableClient table = _tableStorage.GetLocationsTable();
+            Response<LocationEntity> locationEntity = await table.GetEntityAsync<LocationEntity>(eventId, locationId);
 
-            var response = new LocationResponse(
+            LocationResponse response = new(
                 locationEntity.Value.RowKey,
                 locationEntity.Value.EventId,
                 locationEntity.Value.Name,
@@ -92,7 +121,8 @@ public class LocationFunctions
                 locationEntity.Value.Latitude,
                 locationEntity.Value.Longitude,
                 locationEntity.Value.RequiredMarshals,
-                locationEntity.Value.CheckedInCount
+                locationEntity.Value.CheckedInCount,
+                locationEntity.Value.What3Words
             );
 
             return new OkObjectResult(response);
@@ -115,10 +145,10 @@ public class LocationFunctions
     {
         try
         {
-            var table = _tableStorage.GetLocationsTable();
-            var locations = new List<LocationResponse>();
+            TableClient table = _tableStorage.GetLocationsTable();
+            List<LocationResponse> locations = [];
 
-            await foreach (var locationEntity in table.QueryAsync<LocationEntity>(l => l.PartitionKey == eventId))
+            await foreach (LocationEntity locationEntity in table.QueryAsync<LocationEntity>(l => l.PartitionKey == eventId))
             {
                 locations.Add(new LocationResponse(
                     locationEntity.RowKey,
@@ -128,7 +158,8 @@ public class LocationFunctions
                     locationEntity.Latitude,
                     locationEntity.Longitude,
                     locationEntity.RequiredMarshals,
-                    locationEntity.CheckedInCount
+                    locationEntity.CheckedInCount,
+                    locationEntity.What3Words
                 ));
             }
 
@@ -149,26 +180,32 @@ public class LocationFunctions
     {
         try
         {
-            var body = await new StreamReader(req.Body).ReadToEndAsync();
-            var request = JsonSerializer.Deserialize<CreateLocationRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            string body = await new StreamReader(req.Body).ReadToEndAsync();
+            CreateLocationRequest? request = JsonSerializer.Deserialize<CreateLocationRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (request == null)
             {
                 return new BadRequestObjectResult(new { message = "Invalid request" });
             }
 
-            var table = _tableStorage.GetLocationsTable();
-            var locationEntity = await table.GetEntityAsync<LocationEntity>(eventId, locationId);
+            if (!IsValidWhat3Words(request.What3Words))
+            {
+                return new BadRequestObjectResult(new { message = "Invalid What3Words format. Must be in format word.word.word or word/word/word where each word is lowercase letters (1-20 characters)" });
+            }
+
+            TableClient table = _tableStorage.GetLocationsTable();
+            Response<LocationEntity> locationEntity = await table.GetEntityAsync<LocationEntity>(eventId, locationId);
 
             locationEntity.Value.Name = request.Name;
             locationEntity.Value.Description = request.Description;
             locationEntity.Value.Latitude = request.Latitude;
             locationEntity.Value.Longitude = request.Longitude;
             locationEntity.Value.RequiredMarshals = request.RequiredMarshals;
+            locationEntity.Value.What3Words = request.What3Words ?? string.Empty;
 
             await table.UpdateEntityAsync(locationEntity.Value, locationEntity.Value.ETag);
 
-            var response = new LocationResponse(
+            LocationResponse response = new(
                 locationEntity.Value.RowKey,
                 locationEntity.Value.EventId,
                 locationEntity.Value.Name,
@@ -176,7 +213,8 @@ public class LocationFunctions
                 locationEntity.Value.Latitude,
                 locationEntity.Value.Longitude,
                 locationEntity.Value.RequiredMarshals,
-                locationEntity.Value.CheckedInCount
+                locationEntity.Value.CheckedInCount,
+                locationEntity.Value.What3Words
             );
 
             _logger.LogInformation($"Location updated: {locationId}");
@@ -202,7 +240,7 @@ public class LocationFunctions
     {
         try
         {
-            var table = _tableStorage.GetLocationsTable();
+            TableClient table = _tableStorage.GetLocationsTable();
             await table.DeleteEntityAsync(eventId, locationId);
 
             _logger.LogInformation($"Location deleted: {locationId}");
@@ -236,7 +274,7 @@ public class LocationFunctions
                 return new BadRequestObjectResult(new { message = "No file uploaded" });
             }
 
-            var csvFile = req.Form.Files[0];
+            IFormFile csvFile = req.Form.Files[0];
             if (!csvFile.FileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
             {
                 return new BadRequestObjectResult(new { message = "File must be a .csv file" });
@@ -244,9 +282,9 @@ public class LocationFunctions
 
             // Parse the CSV file
             CsvParserService.CsvParseResult parseResult;
-            using (var stream = csvFile.OpenReadStream())
+            using (Stream stream = csvFile.OpenReadStream())
             {
-                parseResult = _csvParser.ParseLocationsCsv(stream);
+                parseResult = CsvParserService.ParseLocationsCsv(stream);
             }
 
             if (parseResult.Locations.Count == 0 && parseResult.Errors.Count > 0)
@@ -254,77 +292,184 @@ public class LocationFunctions
                 return new BadRequestObjectResult(new ImportLocationsResponse(0, 0, parseResult.Errors));
             }
 
-            var locationsTable = _tableStorage.GetLocationsTable();
-            var assignmentsTable = _tableStorage.GetAssignmentsTable();
+            TableClient locationsTable = _tableStorage.GetLocationsTable();
+            TableClient assignmentsTable = _tableStorage.GetAssignmentsTable();
 
             // Delete existing locations if requested
             if (deleteExisting)
             {
-                await foreach (var location in locationsTable.QueryAsync<LocationEntity>(l => l.PartitionKey == eventId))
+                await foreach (LocationEntity location in locationsTable.QueryAsync<LocationEntity>(l => l.PartitionKey == eventId))
                 {
                     await locationsTable.DeleteEntityAsync(eventId, location.RowKey);
                 }
 
-                await foreach (var assignment in assignmentsTable.QueryAsync<AssignmentEntity>(a => a.PartitionKey == eventId))
+                await foreach (AssignmentEntity assignment in assignmentsTable.QueryAsync<AssignmentEntity>(a => a.PartitionKey == eventId))
                 {
                     await assignmentsTable.DeleteEntityAsync(eventId, assignment.RowKey);
                 }
             }
 
-            // Create locations and assignments
+            // Load existing locations to check for duplicates
+            Dictionary<string, LocationEntity> existingLocations = [];
+            await foreach (LocationEntity location in locationsTable.QueryAsync<LocationEntity>(l => l.PartitionKey == eventId))
+            {
+                existingLocations[location.Name.ToLower()] = location;
+            }
+
+            // Create or update locations and assignments
             int locationsCreated = 0;
+            int locationsUpdated = 0;
             int assignmentsCreated = 0;
 
-            foreach (var row in parseResult.Locations)
+            foreach (CsvParserService.LocationCsvRow row in parseResult.Locations)
             {
                 try
                 {
-                    // Create location
-                    var locationEntity = new LocationEntity
-                    {
-                        PartitionKey = eventId,
-                        RowKey = Guid.NewGuid().ToString(),
-                        EventId = eventId,
-                        Name = row.Name,
-                        Description = string.Empty,
-                        Latitude = row.Latitude,
-                        Longitude = row.Longitude,
-                        RequiredMarshals = row.MarshalNames.Count > 0 ? row.MarshalNames.Count : 1
-                    };
+                    LocationEntity? locationEntity;
+                    bool isUpdate = existingLocations.TryGetValue(row.Name.ToLower(), out LocationEntity? existing);
 
-                    await locationsTable.AddEntityAsync(locationEntity);
-                    locationsCreated++;
-
-                    // Create assignments for each marshal
-                    foreach (var marshalName in row.MarshalNames)
+                    if (isUpdate && existing != null)
                     {
-                        var assignmentEntity = new AssignmentEntity
+                        // Update existing location
+                        locationEntity = existing;
+
+                        // Only update lat/long if CSV has values
+                        if (row.HasLatLong)
+                        {
+                            locationEntity.Latitude = row.Latitude;
+                            locationEntity.Longitude = row.Longitude;
+                        }
+
+                        // Update What3Words if CSV has value
+                        if (!string.IsNullOrWhiteSpace(row.What3Words))
+                        {
+                            locationEntity.What3Words = row.What3Words;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(row.Description))
+                        {
+                            locationEntity.Description = row.Description;
+                        }
+
+                        // Update marshals only if CSV has marshal names
+                        if (row.MarshalNames.Count > 0)
+                        {
+                            // Delete existing assignments for this location
+                            await foreach (AssignmentEntity assignment in assignmentsTable.QueryAsync<AssignmentEntity>(
+                                a => a.PartitionKey == eventId && a.LocationId == locationEntity.RowKey))
+                            {
+                                await assignmentsTable.DeleteEntityAsync(eventId, assignment.RowKey);
+                            }
+
+                            // Create new assignments
+                            TableClient marshalsTable = _tableStorage.GetMarshalsTable();
+                            foreach (string marshalName in row.MarshalNames)
+                            {
+                                // Find or create marshal
+                                string marshalId = await FindOrCreateMarshal(marshalsTable, eventId, marshalName);
+
+                                AssignmentEntity assignmentEntity = new()
+                                {
+                                    PartitionKey = eventId,
+                                    RowKey = Guid.NewGuid().ToString(),
+                                    EventId = eventId,
+                                    LocationId = locationEntity.RowKey,
+                                    MarshalId = marshalId,
+                                    MarshalName = marshalName
+                                };
+
+                                await assignmentsTable.AddEntityAsync(assignmentEntity);
+                                assignmentsCreated++;
+                            }
+
+                            locationEntity.RequiredMarshals = row.MarshalNames.Count;
+                        }
+
+                        await locationsTable.UpdateEntityAsync(locationEntity, locationEntity.ETag);
+                        locationsUpdated++;
+                    }
+                    else
+                    {
+                        // Create new location
+                        locationEntity = new LocationEntity
                         {
                             PartitionKey = eventId,
                             RowKey = Guid.NewGuid().ToString(),
                             EventId = eventId,
-                            LocationId = locationEntity.RowKey,
-                            MarshalName = marshalName
+                            Name = row.Name,
+                            Description = string.Empty,
+                            Latitude = row.Latitude,
+                            Longitude = row.Longitude,
+                            RequiredMarshals = row.MarshalNames.Count > 0 ? row.MarshalNames.Count : 1,
+                            What3Words = row.What3Words
                         };
 
-                        await assignmentsTable.AddEntityAsync(assignmentEntity);
-                        assignmentsCreated++;
+                        await locationsTable.AddEntityAsync(locationEntity);
+                        locationsCreated++;
+
+                        // Create assignments for each marshal
+                        TableClient marshalsTable = _tableStorage.GetMarshalsTable();
+                        foreach (string marshalName in row.MarshalNames)
+                        {
+                            // Find or create marshal
+                            string marshalId = await FindOrCreateMarshal(marshalsTable, eventId, marshalName);
+
+                            AssignmentEntity assignmentEntity = new()
+                            {
+                                PartitionKey = eventId,
+                                RowKey = Guid.NewGuid().ToString(),
+                                EventId = eventId,
+                                LocationId = locationEntity.RowKey,
+                                MarshalId = marshalId,
+                                MarshalName = marshalName
+                            };
+
+                            await assignmentsTable.AddEntityAsync(assignmentEntity);
+                            assignmentsCreated++;
+                        }
                     }
                 }
                 catch (Exception ex)
                 {
-                    parseResult.Errors.Add($"Failed to create location '{row.Name}': {ex.Message}");
+                    parseResult.Errors.Add($"Failed to process location '{row.Name}': {ex.Message}");
                 }
             }
 
-            _logger.LogInformation($"Imported {locationsCreated} locations and {assignmentsCreated} assignments for event {eventId}");
+            _logger.LogInformation($"Imported {locationsCreated} new, updated {locationsUpdated} existing locations, and created {assignmentsCreated} assignments for event {eventId}");
 
-            return new OkObjectResult(new ImportLocationsResponse(locationsCreated, assignmentsCreated, parseResult.Errors));
+            return new OkObjectResult(new ImportLocationsResponse(locationsCreated + locationsUpdated, assignmentsCreated, parseResult.Errors));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error importing locations");
             return new StatusCodeResult(500);
         }
+    }
+
+    private async Task<string> FindOrCreateMarshal(TableClient marshalsTable, string eventId, string marshalName)
+    {
+        // Try to find existing marshal by name
+        await foreach (MarshalEntity m in marshalsTable.QueryAsync<MarshalEntity>(m => m.PartitionKey == eventId))
+        {
+            if (m.Name.Equals(marshalName, StringComparison.OrdinalIgnoreCase))
+            {
+                return m.MarshalId;
+            }
+        }
+
+        // Create new marshal if not found
+        string newMarshalId = Guid.NewGuid().ToString();
+        MarshalEntity newMarshal = new()
+        {
+            PartitionKey = eventId,
+            RowKey = newMarshalId,
+            EventId = eventId,
+            MarshalId = newMarshalId,
+            Name = marshalName
+        };
+        await marshalsTable.AddEntityAsync(newMarshal);
+        _logger.LogInformation($"Created new marshal from CSV: {newMarshalId} - {marshalName}");
+
+        return newMarshalId;
     }
 }

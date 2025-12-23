@@ -77,4 +77,20 @@ export const eventAdminsApi = {
   removeAdmin: (eventId, userEmail) => api.delete(`/events/${eventId}/admins/${userEmail}`),
 };
 
+// Marshals API
+export const marshalsApi = {
+  create: (data) => api.post('/marshals', data),
+  getByEvent: (eventId) => api.get(`/events/${eventId}/marshals`),
+  getById: (eventId, marshalId) => api.get(`/marshals/${eventId}/${marshalId}`),
+  update: (eventId, marshalId, data) => api.put(`/marshals/${eventId}/${marshalId}`, data),
+  delete: (eventId, marshalId) => api.delete(`/marshals/${eventId}/${marshalId}`),
+  importCsv: (eventId, file) => {
+    const formData = new FormData();
+    formData.append('csv', file);
+    return api.post(`/marshals/import/${eventId}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+};
+
 export default api;

@@ -11,6 +11,7 @@ public class TableStorageService
     private const string AssignmentsTable = "Assignments";
     private const string AdminUsersTable = "AdminUsers";
     private const string UserEventMappingsTable = "UserEventMappings";
+    private const string MarshalsTable = "Marshals";
 
     public TableStorageService(string connectionString)
     {
@@ -25,6 +26,7 @@ public class TableStorageService
         await _tableServiceClient.CreateTableIfNotExistsAsync(AssignmentsTable);
         await _tableServiceClient.CreateTableIfNotExistsAsync(AdminUsersTable);
         await _tableServiceClient.CreateTableIfNotExistsAsync(UserEventMappingsTable);
+        await _tableServiceClient.CreateTableIfNotExistsAsync(MarshalsTable);
     }
 
     public TableClient GetEventsTable() => _tableServiceClient.GetTableClient(EventsTable);
@@ -32,4 +34,5 @@ public class TableStorageService
     public TableClient GetAssignmentsTable() => _tableServiceClient.GetTableClient(AssignmentsTable);
     public TableClient GetAdminUsersTable() => _tableServiceClient.GetTableClient(AdminUsersTable);
     public TableClient GetUserEventMappingsTable() => _tableServiceClient.GetTableClient(UserEventMappingsTable);
+    public TableClient GetMarshalsTable() => _tableServiceClient.GetTableClient(MarshalsTable);
 }

@@ -1,9 +1,9 @@
+using Azure.Data.Tables;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
-using Azure.Data.Tables;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Services;
 
@@ -26,15 +26,15 @@ public class AuthFunctions
     {
         try
         {
-            var body = await new StreamReader(req.Body).ReadToEndAsync();
-            var request = JsonSerializer.Deserialize<InstantLoginRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            string body = await new StreamReader(req.Body).ReadToEndAsync();
+            InstantLoginRequest? request = JsonSerializer.Deserialize<InstantLoginRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (request == null || string.IsNullOrWhiteSpace(request.Email))
             {
                 return new BadRequestObjectResult(new { message = "Email is required" });
             }
 
-            var adminTable = _tableStorage.GetAdminUsersTable();
+            TableClient adminTable = _tableStorage.GetAdminUsersTable();
 
             // Try to get existing admin, or create new one
             AdminUserEntity admin;
@@ -70,16 +70,16 @@ public class AuthFunctions
     {
         try
         {
-            var body = await new StreamReader(req.Body).ReadToEndAsync();
-            var request = JsonSerializer.Deserialize<InstantLoginRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            string body = await new StreamReader(req.Body).ReadToEndAsync();
+            InstantLoginRequest? request = JsonSerializer.Deserialize<InstantLoginRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (request == null || string.IsNullOrWhiteSpace(request.Email))
             {
                 return new BadRequestObjectResult(new { message = "Email is required" });
             }
 
-            var adminTable = _tableStorage.GetAdminUsersTable();
-            var admin = new AdminUserEntity
+            TableClient adminTable = _tableStorage.GetAdminUsersTable();
+            AdminUserEntity admin = new()
             {
                 RowKey = request.Email,
                 Email = request.Email

@@ -24,12 +24,12 @@ public class EmailService
 
     public async Task SendMagicLinkEmailAsync(string toEmail, string magicLink)
     {
-        var message = new MimeMessage();
+        MimeMessage message = new();
         message.From.Add(new MailboxAddress(_fromName, _fromEmail));
         message.To.Add(new MailboxAddress(toEmail, toEmail));
         message.Subject = "Your Volunteer Check-in Admin Login Link";
 
-        var bodyBuilder = new BodyBuilder
+        BodyBuilder bodyBuilder = new()
         {
             HtmlBody = $@"
                 <html>
@@ -56,7 +56,7 @@ public class EmailService
 
         message.Body = bodyBuilder.ToMessageBody();
 
-        using var client = new SmtpClient();
+        using SmtpClient client = new();
         await client.ConnectAsync(_smtpHost, _smtpPort, MailKit.Security.SecureSocketOptions.StartTls);
         await client.AuthenticateAsync(_smtpUsername, _smtpPassword);
         await client.SendAsync(message);

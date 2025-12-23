@@ -7,7 +7,12 @@ public class GpxParserService
 {
     public List<RoutePoint> ParseGpxFile(Stream fileStream)
     {
-        List<RoutePoint> routePoints = new List<RoutePoint>();
+        List<RoutePoint> routePoints = [];
+
+        if (fileStream.Length == 0)
+        {
+            return routePoints;
+        }
 
         try
         {
@@ -80,7 +85,7 @@ public class GpxParserService
             if (routePoints.Count > 2)
             {
                 int originalCount = routePoints.Count;
-                List<RoutePoint> originalPoints = new List<RoutePoint>(routePoints);
+                List<RoutePoint> originalPoints = [.. routePoints];
 
                 // Start with a small epsilon and increase if needed to stay under size limit
                 double epsilon = 0.0001;
@@ -107,7 +112,7 @@ public class GpxParserService
     /// <summary>
     /// Simplifies a route using the Ramer-Douglas-Peucker algorithm
     /// </summary>
-    private List<RoutePoint> SimplifyRoute(List<RoutePoint> points, double epsilon = 0.0001)
+    private static List<RoutePoint> SimplifyRoute(List<RoutePoint> points, double epsilon = 0.0001)
     {
         if (points.Count < 3)
             return points;
@@ -148,14 +153,14 @@ public class GpxParserService
         else
         {
             // All points between start and end can be removed
-            return new List<RoutePoint> { start, end };
+            return [start, end];
         }
     }
 
     /// <summary>
     /// Calculates the perpendicular distance from a point to a line segment
     /// </summary>
-    private double PerpendicularDistance(RoutePoint point, RoutePoint lineStart, RoutePoint lineEnd)
+    private static double PerpendicularDistance(RoutePoint point, RoutePoint lineStart, RoutePoint lineEnd)
     {
         double dx = lineEnd.Lng - lineStart.Lng;
         double dy = lineEnd.Lat - lineStart.Lat;

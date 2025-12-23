@@ -1,9 +1,10 @@
+using Azure;
+using Azure.Data.Tables;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
-using Azure;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Services;
 
@@ -26,7 +27,7 @@ public class EventFunctions
     {
         try
         {
-            var mappingsTable = _tableStorage.GetUserEventMappingsTable();
+            TableClient mappingsTable = _tableStorage.GetUserEventMappingsTable();
             await mappingsTable.GetEntityAsync<UserEventMappingEntity>(eventId, userEmail);
             return true;
         }
@@ -42,8 +43,8 @@ public class EventFunctions
     {
         try
         {
-            var body = await new StreamReader(req.Body).ReadToEndAsync();
-            var request = JsonSerializer.Deserialize<CreateEventRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            string body = await new StreamReader(req.Body).ReadToEndAsync();
+            CreateEventRequest? request = JsonSerializer.Deserialize<CreateEventRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (request == null)
             {
@@ -64,7 +65,7 @@ public class EventFunctions
                 eventDateUtc = DateTime.SpecifyKind(request.EventDate, DateTimeKind.Utc);
             }
 
-            var eventEntity = new EventEntity
+            EventEntity eventEntity = new()
             {
                 RowKey = Guid.NewGuid().ToString(),
                 Name = request.Name,
@@ -72,14 +73,14 @@ public class EventFunctions
                 EventDate = eventDateUtc,
                 TimeZoneId = request.TimeZoneId,
                 AdminEmail = request.AdminEmail,
-                EmergencyContactsJson = JsonSerializer.Serialize(request.EmergencyContacts ?? new List<EmergencyContact>())
+                EmergencyContactsJson = JsonSerializer.Serialize(request.EmergencyContacts ?? [])
             };
 
-            var table = _tableStorage.GetEventsTable();
+            TableClient table = _tableStorage.GetEventsTable();
             await table.AddEntityAsync(eventEntity);
 
             // Auto-create UserEventMapping for the creator
-            var mappingEntity = new UserEventMappingEntity
+            UserEventMappingEntity mappingEntity = new()
             {
                 PartitionKey = eventEntity.RowKey,
                 RowKey = request.AdminEmail,
@@ -88,16 +89,16 @@ public class EventFunctions
                 Role = "Admin"
             };
 
-            var mappingsTable = _tableStorage.GetUserEventMappingsTable();
+            TableClient mappingsTable = _tableStorage.GetUserEventMappingsTable();
             await mappingsTable.AddEntityAsync(mappingEntity);
 
-            var emergencyContacts = JsonSerializer.Deserialize<List<EmergencyContact>>(eventEntity.EmergencyContactsJson)
-                ?? new List<EmergencyContact>();
+            List<EmergencyContact> emergencyContacts = JsonSerializer.Deserialize<List<EmergencyContact>>(eventEntity.EmergencyContactsJson)
+                ?? [];
 
-            var route = JsonSerializer.Deserialize<List<RoutePoint>>(eventEntity.GpxRouteJson)
-                ?? new List<RoutePoint>();
+            List<RoutePoint> route = JsonSerializer.Deserialize<List<RoutePoint>>(eventEntity.GpxRouteJson)
+                ?? [];
 
-            var response = new EventResponse(
+            EventResponse response = new(
                 eventEntity.RowKey,
                 eventEntity.Name,
                 eventEntity.Description,
@@ -128,16 +129,16 @@ public class EventFunctions
     {
         try
         {
-            var table = _tableStorage.GetEventsTable();
-            var eventEntity = await table.GetEntityAsync<EventEntity>("EVENT", eventId);
+            TableClient table = _tableStorage.GetEventsTable();
+            Response<EventEntity> eventEntity = await table.GetEntityAsync<EventEntity>("EVENT", eventId);
 
-            var emergencyContacts = JsonSerializer.Deserialize<List<EmergencyContact>>(eventEntity.Value.EmergencyContactsJson)
-                ?? new List<EmergencyContact>();
+            List<EmergencyContact> emergencyContacts = JsonSerializer.Deserialize<List<EmergencyContact>>(eventEntity.Value.EmergencyContactsJson)
+                ?? [];
 
-            var route = JsonSerializer.Deserialize<List<RoutePoint>>(eventEntity.Value.GpxRouteJson)
-                ?? new List<RoutePoint>();
+            List<RoutePoint> route = JsonSerializer.Deserialize<List<RoutePoint>>(eventEntity.Value.GpxRouteJson)
+                ?? [];
 
-            var response = new EventResponse(
+            EventResponse response = new(
                 eventEntity.Value.RowKey,
                 eventEntity.Value.Name,
                 eventEntity.Value.Description,
@@ -170,33 +171,33 @@ public class EventFunctions
         try
         {
             // Get admin email from header
-            var adminEmail = req.Headers["X-Admin-Email"].FirstOrDefault();
+            string? adminEmail = req.Headers["X-Admin-Email"].FirstOrDefault();
             if (string.IsNullOrWhiteSpace(adminEmail))
             {
                 return new BadRequestObjectResult(new { message = "Admin email header is required" });
             }
 
-            var table = _tableStorage.GetEventsTable();
-            var mappingsTable = _tableStorage.GetUserEventMappingsTable();
-            var events = new List<EventResponse>();
+            TableClient table = _tableStorage.GetEventsTable();
+            TableClient mappingsTable = _tableStorage.GetUserEventMappingsTable();
+            List<EventResponse> events = [];
 
             // Get all events where user is an admin
-            var userEventIds = new HashSet<string>();
-            await foreach (var mapping in mappingsTable.QueryAsync<UserEventMappingEntity>(m => m.RowKey == adminEmail))
+            HashSet<string> userEventIds = [];
+            await foreach (UserEventMappingEntity mapping in mappingsTable.QueryAsync<UserEventMappingEntity>(m => m.RowKey == adminEmail))
             {
                 userEventIds.Add(mapping.EventId);
             }
 
             // Fetch all events and filter by user access
-            await foreach (var eventEntity in table.QueryAsync<EventEntity>(e => e.PartitionKey == "EVENT"))
+            await foreach (EventEntity eventEntity in table.QueryAsync<EventEntity>(e => e.PartitionKey == "EVENT"))
             {
                 if (userEventIds.Contains(eventEntity.RowKey))
                 {
-                    var emergencyContacts = JsonSerializer.Deserialize<List<EmergencyContact>>(eventEntity.EmergencyContactsJson)
-                        ?? new List<EmergencyContact>();
+                    List<EmergencyContact> emergencyContacts = JsonSerializer.Deserialize<List<EmergencyContact>>(eventEntity.EmergencyContactsJson)
+                        ?? [];
 
-                    var route = JsonSerializer.Deserialize<List<RoutePoint>>(eventEntity.GpxRouteJson)
-                        ?? new List<RoutePoint>();
+                    List<RoutePoint> route = JsonSerializer.Deserialize<List<RoutePoint>>(eventEntity.GpxRouteJson)
+                        ?? [];
 
                     events.Add(new EventResponse(
                         eventEntity.RowKey,
@@ -230,7 +231,7 @@ public class EventFunctions
         try
         {
             // Check authorization
-            var adminEmail = req.Headers["X-Admin-Email"].FirstOrDefault();
+            string? adminEmail = req.Headers["X-Admin-Email"].FirstOrDefault();
             if (string.IsNullOrWhiteSpace(adminEmail))
             {
                 return new BadRequestObjectResult(new { message = "Admin email header is required" });
@@ -241,16 +242,16 @@ public class EventFunctions
                 return new UnauthorizedObjectResult(new { message = "You are not authorized to update this event" });
             }
 
-            var body = await new StreamReader(req.Body).ReadToEndAsync();
-            var request = JsonSerializer.Deserialize<CreateEventRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            string body = await new StreamReader(req.Body).ReadToEndAsync();
+            CreateEventRequest? request = JsonSerializer.Deserialize<CreateEventRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (request == null)
             {
                 return new BadRequestObjectResult(new { message = "Invalid request" });
             }
 
-            var table = _tableStorage.GetEventsTable();
-            var eventEntity = await table.GetEntityAsync<EventEntity>("EVENT", eventId);
+            TableClient table = _tableStorage.GetEventsTable();
+            Response<EventEntity> eventEntity = await table.GetEntityAsync<EventEntity>("EVENT", eventId);
 
             // Convert the event date to UTC
             DateTime eventDateUtc;
@@ -271,17 +272,17 @@ public class EventFunctions
             eventEntity.Value.EventDate = eventDateUtc;
             eventEntity.Value.TimeZoneId = request.TimeZoneId;
             eventEntity.Value.AdminEmail = request.AdminEmail;
-            eventEntity.Value.EmergencyContactsJson = JsonSerializer.Serialize(request.EmergencyContacts ?? new List<EmergencyContact>());
+            eventEntity.Value.EmergencyContactsJson = JsonSerializer.Serialize(request.EmergencyContacts ?? []);
 
             await table.UpdateEntityAsync(eventEntity.Value, eventEntity.Value.ETag);
 
-            var emergencyContacts = JsonSerializer.Deserialize<List<EmergencyContact>>(eventEntity.Value.EmergencyContactsJson)
-                ?? new List<EmergencyContact>();
+            List<EmergencyContact> emergencyContacts = JsonSerializer.Deserialize<List<EmergencyContact>>(eventEntity.Value.EmergencyContactsJson)
+                ?? [];
 
-            var route = JsonSerializer.Deserialize<List<RoutePoint>>(eventEntity.Value.GpxRouteJson)
-                ?? new List<RoutePoint>();
+            List<RoutePoint> route = JsonSerializer.Deserialize<List<RoutePoint>>(eventEntity.Value.GpxRouteJson)
+                ?? [];
 
-            var response = new EventResponse(
+            EventResponse response = new(
                 eventEntity.Value.RowKey,
                 eventEntity.Value.Name,
                 eventEntity.Value.Description,
@@ -317,7 +318,7 @@ public class EventFunctions
         try
         {
             // Check authorization
-            var adminEmail = req.Headers["X-Admin-Email"].FirstOrDefault();
+            string? adminEmail = req.Headers["X-Admin-Email"].FirstOrDefault();
             if (string.IsNullOrWhiteSpace(adminEmail))
             {
                 return new BadRequestObjectResult(new { message = "Admin email header is required" });
@@ -328,7 +329,7 @@ public class EventFunctions
                 return new UnauthorizedObjectResult(new { message = "You are not authorized to delete this event" });
             }
 
-            var table = _tableStorage.GetEventsTable();
+            TableClient table = _tableStorage.GetEventsTable();
             await table.DeleteEntityAsync("EVENT", eventId);
 
             _logger.LogInformation($"Event deleted: {eventId}");
@@ -353,10 +354,10 @@ public class EventFunctions
     {
         try
         {
-            var mappingsTable = _tableStorage.GetUserEventMappingsTable();
-            var admins = new List<UserEventMappingResponse>();
+            TableClient mappingsTable = _tableStorage.GetUserEventMappingsTable();
+            List<UserEventMappingResponse> admins = [];
 
-            await foreach (var mapping in mappingsTable.QueryAsync<UserEventMappingEntity>(m => m.PartitionKey == eventId))
+            await foreach (UserEventMappingEntity mapping in mappingsTable.QueryAsync<UserEventMappingEntity>(m => m.PartitionKey == eventId))
             {
                 admins.Add(new UserEventMappingResponse(
                     mapping.EventId,
@@ -383,7 +384,7 @@ public class EventFunctions
         try
         {
             // Check authorization
-            var adminEmail = req.Headers["X-Admin-Email"].FirstOrDefault();
+            string? adminEmail = req.Headers["X-Admin-Email"].FirstOrDefault();
             if (string.IsNullOrWhiteSpace(adminEmail))
             {
                 return new BadRequestObjectResult(new { message = "Admin email header is required" });
@@ -394,15 +395,15 @@ public class EventFunctions
                 return new UnauthorizedObjectResult(new { message = "You are not authorized to manage admins for this event" });
             }
 
-            var body = await new StreamReader(req.Body).ReadToEndAsync();
-            var request = JsonSerializer.Deserialize<AddEventAdminRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            string body = await new StreamReader(req.Body).ReadToEndAsync();
+            AddEventAdminRequest? request = JsonSerializer.Deserialize<AddEventAdminRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (request == null || string.IsNullOrWhiteSpace(request.UserEmail))
             {
                 return new BadRequestObjectResult(new { message = "User email is required" });
             }
 
-            var mappingsTable = _tableStorage.GetUserEventMappingsTable();
+            TableClient mappingsTable = _tableStorage.GetUserEventMappingsTable();
 
             // Check if mapping already exists
             try
@@ -415,7 +416,7 @@ public class EventFunctions
                 // Mapping doesn't exist, create it
             }
 
-            var mappingEntity = new UserEventMappingEntity
+            UserEventMappingEntity mappingEntity = new()
             {
                 PartitionKey = eventId,
                 RowKey = request.UserEmail,
@@ -426,7 +427,7 @@ public class EventFunctions
 
             await mappingsTable.AddEntityAsync(mappingEntity);
 
-            var response = new UserEventMappingResponse(
+            UserEventMappingResponse response = new(
                 mappingEntity.EventId,
                 mappingEntity.UserEmail,
                 mappingEntity.Role,
@@ -453,7 +454,7 @@ public class EventFunctions
         try
         {
             // Check authorization
-            var adminEmail = req.Headers["X-Admin-Email"].FirstOrDefault();
+            string? adminEmail = req.Headers["X-Admin-Email"].FirstOrDefault();
             if (string.IsNullOrWhiteSpace(adminEmail))
             {
                 return new BadRequestObjectResult(new { message = "Admin email header is required" });
@@ -464,11 +465,11 @@ public class EventFunctions
                 return new UnauthorizedObjectResult(new { message = "You are not authorized to manage admins for this event" });
             }
 
-            var mappingsTable = _tableStorage.GetUserEventMappingsTable();
+            TableClient mappingsTable = _tableStorage.GetUserEventMappingsTable();
 
             // Count total admins for this event
             int adminCount = 0;
-            await foreach (var mapping in mappingsTable.QueryAsync<UserEventMappingEntity>(m => m.PartitionKey == eventId))
+            await foreach (UserEventMappingEntity mapping in mappingsTable.QueryAsync<UserEventMappingEntity>(m => m.PartitionKey == eventId))
             {
                 adminCount++;
             }
@@ -504,7 +505,7 @@ public class EventFunctions
         try
         {
             // Check authorization
-            var adminEmail = req.Headers["X-Admin-Email"].FirstOrDefault();
+            string? adminEmail = req.Headers["X-Admin-Email"].FirstOrDefault();
             if (string.IsNullOrWhiteSpace(adminEmail))
             {
                 return new BadRequestObjectResult(new { message = "Admin email header is required" });
@@ -521,7 +522,7 @@ public class EventFunctions
                 return new BadRequestObjectResult(new { message = "No file uploaded" });
             }
 
-            var gpxFile = req.Form.Files[0];
+            IFormFile gpxFile = req.Form.Files[0];
             if (!gpxFile.FileName.EndsWith(".gpx", StringComparison.OrdinalIgnoreCase))
             {
                 return new BadRequestObjectResult(new { message = "File must be a .gpx file" });
@@ -529,7 +530,7 @@ public class EventFunctions
 
             // Parse the GPX file
             List<RoutePoint> route;
-            using (var stream = gpxFile.OpenReadStream())
+            using (Stream stream = gpxFile.OpenReadStream())
             {
                 route = _gpxParser.ParseGpxFile(stream);
             }
@@ -540,8 +541,8 @@ public class EventFunctions
             }
 
             // Update the event with the route
-            var table = _tableStorage.GetEventsTable();
-            var eventEntity = await table.GetEntityAsync<EventEntity>("EVENT", eventId);
+            TableClient table = _tableStorage.GetEventsTable();
+            Response<EventEntity> eventEntity = await table.GetEntityAsync<EventEntity>("EVENT", eventId);
 
             string routeJson = JsonSerializer.Serialize(route);
 

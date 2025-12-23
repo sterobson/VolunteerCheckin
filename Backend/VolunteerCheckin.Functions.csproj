@@ -9,7 +9,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="VolunteerCheckin.Functions.Tests\**" />
+    <EmbeddedResource Remove="VolunteerCheckin.Functions.Tests\**" />
+    <None Remove="VolunteerCheckin.Functions.Tests\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <None Include="Backend\tests\VolunteerCheckin.Functions.Tests\VolunteerCheckin.Functions.Tests.csproj" />
     <PackageReference Include="Azure.Data.Tables" Version="12.11.0" />
     <PackageReference Include="MailKit" Version="4.14.1" />
     <PackageReference Include="Microsoft.ApplicationInsights.WorkerService" Version="2.23.0" />

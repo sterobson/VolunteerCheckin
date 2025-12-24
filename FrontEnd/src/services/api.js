@@ -53,6 +53,7 @@ export const locationsApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  bulkUpdateTimes: (eventId, timeDelta) => api.post(`/locations/bulk-update-times/${eventId}`, { timeDelta }),
 };
 
 // Assignments API

@@ -7,19 +7,29 @@ using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Services;
+using VolunteerCheckin.Functions.Repositories;
 
 namespace VolunteerCheckin.Functions.Functions;
 
 public class MarshalFunctions
 {
     private readonly ILogger<MarshalFunctions> _logger;
-    private readonly TableStorageService _tableStorage;
+    private readonly IMarshalRepository _marshalRepository;
+    private readonly ILocationRepository _locationRepository;
+    private readonly IAssignmentRepository _assignmentRepository;
     private readonly CsvParserService _csvParser;
 
-    public MarshalFunctions(ILogger<MarshalFunctions> logger, TableStorageService tableStorage, CsvParserService csvParser)
+    public MarshalFunctions(
+        ILogger<MarshalFunctions> logger,
+        IMarshalRepository marshalRepository,
+        ILocationRepository locationRepository,
+        IAssignmentRepository assignmentRepository,
+        CsvParserService csvParser)
     {
         _logger = logger;
-        _tableStorage = tableStorage;
+        _marshalRepository = marshalRepository;
+        _locationRepository = locationRepository;
+        _assignmentRepository = assignmentRepository;
         _csvParser = csvParser;
     }
 
@@ -50,8 +60,7 @@ public class MarshalFunctions
                 Notes = request.Notes ?? string.Empty
             };
 
-            TableClient table = _tableStorage.GetMarshalsTable();
-            await table.AddEntityAsync(marshalEntity);
+            await _marshalRepository.AddAsync(marshalEntity);
 
             MarshalResponse response = new(
                 marshalEntity.MarshalId,
@@ -83,20 +92,18 @@ public class MarshalFunctions
     {
         try
         {
-            TableClient marshalsTable = _tableStorage.GetMarshalsTable();
-            TableClient assignmentsTable = _tableStorage.GetAssignmentsTable();
-
+            IEnumerable<MarshalEntity> marshalEntities = await _marshalRepository.GetByEventAsync(eventId);
             List<MarshalResponse> marshals = [];
 
-            // Get all marshals for the event
-            await foreach (MarshalEntity marshalEntity in marshalsTable.QueryAsync<MarshalEntity>(m => m.PartitionKey == eventId))
+            foreach (MarshalEntity marshalEntity in marshalEntities)
             {
                 // Get assignments for this marshal
+                IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByMarshalAsync(eventId, marshalEntity.MarshalId);
+
                 List<string> assignedLocationIds = [];
                 bool isCheckedIn = false;
 
-                await foreach (AssignmentEntity assignment in assignmentsTable.QueryAsync<AssignmentEntity>(
-                    a => a.PartitionKey == eventId && a.MarshalId == marshalEntity.MarshalId))
+                foreach (AssignmentEntity assignment in assignments)
                 {
                     assignedLocationIds.Add(assignment.LocationId);
                     if (assignment.IsCheckedIn)
@@ -135,17 +142,20 @@ public class MarshalFunctions
     {
         try
         {
-            TableClient marshalsTable = _tableStorage.GetMarshalsTable();
-            TableClient assignmentsTable = _tableStorage.GetAssignmentsTable();
+            MarshalEntity? marshalEntity = await _marshalRepository.GetAsync(eventId, marshalId);
 
-            Response<MarshalEntity> marshalEntity = await marshalsTable.GetEntityAsync<MarshalEntity>(eventId, marshalId);
+            if (marshalEntity == null)
+            {
+                return new NotFoundObjectResult(new { message = "Marshal not found" });
+            }
 
             // Get assignments for this marshal
+            IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByMarshalAsync(eventId, marshalId);
+
             List<string> assignedLocationIds = [];
             bool isCheckedIn = false;
 
-            await foreach (AssignmentEntity assignment in assignmentsTable.QueryAsync<AssignmentEntity>(
-                a => a.PartitionKey == eventId && a.MarshalId == marshalId))
+            foreach (AssignmentEntity assignment in assignments)
             {
                 assignedLocationIds.Add(assignment.LocationId);
                 if (assignment.IsCheckedIn)
@@ -155,22 +165,18 @@ public class MarshalFunctions
             }
 
             MarshalResponse response = new(
-                marshalEntity.Value.MarshalId,
-                marshalEntity.Value.EventId,
-                marshalEntity.Value.Name,
-                marshalEntity.Value.Email,
-                marshalEntity.Value.PhoneNumber,
-                marshalEntity.Value.Notes,
+                marshalEntity.MarshalId,
+                marshalEntity.EventId,
+                marshalEntity.Name,
+                marshalEntity.Email,
+                marshalEntity.PhoneNumber,
+                marshalEntity.Notes,
                 assignedLocationIds,
                 isCheckedIn,
-                marshalEntity.Value.CreatedDate
+                marshalEntity.CreatedDate
             );
 
             return new OkObjectResult(response);
-        }
-        catch (RequestFailedException ex) when (ex.Status == 404)
-        {
-            return new NotFoundObjectResult(new { message = "Marshal not found" });
         }
         catch (Exception ex)
         {
@@ -195,32 +201,34 @@ public class MarshalFunctions
                 return new BadRequestObjectResult(new { message = "Invalid request" });
             }
 
-            TableClient marshalsTable = _tableStorage.GetMarshalsTable();
-            TableClient assignmentsTable = _tableStorage.GetAssignmentsTable();
+            MarshalEntity? marshalEntity = await _marshalRepository.GetAsync(eventId, marshalId);
 
-            Response<MarshalEntity> marshalEntity = await marshalsTable.GetEntityAsync<MarshalEntity>(eventId, marshalId);
+            if (marshalEntity == null)
+            {
+                return new NotFoundObjectResult(new { message = "Marshal not found" });
+            }
 
-            marshalEntity.Value.Name = request.Name;
-            marshalEntity.Value.Email = request.Email ?? string.Empty;
-            marshalEntity.Value.PhoneNumber = request.PhoneNumber ?? string.Empty;
-            marshalEntity.Value.Notes = request.Notes ?? string.Empty;
+            marshalEntity.Name = request.Name;
+            marshalEntity.Email = request.Email ?? string.Empty;
+            marshalEntity.PhoneNumber = request.PhoneNumber ?? string.Empty;
+            marshalEntity.Notes = request.Notes ?? string.Empty;
 
-            await marshalsTable.UpdateEntityAsync(marshalEntity.Value, marshalEntity.Value.ETag);
+            await _marshalRepository.UpdateAsync(marshalEntity);
 
             // Update denormalized name in all assignments
-            await foreach (AssignmentEntity assignment in assignmentsTable.QueryAsync<AssignmentEntity>(
-                a => a.PartitionKey == eventId && a.MarshalId == marshalId))
+            IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByMarshalAsync(eventId, marshalId);
+            foreach (AssignmentEntity assignment in assignments)
             {
                 assignment.MarshalName = request.Name;
-                await assignmentsTable.UpdateEntityAsync(assignment, assignment.ETag);
+                await _assignmentRepository.UpdateAsync(assignment);
             }
 
             // Get updated assignments
             List<string> assignedLocationIds = [];
             bool isCheckedIn = false;
 
-            await foreach (AssignmentEntity assignment in assignmentsTable.QueryAsync<AssignmentEntity>(
-                a => a.PartitionKey == eventId && a.MarshalId == marshalId))
+            IEnumerable<AssignmentEntity> updatedAssignments = await _assignmentRepository.GetByMarshalAsync(eventId, marshalId);
+            foreach (AssignmentEntity assignment in updatedAssignments)
             {
                 assignedLocationIds.Add(assignment.LocationId);
                 if (assignment.IsCheckedIn)
@@ -230,24 +238,20 @@ public class MarshalFunctions
             }
 
             MarshalResponse response = new(
-                marshalEntity.Value.MarshalId,
-                marshalEntity.Value.EventId,
-                marshalEntity.Value.Name,
-                marshalEntity.Value.Email,
-                marshalEntity.Value.PhoneNumber,
-                marshalEntity.Value.Notes,
+                marshalEntity.MarshalId,
+                marshalEntity.EventId,
+                marshalEntity.Name,
+                marshalEntity.Email,
+                marshalEntity.PhoneNumber,
+                marshalEntity.Notes,
                 assignedLocationIds,
                 isCheckedIn,
-                marshalEntity.Value.CreatedDate
+                marshalEntity.CreatedDate
             );
 
             _logger.LogInformation($"Marshal updated: {marshalId}");
 
             return new OkObjectResult(response);
-        }
-        catch (RequestFailedException ex) when (ex.Status == 404)
-        {
-            return new NotFoundObjectResult(new { message = "Marshal not found" });
         }
         catch (Exception ex)
         {
@@ -264,26 +268,19 @@ public class MarshalFunctions
     {
         try
         {
-            TableClient marshalsTable = _tableStorage.GetMarshalsTable();
-            TableClient assignmentsTable = _tableStorage.GetAssignmentsTable();
-
             // Delete all assignments for this marshal
-            await foreach (AssignmentEntity assignment in assignmentsTable.QueryAsync<AssignmentEntity>(
-                a => a.PartitionKey == eventId && a.MarshalId == marshalId))
+            IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByMarshalAsync(eventId, marshalId);
+            foreach (AssignmentEntity assignment in assignments)
             {
-                await assignmentsTable.DeleteEntityAsync(eventId, assignment.RowKey);
+                await _assignmentRepository.DeleteAsync(eventId, assignment.RowKey);
             }
 
             // Delete the marshal
-            await marshalsTable.DeleteEntityAsync(eventId, marshalId);
+            await _marshalRepository.DeleteAsync(eventId, marshalId);
 
             _logger.LogInformation($"Marshal deleted: {marshalId}");
 
             return new NoContentResult();
-        }
-        catch (RequestFailedException ex) when (ex.Status == 404)
-        {
-            return new NotFoundObjectResult(new { message = "Marshal not found" });
         }
         catch (Exception ex)
         {
@@ -323,16 +320,10 @@ public class MarshalFunctions
                 return new BadRequestObjectResult(new ImportMarshalsResponse(0, 0, parseResult.Errors));
             }
 
-            TableClient marshalsTable = _tableStorage.GetMarshalsTable();
-            TableClient locationsTable = _tableStorage.GetLocationsTable();
-            TableClient assignmentsTable = _tableStorage.GetAssignmentsTable();
-
             // Load existing marshals to check for updates
-            Dictionary<string, MarshalEntity> existingMarshals = [];
-            await foreach (MarshalEntity marshal in marshalsTable.QueryAsync<MarshalEntity>(m => m.PartitionKey == eventId))
-            {
-                existingMarshals[marshal.Name.ToLower()] = marshal;
-            }
+            IEnumerable<MarshalEntity> existingMarshalsList = await _marshalRepository.GetByEventAsync(eventId);
+            Dictionary<string, MarshalEntity> existingMarshals = existingMarshalsList
+                .ToDictionary(m => m.Name.ToLower(), m => m);
 
             int marshalsCreated = 0;
             int assignmentsCreated = 0;
@@ -341,99 +332,28 @@ public class MarshalFunctions
             {
                 try
                 {
-                    MarshalEntity marshalEntity;
                     bool isUpdate = existingMarshals.TryGetValue(row.Name.ToLower(), out MarshalEntity? existing);
 
+                    MarshalEntity marshalEntity;
                     if (isUpdate && existing != null)
                     {
-                        // Update existing marshal - only update fields that are provided
-                        marshalEntity = existing;
-
-                        if (!string.IsNullOrWhiteSpace(row.Email))
-                        {
-                            marshalEntity.Email = row.Email;
-                        }
-
-                        if (!string.IsNullOrWhiteSpace(row.Phone))
-                        {
-                            marshalEntity.PhoneNumber = row.Phone;
-                        }
-
-                        await marshalsTable.UpdateEntityAsync(marshalEntity, marshalEntity.ETag);
-
-                        // Update denormalized name in all assignments
-                        await foreach (AssignmentEntity assignment in assignmentsTable.QueryAsync<AssignmentEntity>(
-                            a => a.PartitionKey == eventId && a.MarshalId == marshalEntity.MarshalId))
-                        {
-                            assignment.MarshalName = marshalEntity.Name;
-                            await assignmentsTable.UpdateEntityAsync(assignment, assignment.ETag);
-                        }
+                        marshalEntity = await UpdateExistingMarshal(existing, row, eventId);
                     }
                     else
                     {
-                        // Create new marshal
-                        string newMarshalId = Guid.NewGuid().ToString();
-                        marshalEntity = new MarshalEntity
-                        {
-                            PartitionKey = eventId,
-                            RowKey = newMarshalId,
-                            EventId = eventId,
-                            MarshalId = newMarshalId,
-                            Name = row.Name,
-                            Email = row.Email,
-                            PhoneNumber = row.Phone,
-                            Notes = string.Empty
-                        };
-
-                        await marshalsTable.AddEntityAsync(marshalEntity);
+                        marshalEntity = await CreateNewMarshal(row, eventId);
                         marshalsCreated++;
-                        _logger.LogInformation($"Created new marshal from CSV: {newMarshalId} - {row.Name}");
                     }
 
                     // Create assignment if checkpoint is specified
                     if (!string.IsNullOrWhiteSpace(row.Checkpoint))
                     {
-                        // Find the location by name
-                        LocationEntity? location = null;
-                        await foreach (LocationEntity loc in locationsTable.QueryAsync<LocationEntity>(l => l.PartitionKey == eventId))
-                        {
-                            if (loc.Name.Equals(row.Checkpoint, StringComparison.OrdinalIgnoreCase))
-                            {
-                                location = loc;
-                                break;
-                            }
-                        }
+                        bool assignmentCreated = await CreateAssignmentForCheckpoint(
+                            marshalEntity, row.Checkpoint, eventId, parseResult.Errors);
 
-                        if (location != null)
+                        if (assignmentCreated)
                         {
-                            // Check if assignment already exists
-                            bool assignmentExists = false;
-                            await foreach (AssignmentEntity existingAssignment in assignmentsTable.QueryAsync<AssignmentEntity>(
-                                a => a.PartitionKey == eventId && a.LocationId == location.RowKey && a.MarshalId == marshalEntity.MarshalId))
-                            {
-                                assignmentExists = true;
-                                break;
-                            }
-
-                            if (!assignmentExists)
-                            {
-                                AssignmentEntity assignmentEntity = new()
-                                {
-                                    PartitionKey = eventId,
-                                    RowKey = Guid.NewGuid().ToString(),
-                                    EventId = eventId,
-                                    LocationId = location.RowKey,
-                                    MarshalId = marshalEntity.MarshalId,
-                                    MarshalName = marshalEntity.Name
-                                };
-
-                                await assignmentsTable.AddEntityAsync(assignmentEntity);
-                                assignmentsCreated++;
-                            }
-                        }
-                        else
-                        {
-                            parseResult.Errors.Add($"Checkpoint '{row.Checkpoint}' not found for marshal '{row.Name}'");
+                            assignmentsCreated++;
                         }
                     }
                 }
@@ -452,5 +372,107 @@ public class MarshalFunctions
             _logger.LogError(ex, "Error importing marshals");
             return new StatusCodeResult(500);
         }
+    }
+
+    private async Task<MarshalEntity> UpdateExistingMarshal(
+        MarshalEntity marshalEntity,
+        CsvParserService.MarshalCsvRow row,
+        string eventId)
+    {
+        // Update existing marshal - only update fields that are provided
+        if (!string.IsNullOrWhiteSpace(row.Email))
+        {
+            marshalEntity.Email = row.Email;
+        }
+
+        if (!string.IsNullOrWhiteSpace(row.Phone))
+        {
+            marshalEntity.PhoneNumber = row.Phone;
+        }
+
+        await _marshalRepository.UpdateAsync(marshalEntity);
+
+        // Update denormalized name in all assignments
+        IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByMarshalAsync(eventId, marshalEntity.MarshalId);
+        foreach (AssignmentEntity assignment in assignments)
+        {
+            assignment.MarshalName = marshalEntity.Name;
+            await _assignmentRepository.UpdateAsync(assignment);
+        }
+
+        return marshalEntity;
+    }
+
+    private async Task<MarshalEntity> CreateNewMarshal(
+        CsvParserService.MarshalCsvRow row,
+        string eventId)
+    {
+        string newMarshalId = Guid.NewGuid().ToString();
+        MarshalEntity marshalEntity = new()
+        {
+            PartitionKey = eventId,
+            RowKey = newMarshalId,
+            EventId = eventId,
+            MarshalId = newMarshalId,
+            Name = row.Name,
+            Email = row.Email,
+            PhoneNumber = row.Phone,
+            Notes = string.Empty
+        };
+
+        await _marshalRepository.AddAsync(marshalEntity);
+        _logger.LogInformation($"Created new marshal from CSV: {newMarshalId} - {row.Name}");
+
+        return marshalEntity;
+    }
+
+    private async Task<bool> CreateAssignmentForCheckpoint(
+        MarshalEntity marshalEntity,
+        string checkpointName,
+        string eventId,
+        List<string> errors)
+    {
+        // Find the location by name
+        LocationEntity? location = await FindLocationByName(checkpointName, eventId);
+
+        if (location == null)
+        {
+            errors.Add($"Checkpoint '{checkpointName}' not found for marshal '{marshalEntity.Name}'");
+            return false;
+        }
+
+        // Check if assignment already exists
+        bool assignmentExists = await _assignmentRepository.ExistsAsync(eventId, marshalEntity.MarshalId, location.RowKey);
+
+        if (assignmentExists)
+        {
+            return false;
+        }
+
+        AssignmentEntity assignmentEntity = new()
+        {
+            PartitionKey = eventId,
+            RowKey = Guid.NewGuid().ToString(),
+            EventId = eventId,
+            LocationId = location.RowKey,
+            MarshalId = marshalEntity.MarshalId,
+            MarshalName = marshalEntity.Name
+        };
+
+        await _assignmentRepository.AddAsync(assignmentEntity);
+        return true;
+    }
+
+    private async Task<LocationEntity?> FindLocationByName(string locationName, string eventId)
+    {
+        IEnumerable<LocationEntity> locations = await _locationRepository.GetByEventAsync(eventId);
+        foreach (LocationEntity loc in locations)
+        {
+            if (loc.Name.Equals(locationName, StringComparison.OrdinalIgnoreCase))
+            {
+                return loc;
+            }
+        }
+        return null;
     }
 }

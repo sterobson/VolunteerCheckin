@@ -21,6 +21,25 @@ function Write-Warning($message) { Write-Host $message -ForegroundColor Yellow }
 function Write-ErrorMessage($message) { Write-Host $message -ForegroundColor Red }
 function Write-Gray($message) { Write-Host $message -ForegroundColor Gray }
 
+# Function to kill process on a specific port
+function Stop-ProcessOnPort {
+    param(
+        [int]$Port,
+        [string]$ServiceName
+    )
+
+    $connection = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
+    if ($connection) {
+        Write-Warning "$ServiceName is running on port $Port. Shutting it down..."
+        $processId = $connection.OwningProcess
+        Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+        Write-Success "$ServiceName stopped"
+        return $true
+    }
+    return $false
+}
+
 # Configuration
 $config = @{
     local = @{
@@ -120,31 +139,44 @@ if ($Environment -eq "local" -and $Backend) {
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Host ""
 
-    # Check if already running
-    $connection = Get-NetTCPConnection -LocalPort 7071 -State Listen -ErrorAction SilentlyContinue
-    if ($connection) {
-        Write-Success "Azure Functions already running on http://localhost:7071"
-    } else {
-        # Check for Azurite
-        Write-Info "Checking Azurite (Azure Storage Emulator)..."
-        $azuriteRunning = Get-NetTCPConnection -LocalPort 10000 -State Listen -ErrorAction SilentlyContinue
+    # Check if already running and stop it
+    $wasRunning = Stop-ProcessOnPort -Port 7071 -ServiceName "Azure Functions"
 
-        if (-not $azuriteRunning) {
-            Write-Warning "Azurite not running. Starting Azurite..."
-            try {
-                Start-Process -FilePath "azurite" -ArgumentList "--silent" -WindowStyle Hidden -ErrorAction Stop
-                Start-Sleep -Seconds 2
-                Write-Success "Azurite started"
-            } catch {
-                Write-Warning "Could not start Azurite. Install with: npm install -g azurite"
-            }
-        } else {
-            Write-Success "Azurite already running"
+    # Check for Azurite
+    Write-Info "Checking Azurite (Azure Storage Emulator)..."
+    $azuriteRunning = Get-NetTCPConnection -LocalPort 10000 -State Listen -ErrorAction SilentlyContinue
+
+    if (-not $azuriteRunning) {
+        Write-Warning "Azurite not running. Starting Azurite..."
+        try {
+            Start-Process -FilePath "azurite" -ArgumentList "--silent" -WindowStyle Hidden -ErrorAction Stop
+            Start-Sleep -Seconds 2
+            Write-Success "Azurite started"
+        } catch {
+            Write-Warning "Could not start Azurite. Install with: npm install -g azurite"
         }
+    } else {
+        Write-Success "Azurite already running"
+    }
 
+    # Build the backend
+    Write-Info "Building Azure Functions..."
+    $backendPath = Join-Path $PSScriptRoot "Backend"
+    Push-Location $backendPath
+    try {
+        dotnet build --nologo --verbosity quiet
+        if ($LASTEXITCODE -ne 0) {
+            Write-ErrorMessage "Backend build failed"
+            $deploymentSuccess = $false
+        } else {
+            Write-Success "Backend build completed"
+        }
+    } finally {
+        Pop-Location
+    }
+
+    if ($deploymentSuccess) {
         Write-Info "Starting Azure Functions..."
-        $backendPath = Join-Path $PSScriptRoot "Backend"
-
         Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-Command", "cd '$backendPath'; func start" -WindowStyle Normal
         Start-Sleep -Seconds 5
 
@@ -167,40 +199,39 @@ if ($Environment -eq "local" -and $Frontend) {
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Host ""
 
-    # Check if already running
-    $connection = Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue
-    if ($connection) {
-        Write-Success "Frontend dev server already running on http://localhost:5173"
-    } else {
-        $frontendPath = Join-Path $PSScriptRoot "FrontEnd"
+    # Check if already running and stop it
+    $wasRunning = Stop-ProcessOnPort -Port 5173 -ServiceName "Frontend dev server"
 
-        # Check if node_modules exists
-        $nodeModules = Join-Path $frontendPath "node_modules"
-        if (-not (Test-Path $nodeModules)) {
-            Write-Info "Installing frontend dependencies..."
-            Push-Location $frontendPath
-            try {
-                npm install --silent
-                if ($LASTEXITCODE -ne 0) {
-                    Write-ErrorMessage "Failed to install dependencies"
-                    $deploymentSuccess = $false
-                }
-            } finally {
-                Pop-Location
-            }
-        }
+    $frontendPath = Join-Path $PSScriptRoot "FrontEnd"
 
-        if ($deploymentSuccess) {
-            Write-Info "Starting frontend dev server..."
-            Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-Command", "cd '$frontendPath'; npm run dev" -WindowStyle Normal
-            Start-Sleep -Seconds 3
-
-            $viteRunning = Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue
-            if ($viteRunning) {
-                Write-Success "Frontend started on http://localhost:5173"
+    # Check if node_modules exists
+    $nodeModules = Join-Path $frontendPath "node_modules"
+    if (-not (Test-Path $nodeModules)) {
+        Write-Info "Installing frontend dependencies..."
+        Push-Location $frontendPath
+        try {
+            npm install --silent
+            if ($LASTEXITCODE -ne 0) {
+                Write-ErrorMessage "Failed to install dependencies"
+                $deploymentSuccess = $false
             } else {
-                Write-Warning "Frontend may still be starting. Check the console window."
+                Write-Success "Dependencies installed"
             }
+        } finally {
+            Pop-Location
+        }
+    }
+
+    if ($deploymentSuccess) {
+        Write-Info "Starting frontend dev server..."
+        Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-Command", "cd '$frontendPath'; npm run dev" -WindowStyle Normal
+        Start-Sleep -Seconds 3
+
+        $viteRunning = Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue
+        if ($viteRunning) {
+            Write-Success "Frontend started on http://localhost:5173"
+        } else {
+            Write-Warning "Frontend may still be starting. Check the console window."
         }
     }
 }

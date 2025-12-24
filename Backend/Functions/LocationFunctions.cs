@@ -8,19 +8,29 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Services;
+using VolunteerCheckin.Functions.Repositories;
 
 namespace VolunteerCheckin.Functions.Functions;
 
 public class LocationFunctions
 {
     private readonly ILogger<LocationFunctions> _logger;
-    private readonly TableStorageService _tableStorage;
+    private readonly ILocationRepository _locationRepository;
+    private readonly IMarshalRepository _marshalRepository;
+    private readonly IAssignmentRepository _assignmentRepository;
     private readonly CsvParserService _csvParser;
 
-    public LocationFunctions(ILogger<LocationFunctions> logger, TableStorageService tableStorage, CsvParserService csvParser)
+    public LocationFunctions(
+        ILogger<LocationFunctions> logger,
+        ILocationRepository locationRepository,
+        IMarshalRepository marshalRepository,
+        IAssignmentRepository assignmentRepository,
+        CsvParserService csvParser)
     {
         _logger = logger;
-        _tableStorage = tableStorage;
+        _locationRepository = locationRepository;
+        _marshalRepository = marshalRepository;
+        _assignmentRepository = assignmentRepository;
         _csvParser = csvParser;
     }
 
@@ -73,11 +83,12 @@ public class LocationFunctions
                 Latitude = request.Latitude,
                 Longitude = request.Longitude,
                 RequiredMarshals = request.RequiredMarshals,
-                What3Words = request.What3Words ?? string.Empty
+                What3Words = request.What3Words ?? string.Empty,
+                StartTime = request.StartTime,
+                EndTime = request.EndTime
             };
 
-            TableClient table = _tableStorage.GetLocationsTable();
-            await table.AddEntityAsync(locationEntity);
+            await _locationRepository.AddAsync(locationEntity);
 
             LocationResponse response = new(
                 locationEntity.RowKey,
@@ -88,7 +99,9 @@ public class LocationFunctions
                 locationEntity.Longitude,
                 locationEntity.RequiredMarshals,
                 locationEntity.CheckedInCount,
-                locationEntity.What3Words
+                locationEntity.What3Words,
+                locationEntity.StartTime,
+                locationEntity.EndTime
             );
 
             _logger.LogInformation($"Location created: {locationEntity.RowKey}");
@@ -110,26 +123,28 @@ public class LocationFunctions
     {
         try
         {
-            TableClient table = _tableStorage.GetLocationsTable();
-            Response<LocationEntity> locationEntity = await table.GetEntityAsync<LocationEntity>(eventId, locationId);
+            LocationEntity? locationEntity = await _locationRepository.GetAsync(eventId, locationId);
+
+            if (locationEntity == null)
+            {
+                return new NotFoundObjectResult(new { message = "Location not found" });
+            }
 
             LocationResponse response = new(
-                locationEntity.Value.RowKey,
-                locationEntity.Value.EventId,
-                locationEntity.Value.Name,
-                locationEntity.Value.Description,
-                locationEntity.Value.Latitude,
-                locationEntity.Value.Longitude,
-                locationEntity.Value.RequiredMarshals,
-                locationEntity.Value.CheckedInCount,
-                locationEntity.Value.What3Words
+                locationEntity.RowKey,
+                locationEntity.EventId,
+                locationEntity.Name,
+                locationEntity.Description,
+                locationEntity.Latitude,
+                locationEntity.Longitude,
+                locationEntity.RequiredMarshals,
+                locationEntity.CheckedInCount,
+                locationEntity.What3Words,
+                locationEntity.StartTime,
+                locationEntity.EndTime
             );
 
             return new OkObjectResult(response);
-        }
-        catch (RequestFailedException ex) when (ex.Status == 404)
-        {
-            return new NotFoundObjectResult(new { message = "Location not found" });
         }
         catch (Exception ex)
         {
@@ -145,23 +160,21 @@ public class LocationFunctions
     {
         try
         {
-            TableClient table = _tableStorage.GetLocationsTable();
-            List<LocationResponse> locations = [];
+            IEnumerable<LocationEntity> locationEntities = await _locationRepository.GetByEventAsync(eventId);
 
-            await foreach (LocationEntity locationEntity in table.QueryAsync<LocationEntity>(l => l.PartitionKey == eventId))
-            {
-                locations.Add(new LocationResponse(
-                    locationEntity.RowKey,
-                    locationEntity.EventId,
-                    locationEntity.Name,
-                    locationEntity.Description,
-                    locationEntity.Latitude,
-                    locationEntity.Longitude,
-                    locationEntity.RequiredMarshals,
-                    locationEntity.CheckedInCount,
-                    locationEntity.What3Words
-                ));
-            }
+            List<LocationResponse> locations = locationEntities.Select(locationEntity => new LocationResponse(
+                locationEntity.RowKey,
+                locationEntity.EventId,
+                locationEntity.Name,
+                locationEntity.Description,
+                locationEntity.Latitude,
+                locationEntity.Longitude,
+                locationEntity.RequiredMarshals,
+                locationEntity.CheckedInCount,
+                locationEntity.What3Words,
+                locationEntity.StartTime,
+                locationEntity.EndTime
+            )).ToList();
 
             return new OkObjectResult(locations);
         }
@@ -193,37 +206,41 @@ public class LocationFunctions
                 return new BadRequestObjectResult(new { message = "Invalid What3Words format. Must be in format word.word.word or word/word/word where each word is lowercase letters (1-20 characters)" });
             }
 
-            TableClient table = _tableStorage.GetLocationsTable();
-            Response<LocationEntity> locationEntity = await table.GetEntityAsync<LocationEntity>(eventId, locationId);
+            LocationEntity? locationEntity = await _locationRepository.GetAsync(eventId, locationId);
 
-            locationEntity.Value.Name = request.Name;
-            locationEntity.Value.Description = request.Description;
-            locationEntity.Value.Latitude = request.Latitude;
-            locationEntity.Value.Longitude = request.Longitude;
-            locationEntity.Value.RequiredMarshals = request.RequiredMarshals;
-            locationEntity.Value.What3Words = request.What3Words ?? string.Empty;
+            if (locationEntity == null)
+            {
+                return new NotFoundObjectResult(new { message = "Location not found" });
+            }
 
-            await table.UpdateEntityAsync(locationEntity.Value, locationEntity.Value.ETag);
+            locationEntity.Name = request.Name;
+            locationEntity.Description = request.Description;
+            locationEntity.Latitude = request.Latitude;
+            locationEntity.Longitude = request.Longitude;
+            locationEntity.RequiredMarshals = request.RequiredMarshals;
+            locationEntity.What3Words = request.What3Words ?? string.Empty;
+            locationEntity.StartTime = request.StartTime;
+            locationEntity.EndTime = request.EndTime;
+
+            await _locationRepository.UpdateAsync(locationEntity);
 
             LocationResponse response = new(
-                locationEntity.Value.RowKey,
-                locationEntity.Value.EventId,
-                locationEntity.Value.Name,
-                locationEntity.Value.Description,
-                locationEntity.Value.Latitude,
-                locationEntity.Value.Longitude,
-                locationEntity.Value.RequiredMarshals,
-                locationEntity.Value.CheckedInCount,
-                locationEntity.Value.What3Words
+                locationEntity.RowKey,
+                locationEntity.EventId,
+                locationEntity.Name,
+                locationEntity.Description,
+                locationEntity.Latitude,
+                locationEntity.Longitude,
+                locationEntity.RequiredMarshals,
+                locationEntity.CheckedInCount,
+                locationEntity.What3Words,
+                locationEntity.StartTime,
+                locationEntity.EndTime
             );
 
             _logger.LogInformation($"Location updated: {locationId}");
 
             return new OkObjectResult(response);
-        }
-        catch (RequestFailedException ex) when (ex.Status == 404)
-        {
-            return new NotFoundObjectResult(new { message = "Location not found" });
         }
         catch (Exception ex)
         {
@@ -240,16 +257,11 @@ public class LocationFunctions
     {
         try
         {
-            TableClient table = _tableStorage.GetLocationsTable();
-            await table.DeleteEntityAsync(eventId, locationId);
+            await _locationRepository.DeleteAsync(eventId, locationId);
 
             _logger.LogInformation($"Location deleted: {locationId}");
 
             return new NoContentResult();
-        }
-        catch (RequestFailedException ex) when (ex.Status == 404)
-        {
-            return new NotFoundObjectResult(new { message = "Location not found" });
         }
         catch (Exception ex)
         {
@@ -292,29 +304,17 @@ public class LocationFunctions
                 return new BadRequestObjectResult(new ImportLocationsResponse(0, 0, parseResult.Errors));
             }
 
-            TableClient locationsTable = _tableStorage.GetLocationsTable();
-            TableClient assignmentsTable = _tableStorage.GetAssignmentsTable();
-
             // Delete existing locations if requested
             if (deleteExisting)
             {
-                await foreach (LocationEntity location in locationsTable.QueryAsync<LocationEntity>(l => l.PartitionKey == eventId))
-                {
-                    await locationsTable.DeleteEntityAsync(eventId, location.RowKey);
-                }
-
-                await foreach (AssignmentEntity assignment in assignmentsTable.QueryAsync<AssignmentEntity>(a => a.PartitionKey == eventId))
-                {
-                    await assignmentsTable.DeleteEntityAsync(eventId, assignment.RowKey);
-                }
+                await _locationRepository.DeleteAllByEventAsync(eventId);
+                await _assignmentRepository.DeleteAllByEventAsync(eventId);
             }
 
             // Load existing locations to check for duplicates
-            Dictionary<string, LocationEntity> existingLocations = [];
-            await foreach (LocationEntity location in locationsTable.QueryAsync<LocationEntity>(l => l.PartitionKey == eventId))
-            {
-                existingLocations[location.Name.ToLower()] = location;
-            }
+            IEnumerable<LocationEntity> existingLocationsList = await _locationRepository.GetByEventAsync(eventId);
+            Dictionary<string, LocationEntity> existingLocations = existingLocationsList
+                .ToDictionary(l => l.Name.ToLower(), l => l);
 
             // Create or update locations and assignments
             int locationsCreated = 0;
@@ -325,108 +325,19 @@ public class LocationFunctions
             {
                 try
                 {
-                    LocationEntity? locationEntity;
                     bool isUpdate = existingLocations.TryGetValue(row.Name.ToLower(), out LocationEntity? existing);
 
                     if (isUpdate && existing != null)
                     {
-                        // Update existing location
-                        locationEntity = existing;
-
-                        // Only update lat/long if CSV has values
-                        if (row.HasLatLong)
-                        {
-                            locationEntity.Latitude = row.Latitude;
-                            locationEntity.Longitude = row.Longitude;
-                        }
-
-                        // Update What3Words if CSV has value
-                        if (!string.IsNullOrWhiteSpace(row.What3Words))
-                        {
-                            locationEntity.What3Words = row.What3Words;
-                        }
-
-                        if (!string.IsNullOrWhiteSpace(row.Description))
-                        {
-                            locationEntity.Description = row.Description;
-                        }
-
-                        // Update marshals only if CSV has marshal names
-                        if (row.MarshalNames.Count > 0)
-                        {
-                            // Delete existing assignments for this location
-                            await foreach (AssignmentEntity assignment in assignmentsTable.QueryAsync<AssignmentEntity>(
-                                a => a.PartitionKey == eventId && a.LocationId == locationEntity.RowKey))
-                            {
-                                await assignmentsTable.DeleteEntityAsync(eventId, assignment.RowKey);
-                            }
-
-                            // Create new assignments
-                            TableClient marshalsTable = _tableStorage.GetMarshalsTable();
-                            foreach (string marshalName in row.MarshalNames)
-                            {
-                                // Find or create marshal
-                                string marshalId = await FindOrCreateMarshal(marshalsTable, eventId, marshalName);
-
-                                AssignmentEntity assignmentEntity = new()
-                                {
-                                    PartitionKey = eventId,
-                                    RowKey = Guid.NewGuid().ToString(),
-                                    EventId = eventId,
-                                    LocationId = locationEntity.RowKey,
-                                    MarshalId = marshalId,
-                                    MarshalName = marshalName
-                                };
-
-                                await assignmentsTable.AddEntityAsync(assignmentEntity);
-                                assignmentsCreated++;
-                            }
-
-                            locationEntity.RequiredMarshals = row.MarshalNames.Count;
-                        }
-
-                        await locationsTable.UpdateEntityAsync(locationEntity, locationEntity.ETag);
+                        int newAssignments = await UpdateExistingLocation(existing, row, eventId);
+                        assignmentsCreated += newAssignments;
                         locationsUpdated++;
                     }
                     else
                     {
-                        // Create new location
-                        locationEntity = new LocationEntity
-                        {
-                            PartitionKey = eventId,
-                            RowKey = Guid.NewGuid().ToString(),
-                            EventId = eventId,
-                            Name = row.Name,
-                            Description = row.Description,
-                            Latitude = row.Latitude,
-                            Longitude = row.Longitude,
-                            RequiredMarshals = row.MarshalNames.Count > 0 ? row.MarshalNames.Count : 1,
-                            What3Words = row.What3Words
-                        };
-
-                        await locationsTable.AddEntityAsync(locationEntity);
+                        int newAssignments = await CreateNewLocation(row, eventId);
+                        assignmentsCreated += newAssignments;
                         locationsCreated++;
-
-                        // Create assignments for each marshal
-                        TableClient marshalsTable = _tableStorage.GetMarshalsTable();
-                        foreach (string marshalName in row.MarshalNames)
-                        {
-                            // Find or create marshal
-                            string marshalId = await FindOrCreateMarshal(marshalsTable, eventId, marshalName);
-
-                            AssignmentEntity assignmentEntity = new()
-                            {
-                                PartitionKey = eventId,
-                                RowKey = Guid.NewGuid().ToString(),
-                                EventId = eventId,
-                                LocationId = locationEntity.RowKey,
-                                MarshalId = marshalId,
-                                MarshalName = marshalName
-                            };
-
-                            await assignmentsTable.AddEntityAsync(assignmentEntity);
-                            assignmentsCreated++;
-                        }
                     }
                 }
                 catch (Exception ex)
@@ -438,7 +349,8 @@ public class LocationFunctions
             // Warn about new locations with missing or zero lat/long
             if (deleteExisting || locationsCreated > 0)
             {
-                await foreach (LocationEntity location in locationsTable.QueryAsync<LocationEntity>(l => l.PartitionKey == eventId))
+                IEnumerable<LocationEntity> allLocations = await _locationRepository.GetByEventAsync(eventId);
+                foreach (LocationEntity location in allLocations)
                 {
                     if ((location.Latitude == 0 && location.Longitude == 0) || double.IsNaN(location.Latitude) || double.IsNaN(location.Longitude))
                     {
@@ -458,15 +370,13 @@ public class LocationFunctions
         }
     }
 
-    private async Task<string> FindOrCreateMarshal(TableClient marshalsTable, string eventId, string marshalName)
+    private async Task<string> FindOrCreateMarshal(string eventId, string marshalName)
     {
         // Try to find existing marshal by name
-        await foreach (MarshalEntity m in marshalsTable.QueryAsync<MarshalEntity>(m => m.PartitionKey == eventId))
+        MarshalEntity? existingMarshal = await _marshalRepository.FindByNameAsync(eventId, marshalName);
+        if (existingMarshal != null)
         {
-            if (m.Name.Equals(marshalName, StringComparison.OrdinalIgnoreCase))
-            {
-                return m.MarshalId;
-            }
+            return existingMarshal.MarshalId;
         }
 
         // Create new marshal if not found
@@ -479,9 +389,166 @@ public class LocationFunctions
             MarshalId = newMarshalId,
             Name = marshalName
         };
-        await marshalsTable.AddEntityAsync(newMarshal);
+        await _marshalRepository.AddAsync(newMarshal);
         _logger.LogInformation($"Created new marshal from CSV: {newMarshalId} - {marshalName}");
 
         return newMarshalId;
+    }
+
+    private async Task<int> UpdateExistingLocation(
+        LocationEntity locationEntity,
+        CsvParserService.LocationCsvRow row,
+        string eventId)
+    {
+        int assignmentsCreated = 0;
+
+        // Only update lat/long if CSV has values
+        if (row.HasLatLong)
+        {
+            locationEntity.Latitude = row.Latitude;
+            locationEntity.Longitude = row.Longitude;
+        }
+
+        // Update What3Words if CSV has value
+        if (!string.IsNullOrWhiteSpace(row.What3Words))
+        {
+            locationEntity.What3Words = row.What3Words;
+        }
+
+        if (!string.IsNullOrWhiteSpace(row.Description))
+        {
+            locationEntity.Description = row.Description;
+        }
+
+        // Update marshals only if CSV has marshal names
+        if (row.MarshalNames.Count > 0)
+        {
+            assignmentsCreated = await ReplaceLocationAssignments(locationEntity.RowKey, row.MarshalNames, eventId);
+            locationEntity.RequiredMarshals = row.MarshalNames.Count;
+        }
+
+        await _locationRepository.UpdateAsync(locationEntity);
+
+        return assignmentsCreated;
+    }
+
+    private async Task<int> CreateNewLocation(
+        CsvParserService.LocationCsvRow row,
+        string eventId)
+    {
+        LocationEntity locationEntity = new()
+        {
+            PartitionKey = eventId,
+            RowKey = Guid.NewGuid().ToString(),
+            EventId = eventId,
+            Name = row.Name,
+            Description = row.Description,
+            Latitude = row.Latitude,
+            Longitude = row.Longitude,
+            RequiredMarshals = row.MarshalNames.Count > 0 ? row.MarshalNames.Count : 1,
+            What3Words = row.What3Words
+        };
+
+        await _locationRepository.AddAsync(locationEntity);
+
+        int assignmentsCreated = await CreateAssignmentsForLocation(locationEntity.RowKey, row.MarshalNames, eventId);
+
+        return assignmentsCreated;
+    }
+
+    private async Task<int> ReplaceLocationAssignments(
+        string locationId,
+        List<string> marshalNames,
+        string eventId)
+    {
+        // Delete existing assignments for this location
+        await _assignmentRepository.DeleteAllByLocationAsync(eventId, locationId);
+
+        // Create new assignments
+        return await CreateAssignmentsForLocation(locationId, marshalNames, eventId);
+    }
+
+    private async Task<int> CreateAssignmentsForLocation(
+        string locationId,
+        List<string> marshalNames,
+        string eventId)
+    {
+        int assignmentsCreated = 0;
+
+        foreach (string marshalName in marshalNames)
+        {
+            // Find or create marshal
+            string marshalId = await FindOrCreateMarshal(eventId, marshalName);
+
+            AssignmentEntity assignmentEntity = new()
+            {
+                PartitionKey = eventId,
+                RowKey = Guid.NewGuid().ToString(),
+                EventId = eventId,
+                LocationId = locationId,
+                MarshalId = marshalId,
+                MarshalName = marshalName
+            };
+
+            await _assignmentRepository.AddAsync(assignmentEntity);
+            assignmentsCreated++;
+        }
+
+        return assignmentsCreated;
+    }
+
+    [Function("BulkUpdateLocationTimes")]
+    public async Task<IActionResult> BulkUpdateLocationTimes(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "locations/bulk-update-times/{eventId}")] HttpRequest req,
+        string eventId)
+    {
+        try
+        {
+            string body = await new StreamReader(req.Body).ReadToEndAsync();
+            BulkUpdateLocationTimesRequest? request = JsonSerializer.Deserialize<BulkUpdateLocationTimesRequest>(
+                body,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            );
+
+            if (request == null)
+            {
+                return new BadRequestObjectResult(new { message = "Invalid request" });
+            }
+
+            IEnumerable<LocationEntity> locationEntities = await _locationRepository.GetByEventAsync(eventId);
+            int updatedCount = 0;
+
+            foreach (LocationEntity location in locationEntities)
+            {
+                bool updated = false;
+
+                if (location.StartTime.HasValue)
+                {
+                    location.StartTime = location.StartTime.Value.Add(request.TimeDelta);
+                    updated = true;
+                }
+
+                if (location.EndTime.HasValue)
+                {
+                    location.EndTime = location.EndTime.Value.Add(request.TimeDelta);
+                    updated = true;
+                }
+
+                if (updated)
+                {
+                    await _locationRepository.UpdateAsync(location);
+                    updatedCount++;
+                }
+            }
+
+            _logger.LogInformation($"Bulk updated {updatedCount} location times for event {eventId}");
+
+            return new OkObjectResult(new { updatedCount });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error bulk updating location times");
+            return new StatusCodeResult(500);
+        }
     }
 }

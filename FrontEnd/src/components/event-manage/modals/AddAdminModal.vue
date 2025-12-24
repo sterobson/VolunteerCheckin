@@ -1,45 +1,45 @@
 <template>
-  <div v-if="show" class="modal" @click.self="close">
-    <div class="modal-content">
-      <button @click="close" class="modal-close-btn">✕</button>
-      <h2>Add event administrator</h2>
-      <p class="instruction">Enter the email address of the administrator to add</p>
+  <BaseModal
+    :show="show"
+    title="Add event administrator"
+    size="medium"
+    :confirm-on-close="true"
+    :is-dirty="isDirty"
+    @close="handleClose"
+  >
+    <!-- Instruction text -->
+    <p class="instruction">Enter the email address of the administrator to add</p>
 
-      <form @submit.prevent="handleSubmit">
-        <div class="form-group">
-          <label>Email address</label>
-          <input
-            v-model="email"
-            type="email"
-            required
-            class="form-input"
-            placeholder="admin@example.com"
-            @input="handleInput"
-          />
-        </div>
+    <!-- Form -->
+    <form @submit.prevent="handleSubmit">
+      <div class="form-group">
+        <label>Email address</label>
+        <input
+          v-model="email"
+          type="email"
+          required
+          class="form-input"
+          placeholder="admin@example.com"
+          @input="handleInput"
+        />
+      </div>
+    </form>
 
-        <div class="modal-actions">
-          <button type="button" @click="close" class="btn btn-secondary">
-            Cancel
-          </button>
-          <button type="submit" class="btn btn-primary">Add administrator</button>
-        </div>
-      </form>
-    </div>
-
-    <ConfirmModal
-      :show="showConfirmModal"
-      title="Unsaved Changes"
-      message="You have unsaved changes. Are you sure you want to close?"
-      @confirm="handleConfirmClose"
-      @cancel="handleCancelClose"
-    />
-  </div>
+    <!-- Action buttons -->
+    <template #actions>
+      <button type="button" @click="handleClose" class="btn btn-secondary">
+        Cancel
+      </button>
+      <button type="button" @click="handleSubmit" class="btn btn-primary">
+        Add administrator
+      </button>
+    </template>
+  </BaseModal>
 </template>
 
 <script setup>
 import { ref, defineProps, defineEmits, watch } from 'vue';
-import ConfirmModal from '../../ConfirmModal.vue';
+import BaseModal from '../../BaseModal.vue';
 
 const props = defineProps({
   show: {
@@ -55,7 +55,6 @@ const props = defineProps({
 const emit = defineEmits(['close', 'submit', 'update:isDirty']);
 
 const email = ref('');
-const showConfirmModal = ref(false);
 
 watch(() => props.show, (newVal) => {
   if (!newVal) {
@@ -71,76 +70,12 @@ const handleSubmit = () => {
   emit('submit', email.value);
 };
 
-const close = () => {
-  if (props.isDirty) {
-    showConfirmModal.value = true;
-  } else {
-    emit('close');
-  }
-};
-
-const handleConfirmClose = () => {
-  showConfirmModal.value = false;
+const handleClose = () => {
   emit('close');
-};
-
-const handleCancelClose = () => {
-  showConfirmModal.value = false;
 };
 </script>
 
 <style scoped>
-.modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: white;
-  padding: 2rem;
-  border-radius: 12px;
-  max-width: 500px;
-  width: 90%;
-  max-height: 90vh;
-  overflow-y: auto;
-  position: relative;
-}
-
-.modal-close-btn {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  color: #666;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-}
-
-.modal-close-btn:hover {
-  background: #f0f0f0;
-  color: #333;
-}
-
-h2 {
-  margin: 0 0 1rem 0;
-  color: #333;
-}
-
 .instruction {
   color: #666;
   margin-bottom: 1.5rem;
@@ -164,24 +99,6 @@ h2 {
   border-radius: 4px;
   font-size: 0.9rem;
   box-sizing: border-box;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 1rem;
-  justify-content: flex-end;
-  margin-top: 2rem;
-  padding-top: 1.5rem;
-  background: white;
-  position: sticky;
-  bottom: 0;
-  border-top: 1px solid #e0e0e0;
-  margin-left: -2rem;
-  margin-right: -2rem;
-  margin-bottom: -2rem;
-  padding-left: 2rem;
-  padding-right: 2rem;
-  padding-bottom: 2rem;
 }
 
 .btn {

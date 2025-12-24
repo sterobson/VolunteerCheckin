@@ -3,6 +3,7 @@ using Microsoft.Azure.Functions.Worker.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using VolunteerCheckin.Functions.Services;
+using VolunteerCheckin.Functions.Repositories;
 
 var builder = FunctionsApplication.CreateBuilder(args);
 
@@ -34,5 +35,13 @@ builder.Services.AddSingleton(sp =>
 
 builder.Services.AddSingleton<GpxParserService>();
 builder.Services.AddSingleton<CsvParserService>();
+
+// Register repositories
+builder.Services.AddSingleton<ILocationRepository, TableStorageLocationRepository>();
+builder.Services.AddSingleton<IMarshalRepository, TableStorageMarshalRepository>();
+builder.Services.AddSingleton<IAssignmentRepository, TableStorageAssignmentRepository>();
+builder.Services.AddSingleton<IEventRepository, TableStorageEventRepository>();
+builder.Services.AddSingleton<IAdminUserRepository, TableStorageAdminUserRepository>();
+builder.Services.AddSingleton<IUserEventMappingRepository, TableStorageUserEventMappingRepository>();
 
 builder.Build().Run();

@@ -37,6 +37,35 @@ let map = null;
 const markers = ref([]);
 let routePolyline = null;
 let isInitialLoad = true;
+const showDescriptions = ref(false);
+
+const truncateText = (text, maxLength) => {
+  if (!text) return '';
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '...';
+};
+
+const checkVisibleMarkersAndUpdate = () => {
+  if (!map) return;
+
+  const bounds = map.getBounds();
+  let visibleCount = 0;
+
+  markers.value.forEach((marker) => {
+    const markerLatLng = marker.getLatLng();
+    if (bounds.contains(markerLatLng)) {
+      visibleCount++;
+    }
+  });
+
+  const shouldShowDescriptions = visibleCount <= 10;
+
+  // Only update if the state changed
+  if (showDescriptions.value !== shouldShowDescriptions) {
+    showDescriptions.value = shouldShowDescriptions;
+    updateMarkers();
+  }
+};
 
 const initMap = () => {
   if (!mapContainer.value) return;
@@ -56,6 +85,11 @@ const initMap = () => {
       emit('map-click', { lat: e.latlng.lat, lng: e.latlng.lng });
     });
   }
+
+  // Listen for zoom and move events to update label visibility
+  map.on('zoomend moveend', () => {
+    checkVisibleMarkersAndUpdate();
+  });
 
   updateMarkers();
   updateRoute();
@@ -97,6 +131,10 @@ const updateMarkers = () => {
 
     const color = isFull ? 'green' : isMissing ? 'red' : 'orange';
 
+    const labelText = showDescriptions.value && location.description
+      ? `${location.name}: ${truncateText(location.description, 50)}`
+      : location.name;
+
     const icon = L.divIcon({
       className: 'custom-marker',
       html: `
@@ -128,7 +166,7 @@ const updateMarkers = () => {
             box-shadow: 0 1px 3px rgba(0,0,0,0.3);
             margin-top: 2px;
           ">
-            ${location.name}
+            ${labelText}
           </div>
         </div>
       `,
@@ -171,6 +209,14 @@ const updateMarkers = () => {
       isInitialLoad = false;
     }
   }
+
+  // Check if we should show descriptions after markers are updated
+  // Use setTimeout to ensure markers are fully rendered
+  setTimeout(() => {
+    if (map && !map._animatingZoom) {
+      checkVisibleMarkersAndUpdate();
+    }
+  }, 100);
 };
 
 onMounted(() => {

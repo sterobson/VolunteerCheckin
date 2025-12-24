@@ -85,47 +85,11 @@
     </div>
 
     <!-- Emergency Contact Modal -->
-    <div v-if="showEmergency" class="modal" @click.self="showEmergency = false">
-      <div class="modal-content emergency-modal">
-        <h2>Emergency Contact Information</h2>
-
-        <div v-if="event.emergencyContacts && event.emergencyContacts.length > 0" class="emergency-contacts-list">
-          <div
-            v-for="(contact, index) in event.emergencyContacts"
-            :key="index"
-            class="emergency-contact-item"
-          >
-            <h3>{{ contact.name }}</h3>
-
-            <div class="contact-details">
-              <div class="info-section">
-                <label>Phone Number</label>
-                <a :href="`tel:${contact.phone}`" class="phone-link">
-                  {{ contact.phone }}
-                </a>
-              </div>
-
-              <div v-if="contact.details" class="info-section">
-                <label>Details</label>
-                <p>{{ contact.details }}</p>
-              </div>
-            </div>
-
-            <a :href="`tel:${contact.phone}`" class="btn btn-danger btn-full">
-              Call {{ contact.name }}
-            </a>
-          </div>
-        </div>
-
-        <div v-else class="no-contacts">
-          <p>No emergency contacts have been set up for this event.</p>
-        </div>
-
-        <div class="modal-actions">
-          <button @click="showEmergency = false" class="btn btn-secondary">Close</button>
-        </div>
-      </div>
-    </div>
+    <EmergencyContactModal
+      :show="showEmergency"
+      :contacts="event?.emergencyContacts || []"
+      @close="showEmergency = false"
+    />
 
     <ConfirmModal
       :show="showConfirmModal"
@@ -144,6 +108,7 @@ import { useEventsStore } from '../stores/events';
 import { checkInApi } from '../services/api';
 import MapView from '../components/MapView.vue';
 import ConfirmModal from '../components/ConfirmModal.vue';
+import EmergencyContactModal from '../components/event-manage/modals/EmergencyContactModal.vue';
 
 const route = useRoute();
 const eventsStore = useEventsStore();

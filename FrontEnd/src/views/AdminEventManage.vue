@@ -366,216 +366,20 @@
       </div>
     </div>
 
-    <!-- Edit Location Modal -->
-    <div v-if="showEditLocation" class="modal" @click.self="tryCloseModal(() => closeEditLocationModal())">
-      <div class="modal-content modal-content-large">
-        <button @click="tryCloseModal(() => closeEditLocationModal())" class="modal-close-btn">✕</button>
-        <h2>Edit checkpoint: {{ selectedLocation?.name }}</h2>
-
-        <!-- Modal Tabs Navigation -->
-        <div class="edit-modal-tabs-nav">
-          <button
-            class="edit-modal-tab-button"
-            :class="{ active: editLocationTab === 'details' }"
-            @click="editLocationTab = 'details'"
-            type="button"
-          >
-            Details
-          </button>
-          <button
-            class="edit-modal-tab-button"
-            :class="{ active: editLocationTab === 'marshals' }"
-            @click="editLocationTab = 'marshals'"
-            type="button"
-          >
-            Marshals
-          </button>
-        </div>
-
-        <!-- Details Tab -->
-        <div v-if="editLocationTab === 'details'" class="edit-modal-tab-content">
-          <form @submit.prevent="handleUpdateLocation">
-            <div class="form-group">
-              <label>Name</label>
-              <input
-                v-model="editLocationForm.name"
-                type="text"
-                required
-                class="form-input"
-                @input="markFormDirty"
-              />
-            </div>
-
-            <div class="form-group">
-              <label>Description (optional)</label>
-              <input
-                v-model="editLocationForm.description"
-                type="text"
-                class="form-input"
-                @input="markFormDirty"
-              />
-            </div>
-
-            <div class="form-group">
-              <label>What3Words (optional)</label>
-              <input
-                v-model="editLocationForm.what3Words"
-                type="text"
-                class="form-input"
-                placeholder="e.g. filled.count.soap or filled/count/soap"
-                @input="markFormDirty"
-              />
-              <small v-if="editLocationForm.what3Words && !isValidWhat3Words(editLocationForm.what3Words)" class="form-error">
-                Invalid format. Must be word.word.word or word/word/word (lowercase letters only, 1-20 characters each)
-              </small>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label>Latitude</label>
-                <input
-                  :value="formatCoordinate(editLocationForm.latitude, 6)"
-                  @input="editLocationForm.latitude = parseFloat($event.target.value) || 0; markFormDirty()"
-                  type="text"
-                  required
-                  class="form-input"
-                  :disabled="isMovingLocation"
-                  placeholder="e.g., 51.505123"
-                />
-              </div>
-
-              <div class="form-group">
-                <label>Longitude</label>
-                <input
-                  :value="formatCoordinate(editLocationForm.longitude, 6)"
-                  @input="editLocationForm.longitude = parseFloat($event.target.value) || 0; markFormDirty()"
-                  type="text"
-                  required
-                  class="form-input"
-                  :disabled="isMovingLocation"
-                  placeholder="e.g., -0.091234"
-                />
-              </div>
-            </div>
-
-            <div class="form-group">
-              <button
-                type="button"
-                @click="startMoveLocation"
-                class="btn btn-secondary"
-                :class="{ 'btn-primary': isMovingLocation }"
-              >
-                {{ isMovingLocation ? 'Click on map to set new location...' : 'Move checkpoint...' }}
-              </button>
-            </div>
-          </form>
-        </div>
-
-        <!-- Marshals Tab -->
-        <div v-if="editLocationTab === 'marshals'" class="edit-modal-tab-content">
-          <div class="form-group">
-            <label>Required marshals</label>
-            <input
-              v-model.number="editLocationForm.requiredMarshals"
-              type="number"
-              min="1"
-              required
-              class="form-input"
-              @input="markFormDirty"
-            />
-          </div>
-
-          <h3 style="margin-top: 0;">Assigned marshals ({{ (selectedLocation?.assignments?.length || 0) + pendingAssignments.length }})</h3>
-          <div class="assignments-list">
-            <div
-              v-for="assignment in selectedLocation.assignments"
-              :key="assignment.id"
-              class="assignment-item"
-              :class="{ 'checked-in': assignment.isCheckedIn, 'pending-delete': isPendingDelete(assignment.id) }"
-            >
-              <div class="assignment-info">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <span
-                    class="status-indicator"
-                    :style="{ color: getAssignmentStatus(assignment).color }"
-                    :title="getAssignmentStatus(assignment).text"
-                  >
-                    {{ getAssignmentStatus(assignment).icon }}
-                  </span>
-                  <strong>{{ assignment.marshalName }}</strong>
-                  <span v-if="isPendingDelete(assignment.id)" class="pending-badge">Will be removed</span>
-                </div>
-                <span v-if="assignment.isCheckedIn" class="check-in-info">
-                  {{ formatTime(assignment.checkInTime) }}
-                  <span class="check-in-method">({{ assignment.checkInMethod }})</span>
-                </span>
-                <span class="distance-info">
-                  {{ getAssignmentStatus(assignment).text }}
-                </span>
-              </div>
-              <div class="assignment-actions">
-                <button
-                  @click="toggleCheckIn(assignment)"
-                  class="btn btn-small"
-                  :class="assignment.isCheckedIn ? 'btn-danger' : 'btn-secondary'"
-                >
-                  {{ assignment.isCheckedIn ? 'Undo' : 'Check in' }}
-                </button>
-                <button
-                  @click="markAssignmentForDelete(assignment)"
-                  class="btn btn-small"
-                  :class="isPendingDelete(assignment.id) ? 'btn-secondary' : 'btn-danger'"
-                >
-                  {{ isPendingDelete(assignment.id) ? 'Undo' : 'Remove' }}
-                </button>
-              </div>
-            </div>
-
-            <!-- Pending assignments -->
-            <div
-              v-for="pending in pendingAssignments"
-              :key="`pending-${pending.marshalId}`"
-              class="assignment-item pending-add"
-            >
-              <div class="assignment-info">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <span class="status-indicator" style="color: #666;">✗</span>
-                  <strong>{{ pending.marshalName }}</strong>
-                  <span class="pending-badge">Will be added</span>
-                </div>
-              </div>
-              <div class="assignment-actions">
-                <button
-                  @click="removePendingAssignment(pending.marshalId)"
-                  class="btn btn-small btn-danger"
-                >
-                  Remove
-                </button>
-              </div>
-            </div>
-
-            <!-- Assign Button at the end of list -->
-            <button @click="showAssignMarshalModal = true" class="btn btn-secondary" style="width: 100%; margin-top: 1rem;">
-              Assign...
-            </button>
-          </div>
-        </div>
-
-        <!-- Save/Delete buttons fixed at bottom for all tabs -->
-        <div class="modal-actions-fixed">
-          <button type="button" @click="handleUpdateLocation" class="btn btn-primary">
-            Save changes
-          </button>
-          <button
-            type="button"
-            @click="handleDeleteLocation"
-            class="btn btn-danger"
-          >
-            Delete checkpoint
-          </button>
-        </div>
-      </div>
-    </div>
+    <EditLocationModal
+      :show="showEditLocation"
+      :location="selectedLocation"
+      :assignments="selectedLocation?.assignments || []"
+      :isDirty="formDirty"
+      @close="closeEditLocationModal"
+      @save="handleUpdateLocation"
+      @delete="handleDeleteLocation"
+      @move-location="startMoveLocation"
+      @toggle-check-in="toggleCheckIn"
+      @remove-assignment="handleRemoveLocationAssignment"
+      @assign-marshal="showAssignMarshalModal = true"
+      @update:isDirty="markFormDirty"
+    />
 
     <!-- Share Link Modal -->
     <ShareLinkModal
@@ -617,190 +421,21 @@
       @update:isDirty="markFormDirty"
     />
 
-    <!-- Edit Marshal Modal -->
-    <div v-if="showEditMarshal" class="modal" @click.self="tryCloseModal(closeEditMarshalModal)">
-      <div class="modal-content modal-content-large">
-        <button @click="tryCloseModal(closeEditMarshalModal)" class="modal-close-btn">✕</button>
-        <h2>{{ selectedMarshal ? 'Edit marshal' : 'Add marshal' }}</h2>
-
-        <!-- Modal Tabs Navigation -->
-        <div v-if="selectedMarshal" class="edit-modal-tabs-nav">
-          <button
-            class="edit-modal-tab-button"
-            :class="{ active: editMarshalTab === 'details' }"
-            @click="editMarshalTab = 'details'"
-            type="button"
-          >
-            Details
-          </button>
-          <button
-            class="edit-modal-tab-button"
-            :class="{ active: editMarshalTab === 'checkpoints' }"
-            @click="editMarshalTab = 'checkpoints'"
-            type="button"
-          >
-            Checkpoints
-          </button>
-        </div>
-
-        <!-- Details Tab -->
-        <div v-if="editMarshalTab === 'details' || !selectedMarshal" class="edit-modal-tab-content">
-          <div class="form-group">
-            <label>Name *</label>
-            <input
-              v-model="editMarshalForm.name"
-              type="text"
-              required
-              class="form-input"
-              @input="markFormDirty"
-            />
-          </div>
-
-          <div class="form-group">
-            <label>Email</label>
-            <input
-              v-model="editMarshalForm.email"
-              type="email"
-              class="form-input"
-              @input="markFormDirty"
-            />
-          </div>
-
-          <div class="form-group">
-            <label>Phone number</label>
-            <input
-              v-model="editMarshalForm.phoneNumber"
-              type="tel"
-              class="form-input"
-              @input="markFormDirty"
-            />
-          </div>
-
-          <div class="form-group">
-            <label>Notes</label>
-            <textarea
-              v-model="editMarshalForm.notes"
-              class="form-input"
-              rows="3"
-              placeholder="e.g., Needs to leave by 11am"
-              @input="markFormDirty"
-            ></textarea>
-          </div>
-        </div>
-
-        <!-- Checkpoints Tab -->
-        <div v-if="editMarshalTab === 'checkpoints' && selectedMarshal" class="edit-modal-tab-content">
-          <h3 style="margin-top: 0;">Assigned checkpoints ({{ getMarshalAssignmentCount() }})</h3>
-          <div class="assignments-list">
-            <!-- Existing assignments -->
-            <div
-              v-for="assignment in getMarshalAssignmentsForEdit()"
-              :key="assignment.id"
-              class="assignment-item"
-              :class="{ 'checked-in': assignment.isCheckedIn, 'pending-delete': isPendingMarshalDelete(assignment.id) }"
-            >
-              <div class="assignment-info">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <span
-                    class="status-indicator"
-                    :style="{ color: getMarshalAssignmentStatus(assignment).color }"
-                    :title="getMarshalAssignmentStatus(assignment).text"
-                  >
-                    {{ getMarshalAssignmentStatus(assignment).icon }}
-                  </span>
-                  <strong>{{ getLocationName(assignment.locationId) }}</strong>
-                  <span v-if="isPendingMarshalDelete(assignment.id)" class="pending-badge">Will be removed</span>
-                </div>
-                <span v-if="assignment.isCheckedIn" class="check-in-info">
-                  {{ formatTime(assignment.checkInTime) }}
-                  <span class="check-in-method">({{ assignment.checkInMethod }})</span>
-                </span>
-                <span class="distance-info">
-                  {{ getMarshalAssignmentStatus(assignment).text }}
-                </span>
-              </div>
-              <div class="assignment-actions">
-                <button
-                  @click="toggleMarshalCheckIn(assignment)"
-                  class="btn btn-small"
-                  :class="assignment.isCheckedIn ? 'btn-danger' : 'btn-secondary'"
-                >
-                  {{ assignment.isCheckedIn ? 'Undo' : 'Check in' }}
-                </button>
-                <button
-                  @click="markMarshalAssignmentForDelete(assignment)"
-                  class="btn btn-small"
-                  :class="isPendingMarshalDelete(assignment.id) ? 'btn-secondary' : 'btn-danger'"
-                >
-                  {{ isPendingMarshalDelete(assignment.id) ? 'Undo' : 'Remove' }}
-                </button>
-              </div>
-            </div>
-
-            <!-- Pending assignments -->
-            <div
-              v-for="pending in pendingMarshalAssignments"
-              :key="`pending-${pending.locationId}`"
-              class="assignment-item pending-add"
-            >
-              <div class="assignment-info">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <span class="status-indicator" style="color: #666;">✗</span>
-                  <strong>{{ getLocationName(pending.locationId) }}</strong>
-                  <span class="pending-badge">Will be added</span>
-                </div>
-              </div>
-              <div class="assignment-actions">
-                <button
-                  @click="removePendingMarshalAssignment(pending.locationId)"
-                  class="btn btn-small btn-danger"
-                >
-                  Remove
-                </button>
-              </div>
-            </div>
-
-            <!-- Assign button -->
-            <div class="form-group" style="margin-top: 1.5rem;">
-              <label>Assign to checkpoint</label>
-              <select v-model="newAssignmentLocationId" class="form-input">
-                <option value="">Select a checkpoint...</option>
-                <option
-                  v-for="location in availableMarshalLocations"
-                  :key="location.id"
-                  :value="location.id"
-                >
-                  {{ location.name }}
-                </option>
-              </select>
-              <button
-                @click="assignMarshalToLocation"
-                class="btn btn-secondary"
-                style="margin-top: 0.5rem; width: 100%;"
-                :disabled="!newAssignmentLocationId"
-              >
-                Assign to checkpoint
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Save/Delete buttons fixed at bottom for all tabs -->
-        <div class="modal-actions-fixed">
-          <button type="button" @click="handleSaveMarshal" class="btn btn-primary">
-            {{ selectedMarshal ? 'Save changes' : 'Add marshal' }}
-          </button>
-          <button
-            v-if="selectedMarshal"
-            type="button"
-            @click="handleDeleteMarshal"
-            class="btn btn-danger"
-          >
-            Delete marshal
-          </button>
-        </div>
-      </div>
-    </div>
+    <EditMarshalModal
+      :show="showEditMarshal"
+      :marshal="selectedMarshal"
+      :assignments="getMarshalAssignmentsForEdit()"
+      :availableLocations="availableMarshalLocations"
+      :isEditing="!!selectedMarshal"
+      :isDirty="formDirty"
+      @close="closeEditMarshalModal"
+      @save="handleSaveMarshal"
+      @delete="handleDeleteMarshal"
+      @toggle-check-in="toggleMarshalCheckIn"
+      @remove-assignment="handleRemoveMarshalAssignment"
+      @assign-to-location="assignMarshalToLocation"
+      @update:isDirty="markFormDirty"
+    />
 
     <!-- Import Marshals Modal -->
     <ImportMarshalsModal
@@ -814,110 +449,30 @@
       @update:isDirty="markFormDirty"
     />
 
-    <!-- Marshal Assignment Conflict Modal -->
-    <div v-if="showAssignmentConflict" class="modal" @click.self="showAssignmentConflict = false">
-      <div class="modal-content">
-        <button @click="showAssignmentConflict = false" class="modal-close-btn">✕</button>
-        <h2>Marshal already assigned</h2>
-        <p>
-          <strong>{{ assignmentConflictData.marshalName }}</strong> is currently assigned to:
-        </p>
-        <ul style="margin: 1rem 0; padding-left: 1.5rem;">
-          <li v-for="loc in assignmentConflictData.locations" :key="loc">{{ loc }}</li>
-        </ul>
-        <p>What would you like to do?</p>
+    <AssignmentConflictModal
+      :show="showAssignmentConflict"
+      :conflictData="assignmentConflictData"
+      @close="showAssignmentConflict = false"
+      @choice="handleConflictChoice"
+    />
 
-        <div class="modal-actions" style="flex-direction: column; gap: 0.5rem;">
-          <button @click="handleConflictChoice('move')" class="btn btn-primary" style="width: 100%;">
-            Move to this checkpoint (remove from others)
-          </button>
-          <button @click="handleConflictChoice('both')" class="btn btn-secondary" style="width: 100%;">
-            Assign to both (keep existing assignments)
-          </button>
-          <button @click="handleConflictChoice('cancel')" class="btn btn-secondary" style="width: 100%;">
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
+    <AssignMarshalModal
+      :show="showAssignMarshalModal"
+      :locationName="selectedLocation?.name || ''"
+      :marshals="availableMarshalsForAssignment"
+      @close="closeAssignMarshalModal"
+      @assign-existing="handleAssignExistingMarshal"
+      @create-and-assign="handleAddNewMarshalInline"
+    />
 
-    <!-- Assign Marshal Modal -->
-    <div v-if="showAssignMarshalModal" class="modal" @click.self="closeAssignMarshalModal">
-      <div class="modal-content">
-        <button @click="closeAssignMarshalModal" class="modal-close-btn">✕</button>
-        <h2>{{ showAddNewMarshalInline ? 'Create new marshal' : `Assign marshal to ${selectedLocation?.name}` }}</h2>
-
-        <!-- Select existing marshal - only show if not creating new -->
-        <div v-if="!showAddNewMarshalInline" class="assign-marshal-modal-section">
-          <h3>Select existing marshal</h3>
-          <select v-model="selectedMarshalToAssign" class="form-input">
-            <option value="">Choose a marshal...</option>
-            <option
-              v-for="marshal in availableMarshalsForAssignment"
-              :key="marshal.id"
-              :value="marshal.id"
-            >
-              {{ marshal.name }}
-              <template v-if="marshal.assignedLocationIds.length > 0">
-                (assigned to {{ marshal.assignedLocationIds.length }} checkpoint{{ marshal.assignedLocationIds.length > 1 ? 's' : '' }})
-              </template>
-            </option>
-          </select>
-          <button
-            @click="handleAssignExistingMarshal"
-            class="btn btn-primary"
-            style="margin-top: 1rem; width: 100%;"
-            :disabled="!selectedMarshalToAssign"
-          >
-            Assign selected marshal
-          </button>
-
-          <div style="text-align: center; margin: 1.5rem 0; color: #666; font-weight: 600;">OR</div>
-
-          <button @click="showAddNewMarshalInline = true" class="btn btn-secondary" style="width: 100%;">
-            Create new marshal
-          </button>
-        </div>
-
-        <!-- Create new marshal form - only show when creating -->
-        <div v-else class="assign-marshal-modal-section" style="background: #f5f7fa; padding: 1.5rem; border-radius: 8px;">
-          <h3>Create new marshal</h3>
-          <div class="form-group">
-            <label>Name *</label>
-            <input
-              v-model="newMarshalInlineForm.name"
-              type="text"
-              required
-              class="form-input"
-            />
-          </div>
-          <div class="form-group">
-            <label>Email</label>
-            <input
-              v-model="newMarshalInlineForm.email"
-              type="email"
-              class="form-input"
-            />
-          </div>
-          <div class="form-group">
-            <label>Phone</label>
-            <input
-              v-model="newMarshalInlineForm.phoneNumber"
-              type="tel"
-              class="form-input"
-            />
-          </div>
-          <div class="modal-actions">
-            <button @click="handleAddNewMarshalInline" class="btn btn-primary">
-              Create & assign
-            </button>
-            <button @click="cancelAddNewMarshalInline" class="btn btn-secondary">
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <ShiftCheckpointTimesModal
+      :show="showShiftCheckpointTimes"
+      :old-event-date="oldEventDateForShift"
+      :new-event-date="newEventDateForShift"
+      :affected-checkpoints-count="checkpointsWithCustomTimes"
+      @confirm="handleShiftCheckpointTimesConfirm"
+      @cancel="handleShiftCheckpointTimesCancel"
+    />
 
     <!-- Move Checkpoint Overlay -->
     <div v-if="isMovingLocation" class="move-checkpoint-overlay">
@@ -963,6 +518,11 @@ import AddAdminModal from '../components/event-manage/modals/AddAdminModal.vue';
 import UploadRouteModal from '../components/event-manage/modals/UploadRouteModal.vue';
 import ImportLocationsModal from '../components/event-manage/modals/ImportLocationsModal.vue';
 import ImportMarshalsModal from '../components/event-manage/modals/ImportMarshalsModal.vue';
+import EditLocationModal from '../components/event-manage/modals/EditLocationModal.vue';
+import EditMarshalModal from '../components/event-manage/modals/EditMarshalModal.vue';
+import AssignmentConflictModal from '../components/event-manage/modals/AssignmentConflictModal.vue';
+import AssignMarshalModal from '../components/event-manage/modals/AssignMarshalModal.vue';
+import ShiftCheckpointTimesModal from '../components/event-manage/modals/ShiftCheckpointTimesModal.vue';
 import CheckpointsList from '../components/event-manage/lists/CheckpointsList.vue';
 import AdminsList from '../components/event-manage/lists/AdminsList.vue';
 import InfoModal from '../components/InfoModal.vue';
@@ -1055,6 +615,10 @@ const eventDetailsForm = ref({
   timeZoneId: 'UTC',
 });
 const eventDetailsFormDirty = ref(false);
+const showShiftCheckpointTimes = ref(false);
+const oldEventDateForShift = ref('');
+const newEventDateForShift = ref('');
+const checkpointsWithCustomTimes = ref(0);
 
 const locationForm = ref({
   name: '',
@@ -1191,15 +755,73 @@ const markEventDetailsFormDirty = () => {
 
 const handleUpdateEvent = async () => {
   try {
+    // Check if event date changed and if any checkpoints have custom times
+    const oldEventDate = event.value.eventDate;
+    const newEventDate = eventDetailsForm.value.eventDate;
+
+    // Check if we need to show the shift modal
+    if (oldEventDate !== newEventDate) {
+      // Count checkpoints with custom times
+      const checkpointsWithTimes = locations.value.filter(
+        loc => loc.startTime || loc.endTime
+      );
+
+      if (checkpointsWithTimes.length > 0) {
+        // Show shift modal
+        oldEventDateForShift.value = oldEventDate;
+        newEventDateForShift.value = newEventDate;
+        checkpointsWithCustomTimes.value = checkpointsWithTimes.length;
+        showShiftCheckpointTimes.value = true;
+        return; // Don't update yet, wait for modal response
+      }
+    }
+
+    // No checkpoints with custom times, proceed with update
+    await performEventUpdate(false, null);
+  } catch (error) {
+    console.error('Failed to update event:', error);
+    alert('Failed to update event. Please try again.');
+  }
+};
+
+const performEventUpdate = async (shouldShiftCheckpoints, timeDeltaMs) => {
+  try {
+    // Update the event
     await eventsStore.updateEvent(route.params.eventId, {
       ...eventDetailsForm.value,
     });
+
+    // If we should shift checkpoint times, do it now
+    if (shouldShiftCheckpoints && timeDeltaMs !== null) {
+      // Convert milliseconds to TimeSpan format for C# (HH:mm:ss)
+      const totalSeconds = Math.floor(Math.abs(timeDeltaMs) / 1000);
+      const isNegative = timeDeltaMs < 0;
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+
+      const timeSpanString = `${isNegative ? '-' : ''}${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+      await eventsStore.bulkUpdateLocationTimes(route.params.eventId, timeSpanString);
+    }
+
     await loadEventData();
     eventDetailsFormDirty.value = false;
   } catch (error) {
     console.error('Failed to update event:', error);
     alert('Failed to update event. Please try again.');
   }
+};
+
+const handleShiftCheckpointTimesConfirm = async ({ shouldShift, timeDelta }) => {
+  showShiftCheckpointTimes.value = false;
+  await performEventUpdate(shouldShift, timeDelta);
+};
+
+const handleShiftCheckpointTimesCancel = () => {
+  showShiftCheckpointTimes.value = false;
+  // Reset the form to original values
+  loadEventData();
 };
 
 const tryCloseModal = (closeFunction) => {
@@ -1604,8 +1226,8 @@ const cancelMoveLocation = () => {
   showEditLocation.value = true;
 };
 
-const handleUpdateLocation = async () => {
-  if (!isValidWhat3Words(editLocationForm.value.what3Words)) {
+const handleUpdateLocation = async (formData) => {
+  if (!isValidWhat3Words(formData.what3Words)) {
     alert('Invalid What3Words format. Please use word.word.word or word/word/word (lowercase letters only, 1-20 characters each)');
     return;
   }
@@ -1614,15 +1236,15 @@ const handleUpdateLocation = async () => {
     // Update location
     await locationsApi.update(
       route.params.eventId,
-      editLocationForm.value.id,
+      selectedLocation.value.id,
       {
         eventId: route.params.eventId,
-        name: editLocationForm.value.name,
-        description: editLocationForm.value.description,
-        latitude: editLocationForm.value.latitude,
-        longitude: editLocationForm.value.longitude,
-        requiredMarshals: editLocationForm.value.requiredMarshals,
-        what3Words: editLocationForm.value.what3Words || null,
+        name: formData.name,
+        description: formData.description,
+        latitude: formData.latitude,
+        longitude: formData.longitude,
+        requiredMarshals: formData.requiredMarshals,
+        what3Words: formData.what3Words || null,
       }
     );
 
@@ -1718,6 +1340,10 @@ const markAssignmentForDelete = (assignment) => {
     pendingDeleteAssignments.value.push(assignment.id);
   }
   markFormDirty();
+};
+
+const handleRemoveLocationAssignment = (assignment) => {
+  markAssignmentForDelete(assignment);
 };
 
 const isPendingDelete = (assignmentId) => {
@@ -1857,18 +1483,18 @@ const closeEditMarshalModal = () => {
   formDirty.value = false;
 };
 
-const handleSaveMarshal = async () => {
+const handleSaveMarshal = async (formData) => {
   try {
     if (selectedMarshal.value) {
       // Update marshal details
       await marshalsApi.update(
         route.params.eventId,
-        editMarshalForm.value.id,
+        selectedMarshal.value.id,
         {
-          name: editMarshalForm.value.name,
-          email: editMarshalForm.value.email,
-          phoneNumber: editMarshalForm.value.phoneNumber,
-          notes: editMarshalForm.value.notes,
+          name: formData.name,
+          email: formData.email,
+          phoneNumber: formData.phoneNumber,
+          notes: formData.notes,
         }
       );
 
@@ -1889,10 +1515,10 @@ const handleSaveMarshal = async () => {
     } else {
       await marshalsApi.create({
         eventId: route.params.eventId,
-        name: editMarshalForm.value.name,
-        email: editMarshalForm.value.email,
-        phoneNumber: editMarshalForm.value.phoneNumber,
-        notes: editMarshalForm.value.notes,
+        name: formData.name,
+        email: formData.email,
+        phoneNumber: formData.phoneNumber,
+        notes: formData.notes,
       });
     }
 
@@ -2051,6 +1677,10 @@ const markMarshalAssignmentForDelete = (assignment) => {
   markFormDirty();
 };
 
+const handleRemoveMarshalAssignment = (assignment) => {
+  markMarshalAssignmentForDelete(assignment);
+};
+
 const isPendingMarshalDelete = (assignmentId) => {
   return pendingMarshalDeleteAssignments.value.includes(assignmentId);
 };
@@ -2091,10 +1721,10 @@ const handleConflictChoice = async (choice) => {
   }
 };
 
-const handleAssignExistingMarshal = async () => {
-  if (!selectedMarshalToAssign.value || !selectedLocation.value) return;
+const handleAssignExistingMarshal = async (marshalId) => {
+  if (!marshalId || !selectedLocation.value) return;
 
-  const marshal = marshals.value.find(m => m.id === selectedMarshalToAssign.value);
+  const marshal = marshals.value.find(m => m.id === marshalId);
   if (!marshal) return;
 
   const alreadyAssignedHere = selectedLocation.value.assignments.some(
@@ -2124,8 +1754,8 @@ const removePendingAssignment = (marshalId) => {
   }
 };
 
-const handleAddNewMarshalInline = async () => {
-  if (!newMarshalInlineForm.value.name) {
+const handleAddNewMarshalInline = async (formData) => {
+  if (!formData.name) {
     alert('Please enter a name for the marshal.');
     return;
   }
@@ -2133,9 +1763,9 @@ const handleAddNewMarshalInline = async () => {
   try {
     const response = await marshalsApi.create({
       eventId: route.params.eventId,
-      name: newMarshalInlineForm.value.name,
-      email: newMarshalInlineForm.value.email,
-      phoneNumber: newMarshalInlineForm.value.phoneNumber,
+      name: formData.name,
+      email: formData.email,
+      phoneNumber: formData.phoneNumber,
       notes: '',
     });
 

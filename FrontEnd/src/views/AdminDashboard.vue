@@ -52,165 +52,13 @@
       </div>
     </div>
 
-    <!-- Create/Edit Event Modal -->
-    <div v-if="showCreateEvent || editingEvent" class="modal" @click.self="closeModal">
-      <div class="modal-content modal-wide">
-        <h2>{{ editingEvent ? 'Edit Event' : 'Create New Event' }}</h2>
-
-        <!-- Tabs -->
-        <div class="tabs">
-          <button
-            type="button"
-            @click="activeTab = 'basic'"
-            class="tab-button"
-            :class="{ active: activeTab === 'basic' }"
-          >
-            Basic Details
-          </button>
-          <button
-            type="button"
-            @click="activeTab = 'emergency'"
-            class="tab-button"
-            :class="{ active: activeTab === 'emergency' }"
-          >
-            Emergency Contacts
-          </button>
-        </div>
-
-        <form @submit.prevent="handleSaveEvent">
-          <!-- Basic Details Tab -->
-          <div v-show="activeTab === 'basic'" class="tab-content">
-            <div class="form-group">
-              <label>Event Name *</label>
-              <input
-                v-model="eventForm.name"
-                type="text"
-                required
-                class="form-input"
-              />
-            </div>
-
-            <div class="form-group">
-              <label>Description</label>
-              <textarea
-                v-model="eventForm.description"
-                rows="3"
-                class="form-input"
-              ></textarea>
-            </div>
-
-            <div class="form-group">
-              <label>Event Date *</label>
-              <input
-                v-model="eventForm.eventDate"
-                type="datetime-local"
-                required
-                class="form-input"
-              />
-            </div>
-
-            <div class="form-group">
-              <label>Time Zone *</label>
-              <select
-                v-model="eventForm.timeZoneId"
-                required
-                class="form-input"
-              >
-                <option value="UTC">UTC</option>
-                <option value="America/New_York">Eastern Time (ET)</option>
-                <option value="America/Chicago">Central Time (CT)</option>
-                <option value="America/Denver">Mountain Time (MT)</option>
-                <option value="America/Los_Angeles">Pacific Time (PT)</option>
-                <option value="America/Anchorage">Alaska Time (AKT)</option>
-                <option value="Pacific/Honolulu">Hawaii Time (HT)</option>
-                <option value="Europe/London">London (GMT/BST)</option>
-                <option value="Europe/Paris">Paris (CET/CEST)</option>
-                <option value="Asia/Tokyo">Tokyo (JST)</option>
-                <option value="Australia/Sydney">Sydney (AEDT/AEST)</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Emergency Contacts Tab -->
-          <div v-show="activeTab === 'emergency'" class="tab-content">
-            <div class="emergency-contacts-section">
-              <div class="section-header-small">
-                <h3>Emergency Contacts</h3>
-                <button
-                  type="button"
-                  @click="addEmergencyContact"
-                  class="btn btn-small btn-primary"
-                >
-                  + Add Contact
-                </button>
-              </div>
-
-              <div v-if="eventForm.emergencyContacts.length === 0" class="empty-state">
-                <p>No emergency contacts added yet. Click "Add Contact" to add one.</p>
-              </div>
-
-              <div
-                v-for="(contact, index) in eventForm.emergencyContacts"
-                :key="index"
-                class="emergency-contact-card"
-              >
-                <div class="card-header">
-                  <h4>Contact {{ index + 1 }}</h4>
-                  <button
-                    type="button"
-                    @click="removeEmergencyContact(index)"
-                    class="btn-remove"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <div class="form-group">
-                  <label>Name *</label>
-                  <input
-                    v-model="contact.name"
-                    type="text"
-                    required
-                    class="form-input"
-                    placeholder="Contact person name"
-                  />
-                </div>
-
-                <div class="form-group">
-                  <label>Phone *</label>
-                  <input
-                    v-model="contact.phone"
-                    type="tel"
-                    required
-                    class="form-input"
-                    placeholder="+1 (555) 123-4567"
-                  />
-                </div>
-
-                <div class="form-group">
-                  <label>Additional Details</label>
-                  <textarea
-                    v-model="contact.details"
-                    rows="2"
-                    class="form-input"
-                    placeholder="Role, availability, or other important information..."
-                  ></textarea>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="modal-actions">
-            <button type="button" @click="closeModal" class="btn btn-secondary">
-              Cancel
-            </button>
-            <button type="submit" class="btn btn-primary">
-              {{ editingEvent ? 'Update' : 'Create' }}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <EventFormModal
+      :show="showCreateEvent || !!editingEvent"
+      :eventData="eventForm"
+      :isEditing="!!editingEvent"
+      @close="closeModal"
+      @submit="handleSaveEvent"
+    />
 
     <ConfirmModal
       :show="showConfirmModal"
@@ -228,6 +76,7 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useEventsStore } from '../stores/events';
 import ConfirmModal from '../components/ConfirmModal.vue';
+import EventFormModal from '../components/event-manage/modals/EventFormModal.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -236,7 +85,6 @@ const eventsStore = useEventsStore();
 const loading = ref(true);
 const showCreateEvent = ref(false);
 const editingEvent = ref(null);
-const activeTab = ref('basic');
 
 const eventForm = ref({
   name: '',
@@ -264,10 +112,10 @@ const loadEvents = async () => {
   }
 };
 
-const handleSaveEvent = async () => {
+const handleSaveEvent = async (formData) => {
   try {
     const eventData = {
-      ...eventForm.value,
+      ...formData,
       adminEmail: authStore.adminEmail,
     };
 
@@ -325,22 +173,9 @@ const handleConfirmModalCancel = () => {
   confirmModalCallback.value = null;
 };
 
-const addEmergencyContact = () => {
-  eventForm.value.emergencyContacts.push({
-    name: '',
-    phone: '',
-    details: '',
-  });
-};
-
-const removeEmergencyContact = (index) => {
-  eventForm.value.emergencyContacts.splice(index, 1);
-};
-
 const closeModal = () => {
   showCreateEvent.value = false;
   editingEvent.value = null;
-  activeTab.value = 'basic';
   eventForm.value = {
     name: '',
     description: '',
@@ -529,185 +364,5 @@ onMounted(() => {
 
 .btn-danger:hover {
   background: #cc0000;
-}
-
-.modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 2rem;
-}
-
-.modal-content {
-  background: white;
-  padding: 2rem;
-  border-radius: 12px;
-  max-width: 500px;
-  width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal-content h2 {
-  margin: 0 0 1.5rem 0;
-  color: #333;
-}
-
-.form-group {
-  margin-bottom: 1.5rem;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 0.5rem;
-  color: #333;
-  font-weight: 600;
-}
-
-.form-input {
-  width: 100%;
-  padding: 0.75rem;
-  border: 2px solid #e0e0e0;
-  border-radius: 6px;
-  font-size: 1rem;
-  transition: border-color 0.3s;
-  box-sizing: border-box;
-}
-
-.form-input:focus {
-  outline: none;
-  border-color: #667eea;
-}
-
-textarea.form-input {
-  resize: vertical;
-  font-family: inherit;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 1rem;
-  justify-content: flex-end;
-  margin-top: 2rem;
-  padding-top: 1.5rem;
-  background: white;
-  position: sticky;
-  bottom: 0;
-  border-top: 1px solid #e0e0e0;
-  margin-left: -2rem;
-  margin-right: -2rem;
-  margin-bottom: -2rem;
-  padding-left: 2rem;
-  padding-right: 2rem;
-  padding-bottom: 2rem;
-}
-
-.modal-wide {
-  max-width: 700px;
-}
-
-.tabs {
-  display: flex;
-  border-bottom: 2px solid #e0e0e0;
-  margin-bottom: 2rem;
-  gap: 0.5rem;
-}
-
-.tab-button {
-  padding: 0.75rem 1.5rem;
-  background: none;
-  border: none;
-  border-bottom: 3px solid transparent;
-  cursor: pointer;
-  font-weight: 600;
-  color: #666;
-  transition: all 0.3s;
-}
-
-.tab-button:hover {
-  color: #667eea;
-}
-
-.tab-button.active {
-  color: #667eea;
-  border-bottom-color: #667eea;
-}
-
-.tab-content {
-  min-height: 300px;
-}
-
-.emergency-contacts-section {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.section-header-small {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.section-header-small h3 {
-  margin: 0;
-  color: #333;
-  font-size: 1.125rem;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 2rem;
-  color: #999;
-  border: 2px dashed #e0e0e0;
-  border-radius: 8px;
-}
-
-.emergency-contact-card {
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 1.5rem;
-  background: #f9f9f9;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.card-header h4 {
-  margin: 0;
-  color: #333;
-  font-size: 1rem;
-}
-
-.btn-remove {
-  background: #ff4444;
-  color: white;
-  border: none;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  cursor: pointer;
-  font-size: 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s;
-}
-
-.btn-remove:hover {
-  background: #cc0000;
-  transform: scale(1.1);
 }
 </style>

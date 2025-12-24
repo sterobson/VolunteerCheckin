@@ -7,18 +7,27 @@ using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Services;
+using VolunteerCheckin.Functions.Repositories;
 
 namespace VolunteerCheckin.Functions.Functions;
 
 public class AssignmentFunctions
 {
     private readonly ILogger<AssignmentFunctions> _logger;
-    private readonly TableStorageService _tableStorage;
+    private readonly IAssignmentRepository _assignmentRepository;
+    private readonly IMarshalRepository _marshalRepository;
+    private readonly ILocationRepository _locationRepository;
 
-    public AssignmentFunctions(ILogger<AssignmentFunctions> logger, TableStorageService tableStorage)
+    public AssignmentFunctions(
+        ILogger<AssignmentFunctions> logger,
+        IAssignmentRepository assignmentRepository,
+        IMarshalRepository marshalRepository,
+        ILocationRepository locationRepository)
     {
         _logger = logger;
-        _tableStorage = tableStorage;
+        _assignmentRepository = assignmentRepository;
+        _marshalRepository = marshalRepository;
+        _locationRepository = locationRepository;
     }
 
     [Function("CreateAssignment")]
@@ -35,31 +44,25 @@ public class AssignmentFunctions
                 return new BadRequestObjectResult(new { message = "Invalid request" });
             }
 
-            TableClient marshalsTable = _tableStorage.GetMarshalsTable();
             string marshalId;
             string marshalName;
 
             // If MarshalId is provided, use the existing marshal
             if (!string.IsNullOrEmpty(request.MarshalId))
             {
-                Response<MarshalEntity> marshal = await marshalsTable.GetEntityAsync<MarshalEntity>(request.EventId, request.MarshalId);
-                marshalId = marshal.Value.MarshalId;
-                marshalName = marshal.Value.Name;
+                MarshalEntity? marshal = await _marshalRepository.GetAsync(request.EventId, request.MarshalId);
+                if (marshal == null)
+                {
+                    return new BadRequestObjectResult(new { message = "Marshal not found" });
+                }
+                marshalId = marshal.MarshalId;
+                marshalName = marshal.Name;
             }
             // If MarshalName is provided, find or create a marshal
             else if (!string.IsNullOrEmpty(request.MarshalName))
             {
                 // Try to find existing marshal by name
-                MarshalEntity? existingMarshal = null;
-                await foreach (MarshalEntity m in marshalsTable.QueryAsync<MarshalEntity>(
-                    m => m.PartitionKey == request.EventId))
-                {
-                    if (m.Name.Equals(request.MarshalName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        existingMarshal = m;
-                        break;
-                    }
-                }
+                MarshalEntity? existingMarshal = await _marshalRepository.FindByNameAsync(request.EventId, request.MarshalName);
 
                 if (existingMarshal != null)
                 {
@@ -78,7 +81,7 @@ public class AssignmentFunctions
                         MarshalId = marshalId,
                         Name = request.MarshalName
                     };
-                    await marshalsTable.AddEntityAsync(newMarshal);
+                    await _marshalRepository.AddAsync(newMarshal);
                     marshalName = request.MarshalName;
                     _logger.LogInformation($"Created new marshal: {marshalId} - {marshalName}");
                 }
@@ -98,8 +101,7 @@ public class AssignmentFunctions
                 MarshalName = marshalName
             };
 
-            TableClient table = _tableStorage.GetAssignmentsTable();
-            await table.AddEntityAsync(assignmentEntity);
+            await _assignmentRepository.AddAsync(assignmentEntity);
 
             AssignmentResponse response = new(
                 assignmentEntity.RowKey,
@@ -132,26 +134,27 @@ public class AssignmentFunctions
     {
         try
         {
-            TableClient table = _tableStorage.GetAssignmentsTable();
-            Response<AssignmentEntity> assignmentEntity = await table.GetEntityAsync<AssignmentEntity>(eventId, assignmentId);
+            IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByEventAsync(eventId);
+            AssignmentEntity? assignmentEntity = assignments.FirstOrDefault(a => a.RowKey == assignmentId);
+
+            if (assignmentEntity == null)
+            {
+                return new NotFoundObjectResult(new { message = "Assignment not found" });
+            }
 
             AssignmentResponse response = new(
-                assignmentEntity.Value.RowKey,
-                assignmentEntity.Value.EventId,
-                assignmentEntity.Value.LocationId,
-                assignmentEntity.Value.MarshalName,
-                assignmentEntity.Value.IsCheckedIn,
-                assignmentEntity.Value.CheckInTime,
-                assignmentEntity.Value.CheckInLatitude,
-                assignmentEntity.Value.CheckInLongitude,
-                assignmentEntity.Value.CheckInMethod
+                assignmentEntity.RowKey,
+                assignmentEntity.EventId,
+                assignmentEntity.LocationId,
+                assignmentEntity.MarshalName,
+                assignmentEntity.IsCheckedIn,
+                assignmentEntity.CheckInTime,
+                assignmentEntity.CheckInLatitude,
+                assignmentEntity.CheckInLongitude,
+                assignmentEntity.CheckInMethod
             );
 
             return new OkObjectResult(response);
-        }
-        catch (RequestFailedException ex) when (ex.Status == 404)
-        {
-            return new NotFoundObjectResult(new { message = "Assignment not found" });
         }
         catch (Exception ex)
         {
@@ -167,23 +170,19 @@ public class AssignmentFunctions
     {
         try
         {
-            TableClient table = _tableStorage.GetAssignmentsTable();
-            List<AssignmentResponse> assignments = [];
+            IEnumerable<AssignmentEntity> assignmentEntities = await _assignmentRepository.GetByEventAsync(eventId);
 
-            await foreach (AssignmentEntity assignmentEntity in table.QueryAsync<AssignmentEntity>(a => a.PartitionKey == eventId))
-            {
-                assignments.Add(new AssignmentResponse(
-                    assignmentEntity.RowKey,
-                    assignmentEntity.EventId,
-                    assignmentEntity.LocationId,
-                    assignmentEntity.MarshalName,
-                    assignmentEntity.IsCheckedIn,
-                    assignmentEntity.CheckInTime,
-                    assignmentEntity.CheckInLatitude,
-                    assignmentEntity.CheckInLongitude,
-                    assignmentEntity.CheckInMethod
-                ));
-            }
+            List<AssignmentResponse> assignments = assignmentEntities.Select(assignmentEntity => new AssignmentResponse(
+                assignmentEntity.RowKey,
+                assignmentEntity.EventId,
+                assignmentEntity.LocationId,
+                assignmentEntity.MarshalName,
+                assignmentEntity.IsCheckedIn,
+                assignmentEntity.CheckInTime,
+                assignmentEntity.CheckInLatitude,
+                assignmentEntity.CheckInLongitude,
+                assignmentEntity.CheckInMethod
+            )).ToList();
 
             return new OkObjectResult(assignments);
         }
@@ -202,16 +201,11 @@ public class AssignmentFunctions
     {
         try
         {
-            TableClient table = _tableStorage.GetAssignmentsTable();
-            await table.DeleteEntityAsync(eventId, assignmentId);
+            await _assignmentRepository.DeleteAsync(eventId, assignmentId);
 
             _logger.LogInformation($"Assignment deleted: {assignmentId}");
 
             return new NoContentResult();
-        }
-        catch (RequestFailedException ex) when (ex.Status == 404)
-        {
-            return new NotFoundObjectResult(new { message = "Assignment not found" });
         }
         catch (Exception ex)
         {
@@ -227,20 +221,8 @@ public class AssignmentFunctions
     {
         try
         {
-            TableClient locationsTable = _tableStorage.GetLocationsTable();
-            TableClient assignmentsTable = _tableStorage.GetAssignmentsTable();
-
-            List<LocationEntity> locations = [];
-            await foreach (LocationEntity location in locationsTable.QueryAsync<LocationEntity>(l => l.PartitionKey == eventId))
-            {
-                locations.Add(location);
-            }
-
-            List<AssignmentEntity> assignments = [];
-            await foreach (AssignmentEntity assignment in assignmentsTable.QueryAsync<AssignmentEntity>(a => a.PartitionKey == eventId))
-            {
-                assignments.Add(assignment);
-            }
+            IEnumerable<LocationEntity> locations = await _locationRepository.GetByEventAsync(eventId);
+            IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByEventAsync(eventId);
 
             List<LocationStatusResponse> locationStatuses = [];
 
@@ -272,7 +254,9 @@ public class AssignmentFunctions
                     location.RequiredMarshals,
                     checkedInCount,
                     locationAssignments,
-                    location.What3Words
+                    location.What3Words,
+                    location.StartTime,
+                    location.EndTime
                 ));
             }
 

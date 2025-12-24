@@ -19,4 +19,6 @@ public class LocationEntity : ITableEntity
     public int RequiredMarshals { get; set; } = 1;
     public int CheckedInCount { get; set; } = 0;
     public string What3Words { get; set; } = string.Empty;
+    public DateTime? StartTime { get; set; }
+    public DateTime? EndTime { get; set; }
 }

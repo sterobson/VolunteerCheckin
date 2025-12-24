@@ -6,18 +6,19 @@ using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Services;
+using VolunteerCheckin.Functions.Repositories;
 
 namespace VolunteerCheckin.Functions.Functions;
 
 public class AuthFunctions
 {
     private readonly ILogger<AuthFunctions> _logger;
-    private readonly TableStorageService _tableStorage;
+    private readonly IAdminUserRepository _adminUserRepository;
 
-    public AuthFunctions(ILogger<AuthFunctions> logger, TableStorageService tableStorage)
+    public AuthFunctions(ILogger<AuthFunctions> logger, IAdminUserRepository adminUserRepository)
     {
         _logger = logger;
-        _tableStorage = tableStorage;
+        _adminUserRepository = adminUserRepository;
     }
 
     [Function("InstantLogin")]
@@ -34,16 +35,10 @@ public class AuthFunctions
                 return new BadRequestObjectResult(new { message = "Email is required" });
             }
 
-            TableClient adminTable = _tableStorage.GetAdminUsersTable();
-
             // Try to get existing admin, or create new one
-            AdminUserEntity admin;
-            try
-            {
-                admin = await adminTable.GetEntityAsync<AdminUserEntity>("ADMIN", request.Email);
-                _logger.LogInformation($"Existing admin logged in: {request.Email}");
-            }
-            catch
+            AdminUserEntity? admin = await _adminUserRepository.GetByEmailAsync(request.Email);
+
+            if (admin == null)
             {
                 // Admin doesn't exist, create new one
                 admin = new AdminUserEntity
@@ -51,8 +46,12 @@ public class AuthFunctions
                     RowKey = request.Email,
                     Email = request.Email
                 };
-                await adminTable.AddEntityAsync(admin);
+                await _adminUserRepository.AddAsync(admin);
                 _logger.LogInformation($"New admin created and logged in: {request.Email}");
+            }
+            else
+            {
+                _logger.LogInformation($"Existing admin logged in: {request.Email}");
             }
 
             return new OkObjectResult(new InstantLoginResponse(true, admin.Email, "Login successful"));
@@ -78,14 +77,13 @@ public class AuthFunctions
                 return new BadRequestObjectResult(new { message = "Email is required" });
             }
 
-            TableClient adminTable = _tableStorage.GetAdminUsersTable();
             AdminUserEntity admin = new()
             {
                 RowKey = request.Email,
                 Email = request.Email
             };
 
-            await adminTable.AddEntityAsync(admin);
+            await _adminUserRepository.AddAsync(admin);
 
             _logger.LogInformation($"Admin created: {request.Email}");
 

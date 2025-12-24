@@ -40,7 +40,9 @@ public record CreateLocationRequest(
     double Latitude,
     double Longitude,
     int RequiredMarshals,
-    string? What3Words
+    string? What3Words,
+    DateTime? StartTime,
+    DateTime? EndTime
 );
 
 public record LocationResponse(
@@ -52,7 +54,9 @@ public record LocationResponse(
     double Longitude,
     int RequiredMarshals,
     int CheckedInCount,
-    string What3Words
+    string What3Words,
+    DateTime? StartTime,
+    DateTime? EndTime
 );
 
 public record CreateAssignmentRequest(
@@ -105,7 +109,9 @@ public record LocationStatusResponse(
     int RequiredMarshals,
     int CheckedInCount,
     List<AssignmentResponse> Assignments,
-    string What3Words
+    string What3Words,
+    DateTime? StartTime,
+    DateTime? EndTime
 );
 
 public record UserEventMappingResponse(
@@ -160,4 +166,8 @@ public record MarshalResponse(
     List<string> AssignedLocationIds,
     bool IsCheckedIn,
     DateTime CreatedDate
+);
+
+public record BulkUpdateLocationTimesRequest(
+    TimeSpan TimeDelta
 );

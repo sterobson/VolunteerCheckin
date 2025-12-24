@@ -227,6 +227,22 @@ export const useEventsStore = defineStore('events', () => {
     }
   };
 
+  const bulkUpdateLocationTimes = async (eventId, timeDelta) => {
+    loading.value = true;
+    error.value = null;
+    try {
+      const response = await locationsApi.bulkUpdateTimes(eventId, timeDelta);
+      // Refresh locations after bulk update
+      await fetchLocations(eventId);
+      return response.data;
+    } catch (err) {
+      error.value = err.message;
+      throw err;
+    } finally {
+      loading.value = false;
+    }
+  };
+
   return {
     events,
     currentEvent,
@@ -244,6 +260,7 @@ export const useEventsStore = defineStore('events', () => {
     createLocation,
     updateLocation,
     deleteLocation,
+    bulkUpdateLocationTimes,
     fetchAssignments,
     createAssignment,
     deleteAssignment,

@@ -153,63 +153,7 @@ public class CsvParserService
                         string marshalsStr = values[marshalsIndex].Trim().Trim('"');
                         if (!string.IsNullOrWhiteSpace(marshalsStr))
                         {
-                            location.MarshalNames = [.. marshalsStr
-                                    .Split([",", "&", " and ", "+"], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries )
-                                    .Select(m => m.Trim())
-                                    .Where(m => !string.IsNullOrWhiteSpace(m))];
-
-                            // If anyone is missing a surname, but they appeared with an "&" and a subsequent person had a surname, then use that surname.
-                            // E.g. "John & Jane Smith" -> "John Smith" and "Jane Smith"
-                            // E.g. "John and Jane Smith" -> "John Smith" and "Jane Smith"
-                            // E.g. "John and Jane and Joan Smith" -> "John Smith" and "Jane Smith" and Joan Smith
-                            // E.g. "John, Jane, & Joan Smith" -> "John Smith" and "Jane Smith" and Joan Smith
-
-                            int i = 0;
-                            while (i < location.MarshalNames.Count)
-                            {
-                                string marshalName = location.MarshalNames[i];
-
-                                string[] nameParts = marshalName.Split(' ', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-                                if (nameParts.Length == 1)
-                                {
-                                    if (i > 0 && int.TryParse(marshalName, out int number))
-                                    {
-                                        // It's a number, so would be like "John Smith, +1",
-                                        // or "John Smith +1". We want the marshal name to become "John Smith (+1)", "John Smith (+2)", etc.
-                                        location.MarshalNames = [
-                                            .. location.MarshalNames.Take(i),
-                                            ..Enumerable.Range(1, number).Select(n => MakeNamePossessive(location.MarshalNames[i - 1]) + " (+" + n + ")"),
-                                            .. location.MarshalNames.Skip(i+1)
-                                        ];
-
-                                        i += number; // Skip the newly added entries
-                                        continue;
-                                    }
-
-                                    // Missing surname, look ahead for a surname
-                                    bool foundSurname = false;
-                                    for (int j = i + 1; j < location.MarshalNames.Count; j++)
-                                    {
-                                        string nextMarshalName = location.MarshalNames[j];
-                                        string[] nextNameParts = nextMarshalName.Split(' ', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-                                        if (nextNameParts.Length > 1)
-                                        {
-                                            // Found a surname to use
-                                            string surname = nextNameParts[^1];
-                                            location.MarshalNames[i] = marshalName + " " + surname;
-                                            foundSurname = true;
-                                            break;
-                                        }
-                                    }
-                                    if (foundSurname)
-                                    {
-                                        i++;
-                                        continue;
-                                    }
-                                }
-
-                                i++;
-                            }
+                            location.MarshalNames = ParseMarshalNames(marshalsStr);
                         }
                     }
 
@@ -255,6 +199,76 @@ public class CsvParserService
         {
             return name + "'s";
         }
+    }
+
+    private static List<string> ParseMarshalNames(string marshalsStr)
+    {
+        List<string> marshalNames = [.. marshalsStr
+            .Split([",", "&", " and ", "+"], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Select(m => m.Trim())
+            .Where(m => !string.IsNullOrWhiteSpace(m))];
+
+        // If anyone is missing a surname, but they appeared with an "&" and a subsequent person had a surname, then use that surname.
+        // E.g. "John & Jane Smith" -> "John Smith" and "Jane Smith"
+        // E.g. "John and Jane Smith" -> "John Smith" and "Jane Smith"
+        // E.g. "John and Jane and Joan Smith" -> "John Smith" and "Jane Smith" and Joan Smith
+        // E.g. "John, Jane, & Joan Smith" -> "John Smith" and "Jane Smith" and Joan Smith
+
+        int i = 0;
+        while (i < marshalNames.Count)
+        {
+            string marshalName = marshalNames[i];
+
+            string[] nameParts = marshalName.Split(' ', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            if (nameParts.Length == 1)
+            {
+                if (i > 0 && int.TryParse(marshalName, out int number))
+                {
+                    marshalNames = ExpandNumberedMarshalEntries(marshalNames, i, number);
+                    i += number; // Skip the newly added entries
+                    continue;
+                }
+
+                if (ApplySurnameFromFollowingName(marshalNames, i))
+                {
+                    i++;
+                    continue;
+                }
+            }
+
+            i++;
+        }
+
+        return marshalNames;
+    }
+
+    private static List<string> ExpandNumberedMarshalEntries(List<string> marshalNames, int index, int count)
+    {
+        // It's a number, so would be like "John Smith, +1",
+        // or "John Smith +1". We want the marshal name to become "John Smith (+1)", "John Smith (+2)", etc.
+        return [
+            .. marshalNames.Take(index),
+            .. Enumerable.Range(1, count).Select(n => MakeNamePossessive(marshalNames[index - 1]) + " (+" + n + ")"),
+            .. marshalNames.Skip(index + 1)
+        ];
+    }
+
+    private static bool ApplySurnameFromFollowingName(List<string> marshalNames, int currentIndex)
+    {
+        // Missing surname, look ahead for a surname
+        for (int j = currentIndex + 1; j < marshalNames.Count; j++)
+        {
+            string nextMarshalName = marshalNames[j];
+            string[] nextNameParts = nextMarshalName.Split(' ', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            if (nextNameParts.Length > 1)
+            {
+                // Found a surname to use
+                string surname = nextNameParts[^1];
+                marshalNames[currentIndex] = marshalNames[currentIndex] + " " + surname;
+                return true;
+            }
+        }
+        return false;
     }
 
     private static int FindColumnIndex(string[] headers, params string[] possibleNames)

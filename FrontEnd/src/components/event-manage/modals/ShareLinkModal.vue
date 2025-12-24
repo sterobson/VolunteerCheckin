@@ -1,40 +1,38 @@
 <template>
-  <div v-if="show" class="modal" @click.self="close">
-    <div class="modal-content">
-      <button @click="close" class="modal-close-btn">✕</button>
-      <h2>Marshal check-in link</h2>
-      <p class="instruction">Share this link with marshals so they can check in:</p>
+  <BaseModal
+    :show="show"
+    title="Marshal check-in link"
+    size="medium"
+    :confirm-on-close="true"
+    :is-dirty="isDirty"
+    @close="handleClose"
+  >
+    <!-- Instruction text -->
+    <p class="instruction">Share this link with marshals so they can check in:</p>
 
-      <div class="share-link-container">
-        <input
-          :value="link"
-          readonly
-          class="form-input"
-          ref="linkInput"
-        />
-        <button @click="handleCopyLink" class="btn btn-primary">
-          {{ linkCopied ? 'Copied!' : 'Copy' }}
-        </button>
-      </div>
-
-      <div class="modal-actions">
-        <button @click="handleClose" class="btn btn-secondary">Close</button>
-      </div>
+    <!-- Share link container -->
+    <div class="share-link-container">
+      <input
+        :value="link"
+        readonly
+        class="form-input"
+        ref="linkInput"
+      />
+      <button @click="handleCopyLink" class="btn btn-primary">
+        {{ linkCopied ? 'Copied!' : 'Copy' }}
+      </button>
     </div>
 
-    <ConfirmModal
-      :show="showConfirmModal"
-      title="Unsaved Changes"
-      message="You have unsaved changes. Are you sure you want to close?"
-      @confirm="handleConfirmClose"
-      @cancel="handleCancelClose"
-    />
-  </div>
+    <!-- Action buttons -->
+    <template #actions>
+      <button @click="handleClose" class="btn btn-secondary">Close</button>
+    </template>
+  </BaseModal>
 </template>
 
 <script setup>
 import { ref, defineProps, defineEmits } from 'vue';
-import ConfirmModal from '../../ConfirmModal.vue';
+import BaseModal from '../../BaseModal.vue';
 
 const props = defineProps({
   show: {
@@ -55,7 +53,6 @@ const emit = defineEmits(['close']);
 
 const linkCopied = ref(false);
 const linkInput = ref(null);
-const showConfirmModal = ref(false);
 
 const handleCopyLink = () => {
   if (linkInput.value) {
@@ -68,80 +65,12 @@ const handleCopyLink = () => {
   }
 };
 
-const close = () => {
-  if (props.isDirty) {
-    showConfirmModal.value = true;
-  } else {
-    emit('close');
-  }
-};
-
 const handleClose = () => {
   emit('close');
-};
-
-const handleConfirmClose = () => {
-  showConfirmModal.value = false;
-  emit('close');
-};
-
-const handleCancelClose = () => {
-  showConfirmModal.value = false;
 };
 </script>
 
 <style scoped>
-.modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: white;
-  padding: 2rem;
-  border-radius: 12px;
-  max-width: 600px;
-  width: 90%;
-  max-height: 90vh;
-  overflow-y: auto;
-  position: relative;
-}
-
-.modal-close-btn {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  color: #666;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-}
-
-.modal-close-btn:hover {
-  background: #f0f0f0;
-  color: #333;
-}
-
-h2 {
-  margin: 0 0 1rem 0;
-  color: #333;
-}
-
 .instruction {
   color: #666;
   margin-bottom: 1.5rem;
@@ -159,24 +88,6 @@ h2 {
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 0.9rem;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 1rem;
-  justify-content: flex-end;
-  margin-top: 2rem;
-  padding-top: 1.5rem;
-  background: white;
-  position: sticky;
-  bottom: 0;
-  border-top: 1px solid #e0e0e0;
-  margin-left: -2rem;
-  margin-right: -2rem;
-  margin-bottom: -2rem;
-  padding-left: 2rem;
-  padding-right: 2rem;
-  padding-bottom: 2rem;
 }
 
 .btn {

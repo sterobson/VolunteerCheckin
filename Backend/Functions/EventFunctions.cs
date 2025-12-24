@@ -7,34 +7,33 @@ using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Services;
+using VolunteerCheckin.Functions.Repositories;
 
 namespace VolunteerCheckin.Functions.Functions;
 
 public class EventFunctions
 {
     private readonly ILogger<EventFunctions> _logger;
-    private readonly TableStorageService _tableStorage;
+    private readonly IEventRepository _eventRepository;
+    private readonly IUserEventMappingRepository _userEventMappingRepository;
     private readonly GpxParserService _gpxParser;
 
-    public EventFunctions(ILogger<EventFunctions> logger, TableStorageService tableStorage, GpxParserService gpxParser)
+    public EventFunctions(
+        ILogger<EventFunctions> logger,
+        IEventRepository eventRepository,
+        IUserEventMappingRepository userEventMappingRepository,
+        GpxParserService gpxParser)
     {
         _logger = logger;
-        _tableStorage = tableStorage;
+        _eventRepository = eventRepository;
+        _userEventMappingRepository = userEventMappingRepository;
         _gpxParser = gpxParser;
     }
 
     private async Task<bool> IsUserAuthorizedForEvent(string eventId, string userEmail)
     {
-        try
-        {
-            TableClient mappingsTable = _tableStorage.GetUserEventMappingsTable();
-            await mappingsTable.GetEntityAsync<UserEventMappingEntity>(eventId, userEmail);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
+        UserEventMappingEntity? mapping = await _userEventMappingRepository.GetAsync(eventId, userEmail);
+        return mapping != null;
     }
 
     [Function("CreateEvent")]
@@ -76,8 +75,7 @@ public class EventFunctions
                 EmergencyContactsJson = JsonSerializer.Serialize(request.EmergencyContacts ?? [])
             };
 
-            TableClient table = _tableStorage.GetEventsTable();
-            await table.AddEntityAsync(eventEntity);
+            await _eventRepository.AddAsync(eventEntity);
 
             // Auto-create UserEventMapping for the creator
             UserEventMappingEntity mappingEntity = new()
@@ -89,8 +87,7 @@ public class EventFunctions
                 Role = "Admin"
             };
 
-            TableClient mappingsTable = _tableStorage.GetUserEventMappingsTable();
-            await mappingsTable.AddEntityAsync(mappingEntity);
+            await _userEventMappingRepository.AddAsync(mappingEntity);
 
             List<EmergencyContact> emergencyContacts = JsonSerializer.Deserialize<List<EmergencyContact>>(eventEntity.EmergencyContactsJson)
                 ?? [];
@@ -129,33 +126,33 @@ public class EventFunctions
     {
         try
         {
-            TableClient table = _tableStorage.GetEventsTable();
-            Response<EventEntity> eventEntity = await table.GetEntityAsync<EventEntity>("EVENT", eventId);
+            EventEntity? eventEntity = await _eventRepository.GetAsync(eventId);
 
-            List<EmergencyContact> emergencyContacts = JsonSerializer.Deserialize<List<EmergencyContact>>(eventEntity.Value.EmergencyContactsJson)
+            if (eventEntity == null)
+            {
+                return new NotFoundObjectResult(new { message = "Event not found" });
+            }
+
+            List<EmergencyContact> emergencyContacts = JsonSerializer.Deserialize<List<EmergencyContact>>(eventEntity.EmergencyContactsJson)
                 ?? [];
 
-            List<RoutePoint> route = JsonSerializer.Deserialize<List<RoutePoint>>(eventEntity.Value.GpxRouteJson)
+            List<RoutePoint> route = JsonSerializer.Deserialize<List<RoutePoint>>(eventEntity.GpxRouteJson)
                 ?? [];
 
             EventResponse response = new(
-                eventEntity.Value.RowKey,
-                eventEntity.Value.Name,
-                eventEntity.Value.Description,
-                eventEntity.Value.EventDate,
-                eventEntity.Value.TimeZoneId,
-                eventEntity.Value.AdminEmail,
+                eventEntity.RowKey,
+                eventEntity.Name,
+                eventEntity.Description,
+                eventEntity.EventDate,
+                eventEntity.TimeZoneId,
+                eventEntity.AdminEmail,
                 emergencyContacts,
                 route,
-                eventEntity.Value.IsActive,
-                eventEntity.Value.CreatedDate
+                eventEntity.IsActive,
+                eventEntity.CreatedDate
             );
 
             return new OkObjectResult(response);
-        }
-        catch (RequestFailedException ex) when (ex.Status == 404)
-        {
-            return new NotFoundObjectResult(new { message = "Event not found" });
         }
         catch (Exception ex)
         {
@@ -177,19 +174,15 @@ public class EventFunctions
                 return new BadRequestObjectResult(new { message = "Admin email header is required" });
             }
 
-            TableClient table = _tableStorage.GetEventsTable();
-            TableClient mappingsTable = _tableStorage.GetUserEventMappingsTable();
-            List<EventResponse> events = [];
-
             // Get all events where user is an admin
-            HashSet<string> userEventIds = [];
-            await foreach (UserEventMappingEntity mapping in mappingsTable.QueryAsync<UserEventMappingEntity>(m => m.RowKey == adminEmail))
-            {
-                userEventIds.Add(mapping.EventId);
-            }
+            IEnumerable<UserEventMappingEntity> userMappings = await _userEventMappingRepository.GetByUserAsync(adminEmail);
+            HashSet<string> userEventIds = userMappings.Select(m => m.EventId).ToHashSet();
 
             // Fetch all events and filter by user access
-            await foreach (EventEntity eventEntity in table.QueryAsync<EventEntity>(e => e.PartitionKey == "EVENT"))
+            IEnumerable<EventEntity> allEvents = await _eventRepository.GetAllAsync();
+            List<EventResponse> events = [];
+
+            foreach (EventEntity eventEntity in allEvents)
             {
                 if (userEventIds.Contains(eventEntity.RowKey))
                 {
@@ -250,8 +243,12 @@ public class EventFunctions
                 return new BadRequestObjectResult(new { message = "Invalid request" });
             }
 
-            TableClient table = _tableStorage.GetEventsTable();
-            Response<EventEntity> eventEntity = await table.GetEntityAsync<EventEntity>("EVENT", eventId);
+            EventEntity? eventEntity = await _eventRepository.GetAsync(eventId);
+
+            if (eventEntity == null)
+            {
+                return new NotFoundObjectResult(new { message = "Event not found" });
+            }
 
             // Convert the event date to UTC
             DateTime eventDateUtc;
@@ -267,41 +264,37 @@ public class EventFunctions
                 eventDateUtc = DateTime.SpecifyKind(request.EventDate, DateTimeKind.Utc);
             }
 
-            eventEntity.Value.Name = request.Name;
-            eventEntity.Value.Description = request.Description;
-            eventEntity.Value.EventDate = eventDateUtc;
-            eventEntity.Value.TimeZoneId = request.TimeZoneId;
-            eventEntity.Value.AdminEmail = request.AdminEmail;
-            eventEntity.Value.EmergencyContactsJson = JsonSerializer.Serialize(request.EmergencyContacts ?? []);
+            eventEntity.Name = request.Name;
+            eventEntity.Description = request.Description;
+            eventEntity.EventDate = eventDateUtc;
+            eventEntity.TimeZoneId = request.TimeZoneId;
+            eventEntity.AdminEmail = request.AdminEmail;
+            eventEntity.EmergencyContactsJson = JsonSerializer.Serialize(request.EmergencyContacts ?? []);
 
-            await table.UpdateEntityAsync(eventEntity.Value, eventEntity.Value.ETag);
+            await _eventRepository.UpdateAsync(eventEntity);
 
-            List<EmergencyContact> emergencyContacts = JsonSerializer.Deserialize<List<EmergencyContact>>(eventEntity.Value.EmergencyContactsJson)
+            List<EmergencyContact> emergencyContacts = JsonSerializer.Deserialize<List<EmergencyContact>>(eventEntity.EmergencyContactsJson)
                 ?? [];
 
-            List<RoutePoint> route = JsonSerializer.Deserialize<List<RoutePoint>>(eventEntity.Value.GpxRouteJson)
+            List<RoutePoint> route = JsonSerializer.Deserialize<List<RoutePoint>>(eventEntity.GpxRouteJson)
                 ?? [];
 
             EventResponse response = new(
-                eventEntity.Value.RowKey,
-                eventEntity.Value.Name,
-                eventEntity.Value.Description,
-                eventEntity.Value.EventDate,
-                eventEntity.Value.TimeZoneId,
-                eventEntity.Value.AdminEmail,
+                eventEntity.RowKey,
+                eventEntity.Name,
+                eventEntity.Description,
+                eventEntity.EventDate,
+                eventEntity.TimeZoneId,
+                eventEntity.AdminEmail,
                 emergencyContacts,
                 route,
-                eventEntity.Value.IsActive,
-                eventEntity.Value.CreatedDate
+                eventEntity.IsActive,
+                eventEntity.CreatedDate
             );
 
             _logger.LogInformation($"Event updated: {eventId}");
 
             return new OkObjectResult(response);
-        }
-        catch (RequestFailedException ex) when (ex.Status == 404)
-        {
-            return new NotFoundObjectResult(new { message = "Event not found" });
         }
         catch (Exception ex)
         {
@@ -329,16 +322,11 @@ public class EventFunctions
                 return new UnauthorizedObjectResult(new { message = "You are not authorized to delete this event" });
             }
 
-            TableClient table = _tableStorage.GetEventsTable();
-            await table.DeleteEntityAsync("EVENT", eventId);
+            await _eventRepository.DeleteAsync(eventId);
 
             _logger.LogInformation($"Event deleted: {eventId}");
 
             return new NoContentResult();
-        }
-        catch (RequestFailedException ex) when (ex.Status == 404)
-        {
-            return new NotFoundObjectResult(new { message = "Event not found" });
         }
         catch (Exception ex)
         {
@@ -354,18 +342,14 @@ public class EventFunctions
     {
         try
         {
-            TableClient mappingsTable = _tableStorage.GetUserEventMappingsTable();
-            List<UserEventMappingResponse> admins = [];
+            IEnumerable<UserEventMappingEntity> mappings = await _userEventMappingRepository.GetByEventAsync(eventId);
 
-            await foreach (UserEventMappingEntity mapping in mappingsTable.QueryAsync<UserEventMappingEntity>(m => m.PartitionKey == eventId))
-            {
-                admins.Add(new UserEventMappingResponse(
-                    mapping.EventId,
-                    mapping.UserEmail,
-                    mapping.Role,
-                    mapping.CreatedDate
-                ));
-            }
+            List<UserEventMappingResponse> admins = mappings.Select(mapping => new UserEventMappingResponse(
+                mapping.EventId,
+                mapping.UserEmail,
+                mapping.Role,
+                mapping.CreatedDate
+            )).ToList();
 
             return new OkObjectResult(admins);
         }
@@ -403,17 +387,11 @@ public class EventFunctions
                 return new BadRequestObjectResult(new { message = "User email is required" });
             }
 
-            TableClient mappingsTable = _tableStorage.GetUserEventMappingsTable();
-
             // Check if mapping already exists
-            try
+            UserEventMappingEntity? existingMapping = await _userEventMappingRepository.GetAsync(eventId, request.UserEmail);
+            if (existingMapping != null)
             {
-                await mappingsTable.GetEntityAsync<UserEventMappingEntity>(eventId, request.UserEmail);
                 return new BadRequestObjectResult(new { message = "User is already an admin for this event" });
-            }
-            catch
-            {
-                // Mapping doesn't exist, create it
             }
 
             UserEventMappingEntity mappingEntity = new()
@@ -425,7 +403,7 @@ public class EventFunctions
                 Role = "Admin"
             };
 
-            await mappingsTable.AddEntityAsync(mappingEntity);
+            await _userEventMappingRepository.AddAsync(mappingEntity);
 
             UserEventMappingResponse response = new(
                 mappingEntity.EventId,
@@ -465,14 +443,9 @@ public class EventFunctions
                 return new UnauthorizedObjectResult(new { message = "You are not authorized to manage admins for this event" });
             }
 
-            TableClient mappingsTable = _tableStorage.GetUserEventMappingsTable();
-
             // Count total admins for this event
-            int adminCount = 0;
-            await foreach (UserEventMappingEntity mapping in mappingsTable.QueryAsync<UserEventMappingEntity>(m => m.PartitionKey == eventId))
-            {
-                adminCount++;
-            }
+            IEnumerable<UserEventMappingEntity> mappings = await _userEventMappingRepository.GetByEventAsync(eventId);
+            int adminCount = mappings.Count();
 
             // Ensure at least one admin remains
             if (adminCount <= 1)
@@ -480,15 +453,11 @@ public class EventFunctions
                 return new BadRequestObjectResult(new { message = "Cannot remove the last admin from an event" });
             }
 
-            await mappingsTable.DeleteEntityAsync(eventId, userEmail);
+            await _userEventMappingRepository.DeleteAsync(eventId, userEmail);
 
             _logger.LogInformation($"Admin removed from event {eventId}: {userEmail}");
 
             return new NoContentResult();
-        }
-        catch (RequestFailedException ex) when (ex.Status == 404)
-        {
-            return new NotFoundObjectResult(new { message = "Admin not found for this event" });
         }
         catch (Exception ex)
         {
@@ -541,8 +510,12 @@ public class EventFunctions
             }
 
             // Update the event with the route
-            TableClient table = _tableStorage.GetEventsTable();
-            Response<EventEntity> eventEntity = await table.GetEntityAsync<EventEntity>("EVENT", eventId);
+            EventEntity? eventEntity = await _eventRepository.GetAsync(eventId);
+
+            if (eventEntity == null)
+            {
+                return new NotFoundObjectResult(new { message = "Event not found" });
+            }
 
             string routeJson = JsonSerializer.Serialize(route);
 
@@ -552,16 +525,12 @@ public class EventFunctions
                 return new BadRequestObjectResult(new { message = $"Route is too large ({route.Count} points). The GPX file has too many points even after simplification. Try a simpler route or fewer track points." });
             }
 
-            eventEntity.Value.GpxRouteJson = routeJson;
-            await table.UpdateEntityAsync(eventEntity.Value, eventEntity.Value.ETag);
+            eventEntity.GpxRouteJson = routeJson;
+            await _eventRepository.UpdateAsync(eventEntity);
 
             _logger.LogInformation($"GPX route uploaded for event {eventId}: {route.Count} points (simplified)");
 
             return new OkObjectResult(new { success = true, message = $"Route uploaded successfully with {route.Count} points (simplified)", route });
-        }
-        catch (RequestFailedException ex) when (ex.Status == 404)
-        {
-            return new NotFoundObjectResult(new { message = "Event not found" });
         }
         catch (InvalidOperationException ex)
         {

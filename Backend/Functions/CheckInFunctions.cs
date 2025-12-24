@@ -7,19 +7,25 @@ using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Services;
+using VolunteerCheckin.Functions.Repositories;
 
 namespace VolunteerCheckin.Functions.Functions;
 
 public class CheckInFunctions
 {
     private readonly ILogger<CheckInFunctions> _logger;
-    private readonly TableStorageService _tableStorage;
+    private readonly IAssignmentRepository _assignmentRepository;
+    private readonly ILocationRepository _locationRepository;
     private const double AllowedRadiusMeters = 100; // 100 meters tolerance
 
-    public CheckInFunctions(ILogger<CheckInFunctions> logger, TableStorageService tableStorage)
+    public CheckInFunctions(
+        ILogger<CheckInFunctions> logger,
+        IAssignmentRepository assignmentRepository,
+        ILocationRepository locationRepository)
     {
         _logger = logger;
-        _tableStorage = tableStorage;
+        _assignmentRepository = assignmentRepository;
+        _locationRepository = locationRepository;
     }
 
     [Function("CheckIn")]
@@ -36,14 +42,18 @@ public class CheckInFunctions
                 return new BadRequestObjectResult(new { message = "Invalid request" });
             }
 
-            TableClient assignmentsTable = _tableStorage.GetAssignmentsTable();
-
             // Find the assignment
+            IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetAllAsync();
             AssignmentEntity? assignment = null;
-            await foreach (AssignmentEntity a in assignmentsTable.QueryAsync<AssignmentEntity>(a => a.RowKey == request.AssignmentId))
+
+            // Since we don't have eventId in the request, search across all assignments
+            foreach (AssignmentEntity a in assignments)
             {
-                assignment = a;
-                break;
+                if (a.RowKey == request.AssignmentId)
+                {
+                    assignment = a;
+                    break;
+                }
             }
 
             if (assignment == null)
@@ -57,8 +67,12 @@ public class CheckInFunctions
             }
 
             // Get the location to verify GPS if needed
-            TableClient locationsTable = _tableStorage.GetLocationsTable();
-            Response<LocationEntity> location = await locationsTable.GetEntityAsync<LocationEntity>(assignment.EventId, assignment.LocationId);
+            LocationEntity? location = await _locationRepository.GetAsync(assignment.EventId, assignment.LocationId);
+
+            if (location == null)
+            {
+                return new NotFoundObjectResult(new { message = "Location not found" });
+            }
 
             string checkInMethod;
 
@@ -70,8 +84,8 @@ public class CheckInFunctions
             {
                 // Verify GPS coordinates
                 double distance = GpsService.CalculateDistance(
-                    location.Value.Latitude,
-                    location.Value.Longitude,
+                    location.Latitude,
+                    location.Longitude,
                     request.Latitude.Value,
                     request.Longitude.Value
                 );
@@ -100,11 +114,11 @@ public class CheckInFunctions
             assignment.CheckInLongitude = request.Longitude;
             assignment.CheckInMethod = checkInMethod;
 
-            await assignmentsTable.UpdateEntityAsync(assignment, assignment.ETag);
+            await _assignmentRepository.UpdateAsync(assignment);
 
             // Update location checked-in count
-            location.Value.CheckedInCount++;
-            await locationsTable.UpdateEntityAsync(location.Value, location.Value.ETag);
+            location.CheckedInCount++;
+            await _locationRepository.UpdateAsync(location);
 
             AssignmentResponse response = new(
                 assignment.RowKey,
@@ -122,10 +136,6 @@ public class CheckInFunctions
 
             return new OkObjectResult(response);
         }
-        catch (RequestFailedException ex) when (ex.Status == 404)
-        {
-            return new NotFoundObjectResult(new { message = "Assignment or location not found" });
-        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during check-in");
@@ -140,14 +150,17 @@ public class CheckInFunctions
     {
         try
         {
-            TableClient assignmentsTable = _tableStorage.GetAssignmentsTable();
-
-            // Find the assignment
+            // Find the assignment across all events
+            IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetAllAsync();
             AssignmentEntity? assignment = null;
-            await foreach (AssignmentEntity a in assignmentsTable.QueryAsync<AssignmentEntity>(a => a.RowKey == assignmentId))
+
+            foreach (AssignmentEntity a in assignments)
             {
-                assignment = a;
-                break;
+                if (a.RowKey == assignmentId)
+                {
+                    assignment = a;
+                    break;
+                }
             }
 
             if (assignment == null)
@@ -156,8 +169,12 @@ public class CheckInFunctions
             }
 
             // Get the location to update count
-            TableClient locationsTable = _tableStorage.GetLocationsTable();
-            Response<LocationEntity> location = await locationsTable.GetEntityAsync<LocationEntity>(assignment.EventId, assignment.LocationId);
+            LocationEntity? location = await _locationRepository.GetAsync(assignment.EventId, assignment.LocationId);
+
+            if (location == null)
+            {
+                return new NotFoundObjectResult(new { message = "Location not found" });
+            }
 
             // If already checked in, undo the check-in
             if (assignment.IsCheckedIn)
@@ -167,7 +184,7 @@ public class CheckInFunctions
                 assignment.CheckInLatitude = null;
                 assignment.CheckInLongitude = null;
                 assignment.CheckInMethod = string.Empty;
-                location.Value.CheckedInCount--;
+                location.CheckedInCount--;
             }
             else
             {
@@ -175,11 +192,11 @@ public class CheckInFunctions
                 assignment.IsCheckedIn = true;
                 assignment.CheckInTime = DateTime.UtcNow;
                 assignment.CheckInMethod = "Admin";
-                location.Value.CheckedInCount++;
+                location.CheckedInCount++;
             }
 
-            await assignmentsTable.UpdateEntityAsync(assignment, assignment.ETag);
-            await locationsTable.UpdateEntityAsync(location.Value, location.Value.ETag);
+            await _assignmentRepository.UpdateAsync(assignment);
+            await _locationRepository.UpdateAsync(location);
 
             AssignmentResponse response = new(
                 assignment.RowKey,
@@ -196,10 +213,6 @@ public class CheckInFunctions
             _logger.LogInformation($"Admin check-in toggle: {assignment.RowKey} - Now {(assignment.IsCheckedIn ? "checked in" : "checked out")}");
 
             return new OkObjectResult(response);
-        }
-        catch (RequestFailedException ex) when (ex.Status == 404)
-        {
-            return new NotFoundObjectResult(new { message = "Assignment not found" });
         }
         catch (Exception ex)
         {

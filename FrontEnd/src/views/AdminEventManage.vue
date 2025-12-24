@@ -31,6 +31,91 @@
         >
           Marshals
         </button>
+        <button
+          class="tab-button"
+          :class="{ active: activeTab === 'details' }"
+          @click="activeTab = 'details'"
+        >
+          Event details
+        </button>
+      </div>
+
+      <!-- Details Tab -->
+      <div v-if="activeTab === 'details'" class="tab-content-wrapper">
+        <div class="details-container">
+          <div class="details-section">
+            <h2>Event Information</h2>
+            <form @submit.prevent="handleUpdateEvent" class="event-details-form">
+              <div class="form-group">
+                <label>Event Name</label>
+                <input
+                  v-model="eventDetailsForm.name"
+                  type="text"
+                  required
+                  class="form-input"
+                  @input="markEventDetailsFormDirty"
+                />
+              </div>
+
+              <div class="form-group">
+                <label>Description</label>
+                <textarea
+                  v-model="eventDetailsForm.description"
+                  rows="3"
+                  class="form-input"
+                  @input="markEventDetailsFormDirty"
+                ></textarea>
+              </div>
+
+              <div class="form-group">
+                <label>Event Date & Time</label>
+                <input
+                  v-model="eventDetailsForm.eventDate"
+                  type="datetime-local"
+                  required
+                  class="form-input"
+                  @input="markEventDetailsFormDirty"
+                />
+              </div>
+
+              <div class="form-group">
+                <label>Time Zone</label>
+                <select
+                  v-model="eventDetailsForm.timeZoneId"
+                  required
+                  class="form-input"
+                  @change="markEventDetailsFormDirty"
+                >
+                  <option value="UTC">UTC</option>
+                  <option value="America/New_York">Eastern Time (ET)</option>
+                  <option value="America/Chicago">Central Time (CT)</option>
+                  <option value="America/Denver">Mountain Time (MT)</option>
+                  <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                  <option value="America/Anchorage">Alaska Time (AKT)</option>
+                  <option value="Pacific/Honolulu">Hawaii Time (HT)</option>
+                  <option value="Europe/London">London (GMT/BST)</option>
+                  <option value="Europe/Paris">Paris (CET/CEST)</option>
+                  <option value="Asia/Tokyo">Tokyo (JST)</option>
+                  <option value="Australia/Sydney">Sydney (AEDT/AEST)</option>
+                </select>
+              </div>
+
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary" :disabled="!eventDetailsFormDirty">
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div class="details-section">
+            <AdminsList
+              :admins="eventAdmins"
+              @add-admin="showAddAdmin = true"
+              @remove-admin="removeAdmin"
+            />
+          </div>
+        </div>
       </div>
 
       <!-- Course Tab -->
@@ -55,14 +140,6 @@
                 @select-location="selectLocation"
               />
             </div>
-
-            <div class="section">
-              <AdminsList
-                :admins="eventAdmins"
-                @add-admin="showAddAdmin = true"
-                @remove-admin="removeAdmin"
-              />
-            </div>
           </div>
         </div>
       </div>
@@ -85,16 +162,41 @@
           <table class="marshals-table">
             <thead>
               <tr>
-                <th>Name</th>
-                <th class="hide-on-mobile">Email</th>
-                <th class="hide-on-mobile">Phone</th>
-                <th>Checkpoint</th>
-                <th>Status</th>
+                <th @click="changeMarshalSort('name')" class="sortable">
+                  Name
+                  <span class="sort-indicator" v-if="marshalSortBy === 'name'">
+                    {{ marshalSortOrder === 'asc' ? '▲' : '▼' }}
+                  </span>
+                </th>
+                <th @click="changeMarshalSort('email')" class="sortable hide-on-mobile">
+                  Email
+                  <span class="sort-indicator" v-if="marshalSortBy === 'email'">
+                    {{ marshalSortOrder === 'asc' ? '▲' : '▼' }}
+                  </span>
+                </th>
+                <th @click="changeMarshalSort('phone')" class="sortable hide-on-mobile">
+                  Phone
+                  <span class="sort-indicator" v-if="marshalSortBy === 'phone'">
+                    {{ marshalSortOrder === 'asc' ? '▲' : '▼' }}
+                  </span>
+                </th>
+                <th @click="changeMarshalSort('checkpoint')" class="sortable">
+                  Checkpoint
+                  <span class="sort-indicator" v-if="marshalSortBy === 'checkpoint'">
+                    {{ marshalSortOrder === 'asc' ? '▲' : '▼' }}
+                  </span>
+                </th>
+                <th @click="changeMarshalSort('status')" class="sortable">
+                  Status
+                  <span class="sort-indicator" v-if="marshalSortBy === 'status'">
+                    {{ marshalSortOrder === 'asc' ? '▲' : '▼' }}
+                  </span>
+                </th>
                 <th class="hide-on-mobile">Actions</th>
               </tr>
             </thead>
             <tbody>
-              <template v-for="marshal in marshals" :key="marshal.id">
+              <template v-for="marshal in sortedMarshals" :key="marshal.id">
                 <template v-if="getMarshalAssignments(marshal.id).length > 0">
                   <tr
                     v-for="(assignment, index) in getMarshalAssignments(marshal.id)"
@@ -829,6 +931,23 @@
         </div>
       </div>
     </div>
+
+    <!-- Info Modal -->
+    <InfoModal
+      :show="showInfoModal"
+      :title="infoModalTitle"
+      :message="infoModalMessage"
+      @close="showInfoModal = false"
+    />
+
+    <!-- Confirm Modal -->
+    <ConfirmModal
+      :show="showConfirmModal"
+      :title="confirmModalTitle"
+      :message="confirmModalMessage"
+      @confirm="handleConfirmModalConfirm"
+      @cancel="handleConfirmModalCancel"
+    />
   </div>
 </template>
 
@@ -846,14 +965,16 @@ import ImportLocationsModal from '../components/event-manage/modals/ImportLocati
 import ImportMarshalsModal from '../components/event-manage/modals/ImportMarshalsModal.vue';
 import CheckpointsList from '../components/event-manage/lists/CheckpointsList.vue';
 import AdminsList from '../components/event-manage/lists/AdminsList.vue';
+import InfoModal from '../components/InfoModal.vue';
+import ConfirmModal from '../components/ConfirmModal.vue';
 
 const route = useRoute();
 const router = useRouter();
 const eventsStore = useEventsStore();
 
 const activeTab = ref('course');
-const editLocationTab = ref('details');
-const editMarshalTab = ref('details');
+const editLocationTab = ref('course');
+const editMarshalTab = ref('course');
 const event = ref(null);
 const locations = ref([]);
 const locationStatuses = ref([]);
@@ -920,6 +1041,20 @@ const pendingAssignments = ref([]);
 const pendingDeleteAssignments = ref([]);
 const pendingMarshalAssignments = ref([]);
 const pendingMarshalDeleteAssignments = ref([]);
+const showInfoModal = ref(false);
+const infoModalTitle = ref('');
+const infoModalMessage = ref('');
+const showConfirmModal = ref(false);
+const confirmModalTitle = ref('');
+const confirmModalMessage = ref('');
+const confirmModalCallback = ref(null);
+const eventDetailsForm = ref({
+  name: '',
+  description: '',
+  eventDate: '',
+  timeZoneId: 'UTC',
+});
+const eventDetailsFormDirty = ref(false);
 
 const locationForm = ref({
   name: '',
@@ -946,10 +1081,41 @@ const sortedMarshals = computed(() => {
 
     if (marshalSortBy.value === 'name') {
       compareValue = a.name.localeCompare(b.name);
+    } else if (marshalSortBy.value === 'email') {
+      const aEmail = a.email || '';
+      const bEmail = b.email || '';
+      compareValue = aEmail.localeCompare(bEmail);
+    } else if (marshalSortBy.value === 'phone') {
+      const aPhone = a.phoneNumber || '';
+      const bPhone = b.phoneNumber || '';
+      compareValue = aPhone.localeCompare(bPhone);
+    } else if (marshalSortBy.value === 'checkpoint') {
+      // Sort by first assigned checkpoint name (using same rules as course page)
+      const aAssignments = getMarshalAssignments(a.id);
+      const bAssignments = getMarshalAssignments(b.id);
+      const aCheckpoint = aAssignments.length > 0 ? getLocationName(aAssignments[0].locationId) : '';
+      const bCheckpoint = bAssignments.length > 0 ? getLocationName(bAssignments[0].locationId) : '';
+
+      // Check if both names are purely numeric
+      const aNum = parseFloat(aCheckpoint);
+      const bNum = parseFloat(bCheckpoint);
+      const aIsNum = !isNaN(aNum) && String(aNum) === aCheckpoint.trim();
+      const bIsNum = !isNaN(bNum) && String(bNum) === bCheckpoint.trim();
+
+      // If both are numbers, sort numerically
+      if (aIsNum && bIsNum) {
+        compareValue = aNum - bNum;
+      } else {
+        // Otherwise, sort alphabetically (case-insensitive)
+        compareValue = aCheckpoint.localeCompare(bCheckpoint, undefined, { numeric: true, sensitivity: 'base' });
+      }
     } else if (marshalSortBy.value === 'status') {
-      compareValue = (b.isCheckedIn ? 1 : 0) - (a.isCheckedIn ? 1 : 0);
-    } else if (marshalSortBy.value === 'assignments') {
-      compareValue = a.assignedLocationIds.length - b.assignedLocationIds.length;
+      // Sort by checked-in status of first assignment
+      const aAssignments = getMarshalAssignments(a.id);
+      const bAssignments = getMarshalAssignments(b.id);
+      const aCheckedIn = aAssignments.length > 0 && aAssignments[0].isCheckedIn ? 1 : 0;
+      const bCheckedIn = bAssignments.length > 0 && bAssignments[0].isCheckedIn ? 1 : 0;
+      compareValue = bCheckedIn - aCheckedIn;
     }
 
     return marshalSortOrder.value === 'asc' ? compareValue : -compareValue;
@@ -981,30 +1147,72 @@ const availableMarshalLocations = computed(() => {
 });
 
 const availableMarshalsForAssignment = computed(() => {
-  if (!selectedLocation.value) return marshals.value;
+  let marshalsList = marshals.value;
 
-  const assignedMarshalNames = selectedLocation.value.assignments.map(a => a.marshalName);
-  const pendingMarshalNames = pendingAssignments.value.map(p => p.marshalName);
-  return marshals.value.filter(
-    marshal => !assignedMarshalNames.includes(marshal.name) && !pendingMarshalNames.includes(marshal.name)
-  );
+  if (selectedLocation.value) {
+    const assignedMarshalNames = selectedLocation.value.assignments.map(a => a.marshalName);
+    const pendingMarshalNames = pendingAssignments.value.map(p => p.marshalName);
+    marshalsList = marshals.value.filter(
+      marshal => !assignedMarshalNames.includes(marshal.name) && !pendingMarshalNames.includes(marshal.name)
+    );
+  }
+
+  // Sort alphabetically by name
+  return marshalsList.slice().sort((a, b) => a.name.localeCompare(b.name));
 });
+
+const showConfirm = (title, message, callback) => {
+  confirmModalTitle.value = title;
+  confirmModalMessage.value = message;
+  confirmModalCallback.value = callback;
+  showConfirmModal.value = true;
+};
+
+const handleConfirmModalConfirm = () => {
+  showConfirmModal.value = false;
+  if (confirmModalCallback.value) {
+    confirmModalCallback.value();
+    confirmModalCallback.value = null;
+  }
+};
+
+const handleConfirmModalCancel = () => {
+  showConfirmModal.value = false;
+  confirmModalCallback.value = null;
+};
 
 const markFormDirty = () => {
   formDirty.value = true;
 };
 
+const markEventDetailsFormDirty = () => {
+  eventDetailsFormDirty.value = true;
+};
+
+const handleUpdateEvent = async () => {
+  try {
+    await eventsStore.updateEvent(route.params.eventId, {
+      ...eventDetailsForm.value,
+    });
+    await loadEventData();
+    eventDetailsFormDirty.value = false;
+  } catch (error) {
+    console.error('Failed to update event:', error);
+    alert('Failed to update event. Please try again.');
+  }
+};
+
 const tryCloseModal = (closeFunction) => {
   if (formDirty.value || pendingAssignments.value.length > 0 || pendingDeleteAssignments.value.length > 0 ||
       pendingMarshalAssignments.value.length > 0 || pendingMarshalDeleteAssignments.value.length > 0) {
-    if (confirm('You have unsaved changes. Are you sure you want to close without saving?')) {
+    showConfirm('Unsaved Changes', 'You have unsaved changes. Are you sure you want to close without saving?', () => {
       formDirty.value = false;
       pendingAssignments.value = [];
       pendingDeleteAssignments.value = [];
       pendingMarshalAssignments.value = [];
       pendingMarshalDeleteAssignments.value = [];
       closeFunction();
-    }
+    });
   } else {
     closeFunction();
   }
@@ -1027,6 +1235,30 @@ const loadEventData = async () => {
   try {
     await eventsStore.fetchEvent(route.params.eventId);
     event.value = eventsStore.currentEvent;
+
+    // Populate event details form
+    if (event.value) {
+      // Convert eventDate to datetime-local format (YYYY-MM-DDTHH:mm)
+      let formattedDate = '';
+      if (event.value.eventDate) {
+        const date = new Date(event.value.eventDate);
+        // Format as YYYY-MM-DDTHH:mm (local time)
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        formattedDate = `${year}-${month}-${day}T${hours}:${minutes}`;
+      }
+
+      eventDetailsForm.value = {
+        name: event.value.name || '',
+        description: event.value.description || '',
+        eventDate: formattedDate,
+        timeZoneId: event.value.timeZoneId || 'UTC',
+      };
+      eventDetailsFormDirty.value = false;
+    }
 
     await eventsStore.fetchLocations(route.params.eventId);
     locations.value = eventsStore.locations;
@@ -1082,7 +1314,7 @@ const handleAddAdminSubmit = async (email) => {
 };
 
 const removeAdmin = async (userEmail) => {
-  if (confirm(`Remove ${userEmail} as an administrator?`)) {
+  showConfirm('Remove Administrator', `Remove ${userEmail} as an administrator?`, async () => {
     try {
       await eventAdminsApi.removeAdmin(route.params.eventId, userEmail);
       await loadEventAdmins();
@@ -1090,7 +1322,7 @@ const removeAdmin = async (userEmail) => {
       console.error('Failed to remove admin:', error);
       alert(error.response?.data?.message || 'Failed to remove administrator. Please try again.');
     }
-  }
+  });
 };
 
 const closeAdminModal = () => {
@@ -1202,6 +1434,24 @@ const handleImportLocationsSubmit = async ({ file, deleteExisting }) => {
     );
     importResult.value = response.data;
     await loadEventData();
+
+    // Close import modal and show success message
+    closeImportModal();
+
+    const result = response.data;
+    let message = `<p>Created <strong>${result.locationsCreated}</strong> location(s) and <strong>${result.assignmentsCreated}</strong> assignment(s)</p>`;
+
+    if (result.errors && result.errors.length > 0) {
+      message += '<br><p><strong>Errors:</strong></p><ul style="margin: 0; padding-left: 1.5rem;">';
+      result.errors.forEach(err => {
+        message += `<li>${err}</li>`;
+      });
+      message += '</ul>';
+    }
+
+    infoModalTitle.value = 'Import Complete';
+    infoModalMessage.value = message;
+    showInfoModal.value = true;
   } catch (error) {
     console.error('Failed to import locations:', error);
     importError.value = error.response?.data?.message || 'Failed to import locations. Please try again.';
@@ -1438,7 +1688,7 @@ const handleUpdateLocation = async () => {
 };
 
 const handleDeleteLocation = async () => {
-  if (confirm(`Are you sure you want to delete "${editLocationForm.value.name}"? This will remove all marshal assignments for this checkpoint.`)) {
+  showConfirm('Delete Checkpoint', `Are you sure you want to delete "${editLocationForm.value.name}"? This will remove all marshal assignments for this checkpoint.`, async () => {
     try {
       await locationsApi.delete(route.params.eventId, editLocationForm.value.id);
       await loadEventData();
@@ -1447,7 +1697,7 @@ const handleDeleteLocation = async () => {
       console.error('Failed to delete checkpoint:', error);
       alert('Failed to delete checkpoint. Please try again.');
     }
-  }
+  });
 };
 
 const toggleCheckIn = async (assignment) => {
@@ -1579,6 +1829,17 @@ const toggleSortOrder = () => {
   marshalSortOrder.value = marshalSortOrder.value === 'asc' ? 'desc' : 'asc';
 };
 
+const changeMarshalSort = (column) => {
+  if (marshalSortBy.value === column) {
+    // Toggle sort order if clicking the same column
+    marshalSortOrder.value = marshalSortOrder.value === 'asc' ? 'desc' : 'asc';
+  } else {
+    // Change to new column with ascending order
+    marshalSortBy.value = column;
+    marshalSortOrder.value = 'asc';
+  }
+};
+
 const closeEditMarshalModal = () => {
   showEditMarshal.value = false;
   selectedMarshal.value = null;
@@ -1644,7 +1905,7 @@ const handleSaveMarshal = async () => {
 };
 
 const handleDeleteMarshal = async () => {
-  if (confirm(`Are you sure you want to delete "${editMarshalForm.value.name}"? This will remove all assignments for this marshal.`)) {
+  showConfirm('Delete Marshal', `Are you sure you want to delete "${editMarshalForm.value.name}"? This will remove all assignments for this marshal.`, async () => {
     try {
       await marshalsApi.delete(route.params.eventId, editMarshalForm.value.id);
       await loadEventData();
@@ -1653,7 +1914,7 @@ const handleDeleteMarshal = async () => {
       console.error('Failed to delete marshal:', error);
       alert('Failed to delete marshal. Please try again.');
     }
-  }
+  });
 };
 
 const assignToLocation = async () => {
@@ -1689,7 +1950,7 @@ const removeAssignment = async (locationId) => {
 
   if (!assignment) return;
 
-  if (confirm(`Remove ${selectedMarshal.value.name} from ${location.name}?`)) {
+  showConfirm('Remove Assignment', `Remove ${selectedMarshal.value.name} from ${location.name}?`, async () => {
     try {
       await eventsStore.deleteAssignment(route.params.eventId, assignment.id);
       await loadEventData();
@@ -1699,7 +1960,7 @@ const removeAssignment = async (locationId) => {
       console.error('Failed to remove assignment:', error);
       alert('Failed to remove assignment. Please try again.');
     }
-  }
+  });
 };
 
 const getLocationName = (locationId) => {
@@ -1998,7 +2259,7 @@ const changeAssignmentStatus = async (assignment, newStatus) => {
 };
 
 const handleDeleteMarshalFromGrid = async (marshal) => {
-  if (confirm(`Are you sure you want to delete "${marshal.name}"? This will remove all assignments for this marshal.`)) {
+  showConfirm('Delete Marshal', `Are you sure you want to delete "${marshal.name}"? This will remove all assignments for this marshal.`, async () => {
     try {
       await marshalsApi.delete(route.params.eventId, marshal.id);
       await loadEventData();
@@ -2006,7 +2267,7 @@ const handleDeleteMarshalFromGrid = async (marshal) => {
       console.error('Failed to delete marshal:', error);
       alert('Failed to delete marshal. Please try again.');
     }
-  }
+  });
 };
 
 const handleMarshalsCsvFileChange = (event) => {
@@ -2057,6 +2318,24 @@ const handleImportMarshalsSubmit = async (file) => {
     );
     importMarshalsResult.value = response.data;
     await loadEventData();
+
+    // Close import modal and show success message
+    closeImportMarshalsModal();
+
+    const result = response.data;
+    let message = `<p>Imported <strong>${result.marshalsCreated}</strong> marshal(s) and <strong>${result.assignmentsCreated}</strong> assignment(s)</p>`;
+
+    if (result.errors && result.errors.length > 0) {
+      message += '<br><p><strong>Errors:</strong></p><ul style="margin: 0; padding-left: 1.5rem;">';
+      result.errors.forEach(err => {
+        message += `<li>${err}</li>`;
+      });
+      message += '</ul>';
+    }
+
+    infoModalTitle.value = 'Import Complete';
+    infoModalMessage.value = message;
+    showInfoModal.value = true;
   } catch (error) {
     console.error('Failed to import marshals:', error);
     importError.value = error.response?.data?.message || 'Failed to import marshals. Please try again.';
@@ -2504,6 +2783,11 @@ onUnmounted(() => {
   gap: 1rem;
   justify-content: flex-end;
   margin-top: 2rem;
+  padding-top: 1.5rem;
+  background: white;
+  position: sticky;
+  bottom: 0;
+  border-top: 1px solid #e0e0e0;
 }
 
 .share-link-container {
@@ -2687,6 +2971,68 @@ onUnmounted(() => {
   }
 }
 
+.details-container {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 2rem;
+}
+
+.details-section {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.details-section h2 {
+  margin: 0 0 1.5rem 0;
+  color: #333;
+  font-size: 1.5rem;
+}
+
+.event-details-form .form-group {
+  margin-bottom: 1.5rem;
+}
+
+.event-details-form label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.event-details-form .form-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 1rem;
+  transition: border-color 0.3s;
+  box-sizing: border-box;
+}
+
+.event-details-form .form-input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.event-details-form textarea.form-input {
+  resize: vertical;
+  font-family: inherit;
+}
+
+.form-actions {
+  margin-top: 2rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 1024px) {
+  .details-container {
+    grid-template-columns: 1fr;
+  }
+}
+
 .marshals-tab-header {
   background: white;
   padding: 1.5rem;
@@ -2727,6 +3073,22 @@ onUnmounted(() => {
   text-align: left;
   font-weight: 600;
   color: #333;
+}
+
+.marshals-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.marshals-table th.sortable:hover {
+  background: #e8ecf2;
+}
+
+.sort-indicator {
+  font-size: 0.7rem;
+  margin-left: 0.3rem;
+  color: #667eea;
 }
 
 .marshals-table td {

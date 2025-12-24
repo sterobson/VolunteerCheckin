@@ -266,6 +266,7 @@ public class AssignmentFunctions
                 locationStatuses.Add(new LocationStatusResponse(
                     location.RowKey,
                     location.Name,
+                    location.Description,
                     location.Latitude,
                     location.Longitude,
                     location.RequiredMarshals,

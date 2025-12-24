@@ -12,7 +12,7 @@
 
     <div class="locations-list">
       <div
-        v-for="location in locations"
+        v-for="location in sortedLocations"
         :key="location.id"
         class="location-item"
         :class="{
@@ -23,6 +23,9 @@
       >
         <div class="location-info">
           <strong>{{ location.name }}</strong>
+          <span class="location-description">
+            {{ location.description }}
+          </span>
           <span class="location-status">
             {{ location.checkedInCount }}/{{ location.requiredMarshals }}
           </span>
@@ -43,9 +46,9 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits } from 'vue';
+import { defineProps, defineEmits, computed } from 'vue';
 
-defineProps({
+const props = defineProps({
   locations: {
     type: Array,
     required: true,
@@ -53,6 +56,28 @@ defineProps({
 });
 
 defineEmits(['add-checkpoint', 'import-checkpoints', 'select-location']);
+
+const sortedLocations = computed(() => {
+  return [...props.locations].sort((a, b) => {
+    const aName = a.name;
+    const bName = b.name;
+
+    // Check if both names are purely numeric
+    const aNum = parseFloat(aName);
+    const bNum = parseFloat(bName);
+
+    const aIsNum = !isNaN(aNum) && String(aNum) === aName.trim();
+    const bIsNum = !isNaN(bNum) && String(bNum) === bName.trim();
+
+    // If both are numbers, sort numerically
+    if (aIsNum && bIsNum) {
+      return aNum - bNum;
+    }
+
+    // Otherwise, sort alphabetically (case-insensitive)
+    return aName.localeCompare(bName, undefined, { numeric: true, sensitivity: 'base' });
+  });
+});
 </script>
 
 <style scoped>
@@ -133,6 +158,16 @@ h3 {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 0.5rem;
+  min-width: 0; /* allow children to shrink instead of forcing width */
+}
+
+.location-description {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;  /* take remaining space, but shrink if needed */
+  min-width: 0;    /* critical in flex layouts for ellipsis */
+  margin: 0 0.5rem; /* optional: space between name and status */
 }
 
 .location-status {

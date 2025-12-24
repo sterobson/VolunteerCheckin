@@ -21,11 +21,20 @@
         <button @click="handleClose" class="btn btn-secondary">Close</button>
       </div>
     </div>
+
+    <ConfirmModal
+      :show="showConfirmModal"
+      title="Unsaved Changes"
+      message="You have unsaved changes. Are you sure you want to close?"
+      @confirm="handleConfirmClose"
+      @cancel="handleCancelClose"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, defineProps, defineEmits } from 'vue';
+import ConfirmModal from '../../ConfirmModal.vue';
 
 const props = defineProps({
   show: {
@@ -46,6 +55,7 @@ const emit = defineEmits(['close']);
 
 const linkCopied = ref(false);
 const linkInput = ref(null);
+const showConfirmModal = ref(false);
 
 const handleCopyLink = () => {
   if (linkInput.value) {
@@ -60,9 +70,7 @@ const handleCopyLink = () => {
 
 const close = () => {
   if (props.isDirty) {
-    if (confirm('You have unsaved changes. Are you sure you want to close?')) {
-      emit('close');
-    }
+    showConfirmModal.value = true;
   } else {
     emit('close');
   }
@@ -70,6 +78,15 @@ const close = () => {
 
 const handleClose = () => {
   emit('close');
+};
+
+const handleConfirmClose = () => {
+  showConfirmModal.value = false;
+  emit('close');
+};
+
+const handleCancelClose = () => {
+  showConfirmModal.value = false;
 };
 </script>
 
@@ -148,6 +165,18 @@ h2 {
   display: flex;
   gap: 1rem;
   justify-content: flex-end;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  background: white;
+  position: sticky;
+  bottom: 0;
+  border-top: 1px solid #e0e0e0;
+  margin-left: -2rem;
+  margin-right: -2rem;
+  margin-bottom: -2rem;
+  padding-left: 2rem;
+  padding-right: 2rem;
+  padding-bottom: 2rem;
 }
 
 .btn {

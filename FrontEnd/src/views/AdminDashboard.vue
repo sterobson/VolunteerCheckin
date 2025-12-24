@@ -211,6 +211,14 @@
         </form>
       </div>
     </div>
+
+    <ConfirmModal
+      :show="showConfirmModal"
+      :title="confirmModalTitle"
+      :message="confirmModalMessage"
+      @confirm="handleConfirmModalConfirm"
+      @cancel="handleConfirmModalCancel"
+    />
   </div>
 </template>
 
@@ -219,6 +227,7 @@ import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useEventsStore } from '../stores/events';
+import ConfirmModal from '../components/ConfirmModal.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -238,6 +247,10 @@ const eventForm = ref({
 });
 
 const events = ref([]);
+const showConfirmModal = ref(false);
+const confirmModalTitle = ref('');
+const confirmModalMessage = ref('');
+const confirmModalCallback = ref(null);
 
 const loadEvents = async () => {
   loading.value = true;
@@ -285,7 +298,9 @@ const editEvent = (event) => {
 };
 
 const confirmDelete = async (event) => {
-  if (confirm(`Are you sure you want to delete "${event.name}"?`)) {
+  confirmModalTitle.value = 'Delete Event';
+  confirmModalMessage.value = `Are you sure you want to delete "${event.name}"?`;
+  confirmModalCallback.value = async () => {
     try {
       await eventsStore.deleteEvent(event.id);
       events.value = eventsStore.events;
@@ -293,7 +308,21 @@ const confirmDelete = async (event) => {
       console.error('Failed to delete event:', error);
       alert('Failed to delete event. Please try again.');
     }
+  };
+  showConfirmModal.value = true;
+};
+
+const handleConfirmModalConfirm = () => {
+  showConfirmModal.value = false;
+  if (confirmModalCallback.value) {
+    confirmModalCallback.value();
+    confirmModalCallback.value = null;
   }
+};
+
+const handleConfirmModalCancel = () => {
+  showConfirmModal.value = false;
+  confirmModalCallback.value = null;
 };
 
 const addEmergencyContact = () => {
@@ -567,6 +596,17 @@ textarea.form-input {
   gap: 1rem;
   justify-content: flex-end;
   margin-top: 2rem;
+  padding-top: 1.5rem;
+  background: white;
+  position: sticky;
+  bottom: 0;
+  border-top: 1px solid #e0e0e0;
+  margin-left: -2rem;
+  margin-right: -2rem;
+  margin-bottom: -2rem;
+  padding-left: 2rem;
+  padding-right: 2rem;
+  padding-bottom: 2rem;
 }
 
 .modal-wide {

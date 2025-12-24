@@ -397,7 +397,7 @@ public class LocationFunctions
                             RowKey = Guid.NewGuid().ToString(),
                             EventId = eventId,
                             Name = row.Name,
-                            Description = string.Empty,
+                            Description = row.Description,
                             Latitude = row.Latitude,
                             Longitude = row.Longitude,
                             RequiredMarshals = row.MarshalNames.Count > 0 ? row.MarshalNames.Count : 1,
@@ -432,6 +432,18 @@ public class LocationFunctions
                 catch (Exception ex)
                 {
                     parseResult.Errors.Add($"Failed to process location '{row.Name}': {ex.Message}");
+                }
+            }
+
+            // Warn about new locations with missing or zero lat/long
+            if (deleteExisting || locationsCreated > 0)
+            {
+                await foreach (LocationEntity location in locationsTable.QueryAsync<LocationEntity>(l => l.PartitionKey == eventId))
+                {
+                    if ((location.Latitude == 0 && location.Longitude == 0) || double.IsNaN(location.Latitude) || double.IsNaN(location.Longitude))
+                    {
+                        parseResult.Errors.Add($"Warning: Location '{location.Name}' has no valid coordinates (lat: {location.Latitude}, long: {location.Longitude})");
+                    }
                 }
             }
 

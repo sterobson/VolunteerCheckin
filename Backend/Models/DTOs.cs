@@ -99,6 +99,7 @@ public record EventStatusResponse(
 public record LocationStatusResponse(
     string Id,
     string Name,
+    string Description,
     double Latitude,
     double Longitude,
     int RequiredMarshals,

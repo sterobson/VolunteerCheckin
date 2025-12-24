@@ -1,7 +1,7 @@
 <template>
   <div class="home">
     <div class="container">
-      <h1>Volunteer Check-in System</h1>
+      <h1>Volunteer Check-in System </h1>
       <p class="subtitle">Manage race marshals and volunteers with ease</p>
 
       <div class="actions">

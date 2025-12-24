@@ -126,6 +126,14 @@
         </div>
       </div>
     </div>
+
+    <ConfirmModal
+      :show="showConfirmModal"
+      :title="confirmModalTitle"
+      :message="confirmModalMessage"
+      @confirm="handleConfirmModalConfirm"
+      @cancel="handleConfirmModalCancel"
+    />
   </div>
 </template>
 
@@ -135,6 +143,7 @@ import { useRoute } from 'vue-router';
 import { useEventsStore } from '../stores/events';
 import { checkInApi } from '../services/api';
 import MapView from '../components/MapView.vue';
+import ConfirmModal from '../components/ConfirmModal.vue';
 
 const route = useRoute();
 const eventsStore = useEventsStore();
@@ -149,6 +158,10 @@ const checkingIn = ref(false);
 const checkInError = ref(null);
 const showEmergency = ref(false);
 const userLocation = ref(null);
+const showConfirmModal = ref(false);
+const confirmModalTitle = ref('');
+const confirmModalMessage = ref('');
+const confirmModalCallback = ref(null);
 
 const mapCenter = computed(() => {
   if (assignedLocation.value) {
@@ -246,28 +259,42 @@ const handleCheckIn = async () => {
 };
 
 const handleManualCheckIn = async () => {
-  if (!confirm('Are you sure you want to check in manually? This should only be used if GPS is not available.')) {
-    return;
+  confirmModalTitle.value = 'Manual Check-In';
+  confirmModalMessage.value = 'Are you sure you want to check in manually? This should only be used if GPS is not available.';
+  confirmModalCallback.value = async () => {
+    checkingIn.value = true;
+    checkInError.value = null;
+
+    try {
+      const response = await checkInApi.checkIn({
+        assignmentId: selectedMarshal.value.id,
+        latitude: null,
+        longitude: null,
+        manualCheckIn: true,
+      });
+
+      selectedMarshal.value = response.data;
+      await loadEventData();
+    } catch (error) {
+      checkInError.value = 'Failed to check in manually. Please contact the admin.';
+    } finally {
+      checkingIn.value = false;
+    }
+  };
+  showConfirmModal.value = true;
+};
+
+const handleConfirmModalConfirm = () => {
+  showConfirmModal.value = false;
+  if (confirmModalCallback.value) {
+    confirmModalCallback.value();
+    confirmModalCallback.value = null;
   }
+};
 
-  checkingIn.value = true;
-  checkInError.value = null;
-
-  try {
-    const response = await checkInApi.checkIn({
-      assignmentId: selectedMarshal.value.id,
-      latitude: null,
-      longitude: null,
-      manualCheckIn: true,
-    });
-
-    selectedMarshal.value = response.data;
-    await loadEventData();
-  } catch (error) {
-    checkInError.value = 'Failed to check in manually. Please contact the admin.';
-  } finally {
-    checkingIn.value = false;
-  }
+const handleConfirmModalCancel = () => {
+  showConfirmModal.value = false;
+  confirmModalCallback.value = null;
 };
 
 const formatTime = (dateString) => {
@@ -577,6 +604,18 @@ onMounted(async () => {
   display: flex;
   gap: 1rem;
   justify-content: flex-end;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  background: white;
+  position: sticky;
+  bottom: 0;
+  border-top: 1px solid #e0e0e0;
+  margin-left: -2rem;
+  margin-right: -2rem;
+  margin-bottom: -2rem;
+  padding-left: 2rem;
+  padding-right: 2rem;
+  padding-bottom: 2rem;
 }
 
 .emergency-contacts-list {

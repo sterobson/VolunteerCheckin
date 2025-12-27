@@ -33,6 +33,10 @@ const routes = [
     name: 'MarshalView',
     component: MarshalView,
   },
+  {
+    path: '/:pathMatch(.*)*',
+    redirect: '/',
+  },
 ];
 
 const router = createRouter({

@@ -8,6 +8,7 @@ using System.Text.Json;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Services;
 using VolunteerCheckin.Functions.Repositories;
+using VolunteerCheckin.Functions.Helpers;
 
 namespace VolunteerCheckin.Functions.Functions;
 
@@ -42,27 +43,17 @@ public class EventFunctions
     {
         try
         {
-            string body = await new StreamReader(req.Body).ReadToEndAsync();
-            CreateEventRequest? request = JsonSerializer.Deserialize<CreateEventRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            (CreateEventRequest? request, IActionResult? error) = await FunctionHelpers.TryDeserializeRequestAsync<CreateEventRequest>(req);
+            if (error != null) return error;
 
-            if (request == null)
+            // Validate admin email
+            if (!Validators.IsValidEmail(request!.AdminEmail))
             {
-                return new BadRequestObjectResult(new { message = "Invalid request" });
+                return new BadRequestObjectResult(new { message = "Invalid email address format" });
             }
 
             // Convert the event date to UTC
-            DateTime eventDateUtc;
-            try
-            {
-                TimeZoneInfo timeZone = TimeZoneInfo.FindSystemTimeZoneById(request.TimeZoneId);
-                DateTime unspecifiedDateTime = DateTime.SpecifyKind(request.EventDate, DateTimeKind.Unspecified);
-                eventDateUtc = TimeZoneInfo.ConvertTimeToUtc(unspecifiedDateTime, timeZone);
-            }
-            catch
-            {
-                // If timezone conversion fails, treat as UTC
-                eventDateUtc = DateTime.SpecifyKind(request.EventDate, DateTimeKind.Utc);
-            }
+            DateTime eventDateUtc = FunctionHelpers.ConvertToUtc(request.EventDate, request.TimeZoneId);
 
             EventEntity eventEntity = new()
             {
@@ -84,29 +75,12 @@ public class EventFunctions
                 RowKey = request.AdminEmail,
                 EventId = eventEntity.RowKey,
                 UserEmail = request.AdminEmail,
-                Role = "Admin"
+                Role = Constants.AdminRole
             };
 
             await _userEventMappingRepository.AddAsync(mappingEntity);
 
-            List<EmergencyContact> emergencyContacts = JsonSerializer.Deserialize<List<EmergencyContact>>(eventEntity.EmergencyContactsJson)
-                ?? [];
-
-            List<RoutePoint> route = JsonSerializer.Deserialize<List<RoutePoint>>(eventEntity.GpxRouteJson)
-                ?? [];
-
-            EventResponse response = new(
-                eventEntity.RowKey,
-                eventEntity.Name,
-                eventEntity.Description,
-                eventEntity.EventDate,
-                eventEntity.TimeZoneId,
-                eventEntity.AdminEmail,
-                emergencyContacts,
-                route,
-                eventEntity.IsActive,
-                eventEntity.CreatedDate
-            );
+            EventResponse response = eventEntity.ToResponse();
 
             _logger.LogInformation($"Event created: {eventEntity.RowKey}, Admin: {request.AdminEmail}");
 
@@ -133,24 +107,7 @@ public class EventFunctions
                 return new NotFoundObjectResult(new { message = "Event not found" });
             }
 
-            List<EmergencyContact> emergencyContacts = JsonSerializer.Deserialize<List<EmergencyContact>>(eventEntity.EmergencyContactsJson)
-                ?? [];
-
-            List<RoutePoint> route = JsonSerializer.Deserialize<List<RoutePoint>>(eventEntity.GpxRouteJson)
-                ?? [];
-
-            EventResponse response = new(
-                eventEntity.RowKey,
-                eventEntity.Name,
-                eventEntity.Description,
-                eventEntity.EventDate,
-                eventEntity.TimeZoneId,
-                eventEntity.AdminEmail,
-                emergencyContacts,
-                route,
-                eventEntity.IsActive,
-                eventEntity.CreatedDate
-            );
+            EventResponse response = eventEntity.ToResponse();
 
             return new OkObjectResult(response);
         }
@@ -168,11 +125,8 @@ public class EventFunctions
         try
         {
             // Get admin email from header
-            string? adminEmail = req.Headers["X-Admin-Email"].FirstOrDefault();
-            if (string.IsNullOrWhiteSpace(adminEmail))
-            {
-                return new BadRequestObjectResult(new { message = "Admin email header is required" });
-            }
+            (string? adminEmail, IActionResult? error) = FunctionHelpers.GetAdminEmailFromHeader(req);
+            if (error != null) return error;
 
             // Get all events where user is an admin
             IEnumerable<UserEventMappingEntity> userMappings = await _userEventMappingRepository.GetByUserAsync(adminEmail);
@@ -180,34 +134,19 @@ public class EventFunctions
 
             // Fetch all events and filter by user access
             IEnumerable<EventEntity> allEvents = await _eventRepository.GetAllAsync();
-            List<EventResponse> events = [];
+            IEnumerable<EventResponse> events = allEvents
+                .Where(e => userEventIds.Contains(e.RowKey))
+                .Select(e => e.ToResponse());
 
-            foreach (EventEntity eventEntity in allEvents)
+            // Check if pagination is requested
+            if (req.Query.ContainsKey("page") || req.Query.ContainsKey("pageSize"))
             {
-                if (userEventIds.Contains(eventEntity.RowKey))
-                {
-                    List<EmergencyContact> emergencyContacts = JsonSerializer.Deserialize<List<EmergencyContact>>(eventEntity.EmergencyContactsJson)
-                        ?? [];
-
-                    List<RoutePoint> route = JsonSerializer.Deserialize<List<RoutePoint>>(eventEntity.GpxRouteJson)
-                        ?? [];
-
-                    events.Add(new EventResponse(
-                        eventEntity.RowKey,
-                        eventEntity.Name,
-                        eventEntity.Description,
-                        eventEntity.EventDate,
-                        eventEntity.TimeZoneId,
-                        eventEntity.AdminEmail,
-                        emergencyContacts,
-                        route,
-                        eventEntity.IsActive,
-                        eventEntity.CreatedDate
-                    ));
-                }
+                (int page, int pageSize) = FunctionHelpers.GetPaginationParams(req);
+                PaginatedResponse<EventResponse> paginatedResponse = FunctionHelpers.CreatePaginatedResponse(events, page, pageSize);
+                return new OkObjectResult(paginatedResponse);
             }
 
-            return new OkObjectResult(events);
+            return new OkObjectResult(events.ToList());
         }
         catch (Exception ex)
         {
@@ -224,23 +163,21 @@ public class EventFunctions
         try
         {
             // Check authorization
-            string? adminEmail = req.Headers["X-Admin-Email"].FirstOrDefault();
-            if (string.IsNullOrWhiteSpace(adminEmail))
-            {
-                return new BadRequestObjectResult(new { message = "Admin email header is required" });
-            }
+            (string? adminEmail, IActionResult? authError) = FunctionHelpers.GetAdminEmailFromHeader(req);
+            if (authError != null) return authError;
 
-            if (!await IsUserAuthorizedForEvent(eventId, adminEmail))
+            if (!await IsUserAuthorizedForEvent(eventId, adminEmail!))
             {
                 return new UnauthorizedObjectResult(new { message = "You are not authorized to update this event" });
             }
 
-            string body = await new StreamReader(req.Body).ReadToEndAsync();
-            CreateEventRequest? request = JsonSerializer.Deserialize<CreateEventRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            (CreateEventRequest? request, IActionResult? error) = await FunctionHelpers.TryDeserializeRequestAsync<CreateEventRequest>(req);
+            if (error != null) return error;
 
-            if (request == null)
+            // Validate admin email
+            if (!Validators.IsValidEmail(request!.AdminEmail))
             {
-                return new BadRequestObjectResult(new { message = "Invalid request" });
+                return new BadRequestObjectResult(new { message = "Invalid email address format" });
             }
 
             EventEntity? eventEntity = await _eventRepository.GetAsync(eventId);
@@ -251,18 +188,7 @@ public class EventFunctions
             }
 
             // Convert the event date to UTC
-            DateTime eventDateUtc;
-            try
-            {
-                TimeZoneInfo timeZone = TimeZoneInfo.FindSystemTimeZoneById(request.TimeZoneId);
-                DateTime unspecifiedDateTime = DateTime.SpecifyKind(request.EventDate, DateTimeKind.Unspecified);
-                eventDateUtc = TimeZoneInfo.ConvertTimeToUtc(unspecifiedDateTime, timeZone);
-            }
-            catch
-            {
-                // If timezone conversion fails, treat as UTC
-                eventDateUtc = DateTime.SpecifyKind(request.EventDate, DateTimeKind.Utc);
-            }
+            DateTime eventDateUtc = FunctionHelpers.ConvertToUtc(request.EventDate, request.TimeZoneId);
 
             eventEntity.Name = request.Name;
             eventEntity.Description = request.Description;
@@ -273,24 +199,7 @@ public class EventFunctions
 
             await _eventRepository.UpdateAsync(eventEntity);
 
-            List<EmergencyContact> emergencyContacts = JsonSerializer.Deserialize<List<EmergencyContact>>(eventEntity.EmergencyContactsJson)
-                ?? [];
-
-            List<RoutePoint> route = JsonSerializer.Deserialize<List<RoutePoint>>(eventEntity.GpxRouteJson)
-                ?? [];
-
-            EventResponse response = new(
-                eventEntity.RowKey,
-                eventEntity.Name,
-                eventEntity.Description,
-                eventEntity.EventDate,
-                eventEntity.TimeZoneId,
-                eventEntity.AdminEmail,
-                emergencyContacts,
-                route,
-                eventEntity.IsActive,
-                eventEntity.CreatedDate
-            );
+            EventResponse response = eventEntity.ToResponse();
 
             _logger.LogInformation($"Event updated: {eventId}");
 
@@ -344,12 +253,7 @@ public class EventFunctions
         {
             IEnumerable<UserEventMappingEntity> mappings = await _userEventMappingRepository.GetByEventAsync(eventId);
 
-            List<UserEventMappingResponse> admins = mappings.Select(mapping => new UserEventMappingResponse(
-                mapping.EventId,
-                mapping.UserEmail,
-                mapping.Role,
-                mapping.CreatedDate
-            )).ToList();
+            List<UserEventMappingResponse> admins = mappings.Select(m => m.ToResponse()).ToList();
 
             return new OkObjectResult(admins);
         }
@@ -368,23 +272,26 @@ public class EventFunctions
         try
         {
             // Check authorization
-            string? adminEmail = req.Headers["X-Admin-Email"].FirstOrDefault();
-            if (string.IsNullOrWhiteSpace(adminEmail))
-            {
-                return new BadRequestObjectResult(new { message = "Admin email header is required" });
-            }
+            (string? adminEmail, IActionResult? authError) = FunctionHelpers.GetAdminEmailFromHeader(req);
+            if (authError != null) return authError;
 
-            if (!await IsUserAuthorizedForEvent(eventId, adminEmail))
+            if (!await IsUserAuthorizedForEvent(eventId, adminEmail!))
             {
                 return new UnauthorizedObjectResult(new { message = "You are not authorized to manage admins for this event" });
             }
 
-            string body = await new StreamReader(req.Body).ReadToEndAsync();
-            AddEventAdminRequest? request = JsonSerializer.Deserialize<AddEventAdminRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            (AddEventAdminRequest? request, IActionResult? error) = await FunctionHelpers.TryDeserializeRequestAsync<AddEventAdminRequest>(req);
+            if (error != null) return error;
 
-            if (request == null || string.IsNullOrWhiteSpace(request.UserEmail))
+            if (string.IsNullOrWhiteSpace(request!.UserEmail))
             {
                 return new BadRequestObjectResult(new { message = "User email is required" });
+            }
+
+            // Validate email format
+            if (!Validators.IsValidEmail(request.UserEmail))
+            {
+                return new BadRequestObjectResult(new { message = "Invalid email address format" });
             }
 
             // Check if mapping already exists
@@ -400,17 +307,12 @@ public class EventFunctions
                 RowKey = request.UserEmail,
                 EventId = eventId,
                 UserEmail = request.UserEmail,
-                Role = "Admin"
+                Role = Constants.AdminRole
             };
 
             await _userEventMappingRepository.AddAsync(mappingEntity);
 
-            UserEventMappingResponse response = new(
-                mappingEntity.EventId,
-                mappingEntity.UserEmail,
-                mappingEntity.Role,
-                mappingEntity.CreatedDate
-            );
+            UserEventMappingResponse response = mappingEntity.ToResponse();
 
             _logger.LogInformation($"Admin added to event {eventId}: {request.UserEmail}");
 

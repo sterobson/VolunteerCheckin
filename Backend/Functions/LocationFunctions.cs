@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Services;
 using VolunteerCheckin.Functions.Repositories;
+using VolunteerCheckin.Functions.Helpers;
 
 namespace VolunteerCheckin.Functions.Functions;
 
@@ -34,43 +35,31 @@ public class LocationFunctions
         _csvParser = csvParser;
     }
 
-    private static bool IsValidWhat3Words(string? what3Words)
-    {
-        if (string.IsNullOrWhiteSpace(what3Words))
-        {
-            return true; // Optional field
-        }
-
-        // Pattern: word.word.word or word/word/word where word is lowercase alpha 1-20 chars
-        string pattern = @"^[a-z]{1,20}[./][a-z]{1,20}[./][a-z]{1,20}$";
-        if (!Regex.IsMatch(what3Words, pattern))
-        {
-            return false;
-        }
-
-        // Ensure consistent separator (all dots or all slashes)
-        bool hasDots = what3Words.Contains('.');
-        bool hasSlashes = what3Words.Contains('/');
-        return hasDots != hasSlashes; // XOR - can't have both
-    }
-
     [Function("CreateLocation")]
     public async Task<IActionResult> CreateLocation(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "locations")] HttpRequest req)
     {
         try
         {
-            string body = await new StreamReader(req.Body).ReadToEndAsync();
-            CreateLocationRequest? request = JsonSerializer.Deserialize<CreateLocationRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            (CreateLocationRequest? request, IActionResult? error) = await FunctionHelpers.TryDeserializeRequestAsync<CreateLocationRequest>(req);
+            if (error != null) return error;
 
-            if (request == null)
+            // Validate GPS coordinates
+            if (!Validators.IsValidCoordinates(request!.Latitude, request.Longitude))
             {
-                return new BadRequestObjectResult(new { message = "Invalid request" });
+                return new BadRequestObjectResult(new { message = "Invalid GPS coordinates. Latitude must be between -90 and 90, longitude must be between -180 and 180." });
             }
 
-            if (!IsValidWhat3Words(request.What3Words))
+            // Validate What3Words format
+            if (!Validators.IsValidWhat3Words(request.What3Words))
             {
                 return new BadRequestObjectResult(new { message = "Invalid What3Words format. Must be in format word.word.word or word/word/word where each word is lowercase letters (1-20 characters)" });
+            }
+
+            // Validate required marshals count
+            if (!Validators.IsNonNegative(request.RequiredMarshals))
+            {
+                return new BadRequestObjectResult(new { message = "Required marshals count must be non-negative" });
             }
 
             LocationEntity locationEntity = new()
@@ -90,19 +79,7 @@ public class LocationFunctions
 
             await _locationRepository.AddAsync(locationEntity);
 
-            LocationResponse response = new(
-                locationEntity.RowKey,
-                locationEntity.EventId,
-                locationEntity.Name,
-                locationEntity.Description,
-                locationEntity.Latitude,
-                locationEntity.Longitude,
-                locationEntity.RequiredMarshals,
-                locationEntity.CheckedInCount,
-                locationEntity.What3Words,
-                locationEntity.StartTime,
-                locationEntity.EndTime
-            );
+            LocationResponse response = locationEntity.ToResponse();
 
             _logger.LogInformation($"Location created: {locationEntity.RowKey}");
 
@@ -130,19 +107,7 @@ public class LocationFunctions
                 return new NotFoundObjectResult(new { message = "Location not found" });
             }
 
-            LocationResponse response = new(
-                locationEntity.RowKey,
-                locationEntity.EventId,
-                locationEntity.Name,
-                locationEntity.Description,
-                locationEntity.Latitude,
-                locationEntity.Longitude,
-                locationEntity.RequiredMarshals,
-                locationEntity.CheckedInCount,
-                locationEntity.What3Words,
-                locationEntity.StartTime,
-                locationEntity.EndTime
-            );
+            LocationResponse response = locationEntity.ToResponse();
 
             return new OkObjectResult(response);
         }
@@ -162,19 +127,7 @@ public class LocationFunctions
         {
             IEnumerable<LocationEntity> locationEntities = await _locationRepository.GetByEventAsync(eventId);
 
-            List<LocationResponse> locations = locationEntities.Select(locationEntity => new LocationResponse(
-                locationEntity.RowKey,
-                locationEntity.EventId,
-                locationEntity.Name,
-                locationEntity.Description,
-                locationEntity.Latitude,
-                locationEntity.Longitude,
-                locationEntity.RequiredMarshals,
-                locationEntity.CheckedInCount,
-                locationEntity.What3Words,
-                locationEntity.StartTime,
-                locationEntity.EndTime
-            )).ToList();
+            List<LocationResponse> locations = locationEntities.Select(l => l.ToResponse()).ToList();
 
             return new OkObjectResult(locations);
         }
@@ -193,17 +146,25 @@ public class LocationFunctions
     {
         try
         {
-            string body = await new StreamReader(req.Body).ReadToEndAsync();
-            CreateLocationRequest? request = JsonSerializer.Deserialize<CreateLocationRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            (CreateLocationRequest? request, IActionResult? error) = await FunctionHelpers.TryDeserializeRequestAsync<CreateLocationRequest>(req);
+            if (error != null) return error;
 
-            if (request == null)
+            // Validate GPS coordinates
+            if (!Validators.IsValidCoordinates(request!.Latitude, request.Longitude))
             {
-                return new BadRequestObjectResult(new { message = "Invalid request" });
+                return new BadRequestObjectResult(new { message = "Invalid GPS coordinates. Latitude must be between -90 and 90, longitude must be between -180 and 180." });
             }
 
-            if (!IsValidWhat3Words(request.What3Words))
+            // Validate What3Words format
+            if (!Validators.IsValidWhat3Words(request.What3Words))
             {
                 return new BadRequestObjectResult(new { message = "Invalid What3Words format. Must be in format word.word.word or word/word/word where each word is lowercase letters (1-20 characters)" });
+            }
+
+            // Validate required marshals count
+            if (!Validators.IsNonNegative(request.RequiredMarshals))
+            {
+                return new BadRequestObjectResult(new { message = "Required marshals count must be non-negative" });
             }
 
             LocationEntity? locationEntity = await _locationRepository.GetAsync(eventId, locationId);
@@ -224,19 +185,7 @@ public class LocationFunctions
 
             await _locationRepository.UpdateAsync(locationEntity);
 
-            LocationResponse response = new(
-                locationEntity.RowKey,
-                locationEntity.EventId,
-                locationEntity.Name,
-                locationEntity.Description,
-                locationEntity.Latitude,
-                locationEntity.Longitude,
-                locationEntity.RequiredMarshals,
-                locationEntity.CheckedInCount,
-                locationEntity.What3Words,
-                locationEntity.StartTime,
-                locationEntity.EndTime
-            );
+            LocationResponse response = locationEntity.ToResponse();
 
             _logger.LogInformation($"Location updated: {locationId}");
 

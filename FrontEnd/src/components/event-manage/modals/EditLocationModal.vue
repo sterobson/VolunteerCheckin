@@ -173,7 +173,7 @@
           v-for="assignment in assignments"
           :key="assignment.id"
           class="assignment-item"
-          :class="{ 'checked-in': assignment.isCheckedIn }"
+          :class="{ 'checked-in': getEffectiveCheckInStatus(assignment) }"
         >
           <div class="assignment-info">
             <div class="assignment-header">
@@ -185,19 +185,27 @@
                 {{ getStatusIcon(assignment) }}
               </span>
               <strong>{{ assignment.marshalName }}</strong>
+              <span v-if="pendingCheckInChanges.has(assignment.id)" class="pending-badge">
+                (unsaved)
+              </span>
             </div>
-            <span v-if="assignment.isCheckedIn" class="check-in-info">
-              {{ formatTime(assignment.checkInTime) }}
-              <span class="check-in-method">({{ assignment.checkInMethod }})</span>
+            <span v-if="getEffectiveCheckInStatus(assignment)" class="check-in-info">
+              <template v-if="assignment.isCheckedIn && !pendingCheckInChanges.has(assignment.id)">
+                {{ formatTime(assignment.checkInTime) }}
+                <span class="check-in-method">({{ assignment.checkInMethod }})</span>
+              </template>
+              <template v-else>
+                Will be checked in on save
+              </template>
             </span>
           </div>
           <div class="assignment-actions">
             <button
               @click="handleToggleCheckIn(assignment)"
               class="btn btn-small"
-              :class="assignment.isCheckedIn ? 'btn-danger' : 'btn-secondary'"
+              :class="getEffectiveCheckInStatus(assignment) ? 'btn-danger' : 'btn-secondary'"
             >
-              {{ assignment.isCheckedIn ? 'Undo' : 'Check in' }}
+              {{ getEffectiveCheckInStatus(assignment) ? 'Undo' : 'Check in' }}
             </button>
             <button
               @click="handleRemoveAssignment(assignment)"
@@ -281,9 +289,20 @@ const form = ref({
   endTime: '',
 });
 
+// Track local check-in status changes (assignmentId -> newStatus)
+const pendingCheckInChanges = ref(new Map());
+
 const totalAssignments = computed(() => {
   return props.assignments?.length || 0;
 });
+
+// Get the effective check-in status (considering pending changes)
+const getEffectiveCheckInStatus = (assignment) => {
+  if (pendingCheckInChanges.value.has(assignment.id)) {
+    return pendingCheckInChanges.value.get(assignment.id);
+  }
+  return assignment.isCheckedIn;
+};
 
 watch(() => props.location, (newVal) => {
   if (newVal) {
@@ -319,6 +338,7 @@ watch(() => props.show, (newVal) => {
   if (newVal) {
     activeTab.value = 'details';
     isMoving.value = false;
+    pendingCheckInChanges.value.clear();
   }
 });
 
@@ -367,6 +387,11 @@ const handleSave = () => {
     endTime: form.value.useCustomTimes && form.value.endTime
       ? new Date(form.value.endTime).toISOString()
       : null,
+    // Include pending check-in changes
+    checkInChanges: Array.from(pendingCheckInChanges.value.entries()).map(([assignmentId, shouldBeCheckedIn]) => ({
+      assignmentId,
+      shouldBeCheckedIn,
+    })),
   };
 
   emit('save', formData);
@@ -377,7 +402,19 @@ const handleDelete = () => {
 };
 
 const handleToggleCheckIn = (assignment) => {
-  emit('toggle-check-in', assignment);
+  const currentStatus = getEffectiveCheckInStatus(assignment);
+  const newStatus = !currentStatus;
+
+  // If toggling back to original status, remove from pending changes
+  if (newStatus === assignment.isCheckedIn) {
+    pendingCheckInChanges.value.delete(assignment.id);
+  } else {
+    // Otherwise, track the pending change
+    pendingCheckInChanges.value.set(assignment.id, newStatus);
+  }
+
+  // Mark form as dirty
+  emit('update:isDirty', true);
 };
 
 const handleRemoveAssignment = (assignment) => {
@@ -393,17 +430,17 @@ const handleClose = () => {
 };
 
 const getStatusIcon = (assignment) => {
-  if (assignment.isCheckedIn) return '✓';
-  return '○';
+  if (getEffectiveCheckInStatus(assignment)) return '✓';
+  return '✗';
 };
 
 const getStatusColor = (assignment) => {
-  if (assignment.isCheckedIn) return '#28a745';
-  return '#666';
+  if (getEffectiveCheckInStatus(assignment)) return '#28a745';
+  return '#dc3545';
 };
 
 const getStatusText = (assignment) => {
-  if (assignment.isCheckedIn) return 'Checked in';
+  if (getEffectiveCheckInStatus(assignment)) return 'Checked in';
   return 'Not checked in';
 };
 
@@ -532,6 +569,14 @@ const formatTime = (timeString) => {
   background: #f8f9fa;
   border-radius: 8px;
   border: 1px solid #dee2e6;
+  gap: 1rem;
+}
+
+@media (max-width: 640px) {
+  .assignment-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .assignment-item.checked-in {
@@ -565,9 +610,27 @@ const formatTime = (timeString) => {
   color: #999;
 }
 
+.pending-badge {
+  color: #ff8c00;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-style: italic;
+}
+
 .assignment-actions {
   display: flex;
   gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .assignment-actions {
+    width: 100%;
+  }
+
+  .assignment-actions .btn {
+    flex: 1;
+  }
 }
 
 .custom-footer {

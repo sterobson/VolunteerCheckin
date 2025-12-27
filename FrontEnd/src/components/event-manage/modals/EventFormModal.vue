@@ -10,7 +10,7 @@
       <div class="tabs">
         <button
           type="button"
-          @click="activeTab = 'basic'"
+          @click="switchTab('basic')"
           class="tab-button"
           :class="{ active: activeTab === 'basic' }"
         >
@@ -18,7 +18,7 @@
         </button>
         <button
           type="button"
-          @click="activeTab = 'emergency'"
+          @click="switchTab('emergency')"
           class="tab-button"
           :class="{ active: activeTab === 'emergency' }"
         >
@@ -67,17 +67,13 @@
             required
             class="form-input"
           >
-            <option value="UTC">UTC</option>
-            <option value="America/New_York">Eastern Time (ET)</option>
-            <option value="America/Chicago">Central Time (CT)</option>
-            <option value="America/Denver">Mountain Time (MT)</option>
-            <option value="America/Los_Angeles">Pacific Time (PT)</option>
-            <option value="America/Anchorage">Alaska Time (AKT)</option>
-            <option value="Pacific/Honolulu">Hawaii Time (HT)</option>
-            <option value="Europe/London">London (GMT/BST)</option>
-            <option value="Europe/Paris">Paris (CET/CEST)</option>
-            <option value="Asia/Tokyo">Tokyo (JST)</option>
-            <option value="Australia/Sydney">Sydney (AEDT/AEST)</option>
+            <option
+              v-for="tz in TIME_ZONES"
+              :key="tz.value"
+              :value="tz.value"
+            >
+              {{ tz.label }}
+            </option>
           </select>
         </div>
       </div>
@@ -167,6 +163,8 @@
 <script setup>
 import { ref, defineProps, defineEmits, watch } from 'vue';
 import BaseModal from '../../BaseModal.vue';
+import { useTabs } from '../../../composables/useTabs';
+import { TIME_ZONES } from '../../../constants/timeZones';
 
 const props = defineProps({
   show: {
@@ -191,7 +189,9 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'submit']);
 
-const activeTab = ref('basic');
+// Use composable for tab management
+const { activeTab, switchTab, resetTab } = useTabs('basic', ['basic', 'emergency']);
+
 const form = ref({ ...props.eventData });
 
 watch(() => props.eventData, (newVal) => {
@@ -205,7 +205,7 @@ watch(() => props.eventData, (newVal) => {
 watch(() => props.show, (newVal) => {
   if (newVal) {
     // Reset to basic tab when opening
-    activeTab.value = 'basic';
+    resetTab();
   }
 });
 
@@ -231,6 +231,9 @@ const handleClose = () => {
 </script>
 
 <style scoped>
+/* Global styles now in src/styles/common.css */
+/* Only component-specific styles remain here */
+
 .tabs {
   display: flex;
   gap: 0.5rem;
@@ -262,31 +265,6 @@ const handleClose = () => {
   padding-top: 0.5rem;
 }
 
-.form-group {
-  margin-bottom: 1.5rem;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-  color: #333;
-}
-
-.form-input {
-  width: 100%;
-  padding: 0.5rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  box-sizing: border-box;
-  font-family: inherit;
-}
-
-textarea.form-input {
-  resize: vertical;
-}
-
 .emergency-contacts-section {
   display: flex;
   flex-direction: column;
@@ -303,18 +281,6 @@ textarea.form-input {
   margin: 0;
   font-size: 1rem;
   color: #333;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 2rem;
-  color: #666;
-  background: #f8f9fa;
-  border-radius: 8px;
-}
-
-.empty-state p {
-  margin: 0;
 }
 
 .emergency-contact-card {
@@ -350,37 +316,5 @@ textarea.form-input {
 
 .btn-remove:hover {
   background: rgba(220, 53, 69, 0.1);
-}
-
-.btn {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: background-color 0.2s;
-}
-
-.btn-small {
-  padding: 0.375rem 0.75rem;
-  font-size: 0.85rem;
-}
-
-.btn-primary {
-  background: #007bff;
-  color: white;
-}
-
-.btn-primary:hover {
-  background: #0056b3;
-}
-
-.btn-secondary {
-  background: #6c757d;
-  color: white;
-}
-
-.btn-secondary:hover {
-  background: #545b62;
 }
 </style>

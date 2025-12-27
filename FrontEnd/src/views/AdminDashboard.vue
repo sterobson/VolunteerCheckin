@@ -142,7 +142,6 @@ const editEvent = (event) => {
     timeZoneId: event.timeZoneId || 'UTC',
     emergencyContacts: event.emergencyContacts ? JSON.parse(JSON.stringify(event.emergencyContacts)) : [],
   };
-  activeTab.value = 'basic';
 };
 
 const confirmDelete = async (event) => {
@@ -186,6 +185,10 @@ const closeModal = () => {
 };
 
 const goToEvent = (eventId) => {
+  if (!eventId) {
+    console.error('Cannot navigate to event: eventId is undefined');
+    return;
+  }
   router.push({ name: 'AdminEventManage', params: { eventId } });
 };
 

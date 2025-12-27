@@ -172,17 +172,7 @@ public class AssignmentFunctions
         {
             IEnumerable<AssignmentEntity> assignmentEntities = await _assignmentRepository.GetByEventAsync(eventId);
 
-            List<AssignmentResponse> assignments = assignmentEntities.Select(assignmentEntity => new AssignmentResponse(
-                assignmentEntity.RowKey,
-                assignmentEntity.EventId,
-                assignmentEntity.LocationId,
-                assignmentEntity.MarshalName,
-                assignmentEntity.IsCheckedIn,
-                assignmentEntity.CheckInTime,
-                assignmentEntity.CheckInLatitude,
-                assignmentEntity.CheckInLongitude,
-                assignmentEntity.CheckInMethod
-            )).ToList();
+            List<AssignmentResponse> assignments = assignmentEntities.Select(a => a.ToResponse()).ToList();
 
             return new OkObjectResult(assignments);
         }
@@ -230,17 +220,7 @@ public class AssignmentFunctions
             {
                 List<AssignmentResponse> locationAssignments = assignments
                     .Where(a => a.LocationId == location.RowKey)
-                    .Select(a => new AssignmentResponse(
-                        a.RowKey,
-                        a.EventId,
-                        a.LocationId,
-                        a.MarshalName,
-                        a.IsCheckedIn,
-                        a.CheckInTime,
-                        a.CheckInLatitude,
-                        a.CheckInLongitude,
-                        a.CheckInMethod
-                    ))
+                    .Select(a => a.ToResponse())
                     .ToList();
 
                 int checkedInCount = locationAssignments.Count(a => a.IsCheckedIn);

@@ -79,6 +79,7 @@ public record AssignmentResponse(
 );
 
 public record CheckInRequest(
+    string EventId,
     string AssignmentId,
     double? Latitude,
     double? Longitude,
@@ -170,4 +171,18 @@ public record MarshalResponse(
 
 public record BulkUpdateLocationTimesRequest(
     TimeSpan TimeDelta
+);
+
+public record PaginatedResponse<T>(
+    List<T> Items,
+    int Page,
+    int PageSize,
+    int TotalCount,
+    int TotalPages
+);
+
+public record ErrorResponse(
+    string Message,
+    string? Details = null,
+    string? ErrorCode = null
 );

@@ -19,6 +19,19 @@ public class TableStorageAssignmentRepository : IAssignmentRepository
         return assignment;
     }
 
+    public async Task<AssignmentEntity?> GetAsync(string eventId, string assignmentId)
+    {
+        try
+        {
+            Azure.Response<AssignmentEntity> response = await _table.GetEntityAsync<AssignmentEntity>(eventId, assignmentId);
+            return response.Value;
+        }
+        catch (Azure.RequestFailedException ex) when (ex.Status == 404)
+        {
+            return null;
+        }
+    }
+
     public async Task<IEnumerable<AssignmentEntity>> GetAllAsync()
     {
         List<AssignmentEntity> assignments = [];

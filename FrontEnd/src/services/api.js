@@ -68,7 +68,7 @@ export const assignmentsApi = {
 // Check-in API
 export const checkInApi = {
   checkIn: (data) => api.post('/checkin', data),
-  adminCheckIn: (assignmentId) => api.post(`/checkin/admin/${assignmentId}`),
+  adminCheckIn: (eventId, assignmentId) => api.post(`/checkin/admin/${eventId}/${assignmentId}`),
 };
 
 // Event Admins API

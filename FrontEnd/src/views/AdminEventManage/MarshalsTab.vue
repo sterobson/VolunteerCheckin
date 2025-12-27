@@ -1,0 +1,358 @@
+<template>
+  <div class="marshals-tab">
+    <div class="marshals-tab-header">
+      <h2>Marshals management</h2>
+      <div class="button-group">
+        <button @click="$emit('add-marshal')" class="btn btn-primary">
+          Add marshal
+        </button>
+        <button @click="$emit('import-marshals')" class="btn btn-secondary">
+          Import CSV
+        </button>
+      </div>
+    </div>
+
+    <div class="marshals-grid">
+      <table class="marshals-table">
+        <thead>
+          <tr>
+            <th @click="changeSortColumn('name')" class="sortable">
+              Name
+              <span class="sort-indicator" v-if="sortBy === 'name'">
+                {{ sortOrder === 'asc' ? '▲' : '▼' }}
+              </span>
+            </th>
+            <th @click="changeSortColumn('email')" class="sortable hide-on-mobile">
+              Email
+              <span class="sort-indicator" v-if="sortBy === 'email'">
+                {{ sortOrder === 'asc' ? '▲' : '▼' }}
+              </span>
+            </th>
+            <th @click="changeSortColumn('phone')" class="sortable hide-on-mobile">
+              Phone
+              <span class="sort-indicator" v-if="sortBy === 'phone'">
+                {{ sortOrder === 'asc' ? '▲' : '▼' }}
+              </span>
+            </th>
+            <th @click="changeSortColumn('checkpoint')" class="sortable">
+              Checkpoint
+              <span class="sort-indicator" v-if="sortBy === 'checkpoint'">
+                {{ sortOrder === 'asc' ? '▲' : '▼' }}
+              </span>
+            </th>
+            <th @click="changeSortColumn('status')" class="sortable">
+              Status
+              <span class="sort-indicator" v-if="sortBy === 'status'">
+                {{ sortOrder === 'asc' ? '▲' : '▼' }}
+              </span>
+            </th>
+            <th class="hide-on-mobile">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template v-for="marshal in sortedMarshals" :key="marshal.id">
+            <template v-if="getMarshalAssignments(marshal.id).length > 0">
+              <tr
+                v-for="(assignment, index) in getMarshalAssignments(marshal.id)"
+                :key="`${marshal.id}-${assignment.id}`"
+                class="marshal-row"
+                @click="$emit('select-marshal', marshal)"
+              >
+                <td v-if="index === 0" :rowspan="getMarshalAssignments(marshal.id).length">
+                  {{ marshal.name }}
+                </td>
+                <td v-if="index === 0" :rowspan="getMarshalAssignments(marshal.id).length" class="hide-on-mobile">
+                  {{ marshal.email || '-' }}
+                </td>
+                <td v-if="index === 0" :rowspan="getMarshalAssignments(marshal.id).length" class="hide-on-mobile">
+                  {{ marshal.phoneNumber || '-' }}
+                </td>
+                <td>{{ getLocationName(assignment.locationId) }}</td>
+                <td @click.stop>
+                  <select
+                    :value="getAssignmentStatusValue(assignment)"
+                    @change="$emit('change-assignment-status', { assignment, status: $event.target.value })"
+                    class="status-select hide-on-mobile"
+                    :class="getStatusClass(assignment)"
+                  >
+                    <option value="not-checked-in">Not checked-in</option>
+                    <option value="checked-in">Checked-in</option>
+                    <option value="admin-checked-in">Admin checked-in</option>
+                    <option value="wrong-location">Checked-in but not at correct location</option>
+                  </select>
+                  <span class="status-icon show-on-mobile" :class="getStatusClass(assignment)">
+                    {{ getStatusIcon(assignment) }}
+                  </span>
+                </td>
+                <td v-if="index === 0" :rowspan="getMarshalAssignments(marshal.id).length" class="hide-on-mobile">
+                  <div class="action-buttons" @click.stop>
+                    <button @click="$emit('select-marshal', marshal)" class="btn btn-small btn-secondary">
+                      Edit
+                    </button>
+                    <button @click="$emit('delete-marshal', marshal)" class="btn btn-small btn-danger">
+                      Delete
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </template>
+            <tr v-else class="marshal-row" @click="$emit('select-marshal', marshal)">
+              <td>{{ marshal.name }}</td>
+              <td class="hide-on-mobile">{{ marshal.email || '-' }}</td>
+              <td class="hide-on-mobile">{{ marshal.phoneNumber || '-' }}</td>
+              <td style="color: #999; font-style: italic;">No checkpoint assigned</td>
+              <td>
+                <span class="hide-on-mobile">-</span>
+                <span class="status-icon show-on-mobile" style="color: #999;">-</span>
+              </td>
+              <td class="hide-on-mobile">
+                <div class="action-buttons" @click.stop>
+                  <button @click="$emit('select-marshal', marshal)" class="btn btn-small btn-secondary">
+                    Edit
+                  </button>
+                  <button @click="$emit('delete-marshal', marshal)" class="btn btn-small btn-danger">
+                    Delete
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, defineProps, defineEmits } from 'vue';
+import { sortAlphanumeric } from '../../utils/sortingHelpers';
+import { getStatusIcon } from '../../utils/statusHelpers';
+
+const props = defineProps({
+  marshals: {
+    type: Array,
+    required: true,
+  },
+  assignments: {
+    type: Array,
+    required: true,
+  },
+  locations: {
+    type: Array,
+    required: true,
+  },
+});
+
+const emit = defineEmits([
+  'add-marshal',
+  'import-marshals',
+  'select-marshal',
+  'delete-marshal',
+  'change-assignment-status',
+]);
+
+const sortBy = ref('name');
+const sortOrder = ref('asc');
+
+const changeSortColumn = (column) => {
+  if (sortBy.value === column) {
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortBy.value = column;
+    sortOrder.value = 'asc';
+  }
+};
+
+const getMarshalAssignments = (marshalId) => {
+  return props.assignments.filter(a => a.marshalId === marshalId);
+};
+
+const getLocationName = (locationId) => {
+  const location = props.locations.find(l => l.id === locationId);
+  return location ? location.name : 'Unknown';
+};
+
+const sortedMarshals = computed(() => {
+  const sorted = [...props.marshals];
+
+  sorted.sort((a, b) => {
+    let compareValue = 0;
+
+    if (sortBy.value === 'name') {
+      compareValue = a.name.localeCompare(b.name);
+    } else if (sortBy.value === 'email') {
+      const aEmail = a.email || '';
+      const bEmail = b.email || '';
+      compareValue = aEmail.localeCompare(bEmail);
+    } else if (sortBy.value === 'phone') {
+      const aPhone = a.phoneNumber || '';
+      const bPhone = b.phoneNumber || '';
+      compareValue = aPhone.localeCompare(bPhone);
+    } else if (sortBy.value === 'checkpoint') {
+      const aAssignments = getMarshalAssignments(a.id);
+      const bAssignments = getMarshalAssignments(b.id);
+      const aCheckpoint = aAssignments.length > 0 ? getLocationName(aAssignments[0].locationId) : '';
+      const bCheckpoint = bAssignments.length > 0 ? getLocationName(bAssignments[0].locationId) : '';
+      compareValue = sortAlphanumeric(aCheckpoint, bCheckpoint);
+    } else if (sortBy.value === 'status') {
+      const aAssignments = getMarshalAssignments(a.id);
+      const bAssignments = getMarshalAssignments(b.id);
+      const aCheckedIn = aAssignments.length > 0 && aAssignments[0].isCheckedIn ? 1 : 0;
+      const bCheckedIn = bAssignments.length > 0 && bAssignments[0].isCheckedIn ? 1 : 0;
+      compareValue = bCheckedIn - aCheckedIn;
+    }
+
+    return sortOrder.value === 'asc' ? compareValue : -compareValue;
+  });
+
+  return sorted;
+});
+
+const getAssignmentStatusValue = (assignment) => {
+  if (assignment.isAdminCheckedIn) return 'admin-checked-in';
+  if (assignment.isWrongLocation) return 'wrong-location';
+  if (assignment.isCheckedIn) return 'checked-in';
+  return 'not-checked-in';
+};
+
+const getStatusClass = (assignment) => {
+  if (assignment.isCheckedIn) return 'status-checked-in';
+  return 'status-not-checked-in';
+};
+</script>
+
+<style scoped>
+.marshals-tab {
+  width: 100%;
+}
+
+.marshals-tab-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.marshals-tab-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #333;
+}
+
+.button-group {
+  display: flex;
+  gap: 1rem;
+}
+
+.marshals-grid {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow-x: auto;
+}
+
+.marshals-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.marshals-table th,
+.marshals-table td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.marshals-table th {
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #495057;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.marshals-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.marshals-table th.sortable:hover {
+  background: #e9ecef;
+}
+
+.sort-indicator {
+  margin-left: 0.5rem;
+  color: #007bff;
+}
+
+.marshal-row {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.marshal-row:hover {
+  background: #f8f9fa;
+}
+
+.status-select {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.status-select.status-checked-in {
+  color: #28a745;
+  border-color: #28a745;
+}
+
+.status-select.status-not-checked-in {
+  color: #666;
+}
+
+.status-icon {
+  font-size: 1.25rem;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+@media (max-width: 768px) {
+  .hide-on-mobile {
+    display: none;
+  }
+
+  .show-on-mobile {
+    display: inline-block;
+  }
+
+  .marshals-tab-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .button-group {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .button-group button {
+    width: 100%;
+  }
+}
+
+@media (min-width: 769px) {
+  .show-on-mobile {
+    display: none;
+  }
+}
+</style>

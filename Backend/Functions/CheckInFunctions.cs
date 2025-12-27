@@ -16,7 +16,6 @@ public class CheckInFunctions
     private readonly ILogger<CheckInFunctions> _logger;
     private readonly IAssignmentRepository _assignmentRepository;
     private readonly ILocationRepository _locationRepository;
-    private const double AllowedRadiusMeters = 100; // 100 meters tolerance
 
     public CheckInFunctions(
         ILogger<CheckInFunctions> logger,
@@ -37,24 +36,13 @@ public class CheckInFunctions
             string body = await new StreamReader(req.Body).ReadToEndAsync();
             CheckInRequest? request = JsonSerializer.Deserialize<CheckInRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-            if (request == null || string.IsNullOrWhiteSpace(request.AssignmentId))
+            if (request == null || string.IsNullOrWhiteSpace(request.EventId) || string.IsNullOrWhiteSpace(request.AssignmentId))
             {
                 return new BadRequestObjectResult(new { message = "Invalid request" });
             }
 
-            // Find the assignment
-            IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetAllAsync();
-            AssignmentEntity? assignment = null;
-
-            // Since we don't have eventId in the request, search across all assignments
-            foreach (AssignmentEntity a in assignments)
-            {
-                if (a.RowKey == request.AssignmentId)
-                {
-                    assignment = a;
-                    break;
-                }
-            }
+            // Find the assignment using partition key query
+            AssignmentEntity? assignment = await _assignmentRepository.GetAsync(request.EventId, request.AssignmentId);
 
             if (assignment == null)
             {
@@ -90,13 +78,13 @@ public class CheckInFunctions
                     request.Longitude.Value
                 );
 
-                if (distance > AllowedRadiusMeters)
+                if (distance > Constants.CheckInRadiusMeters)
                 {
                     return new BadRequestObjectResult(new
                     {
-                        message = $"You are {Math.Round(distance)}m away from the location. You must be within {AllowedRadiusMeters}m to check in.",
+                        message = $"You are {Math.Round(distance)}m away from the location. You must be within {Constants.CheckInRadiusMeters}m to check in.",
                         distance = Math.Round(distance),
-                        allowedRadius = AllowedRadiusMeters
+                        allowedRadius = Constants.CheckInRadiusMeters
                     });
                 }
 
@@ -120,17 +108,7 @@ public class CheckInFunctions
             location.CheckedInCount++;
             await _locationRepository.UpdateAsync(location);
 
-            AssignmentResponse response = new(
-                assignment.RowKey,
-                assignment.EventId,
-                assignment.LocationId,
-                assignment.MarshalName,
-                assignment.IsCheckedIn,
-                assignment.CheckInTime,
-                assignment.CheckInLatitude,
-                assignment.CheckInLongitude,
-                assignment.CheckInMethod
-            );
+            AssignmentResponse response = assignment.ToResponse();
 
             _logger.LogInformation($"Check-in successful: {assignment.RowKey} ({checkInMethod})");
 
@@ -145,23 +123,14 @@ public class CheckInFunctions
 
     [Function("AdminCheckIn")]
     public async Task<IActionResult> AdminCheckIn(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "checkin/admin/{assignmentId}")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "checkin/admin/{eventId}/{assignmentId}")] HttpRequest req,
+        string eventId,
         string assignmentId)
     {
         try
         {
-            // Find the assignment across all events
-            IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetAllAsync();
-            AssignmentEntity? assignment = null;
-
-            foreach (AssignmentEntity a in assignments)
-            {
-                if (a.RowKey == assignmentId)
-                {
-                    assignment = a;
-                    break;
-                }
-            }
+            // Find the assignment using partition key query
+            AssignmentEntity? assignment = await _assignmentRepository.GetAsync(eventId, assignmentId);
 
             if (assignment == null)
             {
@@ -198,17 +167,7 @@ public class CheckInFunctions
             await _assignmentRepository.UpdateAsync(assignment);
             await _locationRepository.UpdateAsync(location);
 
-            AssignmentResponse response = new(
-                assignment.RowKey,
-                assignment.EventId,
-                assignment.LocationId,
-                assignment.MarshalName,
-                assignment.IsCheckedIn,
-                assignment.CheckInTime,
-                assignment.CheckInLatitude,
-                assignment.CheckInLongitude,
-                assignment.CheckInMethod
-            );
+            AssignmentResponse response = assignment.ToResponse();
 
             _logger.LogInformation($"Admin check-in toggle: {assignment.RowKey} - Now {(assignment.IsCheckedIn ? "checked in" : "checked out")}");
 

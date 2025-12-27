@@ -24,7 +24,7 @@ public class TableStorageEventRepository : IEventRepository
     {
         try
         {
-            Response<EventEntity> response = await _table.GetEntityAsync<EventEntity>("EVENT", eventId);
+            Response<EventEntity> response = await _table.GetEntityAsync<EventEntity>(Constants.EventPartitionKey, eventId);
             return response.Value;
         }
         catch (RequestFailedException ex) when (ex.Status == 404)
@@ -50,6 +50,6 @@ public class TableStorageEventRepository : IEventRepository
 
     public async Task DeleteAsync(string eventId)
     {
-        await _table.DeleteEntityAsync("EVENT", eventId);
+        await _table.DeleteEntityAsync(Constants.EventPartitionKey, eventId);
     }
 }

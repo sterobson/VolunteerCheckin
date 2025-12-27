@@ -5,7 +5,7 @@ namespace VolunteerCheckin.Functions.Models;
 
 public class AdminUserEntity : ITableEntity
 {
-    public string PartitionKey { get; set; } = "ADMIN";
+    public string PartitionKey { get; set; } = Constants.AdminPartitionKey;
     // RowKey = email address
     public string RowKey { get; set; } = string.Empty;
     public DateTimeOffset? Timestamp { get; set; }

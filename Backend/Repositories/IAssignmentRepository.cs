@@ -5,7 +5,7 @@ namespace VolunteerCheckin.Functions.Repositories;
 public interface IAssignmentRepository
 {
     Task<AssignmentEntity> AddAsync(AssignmentEntity assignment);
-    Task<IEnumerable<AssignmentEntity>> GetAllAsync();
+    Task<AssignmentEntity?> GetAsync(string eventId, string assignmentId);
     Task<IEnumerable<AssignmentEntity>> GetByEventAsync(string eventId);
     Task<IEnumerable<AssignmentEntity>> GetByMarshalAsync(string eventId, string marshalId);
     Task<IEnumerable<AssignmentEntity>> GetByLocationAsync(string eventId, string locationId);

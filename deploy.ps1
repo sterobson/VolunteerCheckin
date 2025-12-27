@@ -176,6 +176,69 @@ if ($Environment -eq "local" -and $Backend) {
     }
 
     if ($deploymentSuccess) {
+        # Check CORS settings if frontend is being deployed too
+        if ($Frontend) {
+            Write-Info "Checking CORS configuration..."
+            $localSettingsPath = Join-Path $backendPath "local.settings.json"
+
+            if (Test-Path $localSettingsPath) {
+                $localSettings = Get-Content $localSettingsPath -Raw | ConvertFrom-Json
+                $frontendPort = "5174"
+                $frontendUrl = "http://localhost:$frontendPort"
+                $needsUpdate = $false
+
+                # Check CORS setting
+                if ($localSettings.Host.CORS) {
+                    $corsUrls = @($localSettings.Host.CORS -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+                    if ($corsUrls -notcontains $frontendUrl) {
+                        Write-Warning "CORS does not include $frontendUrl"
+                        $needsUpdate = $true
+                    }
+                }
+
+                # Check FRONTEND_URL setting
+                if ($localSettings.Values.FRONTEND_URL -and $localSettings.Values.FRONTEND_URL -ne $frontendUrl) {
+                    Write-Warning "FRONTEND_URL is set to $($localSettings.Values.FRONTEND_URL) instead of $frontendUrl"
+                    $needsUpdate = $true
+                }
+
+                if ($needsUpdate) {
+                    Write-Host ""
+                    $response = Read-Host "Update local.settings.json to include port $frontendPort? (Y/n)"
+
+                    if ($response -eq "" -or $response -eq "Y" -or $response -eq "y") {
+                        # Update CORS
+                        if ($localSettings.Host.CORS) {
+                            $corsUrls = @($localSettings.Host.CORS -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_ -ne "http://localhost:5173" })
+                            if ($corsUrls -notcontains $frontendUrl) {
+                                $corsUrls += $frontendUrl
+                            }
+                            $localSettings.Host.CORS = $corsUrls -join ','
+                        } else {
+                            if (-not $localSettings.Host) {
+                                $localSettings | Add-Member -MemberType NoteProperty -Name "Host" -Value @{}
+                            }
+                            $localSettings.Host | Add-Member -MemberType NoteProperty -Name "CORS" -Value $frontendUrl -Force
+                        }
+
+                        # Update FRONTEND_URL
+                        $localSettings.Values.FRONTEND_URL = $frontendUrl
+
+                        # Save the file with proper formatting
+                        $jsonContent = $localSettings | ConvertTo-Json -Depth 10
+                        $jsonContent | Set-Content $localSettingsPath -Encoding UTF8
+                        Write-Success "local.settings.json updated"
+                        Write-Warning "Please restart Azure Functions for CORS changes to take effect!"
+                    } else {
+                        Write-Warning "Skipping CORS update. You may experience CORS errors."
+                    }
+                    Write-Host ""
+                } else {
+                    Write-Success "CORS configuration is correct"
+                }
+            }
+        }
+
         Write-Info "Starting Azure Functions..."
         Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-Command", "cd '$backendPath'; func start" -WindowStyle Normal
         Start-Sleep -Seconds 5
@@ -200,7 +263,7 @@ if ($Environment -eq "local" -and $Frontend) {
     Write-Host ""
 
     # Check if already running and stop it
-    $wasRunning = Stop-ProcessOnPort -Port 5173 -ServiceName "Frontend dev server"
+    $wasRunning = Stop-ProcessOnPort -Port 5174 -ServiceName "Frontend dev server"
 
     $frontendPath = Join-Path $PSScriptRoot "FrontEnd"
 
@@ -224,12 +287,12 @@ if ($Environment -eq "local" -and $Frontend) {
 
     if ($deploymentSuccess) {
         Write-Info "Starting frontend dev server..."
-        Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-Command", "cd '$frontendPath'; npm run dev" -WindowStyle Normal
+        Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-Command", "cd '$frontendPath'; npm run dev -- --port 5174" -WindowStyle Normal
         Start-Sleep -Seconds 3
 
-        $viteRunning = Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue
+        $viteRunning = Get-NetTCPConnection -LocalPort 5174 -State Listen -ErrorAction SilentlyContinue
         if ($viteRunning) {
-            Write-Success "Frontend started on http://localhost:5173"
+            Write-Success "Frontend started on http://localhost:5174"
         } else {
             Write-Warning "Frontend may still be starting. Check the console window."
         }
@@ -528,7 +591,7 @@ if ($deploymentSuccess) {
             Write-Host "  [OK] Backend  -> http://localhost:7071/api" -ForegroundColor Green
         }
         if ($Frontend) {
-            Write-Host "  [OK] Frontend -> http://localhost:5173" -ForegroundColor Green
+            Write-Host "  [OK] Frontend -> http://localhost:5174" -ForegroundColor Green
         }
     } else {
         Write-Host "Deployed to: $Environment" -ForegroundColor White

@@ -5,7 +5,7 @@ namespace VolunteerCheckin.Functions.Models;
 
 public class EventEntity : ITableEntity
 {
-    public string PartitionKey { get; set; } = "EVENT";
+    public string PartitionKey { get; set; } = Constants.EventPartitionKey;
     public string RowKey { get; set; } = Guid.NewGuid().ToString();
     public DateTimeOffset? Timestamp { get; set; }
     public ETag ETag { get; set; }

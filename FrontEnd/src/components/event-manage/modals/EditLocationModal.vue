@@ -20,6 +20,14 @@
         </button>
         <button
           class="tab-button"
+          :class="{ active: activeTab === 'location' }"
+          @click="activeTab = 'location'"
+          type="button"
+        >
+          Location
+        </button>
+        <button
+          class="tab-button"
           :class="{ active: activeTab === 'marshals' }"
           @click="activeTab = 'marshals'"
           type="button"
@@ -51,20 +59,6 @@
             class="form-input"
             @input="handleInput"
           />
-        </div>
-
-        <div class="form-group">
-          <label>What3Words (optional)</label>
-          <input
-            v-model="form.what3Words"
-            type="text"
-            class="form-input"
-            placeholder="e.g. filled.count.soap or filled/count/soap"
-            @input="handleInput"
-          />
-          <small v-if="form.what3Words && !isValidWhat3Words(form.what3Words)" class="form-error">
-            Invalid format. Must be word.word.word or word/word/word (lowercase letters only, 1-20 characters each)
-          </small>
         </div>
 
         <div class="form-group">
@@ -107,6 +101,25 @@
               When marshal can leave this checkpoint
             </small>
           </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Location Tab -->
+    <div v-if="activeTab === 'location'" class="tab-content">
+      <form @submit.prevent="handleSave">
+        <div class="form-group">
+          <label>What3Words (optional)</label>
+          <input
+            v-model="form.what3Words"
+            type="text"
+            class="form-input"
+            placeholder="e.g. filled.count.soap or filled/count/soap"
+            @input="handleInput"
+          />
+          <small v-if="form.what3Words && !isValidWhat3Words(form.what3Words)" class="form-error">
+            Invalid format. Must be word.word.word or word/word/word (lowercase letters only, 1-20 characters each)
+          </small>
         </div>
 
         <div class="form-row">
@@ -170,14 +183,15 @@
       <div class="assignments-list">
         <!-- Existing assignments -->
         <div
-          v-for="assignment in assignments"
+          v-for="assignment in sortedAssignments"
           :key="assignment.id"
           class="assignment-item"
-          :class="{ 'checked-in': getEffectiveCheckInStatus(assignment) }"
+          :class="{ 'checked-in': !assignment.isPending && getEffectiveCheckInStatus(assignment) }"
         >
           <div class="assignment-info">
             <div class="assignment-header">
               <span
+                v-if="!assignment.isPending"
                 class="status-indicator"
                 :style="{ color: getStatusColor(assignment) }"
                 :title="getStatusText(assignment)"
@@ -185,11 +199,14 @@
                 {{ getStatusIcon(assignment) }}
               </span>
               <strong>{{ assignment.marshalName }}</strong>
-              <span v-if="pendingCheckInChanges.has(assignment.id)" class="pending-badge">
+              <span v-if="assignment.isPending" class="pending-badge">
+                (pending)
+              </span>
+              <span v-else-if="pendingCheckInChanges.has(assignment.id)" class="pending-badge">
                 (unsaved)
               </span>
             </div>
-            <span v-if="getEffectiveCheckInStatus(assignment)" class="check-in-info">
+            <span v-if="!assignment.isPending && getEffectiveCheckInStatus(assignment)" class="check-in-info">
               <template v-if="assignment.isCheckedIn && !pendingCheckInChanges.has(assignment.id)">
                 {{ formatTime(assignment.checkInTime) }}
                 <span class="check-in-method">({{ assignment.checkInMethod }})</span>
@@ -201,6 +218,7 @@
           </div>
           <div class="assignment-actions">
             <button
+              v-if="!assignment.isPending"
               @click="handleToggleCheckIn(assignment)"
               class="btn btn-small"
               :class="getEffectiveCheckInStatus(assignment) ? 'btn-danger' : 'btn-secondary'"
@@ -216,10 +234,17 @@
           </div>
         </div>
 
-        <!-- Assign Button -->
-        <button @click="handleAssignMarshal" class="btn btn-secondary btn-full" style="margin-top: 1rem;">
-          Assign...
-        </button>
+        <!-- Empty assignment slots -->
+        <div
+          v-for="index in emptySlots"
+          :key="`empty-${index}`"
+          class="assignment-item empty-assignment"
+          @click="handleAssignMarshal"
+        >
+          <div class="empty-assignment-content">
+            +
+          </div>
+        </div>
       </div>
     </div>
 
@@ -244,6 +269,7 @@
 <script setup>
 import { ref, computed, defineProps, defineEmits, watch } from 'vue';
 import BaseModal from '../../BaseModal.vue';
+import { formatDateForInput } from '../../../utils/dateFormatters';
 
 const props = defineProps({
   show: {
@@ -261,6 +287,10 @@ const props = defineProps({
   isDirty: {
     type: Boolean,
     default: false,
+  },
+  eventDate: {
+    type: String,
+    default: '',
   },
 });
 
@@ -296,6 +326,22 @@ const totalAssignments = computed(() => {
   return props.assignments?.length || 0;
 });
 
+const sortedAssignments = computed(() => {
+  if (!props.assignments) return [];
+  return [...props.assignments].sort((a, b) => {
+    const nameA = a.marshalName?.toLowerCase() || '';
+    const nameB = b.marshalName?.toLowerCase() || '';
+    return nameA.localeCompare(nameB);
+  });
+});
+
+const emptySlots = computed(() => {
+  const assigned = totalAssignments.value;
+  const required = form.value.requiredMarshals || 1;
+  const slots = Math.max(required - assigned, 1);
+  return slots;
+});
+
 // Get the effective check-in status (considering pending changes)
 const getEffectiveCheckInStatus = (assignment) => {
   if (pendingCheckInChanges.value.has(assignment.id)) {
@@ -311,13 +357,11 @@ watch(() => props.location, (newVal) => {
     let endTimeLocal = '';
 
     if (newVal.startTime) {
-      const startDate = new Date(newVal.startTime);
-      startTimeLocal = formatDateTimeLocal(startDate);
+      startTimeLocal = formatDateForInput(newVal.startTime);
     }
 
     if (newVal.endTime) {
-      const endDate = new Date(newVal.endTime);
-      endTimeLocal = formatDateTimeLocal(endDate);
+      endTimeLocal = formatDateForInput(newVal.endTime);
     }
 
     form.value = {
@@ -350,20 +394,18 @@ const isValidWhat3Words = (value) => {
   return parts.every(part => wordRegex.test(part));
 };
 
-const formatDateTimeLocal = (date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-};
-
 const handleCustomTimesToggle = () => {
   if (!form.value.useCustomTimes) {
     // Clear times when disabling custom times
     form.value.startTime = '';
     form.value.endTime = '';
+  } else {
+    // When enabling custom times, default to event date if times are empty
+    if (!form.value.startTime && !form.value.endTime && props.eventDate) {
+      const defaultTime = formatDateForInput(props.eventDate);
+      form.value.startTime = defaultTime;
+      form.value.endTime = defaultTime;
+    }
   }
   handleInput();
 };
@@ -582,6 +624,28 @@ const formatTime = (timeString) => {
 .assignment-item.checked-in {
   background: #d4edda;
   border-color: #c3e6cb;
+}
+
+.assignment-item.empty-assignment {
+  background: transparent;
+  border: 2px dashed #dee2e6;
+  cursor: pointer;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.assignment-item.empty-assignment:hover {
+  border-color: #007bff;
+  background: #f8f9fa;
+}
+
+.empty-assignment-content {
+  font-size: 1.5rem;
+  color: #007bff;
+}
+
+.assignment-item.empty-assignment:hover .empty-assignment-content {
+  color: #0056b3;
 }
 
 .assignment-info {

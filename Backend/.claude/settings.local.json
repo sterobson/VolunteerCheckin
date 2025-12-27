@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dotnet test:*)"
+      "Bash(dotnet test:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(for file in *.cs)",
+      "Bash(done)"
     ]
   }
 }

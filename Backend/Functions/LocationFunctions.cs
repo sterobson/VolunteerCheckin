@@ -20,19 +20,22 @@ public class LocationFunctions
     private readonly IMarshalRepository _marshalRepository;
     private readonly IAssignmentRepository _assignmentRepository;
     private readonly CsvParserService _csvParser;
+    private readonly IAreaRepository _areaRepository;
 
     public LocationFunctions(
         ILogger<LocationFunctions> logger,
         ILocationRepository locationRepository,
         IMarshalRepository marshalRepository,
         IAssignmentRepository assignmentRepository,
-        CsvParserService csvParser)
+        CsvParserService csvParser,
+        IAreaRepository areaRepository)
     {
         _logger = logger;
         _locationRepository = locationRepository;
         _marshalRepository = marshalRepository;
         _assignmentRepository = assignmentRepository;
         _csvParser = csvParser;
+        _areaRepository = areaRepository;
     }
 
     [Function("CreateLocation")]
@@ -62,6 +65,9 @@ public class LocationFunctions
                 return new BadRequestObjectResult(new { message = "Required marshals count must be non-negative" });
             }
 
+            // Ensure default area exists and get its ID
+            AreaEntity defaultArea = await EnsureDefaultAreaExists(request.EventId);
+
             LocationEntity locationEntity = new()
             {
                 PartitionKey = request.EventId,
@@ -74,7 +80,8 @@ public class LocationFunctions
                 RequiredMarshals = request.RequiredMarshals,
                 What3Words = request.What3Words ?? string.Empty,
                 StartTime = request.StartTime,
-                EndTime = request.EndTime
+                EndTime = request.EndTime,
+                AreaId = defaultArea.RowKey
             };
 
             await _locationRepository.AddAsync(locationEntity);
@@ -127,7 +134,33 @@ public class LocationFunctions
         {
             IEnumerable<LocationEntity> locationEntities = await _locationRepository.GetByEventAsync(eventId);
 
-            List<LocationResponse> locations = locationEntities.Select(l => l.ToResponse()).ToList();
+            // Ensure default area exists if there are locations
+            AreaEntity? defaultArea = null;
+            if (locationEntities.Any())
+            {
+                defaultArea = await EnsureDefaultAreaExists(eventId);
+            }
+
+            // Get all areas for name lookup
+            IEnumerable<AreaEntity> areas = await _areaRepository.GetByEventAsync(eventId);
+            Dictionary<string, string> areaNames = areas.ToDictionary(a => a.RowKey, a => a.Name);
+
+            List<LocationResponse> locations = new();
+            foreach (LocationEntity location in locationEntities)
+            {
+                // Auto-assign to default area if AreaId is null
+                if (string.IsNullOrEmpty(location.AreaId) && defaultArea != null)
+                {
+                    location.AreaId = defaultArea.RowKey;
+                    await _locationRepository.UpdateAsync(location);
+                }
+
+                string? areaName = location.AreaId != null && areaNames.TryGetValue(location.AreaId, out string? name)
+                    ? name
+                    : null;
+
+                locations.Add(location.ToResponse(areaName));
+            }
 
             return new OkObjectResult(locations);
         }
@@ -499,5 +532,32 @@ public class LocationFunctions
             _logger.LogError(ex, "Error bulk updating location times");
             return new StatusCodeResult(500);
         }
+    }
+
+    // Helper method to ensure default area exists
+    private async Task<AreaEntity> EnsureDefaultAreaExists(string eventId)
+    {
+        AreaEntity? defaultArea = await _areaRepository.GetDefaultAreaAsync(eventId);
+
+        if (defaultArea == null)
+        {
+            defaultArea = new AreaEntity
+            {
+                PartitionKey = eventId,
+                RowKey = Guid.NewGuid().ToString(),
+                EventId = eventId,
+                Name = Constants.DefaultAreaName,
+                Description = Constants.DefaultAreaDescription,
+                ContactsJson = "[]",
+                PolygonJson = "[]",
+                IsDefault = true,
+                DisplayOrder = 0
+            };
+
+            await _areaRepository.AddAsync(defaultArea);
+            _logger.LogInformation($"Created default area for event {eventId}");
+        }
+
+        return defaultArea;
     }
 }

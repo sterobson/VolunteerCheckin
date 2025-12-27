@@ -23,6 +23,9 @@
         <button @click="handleChoice('both')" class="btn btn-secondary btn-full">
           Assign to both (keep existing assignments)
         </button>
+        <button @click="handleChoice('choose-other')" class="btn btn-secondary btn-full">
+          Choose someone else
+        </button>
         <button @click="handleChoice('cancel')" class="btn btn-secondary btn-full">
           Cancel
         </button>

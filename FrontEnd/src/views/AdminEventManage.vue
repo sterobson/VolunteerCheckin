@@ -180,6 +180,7 @@
       :show="showEditLocation"
       :location="selectedLocation"
       :assignments="selectedLocation?.assignments || []"
+      :event-date="event?.eventDate || ''"
       :isDirty="formDirty"
       @close="closeEditLocationModal"
       @save="handleUpdateLocation"
@@ -561,12 +562,14 @@ const handleShiftCheckpointTimesCancel = () => {
 const tryCloseModal = (closeFunction) => {
   if (formDirty.value || pendingAssignments.value.length > 0 || pendingDeleteAssignments.value.length > 0 ||
       pendingMarshalAssignments.value.length > 0 || pendingMarshalDeleteAssignments.value.length > 0) {
-    showConfirm('Unsaved Changes', 'You have unsaved changes. Are you sure you want to close without saving?', () => {
+    showConfirm('Unsaved Changes', 'You have unsaved changes. Are you sure you want to close without saving?', async () => {
       formDirty.value = false;
       pendingAssignments.value = [];
       pendingDeleteAssignments.value = [];
       pendingMarshalAssignments.value = [];
       pendingMarshalDeleteAssignments.value = [];
+      // Reload data to revert optimistic UI updates
+      await loadEventData();
       closeFunction();
     });
   } else {
@@ -931,22 +934,99 @@ const toggleCheckIn = async (assignment) => {
 };
 
 const handleRemoveLocationAssignment = (assignmentId) => {
-  if (!pendingDeleteAssignments.value.includes(assignmentId)) {
-    pendingDeleteAssignments.value.push(assignmentId);
+  // Check if this is a pending assignment (has temp ID)
+  if (assignmentId.toString().startsWith('temp-')) {
+    // Remove from pending assignments list
+    const assignment = selectedLocation.value.assignments.find(a => a.id === assignmentId);
+    if (assignment) {
+      pendingAssignments.value = pendingAssignments.value.filter(
+        p => p.marshalId !== assignment.marshalId
+      );
+    }
+    // Optimistically remove from UI
+    selectedLocation.value.assignments = selectedLocation.value.assignments.filter(
+      a => a.id !== assignmentId
+    );
     markFormDirty();
+  } else {
+    // For existing assignments, add to pending deletions
+    if (!pendingDeleteAssignments.value.includes(assignmentId)) {
+      pendingDeleteAssignments.value.push(assignmentId);
+      // Optimistically remove from UI
+      selectedLocation.value.assignments = selectedLocation.value.assignments.filter(
+        a => a.id !== assignmentId
+      );
+      markFormDirty();
+    }
   }
 };
 
-const handleAssignExistingMarshal = (marshalId) => {
+const handleAssignExistingMarshal = async (marshalId) => {
   const marshal = marshals.value.find(m => m.id === marshalId);
-  if (marshal) {
-    pendingAssignments.value.push({
-      marshalId: marshal.id,
+  if (!marshal) return;
+
+  // Check if marshal is already assigned to other locations
+  const assignedLocations = locationStatuses.value.filter(loc =>
+    loc.assignments?.some(a => a.marshalId === marshalId && loc.id !== selectedLocation.value.id)
+  );
+
+  if (assignedLocations.length > 0) {
+    // Show conflict modal and wait for user choice
+    assignmentConflictData.value = {
       marshalName: marshal.name,
+      locations: assignedLocations.map(loc => loc.name),
+      marshal: marshal,
+    };
+
+    const choice = await new Promise((resolve) => {
+      conflictResolveCallback.value = resolve;
+      showAssignmentConflict.value = true;
     });
-    markFormDirty();
-    closeAssignMarshalModal();
+
+    if (choice === 'cancel' || choice === 'choose-other') {
+      // Keep the assign marshal modal open for 'choose-other'
+      return;
+    }
+
+    if (choice === 'move') {
+      // Mark existing assignments for removal (will be deleted on save)
+      for (const loc of assignedLocations) {
+        const assignment = loc.assignments.find(a => a.marshalId === marshalId);
+        if (assignment) {
+          pendingDeleteAssignments.value.push(assignment.id);
+          // Optimistically remove from UI
+          const locationIndex = locationStatuses.value.findIndex(l => l.id === loc.id);
+          if (locationIndex !== -1) {
+            locationStatuses.value[locationIndex].assignments =
+              locationStatuses.value[locationIndex].assignments.filter(a => a.id !== assignment.id);
+          }
+        }
+      }
+    }
+    // If choice is 'both', just continue to add the pending assignment
   }
+
+  // Add to pending assignments
+  pendingAssignments.value.push({
+    marshalId: marshal.id,
+    marshalName: marshal.name,
+  });
+
+  // Optimistically update UI - add temporary assignment to selectedLocation
+  if (!selectedLocation.value.assignments) {
+    selectedLocation.value.assignments = [];
+  }
+  selectedLocation.value.assignments.push({
+    id: `temp-${Date.now()}`, // Temporary ID
+    marshalId: marshal.id,
+    marshalName: marshal.name,
+    locationId: selectedLocation.value.id,
+    isCheckedIn: false,
+    isPending: true, // Flag to identify pending assignments
+  });
+
+  markFormDirty();
+  closeAssignMarshalModal();
 };
 
 const handleAddNewMarshalInline = async (marshalData) => {

@@ -43,5 +43,6 @@ builder.Services.AddSingleton<IAssignmentRepository, TableStorageAssignmentRepos
 builder.Services.AddSingleton<IEventRepository, TableStorageEventRepository>();
 builder.Services.AddSingleton<IAdminUserRepository, TableStorageAdminUserRepository>();
 builder.Services.AddSingleton<IUserEventMappingRepository, TableStorageUserEventMappingRepository>();
+builder.Services.AddSingleton<IAreaRepository, TableStorageAreaRepository>();
 
 builder.Build().Run();

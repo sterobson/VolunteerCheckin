@@ -43,6 +43,28 @@ public class TableStorageLocationRepository : ILocationRepository
         return locations;
     }
 
+    public async Task<IEnumerable<LocationEntity>> GetByAreaAsync(string eventId, string areaId)
+    {
+        List<LocationEntity> locations = [];
+        await foreach (LocationEntity location in _table.QueryAsync<LocationEntity>(
+            l => l.PartitionKey == eventId && l.AreaId == areaId))
+        {
+            locations.Add(location);
+        }
+        return locations;
+    }
+
+    public async Task<int> CountByAreaAsync(string eventId, string areaId)
+    {
+        int count = 0;
+        await foreach (LocationEntity location in _table.QueryAsync<LocationEntity>(
+            l => l.PartitionKey == eventId && l.AreaId == areaId))
+        {
+            count++;
+        }
+        return count;
+    }
+
     public async Task UpdateAsync(LocationEntity location)
     {
         await _table.UpdateEntityAsync(location, location.ETag);

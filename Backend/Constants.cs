@@ -14,4 +14,8 @@ public static class Constants
 
     // Headers
     public const string AdminEmailHeader = "X-Admin-Email";
+
+    // Default Area
+    public const string DefaultAreaName = "Unassigned";
+    public const string DefaultAreaDescription = "Default area for unassigned checkpoints";
 }

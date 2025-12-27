@@ -23,7 +23,7 @@ public static class EntityExtensions
         );
     }
 
-    public static LocationResponse ToResponse(this LocationEntity entity)
+    public static LocationResponse ToResponse(this LocationEntity entity, string? areaName = null)
     {
         return new LocationResponse(
             entity.RowKey,
@@ -36,7 +36,28 @@ public static class EntityExtensions
             entity.CheckedInCount,
             entity.What3Words,
             entity.StartTime,
-            entity.EndTime
+            entity.EndTime,
+            entity.AreaId,
+            areaName
+        );
+    }
+
+    public static AreaResponse ToResponse(this AreaEntity entity, int checkpointCount = 0)
+    {
+        List<AreaContact> contacts = JsonSerializer.Deserialize<List<AreaContact>>(entity.ContactsJson) ?? [];
+        List<RoutePoint> polygon = JsonSerializer.Deserialize<List<RoutePoint>>(entity.PolygonJson) ?? [];
+
+        return new AreaResponse(
+            entity.RowKey,
+            entity.EventId,
+            entity.Name,
+            entity.Description,
+            contacts,
+            polygon,
+            entity.IsDefault,
+            entity.DisplayOrder,
+            checkpointCount,
+            entity.CreatedDate
         );
     }
 

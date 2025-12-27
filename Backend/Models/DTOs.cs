@@ -56,7 +56,49 @@ public record LocationResponse(
     int CheckedInCount,
     string What3Words,
     DateTime? StartTime,
-    DateTime? EndTime
+    DateTime? EndTime,
+    string? AreaId,
+    string? AreaName
+);
+
+public record AreaContact(
+    string MarshalId,
+    string MarshalName,
+    string Role
+);
+
+public record CreateAreaRequest(
+    string EventId,
+    string Name,
+    string Description,
+    List<AreaContact> Contacts,
+    List<RoutePoint>? Polygon
+);
+
+public record UpdateAreaRequest(
+    string Name,
+    string Description,
+    List<AreaContact> Contacts,
+    List<RoutePoint>? Polygon,
+    int DisplayOrder
+);
+
+public record AreaResponse(
+    string Id,
+    string EventId,
+    string Name,
+    string Description,
+    List<AreaContact> Contacts,
+    List<RoutePoint> Polygon,
+    bool IsDefault,
+    int DisplayOrder,
+    int CheckpointCount,
+    DateTime CreatedDate
+);
+
+public record BulkAssignCheckpointsRequest(
+    List<string> LocationIds,
+    string AreaId
 );
 
 public record CreateAssignmentRequest(

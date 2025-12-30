@@ -1,0 +1,377 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Moq;
+using Shouldly;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+using VolunteerCheckin.Functions.Functions;
+using VolunteerCheckin.Functions.Models;
+using VolunteerCheckin.Functions.Repositories;
+using VolunteerCheckin.Functions.Services;
+
+namespace VolunteerCheckin.Functions.Tests
+{
+    [TestClass]
+    public class MarshalFunctionsTests
+    {
+        private Mock<ILogger<MarshalFunctions>> _mockLogger = null!;
+        private Mock<IMarshalRepository> _mockMarshalRepository = null!;
+        private Mock<ILocationRepository> _mockLocationRepository = null!;
+        private Mock<IAssignmentRepository> _mockAssignmentRepository = null!;
+        private Mock<CsvParserService> _mockCsvParser = null!;
+        private MarshalFunctions _marshalFunctions = null!;
+
+        [TestInitialize]
+        public void Setup()
+        {
+            _mockLogger = new Mock<ILogger<MarshalFunctions>>();
+            _mockMarshalRepository = new Mock<IMarshalRepository>();
+            _mockLocationRepository = new Mock<ILocationRepository>();
+            _mockAssignmentRepository = new Mock<IAssignmentRepository>();
+            _mockCsvParser = new Mock<CsvParserService>();
+
+            _marshalFunctions = new MarshalFunctions(
+                _mockLogger.Object,
+                _mockMarshalRepository.Object,
+                _mockLocationRepository.Object,
+                _mockAssignmentRepository.Object,
+                _mockCsvParser.Object
+            );
+        }
+
+        #region CreateMarshal Tests
+
+        [TestMethod]
+        public async Task CreateMarshal_ValidRequest_CreatesMarshal()
+        {
+            // Arrange
+            CreateMarshalRequest request = new(
+                "event-123",
+                "John Doe",
+                "john@example.com",
+                "555-1234",
+                "Test notes"
+            );
+
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
+
+            // Act
+            IActionResult result = await _marshalFunctions.CreateMarshal(httpRequest);
+
+            // Assert
+            result.ShouldBeOfType<OkObjectResult>();
+
+            _mockMarshalRepository.Verify(
+                r => r.AddAsync(It.Is<MarshalEntity>(m =>
+                    m.EventId == "event-123" &&
+                    m.Name == "John Doe" &&
+                    m.Email == "john@example.com" &&
+                    m.PhoneNumber == "555-1234" &&
+                    m.Notes == "Test notes"
+                )),
+                Times.Once
+            );
+        }
+
+        [TestMethod]
+        public async Task CreateMarshal_NullRequest_ReturnsBadRequest()
+        {
+            // Arrange
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequest("invalid json");
+
+            // Act
+            IActionResult result = await _marshalFunctions.CreateMarshal(httpRequest);
+
+            // Assert
+            result.ShouldBeOfType<StatusCodeResult>();
+            StatusCodeResult statusResult = (StatusCodeResult)result;
+            statusResult.StatusCode.ShouldBe(500);
+        }
+
+        #endregion
+
+        #region GetMarshalsByEvent Tests
+
+        [TestMethod]
+        public async Task GetMarshalsByEvent_ReturnsMarshalsWithAssignments()
+        {
+            // Arrange
+            string eventId = "event-123";
+
+            List<MarshalEntity> marshals = new()
+            {
+                new MarshalEntity
+                {
+                    MarshalId = "marshal-1",
+                    EventId = eventId,
+                    Name = "John Doe",
+                    Email = "john@example.com",
+                    PhoneNumber = "555-1234",
+                    Notes = "Notes"
+                },
+                new MarshalEntity
+                {
+                    MarshalId = "marshal-2",
+                    EventId = eventId,
+                    Name = "Jane Smith",
+                    Email = "jane@example.com",
+                    PhoneNumber = "555-5678",
+                    Notes = ""
+                }
+            };
+
+            List<AssignmentEntity> assignments = new()
+            {
+                new AssignmentEntity
+                {
+                    EventId = eventId,
+                    MarshalId = "marshal-1",
+                    LocationId = "loc-1",
+                    IsCheckedIn = true
+                },
+                new AssignmentEntity
+                {
+                    EventId = eventId,
+                    MarshalId = "marshal-2",
+                    LocationId = "loc-2",
+                    IsCheckedIn = false
+                }
+            };
+
+            _mockMarshalRepository
+                .Setup(r => r.GetByEventAsync(eventId))
+                .ReturnsAsync(marshals);
+
+            _mockAssignmentRepository
+                .Setup(r => r.GetByMarshalAsync(eventId, "marshal-1"))
+                .ReturnsAsync(new[] { assignments[0] });
+
+            _mockAssignmentRepository
+                .Setup(r => r.GetByMarshalAsync(eventId, "marshal-2"))
+                .ReturnsAsync(new[] { assignments[1] });
+
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
+
+            // Act
+            IActionResult result = await _marshalFunctions.GetMarshalsByEvent(httpRequest, eventId);
+
+            // Assert
+            result.ShouldBeOfType<OkObjectResult>();
+            OkObjectResult okResult = (OkObjectResult)result;
+            okResult.Value.ShouldNotBeNull();
+
+            List<MarshalResponse>? marshalList = okResult.Value as List<MarshalResponse>;
+            marshalList.ShouldNotBeNull();
+            marshalList.Count.ShouldBe(2);
+            marshalList[0].IsCheckedIn.ShouldBeTrue();
+            marshalList[1].IsCheckedIn.ShouldBeFalse();
+        }
+
+        #endregion
+
+        #region GetMarshal Tests
+
+        [TestMethod]
+        public async Task GetMarshal_Exists_ReturnsMarshal()
+        {
+            // Arrange
+            string eventId = "event-123";
+            string marshalId = "marshal-456";
+
+            MarshalEntity marshal = new()
+            {
+                MarshalId = marshalId,
+                EventId = eventId,
+                Name = "John Doe",
+                Email = "john@example.com",
+                PhoneNumber = "555-1234",
+                Notes = "Notes"
+            };
+
+            List<AssignmentEntity> assignments = new()
+            {
+                new AssignmentEntity { LocationId = "loc-1", IsCheckedIn = false }
+            };
+
+            _mockMarshalRepository
+                .Setup(r => r.GetAsync(eventId, marshalId))
+                .ReturnsAsync(marshal);
+
+            _mockAssignmentRepository
+                .Setup(r => r.GetByMarshalAsync(eventId, marshalId))
+                .ReturnsAsync(assignments);
+
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
+
+            // Act
+            IActionResult result = await _marshalFunctions.GetMarshal(httpRequest, eventId, marshalId);
+
+            // Assert
+            result.ShouldBeOfType<OkObjectResult>();
+        }
+
+        [TestMethod]
+        public async Task GetMarshal_NotFound_ReturnsNotFound()
+        {
+            // Arrange
+            _mockMarshalRepository
+                .Setup(r => r.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
+                .ReturnsAsync((MarshalEntity?)null);
+
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
+
+            // Act
+            IActionResult result = await _marshalFunctions.GetMarshal(httpRequest, "event-123", "marshal-456");
+
+            // Assert
+            result.ShouldBeOfType<NotFoundObjectResult>();
+        }
+
+        #endregion
+
+        #region UpdateMarshal Tests
+
+        [TestMethod]
+        public async Task UpdateMarshal_ValidRequest_UpdatesMarshalAndAssignments()
+        {
+            // Arrange
+            string eventId = "event-123";
+            string marshalId = "marshal-456";
+
+            MarshalEntity existingMarshal = new()
+            {
+                MarshalId = marshalId,
+                EventId = eventId,
+                Name = "Old Name",
+                Email = "old@example.com",
+                PhoneNumber = "555-0000",
+                Notes = "Old notes"
+            };
+
+            List<AssignmentEntity> assignments = new()
+            {
+                new AssignmentEntity
+                {
+                    RowKey = "assign-1",
+                    EventId = eventId,
+                    MarshalId = marshalId,
+                    MarshalName = "Old Name",
+                    LocationId = "loc-1"
+                }
+            };
+
+            UpdateMarshalRequest request = new(
+                "New Name",
+                "new@example.com",
+                "555-9999",
+                "New notes"
+            );
+
+            _mockMarshalRepository
+                .Setup(r => r.GetAsync(eventId, marshalId))
+                .ReturnsAsync(existingMarshal);
+
+            _mockAssignmentRepository
+                .Setup(r => r.GetByMarshalAsync(eventId, marshalId))
+                .ReturnsAsync(assignments);
+
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
+
+            // Act
+            IActionResult result = await _marshalFunctions.UpdateMarshal(httpRequest, eventId, marshalId);
+
+            // Assert
+            result.ShouldBeOfType<OkObjectResult>();
+
+            _mockMarshalRepository.Verify(
+                r => r.UpdateAsync(It.Is<MarshalEntity>(m =>
+                    m.Name == "New Name" &&
+                    m.Email == "new@example.com" &&
+                    m.PhoneNumber == "555-9999"
+                )),
+                Times.Once
+            );
+
+            // Verify assignment name was updated
+            _mockAssignmentRepository.Verify(
+                r => r.UpdateAsync(It.Is<AssignmentEntity>(a =>
+                    a.MarshalName == "New Name"
+                )),
+                Times.Once
+            );
+        }
+
+        [TestMethod]
+        public async Task UpdateMarshal_NotFound_ReturnsNotFound()
+        {
+            // Arrange
+            _mockMarshalRepository
+                .Setup(r => r.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
+                .ReturnsAsync((MarshalEntity?)null);
+
+            UpdateMarshalRequest request = new("Name", "email@test.com", "555-1234", "Notes");
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
+
+            // Act
+            IActionResult result = await _marshalFunctions.UpdateMarshal(httpRequest, "event-123", "marshal-456");
+
+            // Assert
+            result.ShouldBeOfType<NotFoundObjectResult>();
+        }
+
+        #endregion
+
+        #region DeleteMarshal Tests
+
+        [TestMethod]
+        public async Task DeleteMarshal_DeletesMarshalAndAssignments()
+        {
+            // Arrange
+            string eventId = "event-123";
+            string marshalId = "marshal-456";
+
+            List<AssignmentEntity> assignments = new()
+            {
+                new AssignmentEntity { RowKey = "assign-1", EventId = eventId, MarshalId = marshalId },
+                new AssignmentEntity { RowKey = "assign-2", EventId = eventId, MarshalId = marshalId }
+            };
+
+            _mockAssignmentRepository
+                .Setup(r => r.GetByMarshalAsync(eventId, marshalId))
+                .ReturnsAsync(assignments);
+
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
+
+            // Act
+            IActionResult result = await _marshalFunctions.DeleteMarshal(httpRequest, eventId, marshalId);
+
+            // Assert
+            result.ShouldBeOfType<NoContentResult>();
+
+            // Verify all assignments deleted
+            _mockAssignmentRepository.Verify(
+                r => r.DeleteAsync(eventId, "assign-1"),
+                Times.Once
+            );
+            _mockAssignmentRepository.Verify(
+                r => r.DeleteAsync(eventId, "assign-2"),
+                Times.Once
+            );
+
+            // Verify marshal deleted
+            _mockMarshalRepository.Verify(
+                r => r.DeleteAsync(eventId, marshalId),
+                Times.Once
+            );
+        }
+
+        #endregion
+    }
+}

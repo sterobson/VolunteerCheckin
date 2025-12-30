@@ -18,7 +18,12 @@
       "Bash(dotnet clean:*)",
       "Bash(tasklist:*)",
       "Bash(find:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(npm run build:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(ls -lR \"C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\FrontEnd\\\\src\\\\components\\\\event-manage\\\\modals\"\" | grep -E \"^- \")",
+      "Bash(ls:*)",
+      "Bash(done)"
     ]
   }
 }

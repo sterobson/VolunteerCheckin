@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using VolunteerCheckin.Functions.Functions;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Repositories;
+using VolunteerCheckin.Functions.Services;
 
 namespace VolunteerCheckin.Functions.Tests
 {
@@ -21,6 +22,7 @@ namespace VolunteerCheckin.Functions.Tests
         private Mock<ILogger<CheckInFunctions>> _mockLogger = null!;
         private Mock<IAssignmentRepository> _mockAssignmentRepository = null!;
         private Mock<ILocationRepository> _mockLocationRepository = null!;
+        private Mock<GpsService> _mockGpsService = null!;
         private CheckInFunctions _checkInFunctions = null!;
 
         [TestInitialize]
@@ -29,11 +31,18 @@ namespace VolunteerCheckin.Functions.Tests
             _mockLogger = new Mock<ILogger<CheckInFunctions>>();
             _mockAssignmentRepository = new Mock<IAssignmentRepository>();
             _mockLocationRepository = new Mock<ILocationRepository>();
+            _mockGpsService = new Mock<GpsService>();
+
+            // Setup default GPS service behavior - close enough (within 100m)
+            _mockGpsService
+                .Setup(g => g.CalculateDistance(It.IsAny<double>(), It.IsAny<double>(), It.IsAny<double>(), It.IsAny<double>()))
+                .Returns(50.0); // Default: 50 meters away (within range)
 
             _checkInFunctions = new CheckInFunctions(
                 _mockLogger.Object,
                 _mockAssignmentRepository.Object,
-                _mockLocationRepository.Object
+                _mockLocationRepository.Object,
+                _mockGpsService.Object
             );
         }
 
@@ -78,7 +87,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .ReturnsAsync(location);
 
             CheckInRequest request = new(eventId, assignmentId, checkInLat, checkInLon, false);
-            HttpRequest httpRequest = CreateHttpRequest(request);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
 
             // Act
             IActionResult result = await _checkInFunctions.CheckIn(httpRequest);
@@ -141,8 +150,13 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetAsync(eventId, "location-789"))
                 .ReturnsAsync(location);
 
+            // Mock GPS service to return distance > 100m
+            _mockGpsService
+                .Setup(g => g.CalculateDistance(locationLat, locationLon, checkInLat, checkInLon))
+                .Returns(500.0); // 500 meters away (too far)
+
             CheckInRequest request = new(eventId, assignmentId, checkInLat, checkInLon, false);
-            HttpRequest httpRequest = CreateHttpRequest(request);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
 
             // Act
             IActionResult result = await _checkInFunctions.CheckIn(httpRequest);
@@ -190,7 +204,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .ReturnsAsync(location);
 
             CheckInRequest request = new(eventId, assignmentId, null, null, true);
-            HttpRequest httpRequest = CreateHttpRequest(request);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
 
             // Act
             IActionResult result = await _checkInFunctions.CheckIn(httpRequest);
@@ -216,7 +230,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .ReturnsAsync((AssignmentEntity?)null);
 
             CheckInRequest request = new("event-123", "assignment-456", 47.6062, -122.3321, false);
-            HttpRequest httpRequest = CreateHttpRequest(request);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
 
             // Act
             IActionResult result = await _checkInFunctions.CheckIn(httpRequest);
@@ -242,7 +256,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .ReturnsAsync(assignment);
 
             CheckInRequest request = new("event-123", "assignment-456", 47.6062, -122.3321, false);
-            HttpRequest httpRequest = CreateHttpRequest(request);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
 
             // Act
             IActionResult result = await _checkInFunctions.CheckIn(httpRequest);
@@ -272,7 +286,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .ReturnsAsync((LocationEntity?)null);
 
             CheckInRequest request = new("event-123", "assignment-456", 47.6062, -122.3321, false);
-            HttpRequest httpRequest = CreateHttpRequest(request);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
 
             // Act
             IActionResult result = await _checkInFunctions.CheckIn(httpRequest);
@@ -308,7 +322,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .ReturnsAsync(location);
 
             CheckInRequest request = new("event-123", "assignment-456", null, null, false);
-            HttpRequest httpRequest = CreateHttpRequest(request);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
 
             // Act
             IActionResult result = await _checkInFunctions.CheckIn(httpRequest);
@@ -351,8 +365,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetAsync(eventId, "location-789"))
                 .ReturnsAsync(location);
 
-            DefaultHttpContext context = new();
-            HttpRequest httpRequest = context.Request;
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
 
             // Act
             IActionResult result = await _checkInFunctions.AdminCheckIn(httpRequest, eventId, assignmentId);
@@ -408,8 +421,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetAsync(eventId, "location-789"))
                 .ReturnsAsync(location);
 
-            DefaultHttpContext context = new();
-            HttpRequest httpRequest = context.Request;
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
 
             // Act
             IActionResult result = await _checkInFunctions.AdminCheckIn(httpRequest, eventId, assignmentId);
@@ -442,8 +454,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
                 .ReturnsAsync((AssignmentEntity?)null);
 
-            DefaultHttpContext context = new();
-            HttpRequest httpRequest = context.Request;
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
 
             // Act
             IActionResult result = await _checkInFunctions.AdminCheckIn(httpRequest, "event-123", "assignment-456");
@@ -472,8 +483,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
                 .ReturnsAsync((LocationEntity?)null);
 
-            DefaultHttpContext context = new();
-            HttpRequest httpRequest = context.Request;
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
 
             // Act
             IActionResult result = await _checkInFunctions.AdminCheckIn(httpRequest, "event-123", "assignment-456");
@@ -483,17 +493,5 @@ namespace VolunteerCheckin.Functions.Tests
         }
 
         #endregion
-
-        private static HttpRequest CreateHttpRequest(object body)
-        {
-            DefaultHttpContext context = new();
-            HttpRequest request = context.Request;
-
-            string json = JsonSerializer.Serialize(body);
-            byte[] bytes = Encoding.UTF8.GetBytes(json);
-            request.Body = new MemoryStream(bytes);
-
-            return request;
-        }
     }
 }

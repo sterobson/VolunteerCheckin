@@ -2,12 +2,31 @@
   <div>
     <h3>Checkpoints ({{ locations.length }})</h3>
     <div class="button-group">
-      <button @click="$emit('add-checkpoint')" class="btn btn-small btn-primary">
-        Add checkpoint
+      <button
+        ref="addButtonRef"
+        @click="handleAddClick"
+        class="btn btn-small btn-primary"
+      >
+        Add...
       </button>
-      <button @click="$emit('import-checkpoints')" class="btn btn-small btn-secondary">
-        Import CSV
-      </button>
+    </div>
+
+    <div v-if="areas.length > 0" class="filter-group">
+      <h4>Filter by area:</h4>
+      <label class="filter-checkbox">
+        <input
+          type="checkbox"
+          :checked="showAllAreas"
+          @change="handleAllAreasToggle"
+        />
+        All areas ({{ locations.length }})
+      </label>
+      <AreasSelection
+        v-if="!showAllAreas"
+        :areas="areas"
+        :selected-area-ids="selectedAreaIds"
+        @update:selected-area-ids="selectedAreaIds = $event"
+      />
     </div>
 
     <div class="locations-list">
@@ -22,7 +41,17 @@
         @click="$emit('select-location', location)"
       >
         <div class="location-info">
-          <strong>{{ location.name }}</strong>
+          <div class="location-header">
+            <strong>{{ location.name }}</strong>
+            <span
+              v-for="areaId in (location.areaIds || location.AreaIds || [])"
+              :key="areaId"
+              class="area-badge"
+              :style="{ backgroundColor: getAreaColor(areaId) }"
+            >
+              {{ getAreaName(areaId) }}
+            </span>
+          </div>
           <span class="location-description">
             {{ location.description }}
           </span>
@@ -46,38 +75,62 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits, computed } from 'vue';
+import { defineProps, defineEmits, computed, ref } from 'vue';
+import { alphanumericCompare } from '../../../utils/sortUtils';
+import AreasSelection from '../AreasSelection.vue';
 
 const props = defineProps({
   locations: {
     type: Array,
     required: true,
   },
+  areas: {
+    type: Array,
+    default: () => [],
+  },
 });
 
-defineEmits(['add-checkpoint', 'import-checkpoints', 'select-location']);
+const emit = defineEmits(['open-add-menu', 'select-location']);
+
+const showAllAreas = ref(true);
+const selectedAreaIds = ref([]);
+const addButtonRef = ref(null);
+
+const handleAddClick = () => {
+  emit('open-add-menu', { buttonElement: addButtonRef.value });
+};
+
+const handleAllAreasToggle = () => {
+  showAllAreas.value = !showAllAreas.value;
+  if (!showAllAreas.value && selectedAreaIds.value.length === 0) {
+    // Select all areas by default when unchecking "All areas"
+    selectedAreaIds.value = props.areas.map(a => a.id);
+  }
+};
 
 const sortedLocations = computed(() => {
-  return [...props.locations].sort((a, b) => {
-    const aName = a.name;
-    const bName = b.name;
+  let filtered = props.locations;
 
-    // Check if both names are purely numeric
-    const aNum = parseFloat(aName);
-    const bNum = parseFloat(bName);
+  // Filter by area
+  if (!showAllAreas.value && selectedAreaIds.value.length > 0) {
+    filtered = filtered.filter((loc) => {
+      const areaIds = loc.areaIds || loc.AreaIds || [];
+      return areaIds.some(id => selectedAreaIds.value.includes(id));
+    });
+  }
 
-    const aIsNum = !isNaN(aNum) && String(aNum) === aName.trim();
-    const bIsNum = !isNaN(bNum) && String(bNum) === bName.trim();
-
-    // If both are numbers, sort numerically
-    if (aIsNum && bIsNum) {
-      return aNum - bNum;
-    }
-
-    // Otherwise, sort alphabetically (case-insensitive)
-    return aName.localeCompare(bName, undefined, { numeric: true, sensitivity: 'base' });
-  });
+  return [...filtered].sort((a, b) => alphanumericCompare(a.name, b.name));
 });
+
+const getAreaName = (areaId) => {
+  const area = props.areas.find((a) => a.id === areaId);
+  return area ? area.name : null;
+};
+
+const getAreaColor = (areaId) => {
+  const area = props.areas.find((a) => a.id === areaId);
+  return area ? area.color : '#999';
+};
 </script>
 
 <style scoped>
@@ -192,5 +245,55 @@ h3 {
 .assignment-badge.checked-in {
   background: #4caf50;
   color: white;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 4px;
+}
+
+.filter-group h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #333;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.filter-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: #333;
+}
+
+.filter-checkbox input[type="checkbox"] {
+  cursor: pointer;
+  width: 1rem;
+  height: 1rem;
+}
+
+.location-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.area-badge {
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 </style>

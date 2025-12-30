@@ -21,5 +21,5 @@ public class LocationEntity : ITableEntity
     public string What3Words { get; set; } = string.Empty;
     public DateTime? StartTime { get; set; }
     public DateTime? EndTime { get; set; }
-    public string? AreaId { get; set; }
+    public string AreaIdsJson { get; set; } = "[]"; // JSON array of area IDs this checkpoint belongs to
 }

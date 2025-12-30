@@ -5,7 +5,9 @@
       "Bash(find:*)",
       "Bash(grep:*)",
       "Bash(for file in *.cs)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(wc:*)",
+      "Bash(dotnet build:*)"
     ]
   }
 }

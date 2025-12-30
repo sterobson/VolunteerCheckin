@@ -13,9 +13,16 @@ public class AreaEntity : ITableEntity
     public string EventId { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public string Color { get; set; } = "#667eea"; // Hex color code for UI display
     public string ContactsJson { get; set; } = "[]"; // List<AreaContact>
     public string PolygonJson { get; set; } = "[]"; // List<RoutePoint> for map selection
     public bool IsDefault { get; set; } = false;
     public int DisplayOrder { get; set; } = 0;
     public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// JSON array of marshal IDs who are area leads for this area.
+    /// Area leads have special permissions for checklist items in their area.
+    /// </summary>
+    public string AreaLeadMarshalIdsJson { get; set; } = "[]";
 }

@@ -80,7 +80,7 @@ namespace VolunteerCheckin.Functions.Tests
             .ReturnsAsync(locations);
 
         BulkUpdateLocationTimesRequest request = new(timeDelta);
-        HttpRequest httpRequest = CreateHttpRequest(request);
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
 
         // Act
         IActionResult result = await _locationFunctions.BulkUpdateLocationTimes(httpRequest, eventId);
@@ -137,7 +137,7 @@ namespace VolunteerCheckin.Functions.Tests
             .ReturnsAsync(locations);
 
         BulkUpdateLocationTimesRequest request = new(timeDelta);
-        HttpRequest httpRequest = CreateHttpRequest(request);
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
 
         // Act
         IActionResult result = await _locationFunctions.BulkUpdateLocationTimes(httpRequest, eventId);
@@ -179,7 +179,7 @@ namespace VolunteerCheckin.Functions.Tests
             .ReturnsAsync(locations);
 
         BulkUpdateLocationTimesRequest request = new(timeDelta);
-        HttpRequest httpRequest = CreateHttpRequest(request);
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
 
         // Act
         IActionResult result = await _locationFunctions.BulkUpdateLocationTimes(httpRequest, eventId);
@@ -247,7 +247,7 @@ namespace VolunteerCheckin.Functions.Tests
             .ReturnsAsync(locations);
 
         BulkUpdateLocationTimesRequest request = new(timeDelta);
-        HttpRequest httpRequest = CreateHttpRequest(request);
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
 
         // Act
         IActionResult result = await _locationFunctions.BulkUpdateLocationTimes(httpRequest, eventId);
@@ -302,7 +302,7 @@ namespace VolunteerCheckin.Functions.Tests
     {
         // Arrange
         string eventId = "event-invalid";
-        HttpRequest httpRequest = CreateHttpRequest("invalid json content");
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest("invalid json content");
 
         // Act
         IActionResult result = await _locationFunctions.BulkUpdateLocationTimes(httpRequest, eventId);
@@ -331,7 +331,7 @@ namespace VolunteerCheckin.Functions.Tests
             .ReturnsAsync(new List<LocationEntity>());
 
         BulkUpdateLocationTimesRequest request = new(timeDelta);
-        HttpRequest httpRequest = CreateHttpRequest(request);
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
 
         // Act
         IActionResult result = await _locationFunctions.BulkUpdateLocationTimes(httpRequest, eventId);
@@ -371,7 +371,7 @@ namespace VolunteerCheckin.Functions.Tests
             .ReturnsAsync(locations);
 
         BulkUpdateLocationTimesRequest request = new(timeDelta);
-        HttpRequest httpRequest = CreateHttpRequest(request);
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
 
         // Act
         IActionResult result = await _locationFunctions.BulkUpdateLocationTimes(httpRequest, eventId);
@@ -390,27 +390,5 @@ namespace VolunteerCheckin.Functions.Tests
         );
     }
 
-    private static HttpRequest CreateHttpRequest(object body)
-    {
-        DefaultHttpContext context = new();
-        HttpRequest request = context.Request;
-
-        string json = JsonSerializer.Serialize(body);
-        byte[] bytes = Encoding.UTF8.GetBytes(json);
-        request.Body = new MemoryStream(bytes);
-
-        return request;
-    }
-
-    private static HttpRequest CreateHttpRequest(string body)
-    {
-        DefaultHttpContext context = new();
-        HttpRequest request = context.Request;
-
-        byte[] bytes = Encoding.UTF8.GetBytes(body);
-        request.Body = new MemoryStream(bytes);
-
-        return request;
-    }
     }
 }

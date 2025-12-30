@@ -352,6 +352,7 @@ public class EventFunctions
             // Ensure at least one admin remains
             if (adminCount <= 1)
             {
+                _logger.LogWarning($"Attempt to remove last admin from event {eventId} rejected: {userEmail}");
                 return new BadRequestObjectResult(new { message = "Cannot remove the last admin from an event" });
             }
 

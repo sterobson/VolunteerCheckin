@@ -54,6 +54,7 @@ public class AreaFunctions
                 EventId = request.EventId,
                 Name = request.Name,
                 Description = request.Description,
+                Color = request.Color,
                 ContactsJson = JsonSerializer.Serialize(request.Contacts),
                 PolygonJson = JsonSerializer.Serialize(request.Polygon ?? []),
                 IsDefault = false,
@@ -61,6 +62,12 @@ public class AreaFunctions
             };
 
             await _areaRepository.AddAsync(areaEntity);
+
+            // If a polygon was provided, recalculate checkpoint assignments
+            if (request.Polygon != null && request.Polygon.Count > 0)
+            {
+                await RecalculateCheckpointAreas(request.EventId);
+            }
 
             // Get checkpoint count
             int checkpointCount = await _locationRepository.CountByAreaAsync(request.EventId, areaEntity.RowKey);
@@ -166,11 +173,16 @@ public class AreaFunctions
 
             areaEntity.Name = request.Name;
             areaEntity.Description = request.Description;
+            areaEntity.Color = request.Color;
             areaEntity.ContactsJson = JsonSerializer.Serialize(request.Contacts);
             areaEntity.PolygonJson = JsonSerializer.Serialize(request.Polygon ?? []);
             areaEntity.DisplayOrder = request.DisplayOrder;
 
             await _areaRepository.UpdateAsync(areaEntity);
+
+            // Recalculate checkpoint assignments for all checkpoints in this event
+            // since the area boundary may have changed
+            await RecalculateCheckpointAreas(eventId);
 
             int checkpointCount = await _locationRepository.CountByAreaAsync(eventId, areaId);
             AreaResponse response = areaEntity.ToResponse(checkpointCount);
@@ -204,16 +216,43 @@ public class AreaFunctions
             // Prevent deletion of default area
             if (areaEntity.IsDefault)
             {
+                _logger.LogWarning($"Attempt to delete default area rejected: {areaId} in event {eventId}");
                 return new BadRequestObjectResult(new { message = "Cannot delete default area" });
             }
 
-            // Check if area has checkpoints
-            int checkpointCount = await _locationRepository.CountByAreaAsync(eventId, areaId);
-            if (checkpointCount > 0)
+            // Get all checkpoints in this area
+            IEnumerable<LocationEntity> checkpointsInArea = await _locationRepository.GetByAreaAsync(eventId, areaId);
+
+            if (checkpointsInArea.Any())
             {
-                return new BadRequestObjectResult(new {
-                    message = $"Cannot delete area with {checkpointCount} checkpoints. Please reassign or delete checkpoints first."
-                });
+                // Get the default area
+                AreaEntity? defaultArea = await _areaRepository.GetDefaultAreaAsync(eventId);
+                if (defaultArea == null)
+                {
+                    _logger.LogError($"Default area not found for event {eventId}");
+                    return new StatusCodeResult(500);
+                }
+
+                // Remove this area from all checkpoints, and assign to default if no other areas
+                foreach (LocationEntity checkpoint in checkpointsInArea)
+                {
+                    List<string> areaIds = System.Text.Json.JsonSerializer.Deserialize<List<string>>(checkpoint.AreaIdsJson) ?? new List<string>();
+
+                    // Remove the area being deleted
+                    areaIds.Remove(areaId);
+
+                    // If no areas left, assign to default area
+                    if (areaIds.Count == 0)
+                    {
+                        areaIds.Add(defaultArea.RowKey);
+                    }
+
+                    // Update the checkpoint with new area assignments
+                    checkpoint.AreaIdsJson = System.Text.Json.JsonSerializer.Serialize(areaIds);
+                    await _locationRepository.UpdateAsync(checkpoint);
+                }
+
+                _logger.LogInformation($"Reassigned {checkpointsInArea.Count()} checkpoints from area {areaId}");
             }
 
             await _areaRepository.DeleteAsync(eventId, areaId);
@@ -229,97 +268,22 @@ public class AreaFunctions
         }
     }
 
-    [Function("BulkAssignCheckpointsToArea")]
-    public async Task<IActionResult> BulkAssignCheckpointsToArea(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "areas/bulk-assign/{eventId}")] HttpRequest req,
+    [Function("RecalculateCheckpointAreasEndpoint")]
+    public async Task<IActionResult> RecalculateCheckpointAreasEndpoint(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "areas/recalculate/{eventId}")] HttpRequest req,
         string eventId)
     {
         try
         {
-            (BulkAssignCheckpointsRequest? request, IActionResult? error) = await FunctionHelpers.TryDeserializeRequestAsync<BulkAssignCheckpointsRequest>(req);
-            if (error != null) return error;
-
-            // Validate area exists
-            AreaEntity? area = await _areaRepository.GetAsync(eventId, request!.AreaId);
-            if (area == null)
-            {
-                return new BadRequestObjectResult(new { message = "Area not found" });
-            }
-
-            int updatedCount = 0;
-            List<string> errors = new();
-
-            foreach (string locationId in request.LocationIds)
-            {
-                try
-                {
-                    LocationEntity? location = await _locationRepository.GetAsync(eventId, locationId);
-                    if (location == null)
-                    {
-                        errors.Add($"Location not found: {locationId}");
-                        continue;
-                    }
-
-                    location.AreaId = request.AreaId;
-                    await _locationRepository.UpdateAsync(location);
-                    updatedCount++;
-                }
-                catch (Exception ex)
-                {
-                    errors.Add($"Failed to update location {locationId}: {ex.Message}");
-                }
-            }
-
-            _logger.LogInformation($"Bulk assigned {updatedCount} checkpoints to area {request.AreaId}");
+            await RecalculateCheckpointAreas(eventId);
 
             return new OkObjectResult(new {
-                updatedCount,
-                totalRequested = request.LocationIds.Count,
-                errors
+                message = $"Successfully recalculated checkpoint area assignments for event {eventId}"
             });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error bulk assigning checkpoints");
-            return new StatusCodeResult(500);
-        }
-    }
-
-    [Function("MigrateLocationsToDefaultArea")]
-    public async Task<IActionResult> MigrateLocationsToDefaultArea(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "areas/migrate/{eventId}")] HttpRequest req,
-        string eventId)
-    {
-        try
-        {
-            // Ensure default area exists
-            AreaEntity defaultArea = await EnsureDefaultAreaExists(eventId);
-
-            // Get all locations for event
-            IEnumerable<LocationEntity> locations = await _locationRepository.GetByEventAsync(eventId);
-
-            int migratedCount = 0;
-            foreach (LocationEntity location in locations)
-            {
-                if (string.IsNullOrEmpty(location.AreaId))
-                {
-                    location.AreaId = defaultArea.RowKey;
-                    await _locationRepository.UpdateAsync(location);
-                    migratedCount++;
-                }
-            }
-
-            _logger.LogInformation($"Migrated {migratedCount} locations to default area for event {eventId}");
-
-            return new OkObjectResult(new {
-                message = $"Successfully migrated {migratedCount} locations to default area",
-                migratedCount,
-                defaultAreaId = defaultArea.RowKey
-            });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error migrating locations");
+            _logger.LogError(ex, "Error recalculating checkpoint areas");
             return new StatusCodeResult(500);
         }
     }
@@ -334,12 +298,8 @@ public class AreaFunctions
         {
             IEnumerable<LocationEntity> locationEntities = await _locationRepository.GetByAreaAsync(eventId, areaId);
 
-            // Get area name for responses
-            AreaEntity? area = await _areaRepository.GetAsync(eventId, areaId);
-            string? areaName = area?.Name;
-
             List<LocationResponse> locations = locationEntities
-                .Select(l => l.ToResponse(areaName))
+                .Select(l => l.ToResponse())
                 .ToList();
 
             return new OkObjectResult(locations);
@@ -365,6 +325,7 @@ public class AreaFunctions
                 EventId = eventId,
                 Name = Constants.DefaultAreaName,
                 Description = Constants.DefaultAreaDescription,
+                Color = "#667eea",
                 ContactsJson = "[]",
                 PolygonJson = "[]",
                 IsDefault = true,
@@ -376,5 +337,175 @@ public class AreaFunctions
         }
 
         return defaultArea;
+    }
+
+    // Helper method to recalculate checkpoint area assignments for an event
+    private async Task RecalculateCheckpointAreas(string eventId)
+    {
+        // Get all areas and checkpoints
+        IEnumerable<AreaEntity> areas = await _areaRepository.GetByEventAsync(eventId);
+        IEnumerable<LocationEntity> checkpoints = await _locationRepository.GetByEventAsync(eventId);
+        AreaEntity? defaultArea = await _areaRepository.GetDefaultAreaAsync(eventId);
+
+        if (defaultArea == null)
+        {
+            _logger.LogWarning($"No default area found for event {eventId} during recalculation");
+            return;
+        }
+
+        // Recalculate area assignments for each checkpoint
+        foreach (LocationEntity checkpoint in checkpoints)
+        {
+            List<string> areaIds = Helpers.GeometryHelper.CalculateCheckpointAreas(
+                checkpoint.Latitude,
+                checkpoint.Longitude,
+                areas,
+                defaultArea.RowKey
+            );
+
+            checkpoint.AreaIdsJson = JsonSerializer.Serialize(areaIds);
+            await _locationRepository.UpdateAsync(checkpoint);
+        }
+
+        _logger.LogInformation($"Recalculated area assignments for {checkpoints.Count()} checkpoints in event {eventId}");
+    }
+
+    [Function("AddAreaLead")]
+    public async Task<IActionResult> AddAreaLead(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "areas/{eventId}/{areaId}/leads")] HttpRequest req,
+        string eventId,
+        string areaId)
+    {
+        try
+        {
+            string body = await new StreamReader(req.Body).ReadToEndAsync();
+            AddAreaLeadRequest? request = JsonSerializer.Deserialize<AddAreaLeadRequest>(body,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            if (request == null || string.IsNullOrWhiteSpace(request.MarshalId))
+            {
+                return new BadRequestObjectResult(new { message = Constants.ErrorInvalidRequest });
+            }
+
+            AreaEntity? area = await _areaRepository.GetAsync(eventId, areaId);
+            if (area == null)
+            {
+                return new NotFoundObjectResult(new { message = Constants.ErrorAreaNotFound });
+            }
+
+            // Verify marshal exists
+            MarshalEntity? marshal = await _marshalRepository.GetAsync(eventId, request.MarshalId);
+            if (marshal == null)
+            {
+                return new NotFoundObjectResult(new { message = Constants.ErrorMarshalNotFound });
+            }
+
+            // Get current area leads
+            List<string> areaLeadIds = JsonSerializer.Deserialize<List<string>>(area.AreaLeadMarshalIdsJson) ?? [];
+
+            // Check if already an area lead
+            if (areaLeadIds.Contains(request.MarshalId))
+            {
+                return new BadRequestObjectResult(new { message = "Marshal is already an area lead for this area" });
+            }
+
+            // Add to area leads
+            areaLeadIds.Add(request.MarshalId);
+            area.AreaLeadMarshalIdsJson = JsonSerializer.Serialize(areaLeadIds);
+
+            await _areaRepository.UpdateAsync(area);
+
+            _logger.LogInformation($"Added marshal {request.MarshalId} as area lead for area {areaId}");
+
+            return new OkObjectResult(new AreaLeadResponse(
+                marshal.MarshalId,
+                marshal.Name,
+                marshal.Email
+            ));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding area lead");
+            return new StatusCodeResult(500);
+        }
+    }
+
+    [Function("RemoveAreaLead")]
+    public async Task<IActionResult> RemoveAreaLead(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "areas/{eventId}/{areaId}/leads/{marshalId}")] HttpRequest req,
+        string eventId,
+        string areaId,
+        string marshalId)
+    {
+        try
+        {
+            AreaEntity? area = await _areaRepository.GetAsync(eventId, areaId);
+            if (area == null)
+            {
+                return new NotFoundObjectResult(new { message = Constants.ErrorAreaNotFound });
+            }
+
+            // Get current area leads
+            List<string> areaLeadIds = JsonSerializer.Deserialize<List<string>>(area.AreaLeadMarshalIdsJson) ?? [];
+
+            // Check if marshal is an area lead
+            if (!areaLeadIds.Contains(marshalId))
+            {
+                return new NotFoundObjectResult(new { message = "Marshal is not an area lead for this area" });
+            }
+
+            // Remove from area leads
+            areaLeadIds.Remove(marshalId);
+            area.AreaLeadMarshalIdsJson = JsonSerializer.Serialize(areaLeadIds);
+
+            await _areaRepository.UpdateAsync(area);
+
+            _logger.LogInformation($"Removed marshal {marshalId} as area lead from area {areaId}");
+
+            return new NoContentResult();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error removing area lead");
+            return new StatusCodeResult(500);
+        }
+    }
+
+    [Function("GetAreaLeads")]
+    public async Task<IActionResult> GetAreaLeads(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "areas/{eventId}/{areaId}/leads")] HttpRequest req,
+        string eventId,
+        string areaId)
+    {
+        try
+        {
+            AreaEntity? area = await _areaRepository.GetAsync(eventId, areaId);
+            if (area == null)
+            {
+                return new NotFoundObjectResult(new { message = Constants.ErrorAreaNotFound });
+            }
+
+            // Get area lead IDs
+            List<string> areaLeadIds = JsonSerializer.Deserialize<List<string>>(area.AreaLeadMarshalIdsJson) ?? [];
+
+            if (areaLeadIds.Count == 0)
+            {
+                return new OkObjectResult(new List<AreaLeadResponse>());
+            }
+
+            // Get marshal details for each area lead
+            IEnumerable<MarshalEntity> allMarshals = await _marshalRepository.GetByEventAsync(eventId);
+            List<AreaLeadResponse> areaLeads = allMarshals
+                .Where(m => areaLeadIds.Contains(m.MarshalId))
+                .Select(m => new AreaLeadResponse(m.MarshalId, m.Name, m.Email))
+                .ToList();
+
+            return new OkObjectResult(areaLeads);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting area leads");
+            return new StatusCodeResult(500);
+        }
     }
 }

@@ -47,9 +47,14 @@ public class TableStorageLocationRepository : ILocationRepository
     {
         List<LocationEntity> locations = [];
         await foreach (LocationEntity location in _table.QueryAsync<LocationEntity>(
-            l => l.PartitionKey == eventId && l.AreaId == areaId))
+            l => l.PartitionKey == eventId))
         {
-            locations.Add(location);
+            // Parse the area IDs JSON and check if this checkpoint belongs to the specified area
+            List<string>? areaIds = System.Text.Json.JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson);
+            if (areaIds != null && areaIds.Contains(areaId))
+            {
+                locations.Add(location);
+            }
         }
         return locations;
     }
@@ -58,9 +63,14 @@ public class TableStorageLocationRepository : ILocationRepository
     {
         int count = 0;
         await foreach (LocationEntity location in _table.QueryAsync<LocationEntity>(
-            l => l.PartitionKey == eventId && l.AreaId == areaId))
+            l => l.PartitionKey == eventId))
         {
-            count++;
+            // Parse the area IDs JSON and check if this checkpoint belongs to the specified area
+            List<string>? areaIds = System.Text.Json.JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson);
+            if (areaIds != null && areaIds.Contains(areaId))
+            {
+                count++;
+            }
         }
         return count;
     }

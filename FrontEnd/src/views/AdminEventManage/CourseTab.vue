@@ -15,6 +15,7 @@
         <div class="section">
           <CheckpointsList
             :locations="locationStatuses"
+            :areas="areas"
             @add-checkpoint="$emit('add-checkpoint')"
             @import-checkpoints="$emit('import-checkpoints')"
             @select-location="$emit('select-location', $event)"
@@ -36,6 +37,10 @@ const props = defineProps({
     required: true,
   },
   route: {
+    type: Array,
+    default: () => [],
+  },
+  areas: {
     type: Array,
     default: () => [],
   },

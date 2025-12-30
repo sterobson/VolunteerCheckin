@@ -59,7 +59,7 @@ namespace VolunteerCheckin.Functions.Tests
                 new List<EmergencyContact> { new("John", "555-1234", "Emergency contact") }
             );
 
-            HttpRequest httpRequest = CreateHttpRequest(request);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
 
             // Act
             IActionResult result = await _eventFunctions.CreateEvent(httpRequest);
@@ -101,7 +101,7 @@ namespace VolunteerCheckin.Functions.Tests
                 new List<EmergencyContact>()
             );
 
-            HttpRequest httpRequest = CreateHttpRequest(request);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
 
             // Act
             IActionResult result = await _eventFunctions.CreateEvent(httpRequest);
@@ -140,8 +140,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetAsync(eventId))
                 .ReturnsAsync(eventEntity);
 
-            DefaultHttpContext context = new();
-            HttpRequest httpRequest = context.Request;
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
 
             // Act
             IActionResult result = await _eventFunctions.GetEvent(httpRequest, eventId);
@@ -160,8 +159,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetAsync(It.IsAny<string>()))
                 .ReturnsAsync((EventEntity?)null);
 
-            DefaultHttpContext context = new();
-            HttpRequest httpRequest = context.Request;
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
 
             // Act
             IActionResult result = await _eventFunctions.GetEvent(httpRequest, "event-123");
@@ -215,7 +213,7 @@ namespace VolunteerCheckin.Functions.Tests
                     Role = "Admin"
                 });
 
-            HttpRequest httpRequest = CreateHttpRequestWithAdminHeader(updateRequest, adminEmail);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAdminHeader(updateRequest, adminEmail);
 
             // Act
             IActionResult result = await _eventFunctions.UpdateEvent(httpRequest, eventId);
@@ -257,7 +255,7 @@ namespace VolunteerCheckin.Functions.Tests
                 new List<EmergencyContact>()
             );
 
-            HttpRequest httpRequest = CreateHttpRequestWithAdminHeader(updateRequest, adminEmail);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAdminHeader(updateRequest, adminEmail);
 
             // Act
             IActionResult result = await _eventFunctions.UpdateEvent(httpRequest, eventId);
@@ -290,7 +288,7 @@ namespace VolunteerCheckin.Functions.Tests
                 new List<EmergencyContact>()
             );
 
-            HttpRequest httpRequest = CreateHttpRequestWithAdminHeader(updateRequest, adminEmail);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAdminHeader(updateRequest, adminEmail);
 
             // Act
             IActionResult result = await _eventFunctions.UpdateEvent(httpRequest, eventId);
@@ -319,7 +317,7 @@ namespace VolunteerCheckin.Functions.Tests
                     Role = "Admin"
                 });
 
-            HttpRequest httpRequest = CreateHttpRequestWithHeader("X-Admin-Email", adminEmail);
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAdminHeader(adminEmail);
 
             // Act
             IActionResult result = await _eventFunctions.DeleteEvent(httpRequest, eventId);
@@ -344,7 +342,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetAsync(eventId, adminEmail))
                 .ReturnsAsync((UserEventMappingEntity?)null);
 
-            HttpRequest httpRequest = CreateHttpRequestWithHeader("X-Admin-Email", adminEmail);
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAdminHeader(adminEmail);
 
             // Act
             IActionResult result = await _eventFunctions.DeleteEvent(httpRequest, eventId);
@@ -357,8 +355,7 @@ namespace VolunteerCheckin.Functions.Tests
         public async Task DeleteEvent_MissingHeader_ReturnsBadRequest()
         {
             // Arrange
-            DefaultHttpContext context = new();
-            HttpRequest httpRequest = context.Request;
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
 
             // Act
             IActionResult result = await _eventFunctions.DeleteEvent(httpRequest, "event-123");
@@ -416,7 +413,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetAllAsync())
                 .ReturnsAsync(allEvents);
 
-            HttpRequest httpRequest = CreateHttpRequestWithHeader("X-Admin-Email", adminEmail);
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAdminHeader(adminEmail);
 
             // Act
             IActionResult result = await _eventFunctions.GetAllEvents(httpRequest);
@@ -452,7 +449,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .ReturnsAsync((UserEventMappingEntity?)null);
 
             AddEventAdminRequest request = new(newAdminEmail);
-            HttpRequest httpRequest = CreateHttpRequestWithAdminHeader(request, adminEmail);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAdminHeader(request, adminEmail);
 
             // Act
             IActionResult result = await _eventFunctions.AddEventAdmin(httpRequest, eventId);
@@ -487,7 +484,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .ReturnsAsync(new UserEventMappingEntity { EventId = eventId, UserEmail = existingAdminEmail });
 
             AddEventAdminRequest request = new(existingAdminEmail);
-            HttpRequest httpRequest = CreateHttpRequestWithAdminHeader(request, adminEmail);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAdminHeader(request, adminEmail);
 
             // Act
             IActionResult result = await _eventFunctions.AddEventAdmin(httpRequest, eventId);
@@ -508,7 +505,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .ReturnsAsync(new UserEventMappingEntity { EventId = eventId, UserEmail = adminEmail });
 
             AddEventAdminRequest request = new("invalid-email");
-            HttpRequest httpRequest = CreateHttpRequestWithAdminHeader(request, adminEmail);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAdminHeader(request, adminEmail);
 
             // Act
             IActionResult result = await _eventFunctions.AddEventAdmin(httpRequest, eventId);
@@ -543,7 +540,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetByEventAsync(eventId))
                 .ReturnsAsync(admins);
 
-            HttpRequest httpRequest = CreateHttpRequestWithHeader("X-Admin-Email", adminEmail);
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAdminHeader(adminEmail);
 
             // Act
             IActionResult result = await _eventFunctions.RemoveEventAdmin(httpRequest, eventId, removeAdminEmail);
@@ -577,7 +574,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetByEventAsync(eventId))
                 .ReturnsAsync(admins);
 
-            HttpRequest httpRequest = CreateHttpRequestWithHeader("X-Admin-Email", adminEmail);
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAdminHeader(adminEmail);
 
             // Act
             IActionResult result = await _eventFunctions.RemoveEventAdmin(httpRequest, eventId, adminEmail);
@@ -611,8 +608,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetByEventAsync(eventId))
                 .ReturnsAsync(admins);
 
-            DefaultHttpContext context = new();
-            HttpRequest httpRequest = context.Request;
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
 
             // Act
             IActionResult result = await _eventFunctions.GetEventAdmins(httpRequest, eventId);
@@ -628,41 +624,5 @@ namespace VolunteerCheckin.Functions.Tests
         }
 
         #endregion
-
-        private static HttpRequest CreateHttpRequest(object body)
-        {
-            DefaultHttpContext context = new();
-            HttpRequest request = context.Request;
-
-            string json = JsonSerializer.Serialize(body);
-            byte[] bytes = Encoding.UTF8.GetBytes(json);
-            request.Body = new MemoryStream(bytes);
-
-            return request;
-        }
-
-        private static HttpRequest CreateHttpRequestWithAdminHeader(object body, string adminEmail)
-        {
-            DefaultHttpContext context = new();
-            HttpRequest request = context.Request;
-
-            string json = JsonSerializer.Serialize(body);
-            byte[] bytes = Encoding.UTF8.GetBytes(json);
-            request.Body = new MemoryStream(bytes);
-
-            request.Headers["X-Admin-Email"] = adminEmail;
-
-            return request;
-        }
-
-        private static HttpRequest CreateHttpRequestWithHeader(string headerName, string headerValue)
-        {
-            DefaultHttpContext context = new();
-            HttpRequest request = context.Request;
-
-            request.Headers[headerName] = headerValue;
-
-            return request;
-        }
     }
 }

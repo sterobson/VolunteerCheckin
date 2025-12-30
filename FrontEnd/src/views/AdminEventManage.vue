@@ -33,6 +33,13 @@
         </button>
         <button
           class="tab-button"
+          :class="{ active: activeTab === 'checklists' }"
+          @click="switchTab('checklists')"
+        >
+          Checklists
+        </button>
+        <button
+          class="tab-button"
           :class="{ active: activeTab === 'details' }"
           @click="switchTab('details')"
         >
@@ -42,15 +49,28 @@
 
       <!-- Tab Components -->
       <div class="tab-content-wrapper">
-        <CourseTab
+        <CourseAreasTab
           v-if="activeTab === 'course'"
-          :location-statuses="locationStatuses"
+          ref="courseAreasTab"
+          :checkpoints="locationStatuses"
+          :areas="areas"
           :route="event?.route || []"
+          :selectedAreaId="selectedAreaId"
+          :drawingMode="isDrawingAreaBoundary"
           @map-click="handleMapClick"
           @location-click="handleLocationClick"
-          @add-checkpoint="showAddLocation = true"
+          @area-click="handleSelectArea"
+          @add-checkpoint="handleAddLocationClick"
+          @add-multiple-checkpoints="handleAddMultipleCheckpointsClick"
           @import-checkpoints="showImportLocations = true"
           @select-location="selectLocation"
+          @add-area="handleAddArea"
+          @select-area="handleSelectArea"
+          @polygon-complete="handlePolygonComplete"
+          @cancel-drawing="handleCancelDrawing"
+          @add-checkpoint-from-map="handleAddCheckpointFromMap"
+          @add-many-checkpoints-from-map="handleAddMultipleCheckpointsClick"
+          @add-area-from-map="handleAddAreaFromMap"
         />
 
         <MarshalsTab
@@ -63,6 +83,17 @@
           @select-marshal="selectMarshal"
           @delete-marshal="handleDeleteMarshalFromGrid"
           @change-assignment-status="changeAssignmentStatus"
+        />
+
+        <ChecklistsTab
+          v-if="activeTab === 'checklists'"
+          :checklist-items="checklistItems"
+          :areas="areas"
+          :locations="locationStatuses"
+          :marshals="marshals"
+          :completion-report="checklistCompletionReport"
+          @add-checklist-item="handleAddChecklistItem"
+          @select-checklist-item="handleSelectChecklistItem"
         />
 
         <EventDetailsTab
@@ -79,108 +110,23 @@
     </div>
 
     <!-- Add Location Modal -->
-    <div v-if="showAddLocation" class="modal-sidebar">
-      <div class="modal-sidebar-content">
-        <button @click="tryCloseModal(() => closeLocationModal())" class="modal-close-btn">✕</button>
-        <h2>Add location</h2>
-        <p class="instruction">
-          <strong>👆 Click on the map</strong> to set the location, or enter coordinates manually
-        </p>
-
-        <div v-if="locationForm.latitude !== 0 && locationForm.longitude !== 0" class="location-set-notice">
-          ✓ Location set on map
-        </div>
-
-        <form @submit.prevent="handleSaveLocation">
-          <div class="form-group">
-            <label>Name</label>
-            <input
-              v-model="locationForm.name"
-              type="text"
-              required
-              class="form-input"
-              @input="markFormDirty"
-            />
-          </div>
-
-          <div class="form-group">
-            <label>Description</label>
-            <input
-              v-model="locationForm.description"
-              type="text"
-              class="form-input"
-              @input="markFormDirty"
-            />
-          </div>
-
-          <div class="form-group">
-            <label>What3Words (optional)</label>
-            <input
-              v-model="locationForm.what3Words"
-              type="text"
-              class="form-input"
-              placeholder="e.g. filled.count.soap or filled/count/soap"
-              @input="markFormDirty"
-            />
-            <small v-if="locationForm.what3Words && !isValidWhat3Words(locationForm.what3Words)" class="form-error">
-              Invalid format. Must be word.word.word or word/word/word (lowercase letters only, 1-20 characters each)
-            </small>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>Latitude</label>
-              <input
-                v-model.number="locationForm.latitude"
-                type="number"
-                step="any"
-                required
-                class="form-input"
-                @input="markFormDirty"
-              />
-            </div>
-
-            <div class="form-group">
-              <label>Longitude</label>
-              <input
-                v-model.number="locationForm.longitude"
-                type="number"
-                step="any"
-                required
-                class="form-input"
-                @input="markFormDirty"
-              />
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>Required marshals</label>
-            <input
-              v-model.number="locationForm.requiredMarshals"
-              type="number"
-              min="1"
-              required
-              class="form-input"
-              @input="markFormDirty"
-            />
-          </div>
-
-          <div class="modal-actions">
-            <button type="button" @click="tryCloseModal(() => closeLocationModal())" class="btn btn-secondary">
-              Cancel
-            </button>
-            <button type="submit" class="btn btn-primary">Add location</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
     <!-- All Modals -->
+    <AddLocationModal
+      :show="showAddLocation"
+      :location="locationForm"
+      :isDirty="formDirty"
+      @close="closeLocationModal"
+      @save="handleSaveLocation"
+      @set-on-map="handleSetLocationOnMap"
+      @update:isDirty="markFormDirty"
+      @update:location="handleLocationFormUpdate"
+    />
     <EditLocationModal
       :show="showEditLocation"
       :location="selectedLocation"
       :assignments="selectedLocation?.assignments || []"
       :event-date="event?.eventDate || ''"
+      :areas="areas"
       :isDirty="formDirty"
       @close="closeEditLocationModal"
       @save="handleUpdateLocation"
@@ -278,18 +224,54 @@
       @cancel="handleShiftCheckpointTimesCancel"
     />
 
-    <!-- Move Checkpoint Overlay -->
-    <div v-if="isMovingLocation" class="move-checkpoint-overlay">
-      <div class="move-checkpoint-instructions">
-        <h3>Move checkpoint: {{ editLocationForm.name }}</h3>
-        <p>Click on the map to set the new location for this checkpoint</p>
-        <div class="move-checkpoint-actions">
-          <button @click="cancelMoveLocation" class="btn btn-danger">
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
+    <EditAreaModal
+      :show="showEditArea"
+      :area="selectedArea"
+      :checkpoints="locationStatuses"
+      :marshals="marshals"
+      :areas="areas"
+      :isDirty="formDirty"
+      @close="closeEditAreaModal"
+      @save="handleSaveArea"
+      @delete="handleDeleteArea"
+      @draw-boundary="handleDrawBoundary"
+      @update:isDirty="markFormDirty"
+    />
+
+    <EditChecklistItemModal
+      :show="showEditChecklistItem"
+      :checklist-item="selectedChecklistItem"
+      :areas="areas"
+      :locations="locationStatuses"
+      :marshals="marshals"
+      :isDirty="formDirty"
+      @close="closeEditChecklistItemModal"
+      @save="handleSaveChecklistItem"
+      @delete="handleDeleteChecklistItem"
+      @update:isDirty="markFormDirty"
+    />
+
+    <!-- Fullscreen Map Overlay -->
+    <FullscreenMapOverlay
+      :show="isFullscreenMapActive"
+      :mode="fullscreenMode"
+      :context-title="fullscreenContext.title"
+      :context-description="fullscreenContext.description"
+      :can-complete="canCompleteFullscreen"
+      :clickable="fullscreenMode !== 'draw-area'"
+      :drawing-mode="fullscreenMode === 'draw-area' && isDrawingAreaBoundary"
+      :locations="displayCheckpoints"
+      :areas="displayAreas"
+      :route="event?.route || []"
+      :selected-area-id="selectedAreaId"
+      :center="savedMapCenter"
+      :zoom="savedMapZoom"
+      @map-click="handleFullscreenMapClick"
+      @polygon-complete="handlePolygonComplete"
+      @polygon-drawing="handlePolygonDrawing"
+      @done="handleFullscreenDone"
+      @cancel="handleFullscreenCancel"
+    />
 
     <InfoModal
       :show="showInfoModal"
@@ -316,7 +298,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useEventsStore } from '../stores/events';
-import { checkInApi, eventAdminsApi, eventsApi, locationsApi, marshalsApi } from '../services/api';
+import { checkInApi, eventAdminsApi, eventsApi, locationsApi, marshalsApi, areasApi, checklistApi } from '../services/api';
 import { startSignalRConnection, stopSignalRConnection } from '../services/signalr';
 
 // New composables and utilities
@@ -325,11 +307,13 @@ import { useConfirmDialog } from '../composables/useConfirmDialog';
 import { formatDate as formatEventDate, formatDateForInput } from '../utils/dateFormatters';
 import { isValidWhat3Words } from '../utils/validators';
 import { calculateDistance } from '../utils/coordinateUtils';
+import { getCheckpointsInPolygon } from '../utils/geometryUtils';
 import { CHECK_IN_RADIUS_METERS } from '../constants/app';
 
 // Tab Components
-import CourseTab from './AdminEventManage/CourseTab.vue';
+import CourseAreasTab from './AdminEventManage/CourseAreasTab.vue';
 import MarshalsTab from './AdminEventManage/MarshalsTab.vue';
+import ChecklistsTab from './AdminEventManage/ChecklistsTab.vue';
 import EventDetailsTab from './AdminEventManage/EventDetailsTab.vue';
 
 // Modal Components
@@ -343,15 +327,19 @@ import EditMarshalModal from '../components/event-manage/modals/EditMarshalModal
 import AssignmentConflictModal from '../components/event-manage/modals/AssignmentConflictModal.vue';
 import AssignMarshalModal from '../components/event-manage/modals/AssignMarshalModal.vue';
 import ShiftCheckpointTimesModal from '../components/event-manage/modals/ShiftCheckpointTimesModal.vue';
+import EditAreaModal from '../components/event-manage/modals/EditAreaModal.vue';
+import EditChecklistItemModal from '../components/event-manage/modals/EditChecklistItemModal.vue';
 import InfoModal from '../components/InfoModal.vue';
 import ConfirmModal from '../components/ConfirmModal.vue';
+import FullscreenMapOverlay from '../components/FullscreenMapOverlay.vue';
+import AddLocationModal from '../components/event-manage/modals/AddLocationModal.vue';
 
 const route = useRoute();
 const router = useRouter();
 const eventsStore = useEventsStore();
 
 // Use composables
-const { activeTab, switchTab } = useTabs('course', ['course', 'marshals', 'details']);
+const { activeTab, switchTab } = useTabs('course', ['course', 'marshals', 'checklists', 'areas', 'details']);
 const {
   showConfirmModal,
   confirmModalTitle,
@@ -367,6 +355,7 @@ const locations = ref([]);
 const locationStatuses = ref([]);
 const selectedLocation = ref(null);
 const showAddLocation = ref(false);
+const courseAreasTab = ref(null);
 const showShareLink = ref(false);
 const eventAdmins = ref([]);
 const showAddAdmin = ref(false);
@@ -436,6 +425,27 @@ const locationForm = ref({
   requiredMarshals: 1,
   what3Words: '',
 });
+const areas = ref([]);
+const selectedArea = ref(null);
+const showEditArea = ref(false);
+const selectedAreaId = ref(null);
+const isDrawingAreaBoundary = ref(false);
+const pendingAreaFormData = ref(null);
+const isAddingMultipleCheckpoints = ref(false);
+const multiCheckpointCounter = ref(1);
+// Fullscreen map mode
+const isFullscreenMapActive = ref(false);
+const fullscreenMode = ref(null);
+const fullscreenContext = ref({});
+const tempLocationCoords = ref(null); // For previewing checkpoint placement
+const currentDrawingPolygon = ref(null); // For area drawing with Done button
+const tempCheckpoints = ref([]); // For storing multiple checkpoints before saving
+const savedMapCenter = ref(null); // Store map center when entering fullscreen
+const savedMapZoom = ref(null); // Store map zoom when entering fullscreen
+const checklistItems = ref([]);
+const selectedChecklistItem = ref(null);
+const showEditChecklistItem = ref(false);
+const checklistCompletionReport = ref(null);
 
 // Computed
 const marshalLink = computed(() => {
@@ -478,6 +488,82 @@ const availableMarshalsForAssignment = computed(() => {
   }
 
   return marshalsList.slice().sort((a, b) => a.name.localeCompare(b.name));
+});
+
+const canCompleteFullscreen = computed(() => {
+  if (fullscreenMode.value === 'place-checkpoint') {
+    return tempLocationCoords.value !== null;
+  } else if (fullscreenMode.value === 'move-checkpoint') {
+    return tempLocationCoords.value !== null;
+  } else if (fullscreenMode.value === 'draw-area') {
+    // Enable Done button if there's a completed polygon or at least 3 points drawn
+    return selectedArea.value?.polygon?.length > 0 ||
+           (currentDrawingPolygon.value && currentDrawingPolygon.value.length >= 3);
+  } else if (fullscreenMode.value === 'add-multiple') {
+    return true; // Always enabled for multiple mode
+  }
+  return false;
+});
+
+// Combine real checkpoints with temporary ones for display
+const displayCheckpoints = computed(() => {
+  const checkpoints = [...locationStatuses.value];
+
+  // Add temporary preview for single checkpoint placement
+  if (fullscreenMode.value === 'place-checkpoint' && tempLocationCoords.value) {
+    checkpoints.push({
+      id: 'temp-single',
+      name: locationForm.value.name || 'New Checkpoint',
+      latitude: tempLocationCoords.value.lat,
+      longitude: tempLocationCoords.value.lng,
+      requiredMarshals: locationForm.value.requiredMarshals || 1,
+      assignments: [],
+      isTemporary: true,
+    });
+  }
+
+  // Add temporary preview for move checkpoint
+  if (fullscreenMode.value === 'move-checkpoint' && tempLocationCoords.value && selectedLocation.value) {
+    checkpoints.push({
+      id: 'temp-move',
+      name: selectedLocation.value.name + ' (new position)',
+      latitude: tempLocationCoords.value.lat,
+      longitude: tempLocationCoords.value.lng,
+      requiredMarshals: selectedLocation.value.requiredMarshals,
+      assignments: [],
+      isTemporary: true,
+    });
+  }
+
+  // Add temporary checkpoints for multiple placement mode
+  if (fullscreenMode.value === 'add-multiple') {
+    checkpoints.push(...tempCheckpoints.value);
+  }
+
+  return checkpoints;
+});
+
+// Combine real areas with the area being drawn/edited
+const displayAreas = computed(() => {
+  const areasList = [...areas.value];
+
+  // If drawing or editing an area with a polygon, include it in display
+  if (fullscreenMode.value === 'draw-area' && selectedArea.value?.polygon?.length > 0) {
+    // Check if this area already exists in the list
+    const existingIndex = areasList.findIndex(a => a.id === selectedArea.value.id);
+    if (existingIndex >= 0) {
+      // Replace existing area with updated version
+      areasList[existingIndex] = { ...selectedArea.value };
+    } else {
+      // Add new area being drawn
+      areasList.push({
+        ...selectedArea.value,
+        id: selectedArea.value.id || 'temp-area',
+      });
+    }
+  }
+
+  return areasList;
 });
 
 // Methods
@@ -600,6 +686,8 @@ const loadEventData = async () => {
 
     await loadEventAdmins();
     await loadMarshals();
+    await loadAreas();
+    await loadChecklists();
   } catch (error) {
     console.error('Failed to load event data:', error);
   }
@@ -611,6 +699,207 @@ const loadMarshals = async () => {
     marshals.value = response.data;
   } catch (error) {
     console.error('Failed to load marshals:', error);
+  }
+};
+
+const loadAreas = async () => {
+  try {
+    const response = await areasApi.getByEvent(route.params.eventId);
+    areas.value = response.data;
+  } catch (error) {
+    console.error('Failed to load areas:', error);
+  }
+};
+
+const loadChecklists = async () => {
+  try {
+    const [itemsResponse, reportResponse] = await Promise.all([
+      checklistApi.getByEvent(route.params.eventId),
+      checklistApi.getReport(route.params.eventId),
+    ]);
+    checklistItems.value = itemsResponse.data;
+    checklistCompletionReport.value = reportResponse.data;
+  } catch (error) {
+    console.error('Failed to load checklists:', error);
+  }
+};
+
+const handleAddArea = () => {
+  selectedArea.value = null;
+  formDirty.value = false;
+  showEditArea.value = true;
+};
+
+const handleSelectArea = (area) => {
+  selectedArea.value = area;
+  selectedAreaId.value = area.id;
+  formDirty.value = false;
+  showEditArea.value = true;
+};
+
+const handleSaveArea = async (formData) => {
+  try {
+    if (selectedArea.value && selectedArea.value.id) {
+      // Update existing area (checkpoints will be automatically recalculated on backend)
+      await areasApi.update(route.params.eventId, selectedArea.value.id, formData);
+    } else {
+      // Create new area (checkpoints will be automatically assigned on backend)
+      await areasApi.create({
+        eventId: route.params.eventId,
+        ...formData,
+      });
+    }
+
+    await loadAreas();
+    await loadEventData(); // Reload to get updated checkpoint area assignments
+    closeEditAreaModal();
+  } catch (error) {
+    console.error('Failed to save area:', error);
+    alert(error.response?.data?.message || 'Failed to save area. Please try again.');
+  }
+};
+
+const handleDeleteArea = async (areaId) => {
+  showConfirm('Delete Area', 'Are you sure you want to delete this area? Checkpoints will be automatically reassigned.', async () => {
+    try {
+      // Delete the area (checkpoints will be automatically reassigned to default area on backend)
+      await areasApi.delete(route.params.eventId, areaId);
+
+      // Trigger recalculation to reassign checkpoints that were in this area
+      await areasApi.recalculate(route.params.eventId);
+
+      await loadAreas();
+      await loadEventData();
+      closeEditAreaModal();
+    } catch (error) {
+      console.error('Failed to delete area:', error);
+      alert(error.response?.data?.message || 'Failed to delete area. Please try again.');
+    }
+  });
+};
+
+const closeEditAreaModal = () => {
+  showEditArea.value = false;
+  selectedArea.value = null;
+  selectedAreaId.value = null;
+  formDirty.value = false;
+  isDrawingAreaBoundary.value = false;
+  pendingAreaFormData.value = null;
+};
+
+const handleAddChecklistItem = () => {
+  selectedChecklistItem.value = null;
+  formDirty.value = false;
+  showEditChecklistItem.value = true;
+};
+
+const handleSelectChecklistItem = (item) => {
+  selectedChecklistItem.value = item;
+  formDirty.value = false;
+  showEditChecklistItem.value = true;
+};
+
+const handleSaveChecklistItem = async (formData) => {
+  try {
+    if (selectedChecklistItem.value && selectedChecklistItem.value.itemId) {
+      await checklistApi.update(route.params.eventId, selectedChecklistItem.value.itemId, formData);
+    } else {
+      const response = await checklistApi.create(route.params.eventId, formData);
+
+      // Show success message if multiple items were created
+      if (response.data.count && response.data.count > 1) {
+        infoModalTitle.value = 'Checklist Items Created';
+        infoModalMessage.value = `Successfully created ${response.data.count} checklist items.`;
+        showInfoModal.value = true;
+      }
+    }
+
+    await loadChecklists();
+    closeEditChecklistItemModal();
+  } catch (error) {
+    console.error('Failed to save checklist item:', error);
+    alert(error.response?.data?.message || 'Failed to save checklist item. Please try again.');
+  }
+};
+
+const handleDeleteChecklistItem = async (itemId) => {
+  showConfirm('Delete Checklist Item', 'Are you sure you want to delete this checklist item?', async () => {
+    try {
+      await checklistApi.delete(route.params.eventId, itemId);
+      await loadChecklists();
+      closeEditChecklistItemModal();
+    } catch (error) {
+      console.error('Failed to delete checklist item:', error);
+      alert(error.response?.data?.message || 'Failed to delete checklist item. Please try again.');
+    }
+  });
+};
+
+const closeEditChecklistItemModal = () => {
+  showEditChecklistItem.value = false;
+  selectedChecklistItem.value = null;
+  formDirty.value = false;
+};
+
+const handleDrawBoundary = (formData) => {
+  // Store form data
+  pendingAreaFormData.value = formData;
+  // Close modal
+  showEditArea.value = false;
+
+  // Capture current map state before entering fullscreen
+  if (courseAreasTab.value) {
+    const center = courseAreasTab.value.getMapCenter();
+    const zoom = courseAreasTab.value.getMapZoom();
+
+    // Only use captured values if they're valid, otherwise keep null for auto-fit
+    if (center && zoom !== null) {
+      savedMapCenter.value = center;
+      savedMapZoom.value = zoom;
+    }
+  }
+
+  // Enter fullscreen with drawing mode
+  isFullscreenMapActive.value = true;
+  fullscreenMode.value = 'draw-area';
+  isDrawingAreaBoundary.value = true;
+  fullscreenContext.value = {
+    title: 'Draw area boundary',
+    description: 'Click to add points. Click Done when finished to complete the area.',
+  };
+};
+
+const handlePolygonComplete = (coordinates) => {
+  // Store polygon coordinates, but don't exit fullscreen yet - wait for Done button
+  if (pendingAreaFormData.value) {
+    selectedArea.value = {
+      ...(selectedArea.value || {}),
+      ...pendingAreaFormData.value,
+      polygon: coordinates,
+    };
+  } else {
+    selectedArea.value = {
+      ...selectedArea.value,
+      polygon: coordinates,
+    };
+  }
+  // Don't exit fullscreen - user needs to click Done
+};
+
+const handlePolygonDrawing = (points) => {
+  // Store intermediate polygon points as user draws
+  currentDrawingPolygon.value = points;
+};
+
+const handleCancelDrawing = () => {
+  // Disable drawing mode
+  isDrawingAreaBoundary.value = false;
+
+  // Restore the area modal if there was pending data
+  if (pendingAreaFormData.value) {
+    selectedArea.value = pendingAreaFormData.value;
+    showEditArea.value = true;
+    pendingAreaFormData.value = null;
   }
 };
 
@@ -726,34 +1015,344 @@ const closeImportModal = () => {
   importResult.value = null;
 };
 
-const handleMapClick = (coords) => {
+const handleMapClick = async (coords) => {
   if (showAddLocation.value) {
+    // User has add location modal open, set coordinates
     locationForm.value.latitude = coords.lat;
     locationForm.value.longitude = coords.lng;
-    markFormDirty();
+    // Don't mark dirty for map click - only mark dirty when user types in form fields
   } else if (isMovingLocation.value) {
+    // User is moving an existing location
     editLocationForm.value.latitude = coords.lat;
     editLocationForm.value.longitude = coords.lng;
     isMovingLocation.value = false;
     showEditLocation.value = true;
     markFormDirty();
-  } else {
-    const nearbyCheckpoint = locationStatuses.value.find(location => {
-      const distance = calculateDistance(
-        coords.lat,
-        coords.lng,
-        location.latitude,
-        location.longitude
-      );
-      return distance <= CHECK_IN_RADIUS_METERS;
-    });
+  } else if (isAddingMultipleCheckpoints.value) {
+    // User is adding multiple checkpoints
+    try {
+      await eventsStore.createLocation({
+        eventId: route.params.eventId,
+        name: `Checkpoint ${multiCheckpointCounter.value}`,
+        description: '',
+        latitude: coords.lat,
+        longitude: coords.lng,
+        requiredMarshals: 1,
+        what3Words: '',
+      });
+      multiCheckpointCounter.value++;
+      await loadEventData();
+    } catch (error) {
+      console.error('Failed to create checkpoint:', error);
+      alert('Failed to create checkpoint. Please try again.');
+    }
+  }
+  // Removed auto-opening add location modal - user must explicitly click "Add checkpoint"
+};
 
-    if (!nearbyCheckpoint) {
-      locationForm.value.latitude = coords.lat;
-      locationForm.value.longitude = coords.lng;
-      showAddLocation.value = true;
+const handleFullscreenMapClick = (coords) => {
+  if (fullscreenMode.value === 'place-checkpoint') {
+    // Allow repositioning - last click wins
+    tempLocationCoords.value = coords;
+  } else if (fullscreenMode.value === 'move-checkpoint') {
+    // Preview new location
+    tempLocationCoords.value = coords;
+  } else if (fullscreenMode.value === 'add-multiple') {
+    // Instant creation (existing behavior)
+    createMultipleCheckpoint(coords);
+  }
+};
+
+const handleAddLocationClick = () => {
+  // Capture current map state before opening modal
+  if (courseAreasTab.value) {
+    const center = courseAreasTab.value.getMapCenter();
+    const zoom = courseAreasTab.value.getMapZoom();
+    if (center && zoom !== null) {
+      savedMapCenter.value = center;
+      savedMapZoom.value = zoom;
+    }
+  }
+
+  // Reset the form
+  locationForm.value = {
+    name: '',
+    description: '',
+    latitude: 0,
+    longitude: 0,
+    requiredMarshals: 1,
+    what3Words: '',
+  };
+
+  // Open the modal
+  showAddLocation.value = true;
+};
+
+const handleLocationFormUpdate = (updatedLocation) => {
+  // Sync form data from modal back to locationForm
+  locationForm.value = { ...updatedLocation };
+};
+
+const handleSetLocationOnMap = () => {
+  // Close the modal temporarily
+  showAddLocation.value = false;
+
+  // Reset temp coordinates
+  tempLocationCoords.value = null;
+
+  // Map state already captured in handleAddLocationClick
+
+  // Enter fullscreen
+  isFullscreenMapActive.value = true;
+  fullscreenMode.value = 'place-checkpoint';
+  fullscreenContext.value = {
+    title: 'Select checkpoint location',
+    description: 'Click on the map to set the location. Click again to reposition.',
+  };
+};
+
+const handleAddCheckpointFromMap = () => {
+  // Capture current map state before entering fullscreen
+  if (courseAreasTab.value) {
+    const center = courseAreasTab.value.getMapCenter();
+    const zoom = courseAreasTab.value.getMapZoom();
+    if (center && zoom !== null) {
+      savedMapCenter.value = center;
+      savedMapZoom.value = zoom;
+    }
+  }
+
+  // Reset the form
+  locationForm.value = {
+    name: '',
+    description: '',
+    latitude: 0,
+    longitude: 0,
+    requiredMarshals: 1,
+    what3Words: '',
+  };
+
+  // Reset temp coordinates
+  tempLocationCoords.value = null;
+
+  // Enter fullscreen directly
+  isFullscreenMapActive.value = true;
+  fullscreenMode.value = 'place-checkpoint';
+  fullscreenContext.value = {
+    title: 'Select checkpoint location',
+    description: 'Click on the map to set the location. Click again to reposition.',
+  };
+};
+
+const handleAddAreaFromMap = () => {
+  // Capture current map state before entering fullscreen
+  if (courseAreasTab.value) {
+    const center = courseAreasTab.value.getMapCenter();
+    const zoom = courseAreasTab.value.getMapZoom();
+    if (center && zoom !== null) {
+      savedMapCenter.value = center;
+      savedMapZoom.value = zoom;
+    }
+  }
+
+  // Create new area with empty data
+  selectedArea.value = {
+    id: null,
+    name: '',
+    description: '',
+    color: '#667eea',
+    polygon: [],
+    checkpointIds: [],
+    marshalIds: [],
+    displayOrder: areas.value.length,
+  };
+
+  // Enter fullscreen with drawing mode
+  isFullscreenMapActive.value = true;
+  fullscreenMode.value = 'draw-area';
+  isDrawingAreaBoundary.value = true;
+  fullscreenContext.value = {
+    title: 'Draw area boundary',
+    description: 'Click to add points. Click Done when finished to complete the area.',
+  };
+};
+
+const handleAddMultipleCheckpointsClick = () => {
+  // Find the highest checkpoint number to continue from
+  const checkpointNumbers = locationStatuses.value
+    .map(loc => {
+      const match = loc.name.match(/^Checkpoint (\d+)$/);
+      return match ? parseInt(match[1]) : 0;
+    })
+    .filter(n => n > 0);
+
+  multiCheckpointCounter.value = checkpointNumbers.length > 0
+    ? Math.max(...checkpointNumbers) + 1
+    : 1;
+
+  // Capture current map state before entering fullscreen
+  if (courseAreasTab.value) {
+    const center = courseAreasTab.value.getMapCenter();
+    const zoom = courseAreasTab.value.getMapZoom();
+    if (center && zoom !== null) {
+      savedMapCenter.value = center;
+      savedMapZoom.value = zoom;
+    }
+  }
+
+  // Enter fullscreen
+  isFullscreenMapActive.value = true;
+  fullscreenMode.value = 'add-multiple';
+  isAddingMultipleCheckpoints.value = true;
+  fullscreenContext.value = {
+    title: 'Add multiple checkpoints',
+    description: `Click on map to add checkpoints. Next: Checkpoint ${multiCheckpointCounter.value}`,
+  };
+};
+
+const handleCancelMultipleCheckpoints = () => {
+  isAddingMultipleCheckpoints.value = false;
+};
+
+const createMultipleCheckpoint = (coords) => {
+  // Add to temporary array instead of saving immediately
+  tempCheckpoints.value.push({
+    id: `temp-${multiCheckpointCounter.value}`,
+    name: `Checkpoint ${multiCheckpointCounter.value}`,
+    description: '',
+    latitude: coords.lat,
+    longitude: coords.lng,
+    requiredMarshals: 1,
+    what3Words: '',
+    assignments: [],
+    isTemporary: true,
+  });
+
+  multiCheckpointCounter.value++;
+  // Update context description with next number (reassign whole object for reactivity)
+  fullscreenContext.value = {
+    ...fullscreenContext.value,
+    description: `Click on map to add checkpoints. Next: Checkpoint ${multiCheckpointCounter.value}`,
+  };
+};
+
+const handleFullscreenDone = () => {
+  if (fullscreenMode.value === 'place-checkpoint') {
+    // Confirm placement
+    if (tempLocationCoords.value) {
+      locationForm.value.latitude = tempLocationCoords.value.lat;
+      locationForm.value.longitude = tempLocationCoords.value.lng;
       markFormDirty();
     }
+    // Exit fullscreen and reopen modal
+    exitFullscreen();
+    showAddLocation.value = true;
+
+  } else if (fullscreenMode.value === 'move-checkpoint') {
+    // Confirm move
+    if (tempLocationCoords.value) {
+      editLocationForm.value.latitude = tempLocationCoords.value.lat;
+      editLocationForm.value.longitude = tempLocationCoords.value.lng;
+      markFormDirty();
+    }
+    // Exit fullscreen and reopen modal
+    exitFullscreen();
+    showEditLocation.value = true;
+
+  } else if (fullscreenMode.value === 'draw-area') {
+    // Complete the polygon and exit
+    // If user hasn't finished drawing with double-click, use current polygon points
+    if (currentDrawingPolygon.value && currentDrawingPolygon.value.length >= 3) {
+      const coordinates = currentDrawingPolygon.value.map(p => ({
+        lat: p.lat,
+        lng: p.lng
+      }));
+
+      // If there's pending form data, merge it; otherwise just update polygon
+      if (pendingAreaFormData.value) {
+        selectedArea.value = {
+          ...(selectedArea.value || {}),
+          ...pendingAreaFormData.value,
+          polygon: coordinates,
+        };
+      } else {
+        selectedArea.value = {
+          ...(selectedArea.value || {}),
+          polygon: coordinates,
+        };
+      }
+    }
+
+    isDrawingAreaBoundary.value = false;
+    exitFullscreen();
+    showEditArea.value = true;
+    pendingAreaFormData.value = null;
+    currentDrawingPolygon.value = null;
+
+  } else if (fullscreenMode.value === 'add-multiple') {
+    // Save all temporary checkpoints
+    saveTempCheckpoints();
+  }
+};
+
+const saveTempCheckpoints = async () => {
+  const checkpointsToSave = [...tempCheckpoints.value];
+
+  try {
+    // Save all checkpoints
+    for (const checkpoint of checkpointsToSave) {
+      await eventsStore.createLocation({
+        eventId: route.params.eventId,
+        name: checkpoint.name,
+        description: checkpoint.description,
+        latitude: checkpoint.latitude,
+        longitude: checkpoint.longitude,
+        requiredMarshals: checkpoint.requiredMarshals,
+        what3Words: checkpoint.what3Words,
+      });
+    }
+
+    // Clear temp checkpoints and exit
+    tempCheckpoints.value = [];
+    isAddingMultipleCheckpoints.value = false;
+    exitFullscreen();
+
+    // Reload to show saved checkpoints
+    await loadEventData();
+  } catch (error) {
+    console.error('Failed to create checkpoints:', error);
+    alert('Failed to create checkpoints. Please try again.');
+  }
+};
+
+const handleFullscreenCancel = () => {
+  if (fullscreenMode.value === 'draw-area') {
+    // Restore modal if there was pending data
+    if (pendingAreaFormData.value) {
+      selectedArea.value = pendingAreaFormData.value;
+      showEditArea.value = true;
+      pendingAreaFormData.value = null;
+    }
+    isDrawingAreaBoundary.value = false;
+    currentDrawingPolygon.value = null;
+  } else if (fullscreenMode.value === 'add-multiple') {
+    // Clear temp checkpoints without saving
+    tempCheckpoints.value = [];
+    isAddingMultipleCheckpoints.value = false;
+  }
+  exitFullscreen();
+};
+
+const exitFullscreen = () => {
+  isFullscreenMapActive.value = false;
+  fullscreenMode.value = null;
+  fullscreenContext.value = {};
+  tempLocationCoords.value = null;
+  savedMapCenter.value = null;
+  savedMapZoom.value = null;
+  // Always ensure drawing mode is disabled when exiting fullscreen
+  if (isDrawingAreaBoundary.value) {
+    isDrawingAreaBoundary.value = false;
   }
 };
 
@@ -776,10 +1375,14 @@ const selectLocation = (location) => {
   pendingDeleteAssignments.value = [];
   formDirty.value = false;
   showEditLocation.value = true;
+  // Scroll map into view
+  setTimeout(() => {
+    courseAreasTab.value?.scrollMapIntoView();
+  }, 100);
 };
 
-const handleSaveLocation = async () => {
-  if (!isValidWhat3Words(locationForm.value.what3Words)) {
+const handleSaveLocation = async (formData) => {
+  if (!isValidWhat3Words(formData.what3Words)) {
     alert('Invalid What3Words format. Please use word.word.word or word/word/word (lowercase letters only, 1-20 characters each)');
     return;
   }
@@ -787,7 +1390,7 @@ const handleSaveLocation = async () => {
   try {
     await eventsStore.createLocation({
       eventId: route.params.eventId,
-      ...locationForm.value,
+      ...formData,
     });
 
     await loadEventData();
@@ -808,6 +1411,7 @@ const closeLocationModal = () => {
     requiredMarshals: 1,
     what3Words: '',
   };
+  formDirty.value = false;
   formDirty.value = false;
 };
 
@@ -835,9 +1439,28 @@ const closeAssignMarshalModal = () => {
 };
 
 const startMoveLocation = () => {
-  isMovingLocation.value = true;
+  // Close edit modal
   showEditLocation.value = false;
-  switchTab('course');
+  // Reset temp coordinates
+  tempLocationCoords.value = null;
+
+  // Capture current map state before entering fullscreen
+  if (courseAreasTab.value) {
+    const center = courseAreasTab.value.getMapCenter();
+    const zoom = courseAreasTab.value.getMapZoom();
+    if (center && zoom !== null) {
+      savedMapCenter.value = center;
+      savedMapZoom.value = zoom;
+    }
+  }
+
+  // Enter fullscreen
+  isFullscreenMapActive.value = true;
+  fullscreenMode.value = 'move-checkpoint';
+  fullscreenContext.value = {
+    title: `Move checkpoint: ${selectedLocation.value?.name}`,
+    description: 'Click on the map to set the new location',
+  };
 };
 
 const cancelMoveLocation = () => {
@@ -865,6 +1488,7 @@ const handleUpdateLocation = async (formData) => {
         what3Words: formData.what3Words || null,
         startTime: formData.startTime,
         endTime: formData.endTime,
+        // areaId removed - areas are auto-assigned by backend based on polygon boundaries
       }
     );
 
@@ -1379,6 +2003,7 @@ onUnmounted(() => {
   gap: 0.5rem;
   margin-bottom: 2rem;
   border-bottom: 2px solid #dee2e6;
+  overflow-y: hidden;
 }
 
 .tab-button {
@@ -1420,132 +2045,6 @@ onUnmounted(() => {
   }
 }
 
-/* Modal Sidebar */
-.modal-sidebar {
-  position: fixed;
-  top: 0;
-  right: 0;
-  width: 450px;
-  height: 100vh;
-  background: white;
-  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15);
-  z-index: 1001;
-  overflow-y: auto;
-  animation: slideIn 0.3s ease-out;
-}
-
-@keyframes slideIn {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
-
-.modal-sidebar-content {
-  padding: 2rem;
-}
-
-.modal-close-btn {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  color: #666;
-  cursor: pointer;
-  padding: 0.5rem;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-}
-
-.modal-close-btn:hover {
-  background: #f8f9fa;
-}
-
-.modal-sidebar h2 {
-  margin: 0 0 1.5rem 0;
-  font-size: 1.5rem;
-  color: #333;
-}
-
-.instruction {
-  background: #e7f3ff;
-  padding: 1rem;
-  border-radius: 8px;
-  margin-bottom: 1.5rem;
-  color: #0056b3;
-  font-size: 0.9rem;
-}
-
-.location-set-notice {
-  background: #d4edda;
-  color: #155724;
-  padding: 0.75rem;
-  border-radius: 4px;
-  margin-bottom: 1rem;
-  font-size: 0.9rem;
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 1rem;
-  margin-top: 2rem;
-  padding-top: 2rem;
-  border-top: 1px solid #dee2e6;
-}
-
-.modal-actions button {
-  flex: 1;
-}
-
-/* Move Checkpoint Overlay */
-.move-checkpoint-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.move-checkpoint-instructions {
-  background: white;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  max-width: 500px;
-  text-align: center;
-}
-
-.move-checkpoint-instructions h3 {
-  margin: 0 0 1rem 0;
-  color: #333;
-}
-
-.move-checkpoint-instructions p {
-  margin: 0 0 1.5rem 0;
-  color: #666;
-}
-
-.move-checkpoint-actions {
-  display: flex;
-  justify-content: center;
-  gap: 1rem;
-}
-
 @media (max-width: 768px) {
   .header {
     flex-direction: column;
@@ -1568,10 +2067,6 @@ onUnmounted(() => {
 
   .tabs-nav {
     overflow-x: auto;
-  }
-
-  .modal-sidebar {
-    width: 100%;
   }
 }
 </style>

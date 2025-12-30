@@ -8,6 +8,7 @@ using System.Text.Json;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Services;
 using VolunteerCheckin.Functions.Repositories;
+using VolunteerCheckin.Functions.Helpers;
 
 namespace VolunteerCheckin.Functions.Functions;
 
@@ -17,17 +18,20 @@ public class AssignmentFunctions
     private readonly IAssignmentRepository _assignmentRepository;
     private readonly IMarshalRepository _marshalRepository;
     private readonly ILocationRepository _locationRepository;
+    private readonly IAreaRepository _areaRepository;
 
     public AssignmentFunctions(
         ILogger<AssignmentFunctions> logger,
         IAssignmentRepository assignmentRepository,
         IMarshalRepository marshalRepository,
-        ILocationRepository locationRepository)
+        ILocationRepository locationRepository,
+        IAreaRepository areaRepository)
     {
         _logger = logger;
         _assignmentRepository = assignmentRepository;
         _marshalRepository = marshalRepository;
         _locationRepository = locationRepository;
+        _areaRepository = areaRepository;
     }
 
     [Function("CreateAssignment")]
@@ -107,6 +111,7 @@ public class AssignmentFunctions
                 assignmentEntity.RowKey,
                 assignmentEntity.EventId,
                 assignmentEntity.LocationId,
+                assignmentEntity.MarshalId,
                 assignmentEntity.MarshalName,
                 assignmentEntity.IsCheckedIn,
                 assignmentEntity.CheckInTime,
@@ -146,6 +151,7 @@ public class AssignmentFunctions
                 assignmentEntity.RowKey,
                 assignmentEntity.EventId,
                 assignmentEntity.LocationId,
+                assignmentEntity.MarshalId,
                 assignmentEntity.MarshalName,
                 assignmentEntity.IsCheckedIn,
                 assignmentEntity.CheckInTime,
@@ -212,11 +218,61 @@ public class AssignmentFunctions
         try
         {
             IEnumerable<LocationEntity> locations = await _locationRepository.GetByEventAsync(eventId);
+            List<LocationEntity> locationsList = locations.ToList();
             IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByEventAsync(eventId);
+
+            // Check if any checkpoints are missing area assignments
+            List<LocationEntity> checkpointsNeedingAreas = locationsList
+                .Where(l => string.IsNullOrEmpty(l.AreaIdsJson) || l.AreaIdsJson == "[]")
+                .ToList();
+
+            if (checkpointsNeedingAreas.Count > 0)
+            {
+                _logger.LogInformation($"Found {checkpointsNeedingAreas.Count} checkpoints without area assignments. Calculating...");
+
+                // Load areas once for all calculations
+                AreaEntity? defaultArea = await _areaRepository.GetDefaultAreaAsync(eventId);
+                if (defaultArea == null)
+                {
+                    // Create default area if it doesn't exist
+                    defaultArea = new AreaEntity
+                    {
+                        PartitionKey = eventId,
+                        RowKey = Guid.NewGuid().ToString(),
+                        EventId = eventId,
+                        Name = Constants.DefaultAreaName,
+                        Description = Constants.DefaultAreaDescription,
+                        Color = "#667eea",
+                        ContactsJson = "[]",
+                        PolygonJson = "[]",
+                        IsDefault = true,
+                        DisplayOrder = 0
+                    };
+                    await _areaRepository.AddAsync(defaultArea);
+                }
+
+                IEnumerable<AreaEntity> areas = await _areaRepository.GetByEventAsync(eventId);
+
+                // Calculate and update area assignments for each checkpoint
+                foreach (LocationEntity checkpoint in checkpointsNeedingAreas)
+                {
+                    List<string> areaIds = GeometryHelper.CalculateCheckpointAreas(
+                        checkpoint.Latitude,
+                        checkpoint.Longitude,
+                        areas,
+                        defaultArea.RowKey
+                    );
+
+                    checkpoint.AreaIdsJson = JsonSerializer.Serialize(areaIds);
+                    await _locationRepository.UpdateAsync(checkpoint);
+                }
+
+                _logger.LogInformation($"Automatically assigned areas to {checkpointsNeedingAreas.Count} checkpoints");
+            }
 
             List<LocationStatusResponse> locationStatuses = [];
 
-            foreach (LocationEntity location in locations)
+            foreach (LocationEntity location in locationsList)
             {
                 List<AssignmentResponse> locationAssignments = assignments
                     .Where(a => a.LocationId == location.RowKey)
@@ -224,6 +280,8 @@ public class AssignmentFunctions
                     .ToList();
 
                 int checkedInCount = locationAssignments.Count(a => a.IsCheckedIn);
+
+                List<string> areaIds = System.Text.Json.JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson) ?? [];
 
                 locationStatuses.Add(new LocationStatusResponse(
                     location.RowKey,
@@ -236,7 +294,8 @@ public class AssignmentFunctions
                     locationAssignments,
                     location.What3Words,
                     location.StartTime,
-                    location.EndTime
+                    location.EndTime,
+                    areaIds
                 ));
             }
 

@@ -23,8 +23,10 @@ public static class EntityExtensions
         );
     }
 
-    public static LocationResponse ToResponse(this LocationEntity entity, string? areaName = null)
+    public static LocationResponse ToResponse(this LocationEntity entity)
     {
+        List<string> areaIds = JsonSerializer.Deserialize<List<string>>(entity.AreaIdsJson) ?? [];
+
         return new LocationResponse(
             entity.RowKey,
             entity.EventId,
@@ -37,8 +39,7 @@ public static class EntityExtensions
             entity.What3Words,
             entity.StartTime,
             entity.EndTime,
-            entity.AreaId,
-            areaName
+            areaIds
         );
     }
 
@@ -52,6 +53,7 @@ public static class EntityExtensions
             entity.EventId,
             entity.Name,
             entity.Description,
+            entity.Color,
             contacts,
             polygon,
             entity.IsDefault,
@@ -67,6 +69,7 @@ public static class EntityExtensions
             entity.RowKey,
             entity.EventId,
             entity.LocationId,
+            entity.MarshalId,
             entity.MarshalName,
             entity.IsCheckedIn,
             entity.CheckInTime,
@@ -83,6 +86,43 @@ public static class EntityExtensions
             entity.UserEmail,
             entity.Role,
             entity.CreatedDate
+        );
+    }
+
+    public static ChecklistItemResponse ToResponse(this ChecklistItemEntity entity)
+    {
+        List<ScopeConfiguration> scopeConfigurations =
+            JsonSerializer.Deserialize<List<ScopeConfiguration>>(entity.ScopeConfigurationsJson) ?? [];
+
+        return new ChecklistItemResponse(
+            entity.ItemId,
+            entity.EventId,
+            entity.Text,
+            scopeConfigurations,
+            entity.DisplayOrder,
+            entity.IsRequired,
+            entity.VisibleFrom,
+            entity.VisibleUntil,
+            entity.MustCompleteBy,
+            entity.CreatedByAdminEmail,
+            entity.CreatedDate,
+            entity.LastModifiedDate,
+            entity.LastModifiedByAdminEmail
+        );
+    }
+
+    public static ChecklistCompletionResponse ToResponse(this ChecklistCompletionEntity entity)
+    {
+        return new ChecklistCompletionResponse(
+            entity.RowKey,
+            entity.EventId,
+            entity.ChecklistItemId,
+            entity.CompletedByMarshalId,
+            entity.CompletedByMarshalName,
+            entity.CompletionContextType,
+            entity.CompletionContextId,
+            entity.CompletedAt,
+            entity.IsDeleted
         );
     }
 }

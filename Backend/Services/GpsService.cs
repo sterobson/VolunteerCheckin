@@ -4,8 +4,11 @@ public class GpsService
 {
     private const double EarthRadiusMeters = 6371000;
 
-    public static double CalculateDistance(double latitude1Degrees, double longitude1Degrees,
-                                           double latitude2Degrees, double longitude2Degrees)
+    /// <summary>
+    /// Calculate the distance between two GPS coordinates using the Haversine formula
+    /// </summary>
+    public virtual double CalculateDistance(double latitude1Degrees, double longitude1Degrees,
+                                            double latitude2Degrees, double longitude2Degrees)
     {
         // Haversine formula to calculate distance between two GPS coordinates
         double δLatitude = DegreesToRadians(latitude2Degrees - latitude1Degrees);
@@ -25,9 +28,12 @@ public class GpsService
         return degrees * Math.PI / 180;
     }
 
-    public static bool IsWithinRadius(double latitude1Degrees, double longitude1Degrees,
-                                      double latitude2Degrees, double longitude2Degrees,
-                                      double radiusMeters)
+    /// <summary>
+    /// Check if two GPS coordinates are within a specified radius
+    /// </summary>
+    public virtual bool IsWithinRadius(double latitude1Degrees, double longitude1Degrees,
+                                       double latitude2Degrees, double longitude2Degrees,
+                                       double radiusMeters)
     {
         double distance = CalculateDistance(latitude1Degrees, longitude1Degrees, latitude2Degrees, longitude2Degrees);
         return distance <= radiusMeters;

@@ -35,6 +35,7 @@ builder.Services.AddSingleton(sp =>
 
 builder.Services.AddSingleton<GpxParserService>();
 builder.Services.AddSingleton<CsvParserService>();
+builder.Services.AddSingleton<GpsService>();
 
 // Register repositories
 builder.Services.AddSingleton<ILocationRepository, TableStorageLocationRepository>();
@@ -44,5 +45,7 @@ builder.Services.AddSingleton<IEventRepository, TableStorageEventRepository>();
 builder.Services.AddSingleton<IAdminUserRepository, TableStorageAdminUserRepository>();
 builder.Services.AddSingleton<IUserEventMappingRepository, TableStorageUserEventMappingRepository>();
 builder.Services.AddSingleton<IAreaRepository, TableStorageAreaRepository>();
+builder.Services.AddSingleton<IChecklistItemRepository, TableStorageChecklistItemRepository>();
+builder.Services.AddSingleton<IChecklistCompletionRepository, TableStorageChecklistCompletionRepository>();
 
 builder.Build().Run();

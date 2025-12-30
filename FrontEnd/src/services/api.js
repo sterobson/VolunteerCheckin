@@ -94,4 +94,27 @@ export const marshalsApi = {
   },
 };
 
+// Areas API
+export const areasApi = {
+  create: (data) => api.post('/areas', data),
+  getByEvent: (eventId) => api.get(`/events/${eventId}/areas`),
+  getById: (eventId, areaId) => api.get(`/areas/${eventId}/${areaId}`),
+  update: (eventId, areaId, data) => api.put(`/areas/${eventId}/${areaId}`, data),
+  delete: (eventId, areaId) => api.delete(`/areas/${eventId}/${areaId}`),
+  recalculate: (eventId) => api.post(`/areas/recalculate/${eventId}`),
+  getCheckpoints: (eventId, areaId) => api.get(`/areas/${eventId}/${areaId}/locations`),
+};
+
+// Checklist API
+export const checklistApi = {
+  create: (eventId, data) => api.post(`/events/${eventId}/checklist-items`, data),
+  getByEvent: (eventId) => api.get(`/events/${eventId}/checklist-items`),
+  getById: (eventId, itemId) => api.get(`/checklist-items/${eventId}/${itemId}`),
+  update: (eventId, itemId, data) => api.put(`/checklist-items/${eventId}/${itemId}`, data),
+  delete: (eventId, itemId) => api.delete(`/checklist-items/${eventId}/${itemId}`),
+  getReport: (eventId) => api.get(`/events/${eventId}/checklist-report`),
+  complete: (eventId, itemId, data) => api.post(`/checklist-items/${eventId}/${itemId}/complete`, data),
+  uncomplete: (eventId, itemId, data) => api.post(`/checklist-items/${eventId}/${itemId}/uncomplete`, data),
+};
+
 export default api;

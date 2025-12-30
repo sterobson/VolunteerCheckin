@@ -57,8 +57,7 @@ public record LocationResponse(
     string What3Words,
     DateTime? StartTime,
     DateTime? EndTime,
-    string? AreaId,
-    string? AreaName
+    List<string> AreaIds
 );
 
 public record AreaContact(
@@ -71,6 +70,7 @@ public record CreateAreaRequest(
     string EventId,
     string Name,
     string Description,
+    string Color,
     List<AreaContact> Contacts,
     List<RoutePoint>? Polygon
 );
@@ -78,6 +78,7 @@ public record CreateAreaRequest(
 public record UpdateAreaRequest(
     string Name,
     string Description,
+    string Color,
     List<AreaContact> Contacts,
     List<RoutePoint>? Polygon,
     int DisplayOrder
@@ -88,6 +89,7 @@ public record AreaResponse(
     string EventId,
     string Name,
     string Description,
+    string Color,
     List<AreaContact> Contacts,
     List<RoutePoint> Polygon,
     bool IsDefault,
@@ -112,6 +114,7 @@ public record AssignmentResponse(
     string Id,
     string EventId,
     string LocationId,
+    string MarshalId,
     string MarshalName,
     bool IsCheckedIn,
     DateTime? CheckInTime,
@@ -154,7 +157,8 @@ public record LocationStatusResponse(
     List<AssignmentResponse> Assignments,
     string What3Words,
     DateTime? StartTime,
-    DateTime? EndTime
+    DateTime? EndTime,
+    List<string> AreaIds
 );
 
 public record UserEventMappingResponse(
@@ -227,4 +231,90 @@ public record ErrorResponse(
     string Message,
     string? Details = null,
     string? ErrorCode = null
+);
+
+// Checklist-related DTOs
+
+public record CreateChecklistItemRequest(
+    string Text,
+    List<ScopeConfiguration> ScopeConfigurations,
+    int DisplayOrder,
+    bool IsRequired,
+    DateTime? VisibleFrom,
+    DateTime? VisibleUntil,
+    DateTime? MustCompleteBy,
+    bool CreateSeparateItems = false
+);
+
+public record UpdateChecklistItemRequest(
+    string Text,
+    List<ScopeConfiguration> ScopeConfigurations,
+    int DisplayOrder,
+    bool IsRequired,
+    DateTime? VisibleFrom,
+    DateTime? VisibleUntil,
+    DateTime? MustCompleteBy
+);
+
+public record ChecklistItemResponse(
+    string ItemId,
+    string EventId,
+    string Text,
+    List<ScopeConfiguration> ScopeConfigurations,
+    int DisplayOrder,
+    bool IsRequired,
+    DateTime? VisibleFrom,
+    DateTime? VisibleUntil,
+    DateTime? MustCompleteBy,
+    string CreatedByAdminEmail,
+    DateTime CreatedDate,
+    DateTime? LastModifiedDate,
+    string LastModifiedByAdminEmail
+);
+
+public record ChecklistItemWithStatus(
+    string ItemId,
+    string EventId,
+    string Text,
+    List<ScopeConfiguration> ScopeConfigurations,
+    int DisplayOrder,
+    bool IsRequired,
+    DateTime? VisibleFrom,
+    DateTime? VisibleUntil,
+    DateTime? MustCompleteBy,
+    bool IsCompleted,
+    bool CanBeCompletedByMe,
+    string? CompletedByName,
+    DateTime? CompletedAt,
+    string CompletionContextType,
+    string CompletionContextId,
+    string MatchedScope  // Which scope configuration matched for this marshal
+);
+
+public record CompleteChecklistItemRequest(
+    string MarshalId,
+    string? ContextType = null,  // Optional override for context
+    string? ContextId = null     // Optional override for context
+);
+
+public record ChecklistCompletionResponse(
+    string CompletionId,
+    string EventId,
+    string ChecklistItemId,
+    string CompletedByMarshalId,
+    string CompletedByMarshalName,
+    string CompletionContextType,
+    string CompletionContextId,
+    DateTime CompletedAt,
+    bool IsDeleted
+);
+
+public record AddAreaLeadRequest(
+    string MarshalId
+);
+
+public record AreaLeadResponse(
+    string MarshalId,
+    string MarshalName,
+    string Email
 );

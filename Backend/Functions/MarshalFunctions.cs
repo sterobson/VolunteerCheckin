@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using VolunteerCheckin.Functions.Helpers;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Services;
 using VolunteerCheckin.Functions.Repositories;
@@ -47,6 +48,17 @@ public class MarshalFunctions
                 return new BadRequestObjectResult(new { message = "Invalid request" });
             }
 
+            // Sanitize inputs
+            string sanitizedName = InputSanitizer.SanitizeName(request.Name);
+            if (string.IsNullOrWhiteSpace(sanitizedName))
+            {
+                return new BadRequestObjectResult(new { message = "Name is required and cannot be empty" });
+            }
+
+            string? sanitizedEmail = InputSanitizer.SanitizeEmail(request.Email);
+            string sanitizedPhone = InputSanitizer.SanitizePhone(request.PhoneNumber);
+            string sanitizedNotes = InputSanitizer.SanitizeNotes(request.Notes);
+
             string marshalId = Guid.NewGuid().ToString();
             MarshalEntity marshalEntity = new()
             {
@@ -54,10 +66,10 @@ public class MarshalFunctions
                 RowKey = marshalId,
                 EventId = request.EventId,
                 MarshalId = marshalId,
-                Name = request.Name,
-                Email = request.Email ?? string.Empty,
-                PhoneNumber = request.PhoneNumber ?? string.Empty,
-                Notes = request.Notes ?? string.Empty
+                Name = sanitizedName,
+                Email = sanitizedEmail ?? string.Empty,
+                PhoneNumber = sanitizedPhone,
+                Notes = sanitizedNotes
             };
 
             await _marshalRepository.AddAsync(marshalEntity);
@@ -208,10 +220,21 @@ public class MarshalFunctions
                 return new NotFoundObjectResult(new { message = "Marshal not found" });
             }
 
-            marshalEntity.Name = request.Name;
-            marshalEntity.Email = request.Email ?? string.Empty;
-            marshalEntity.PhoneNumber = request.PhoneNumber ?? string.Empty;
-            marshalEntity.Notes = request.Notes ?? string.Empty;
+            // Sanitize inputs
+            string sanitizedName = InputSanitizer.SanitizeName(request.Name);
+            if (string.IsNullOrWhiteSpace(sanitizedName))
+            {
+                return new BadRequestObjectResult(new { message = "Name is required and cannot be empty" });
+            }
+
+            string? sanitizedEmail = InputSanitizer.SanitizeEmail(request.Email);
+            string sanitizedPhone = InputSanitizer.SanitizePhone(request.PhoneNumber);
+            string sanitizedNotes = InputSanitizer.SanitizeNotes(request.Notes);
+
+            marshalEntity.Name = sanitizedName;
+            marshalEntity.Email = sanitizedEmail ?? string.Empty;
+            marshalEntity.PhoneNumber = sanitizedPhone;
+            marshalEntity.Notes = sanitizedNotes;
 
             await _marshalRepository.UpdateAsync(marshalEntity);
 

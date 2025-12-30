@@ -68,6 +68,15 @@ public class LocationFunctions
             // Ensure default area exists and get its ID
             AreaEntity defaultArea = await EnsureDefaultAreaExists(request.EventId);
 
+            // Get all areas for this event to calculate which ones the checkpoint belongs to
+            IEnumerable<AreaEntity> areas = await _areaRepository.GetByEventAsync(request.EventId);
+            List<string> areaIds = GeometryHelper.CalculateCheckpointAreas(
+                request.Latitude,
+                request.Longitude,
+                areas,
+                defaultArea.RowKey
+            );
+
             LocationEntity locationEntity = new()
             {
                 PartitionKey = request.EventId,
@@ -81,7 +90,7 @@ public class LocationFunctions
                 What3Words = request.What3Words ?? string.Empty,
                 StartTime = request.StartTime,
                 EndTime = request.EndTime,
-                AreaId = defaultArea.RowKey
+                AreaIdsJson = JsonSerializer.Serialize(areaIds)
             };
 
             await _locationRepository.AddAsync(locationEntity);
@@ -133,34 +142,41 @@ public class LocationFunctions
         try
         {
             IEnumerable<LocationEntity> locationEntities = await _locationRepository.GetByEventAsync(eventId);
+            List<LocationEntity> locationsList = locationEntities.ToList();
 
-            // Ensure default area exists if there are locations
-            AreaEntity? defaultArea = null;
-            if (locationEntities.Any())
+            // Check if any checkpoints are missing area assignments
+            List<LocationEntity> checkpointsNeedingAreas = locationsList
+                .Where(l => string.IsNullOrEmpty(l.AreaIdsJson) || l.AreaIdsJson == "[]")
+                .ToList();
+
+            if (checkpointsNeedingAreas.Count > 0)
             {
-                defaultArea = await EnsureDefaultAreaExists(eventId);
-            }
+                _logger.LogInformation($"Found {checkpointsNeedingAreas.Count} checkpoints without area assignments. Calculating...");
 
-            // Get all areas for name lookup
-            IEnumerable<AreaEntity> areas = await _areaRepository.GetByEventAsync(eventId);
-            Dictionary<string, string> areaNames = areas.ToDictionary(a => a.RowKey, a => a.Name);
+                // Load areas once for all calculations
+                AreaEntity defaultArea = await EnsureDefaultAreaExists(eventId);
+                IEnumerable<AreaEntity> areas = await _areaRepository.GetByEventAsync(eventId);
 
-            List<LocationResponse> locations = new();
-            foreach (LocationEntity location in locationEntities)
-            {
-                // Auto-assign to default area if AreaId is null
-                if (string.IsNullOrEmpty(location.AreaId) && defaultArea != null)
+                // Calculate and update area assignments for each checkpoint
+                foreach (LocationEntity checkpoint in checkpointsNeedingAreas)
                 {
-                    location.AreaId = defaultArea.RowKey;
-                    await _locationRepository.UpdateAsync(location);
+                    List<string> areaIds = GeometryHelper.CalculateCheckpointAreas(
+                        checkpoint.Latitude,
+                        checkpoint.Longitude,
+                        areas,
+                        defaultArea.RowKey
+                    );
+
+                    checkpoint.AreaIdsJson = JsonSerializer.Serialize(areaIds);
+                    await _locationRepository.UpdateAsync(checkpoint);
                 }
 
-                string? areaName = location.AreaId != null && areaNames.TryGetValue(location.AreaId, out string? name)
-                    ? name
-                    : null;
-
-                locations.Add(location.ToResponse(areaName));
+                _logger.LogInformation($"Automatically assigned areas to {checkpointsNeedingAreas.Count} checkpoints");
             }
+
+            List<LocationResponse> locations = locationsList
+                .Select(l => l.ToResponse())
+                .ToList();
 
             return new OkObjectResult(locations);
         }
@@ -215,6 +231,17 @@ public class LocationFunctions
             locationEntity.What3Words = request.What3Words ?? string.Empty;
             locationEntity.StartTime = request.StartTime;
             locationEntity.EndTime = request.EndTime;
+
+            // Recalculate area assignments based on new location
+            AreaEntity defaultArea = await EnsureDefaultAreaExists(eventId);
+            IEnumerable<AreaEntity> areas = await _areaRepository.GetByEventAsync(eventId);
+            List<string> areaIds = GeometryHelper.CalculateCheckpointAreas(
+                request.Latitude,
+                request.Longitude,
+                areas,
+                defaultArea.RowKey
+            );
+            locationEntity.AreaIdsJson = JsonSerializer.Serialize(areaIds);
 
             await _locationRepository.UpdateAsync(locationEntity);
 

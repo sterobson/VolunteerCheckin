@@ -16,15 +16,18 @@ public class CheckInFunctions
     private readonly ILogger<CheckInFunctions> _logger;
     private readonly IAssignmentRepository _assignmentRepository;
     private readonly ILocationRepository _locationRepository;
+    private readonly GpsService _gpsService;
 
     public CheckInFunctions(
         ILogger<CheckInFunctions> logger,
         IAssignmentRepository assignmentRepository,
-        ILocationRepository locationRepository)
+        ILocationRepository locationRepository,
+        GpsService gpsService)
     {
         _logger = logger;
         _assignmentRepository = assignmentRepository;
         _locationRepository = locationRepository;
+        _gpsService = gpsService;
     }
 
     [Function("CheckIn")]
@@ -38,7 +41,7 @@ public class CheckInFunctions
 
             if (request == null || string.IsNullOrWhiteSpace(request.EventId) || string.IsNullOrWhiteSpace(request.AssignmentId))
             {
-                return new BadRequestObjectResult(new { message = "Invalid request" });
+                return new BadRequestObjectResult(new { message = Constants.ErrorInvalidRequest });
             }
 
             // Find the assignment using partition key query
@@ -46,7 +49,7 @@ public class CheckInFunctions
 
             if (assignment == null)
             {
-                return new NotFoundObjectResult(new { message = "Assignment not found" });
+                return new NotFoundObjectResult(new { message = Constants.ErrorAssignmentNotFound });
             }
 
             if (assignment.IsCheckedIn)
@@ -59,19 +62,19 @@ public class CheckInFunctions
 
             if (location == null)
             {
-                return new NotFoundObjectResult(new { message = "Location not found" });
+                return new NotFoundObjectResult(new { message = Constants.ErrorLocationNotFound });
             }
 
             string checkInMethod;
 
             if (request.ManualCheckIn)
             {
-                checkInMethod = "Manual";
+                checkInMethod = Constants.CheckInMethodManual;
             }
             else if (request.Latitude.HasValue && request.Longitude.HasValue)
             {
                 // Verify GPS coordinates
-                double distance = GpsService.CalculateDistance(
+                double distance = _gpsService.CalculateDistance(
                     location.Latitude,
                     location.Longitude,
                     request.Latitude.Value,
@@ -80,6 +83,7 @@ public class CheckInFunctions
 
                 if (distance > Constants.CheckInRadiusMeters)
                 {
+                    _logger.LogWarning($"Check-in rejected: {Math.Round(distance)}m away from location (max {Constants.CheckInRadiusMeters}m) - Assignment: {request.AssignmentId}");
                     return new BadRequestObjectResult(new
                     {
                         message = $"You are {Math.Round(distance)}m away from the location. You must be within {Constants.CheckInRadiusMeters}m to check in.",
@@ -88,7 +92,7 @@ public class CheckInFunctions
                     });
                 }
 
-                checkInMethod = "GPS";
+                checkInMethod = Constants.CheckInMethodGps;
             }
             else
             {
@@ -134,7 +138,7 @@ public class CheckInFunctions
 
             if (assignment == null)
             {
-                return new NotFoundObjectResult(new { message = "Assignment not found" });
+                return new NotFoundObjectResult(new { message = Constants.ErrorAssignmentNotFound });
             }
 
             // Get the location to update count
@@ -142,7 +146,7 @@ public class CheckInFunctions
 
             if (location == null)
             {
-                return new NotFoundObjectResult(new { message = "Location not found" });
+                return new NotFoundObjectResult(new { message = Constants.ErrorLocationNotFound });
             }
 
             // If already checked in, undo the check-in
@@ -160,7 +164,7 @@ public class CheckInFunctions
                 // Check in via admin
                 assignment.IsCheckedIn = true;
                 assignment.CheckInTime = DateTime.UtcNow;
-                assignment.CheckInMethod = "Admin";
+                assignment.CheckInMethod = Constants.CheckInMethodAdmin;
                 location.CheckedInCount++;
             }
 

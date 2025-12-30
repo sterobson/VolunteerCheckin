@@ -23,7 +23,7 @@ public class ChecklistItemEntity : ITableEntity
     ///   1. Marshal ID (most specific)
     ///   2. Checkpoint ID
     ///   3. Area ID
-    ///   4. Everyone (least specific)
+    ///   4. (least specific)
     /// </summary>
     public string ScopeConfigurationsJson { get; set; } = "[]";
 

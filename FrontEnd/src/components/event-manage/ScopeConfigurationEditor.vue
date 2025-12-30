@@ -2,128 +2,145 @@
   <div class="scope-configuration-editor">
     <div class="editor-header">
       <h4>Who can see and complete this item?</h4>
-      <p class="help-text">You can add multiple scope configurations for complex targeting scenarios.</p>
     </div>
 
-    <div class="configurations-list">
+    <div class="scope-types-list">
       <div
-        v-for="(config, index) in localConfigs"
-        :key="index"
-        class="configuration-item"
+        v-for="scopeType in displayedScopeTypes"
+        :key="scopeType.scope"
+        class="scope-type-row"
+        :class="{ active: isScopeActive(scopeType.scope) }"
+        @click="openScopeConfig(scopeType.scope)"
       >
-        <div class="config-header">
-          <strong>Scope {{ index + 1 }}</strong>
-          <button
-            v-if="localConfigs.length > 1"
-            @click="removeConfiguration(index)"
-            class="btn-remove"
-            type="button"
-          >
-            Remove
-          </button>
+        <div class="scope-type-label">{{ scopeType.label }}</div>
+        <div class="scope-type-pill">{{ getScopePill(scopeType.scope) }}</div>
+      </div>
+
+      <div v-if="hasHiddenScopes" class="expand-row" @click="showAllScopes = !showAllScopes">
+        <div class="expand-label">
+          {{ showAllScopes ? 'Show less' : `Show ${hiddenScopeCount} more option${hiddenScopeCount !== 1 ? 's' : ''}...` }}
         </div>
-
-        <div class="config-body">
-          <div class="form-group">
-            <label>Scope type:</label>
-            <select v-model="config.scope" @change="handleScopeChange(index)">
-              <option value="Everyone">Everyone at the event</option>
-              <option value="EveryoneInAreas">Everyone in specific areas</option>
-              <option value="EveryoneAtCheckpoints">Everyone at specific checkpoints</option>
-              <option value="SpecificPeople">Specific people</option>
-              <option value="OnePerCheckpoint">One person per checkpoint</option>
-              <option value="OnePerArea">One person per area</option>
-              <option value="AreaLead">Area leads only</option>
-            </select>
-            <small class="help-text">{{ getScopeHelp(config.scope) }}</small>
-          </div>
-
-          <!-- Area selection -->
-          <div v-if="needsAreaSelection(config.scope)" class="form-group">
-            <label>Select areas:</label>
-            <div class="checkbox-group scrollable">
-              <label v-for="area in areas" :key="area.id" class="checkbox-label">
-                <input
-                  type="checkbox"
-                  :value="area.id"
-                  :checked="config.ids.includes(area.id)"
-                  @change="toggleId(index, area.id)"
-                />
-                <span class="area-color-dot" :style="{ backgroundColor: area.color || '#667eea' }"></span>
-                <span>{{ area.name }}</span>
-              </label>
-            </div>
-          </div>
-
-          <!-- Checkpoint selection -->
-          <div v-if="needsCheckpointSelection(config.scope)" class="form-group">
-            <label>Select checkpoints:</label>
-            <input
-              v-model="checkpointSearches[index]"
-              type="text"
-              placeholder="Search checkpoints..."
-              class="search-input"
-            />
-            <div class="checkbox-group scrollable">
-              <label
-                v-for="location in getFilteredLocations(index)"
-                :key="location.id"
-                class="checkbox-label"
-              >
-                <input
-                  type="checkbox"
-                  :value="location.id"
-                  :checked="config.ids.includes(location.id)"
-                  @change="toggleId(index, location.id)"
-                />
-                <div class="checkpoint-info">
-                  <span class="checkpoint-name">{{ location.name }}</span>
-                  <span v-if="location.description" class="checkpoint-description"> - {{ location.description }}</span>
-                </div>
-              </label>
-            </div>
-          </div>
-
-          <!-- Marshal selection -->
-          <div v-if="needsMarshalSelection(config.scope)" class="form-group">
-            <label>Select people:</label>
-            <input
-              v-model="marshalSearches[index]"
-              type="text"
-              placeholder="Search marshals..."
-              class="search-input"
-            />
-            <div class="checkbox-group scrollable">
-              <label
-                v-for="marshal in getFilteredMarshals(index)"
-                :key="marshal.id"
-                class="checkbox-label"
-              >
-                <input
-                  type="checkbox"
-                  :value="marshal.id"
-                  :checked="config.ids.includes(marshal.id)"
-                  @change="toggleId(index, marshal.id)"
-                />
-                <span>{{ marshal.name }}</span>
-              </label>
-            </div>
-          </div>
-
-          <div class="specificity-info">
-            <small>Specificity level: {{ getSpecificity(config) }} ({{ getSpecificityLabel(config) }})</small>
-          </div>
-        </div>
+        <div class="expand-icon">{{ showAllScopes ? '▲' : '▼' }}</div>
       </div>
     </div>
 
-    <button @click="addConfiguration" class="btn btn-secondary btn-add-scope" type="button">
-      + Add another scope configuration
-    </button>
+    <!-- Modal for configuring a specific scope -->
+    <div v-if="editingScope" class="scope-config-modal" @click.self="closeConfigModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5>{{ getScopeTypeLabel(editingScope) }}</h5>
+          <button @click="closeConfigModal" class="btn-close" type="button">&times;</button>
+        </div>
 
-    <div v-if="localConfigs.length > 1" class="most-specific-wins-info">
-      <strong>Most Specific Wins:</strong> When a marshal matches multiple configurations, the most specific one determines the completion context.
-      Marshal (1) > Checkpoint (2) > Area (3) > Everyone (4)
+        <div class="modal-body">
+          <p class="scope-help">{{ getScopeHelp(editingScope) }}</p>
+
+          <!-- Marshal selection -->
+          <div v-if="needsMarshalSelection(editingScope)" class="form-group">
+            <label class="checkbox-label special-option">
+              <input
+                type="checkbox"
+                :checked="isAllMarshalsSelected()"
+                @change="toggleAllMarshals"
+              />
+              <span><strong>Everyone at the event</strong> (all current and future people)</span>
+            </label>
+
+            <div v-if="!isAllMarshalsSelected()" class="specific-selection">
+              <input
+                v-model="marshalSearch"
+                type="text"
+                placeholder="Search people..."
+                class="search-input"
+              />
+              <div class="checkbox-group scrollable">
+                <label
+                  v-for="marshal in filteredMarshals"
+                  :key="marshal.id"
+                  class="checkbox-label"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="isMarshalSelected(marshal.id)"
+                    @change="toggleMarshal(marshal.id)"
+                  />
+                  <span>{{ marshal.name }}</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Area selection scopes -->
+          <div v-if="needsAreaSelection(editingScope)" class="form-group">
+            <label class="checkbox-label special-option">
+              <input
+                type="checkbox"
+                :checked="isAllAreasSelected()"
+                @change="toggleAllAreas"
+              />
+              <span><strong>All areas</strong> (includes future areas)</span>
+            </label>
+
+            <div v-if="!isAllAreasSelected()" class="specific-selection">
+              <div class="checkbox-group scrollable">
+                <label v-for="area in areas" :key="area.id" class="checkbox-label">
+                  <input
+                    type="checkbox"
+                    :checked="isAreaSelected(area.id)"
+                    @change="toggleArea(area.id)"
+                  />
+                  <span class="area-color-dot" :style="{ backgroundColor: area.color || '#667eea' }"></span>
+                  <span>{{ area.name }}</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Checkpoint selection scopes -->
+          <div v-if="needsCheckpointSelection(editingScope)" class="form-group">
+            <label class="checkbox-label special-option">
+              <input
+                type="checkbox"
+                :checked="isAllCheckpointsSelected()"
+                @change="toggleAllCheckpoints"
+              />
+              <span><strong>All checkpoints</strong> (includes future checkpoints)</span>
+            </label>
+
+            <div v-if="!isAllCheckpointsSelected()" class="specific-selection">
+              <input
+                v-model="checkpointSearch"
+                type="text"
+                placeholder="Search checkpoints..."
+                class="search-input"
+              />
+              <div class="checkbox-group scrollable">
+                <label
+                  v-for="location in filteredCheckpoints"
+                  :key="location.id"
+                  class="checkbox-label"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="isCheckpointSelected(location.id)"
+                    @change="toggleCheckpoint(location.id)"
+                  />
+                  <div class="checkpoint-info">
+                    <span class="checkpoint-name">{{ location.name }}</span>
+                    <span v-if="location.description" class="checkpoint-description"> - {{ location.description }}</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="modal-footer">
+          <button @click="clearScope" class="btn btn-secondary" type="button">Deselect all</button>
+          <button @click="closeConfigModal" class="btn btn-primary" type="button">Done</button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -135,11 +152,7 @@ import { alphanumericCompare } from '../../utils/sortUtils';
 const props = defineProps({
   modelValue: {
     type: Array,
-    default: () => [{
-      scope: 'Everyone',
-      itemType: null,
-      ids: []
-    }]
+    default: () => []
   },
   areas: {
     type: Array,
@@ -152,37 +165,163 @@ const props = defineProps({
   marshals: {
     type: Array,
     default: () => []
+  },
+  isEditing: {
+    type: Boolean,
+    default: false
   }
 });
 
-const emit = defineEmits(['update:modelValue']);
+const emit = defineEmits(['update:modelValue', 'user-changed']);
 
-const localConfigs = ref([]);
-const checkpointSearches = ref({});
-const marshalSearches = ref({});
+// Scope types with labels (in display order)
+const scopeTypes = [
+  { scope: 'SpecificPeople', label: 'Specific people' },
+  { scope: 'EveryoneAtCheckpoints', label: 'Every person at specified checkpoints' },
+  { scope: 'OnePerCheckpoint', label: 'One person at each specified checkpoint' },
+  { scope: 'OnePerArea', label: 'One person in specified areas' },
+  { scope: 'EveryoneInAreas', label: 'Everyone in specified areas' },
+  { scope: 'EveryAreaLead', label: 'Every area lead at specified areas' },
+  { scope: 'OneLeadPerArea', label: 'One lead per specified area' },
+];
 
-// Initialize local configs from prop
-watch(() => props.modelValue, (newVal) => {
-  if (newVal && newVal.length > 0) {
-    // Deep clone to avoid mutation
-    const newConfigs = JSON.parse(JSON.stringify(newVal));
-    // Only update if actually different to prevent circular updates
-    if (JSON.stringify(localConfigs.value) !== JSON.stringify(newConfigs)) {
-      localConfigs.value = newConfigs;
-    }
+// Local state for each scope type
+const scopeStates = ref({
+  SpecificPeople: { enabled: true, ids: ['ALL_MARSHALS'] },
+  EveryoneInAreas: { enabled: false, ids: [] },
+  EveryoneAtCheckpoints: { enabled: false, ids: [] },
+  OnePerCheckpoint: { enabled: false, ids: [] },
+  OnePerArea: { enabled: false, ids: [] },
+  EveryAreaLead: { enabled: false, ids: [] },
+  OneLeadPerArea: { enabled: false, ids: [] },
+});
+
+const editingScope = ref(null);
+const checkpointSearch = ref('');
+const marshalSearch = ref('');
+// When creating, show all scopes by default. When editing, collapse to only show configured scopes.
+const showAllScopes = ref(!props.isEditing);
+
+let isInitializing = true;
+let isSyncingFromParent = false;
+
+// Computed properties for collapsible scope list
+const displayedScopeTypes = computed(() => {
+  if (showAllScopes.value) {
+    return scopeTypes;
   }
+  // Only show scopes that are active (have values)
+  return scopeTypes.filter(st => isScopeActive(st.scope));
+});
+
+const hasHiddenScopes = computed(() => {
+  const activeCount = scopeTypes.filter(st => isScopeActive(st.scope)).length;
+  return activeCount < scopeTypes.length;
+});
+
+const hiddenScopeCount = computed(() => {
+  const activeCount = scopeTypes.filter(st => isScopeActive(st.scope)).length;
+  return scopeTypes.length - activeCount;
+});
+
+// Initialize from modelValue
+watch(() => props.modelValue, (newVal) => {
+  if (!newVal) return;
+
+  // Don't sync if we just emitted this change
+  if (isSyncingFromParent) {
+    isSyncingFromParent = false;
+    return;
+  }
+
+  isInitializing = true;
+
+  // Reset all states
+  Object.keys(scopeStates.value).forEach(scope => {
+    scopeStates.value[scope] = { enabled: false, ids: [] };
+  });
+
+  // Parse incoming configurations
+  newVal.forEach(config => {
+    // Handle legacy "Everyone" scope by converting to SpecificPeople with ALL_MARSHALS
+    if (config.scope === 'Everyone') {
+      scopeStates.value.SpecificPeople = {
+        enabled: true,
+        ids: ['ALL_MARSHALS']
+      };
+    }
+    // Handle legacy "AreaLead" scope by converting to EveryAreaLead
+    else if (config.scope === 'AreaLead') {
+      scopeStates.value.EveryAreaLead = {
+        enabled: true,
+        ids: [...config.ids]
+      };
+    }
+    else if (scopeStates.value[config.scope]) {
+      scopeStates.value[config.scope] = {
+        enabled: true,
+        ids: [...config.ids]
+      };
+    }
+  });
+
+  isInitializing = false;
 }, { immediate: true });
 
-// Emit changes back to parent
-watch(localConfigs, (newVal) => {
-  // Only emit if different from prop value to prevent circular updates
-  if (JSON.stringify(newVal) !== JSON.stringify(props.modelValue)) {
-    emit('update:modelValue', newVal);
+// Convert local state back to scopeConfigurations array
+const buildScopeConfigurations = () => {
+  const configs = [];
+
+  Object.keys(scopeStates.value).forEach(scope => {
+    const state = scopeStates.value[scope];
+    if (state.enabled) {
+      const config = {
+        scope,
+        itemType: getItemType(scope),
+        ids: [...state.ids]
+      };
+      configs.push(config);
+    }
+  });
+
+  return configs;
+};
+
+// Watch scope states and emit changes
+watch(scopeStates, () => {
+  if (isInitializing) return;
+
+  // Auto-remove ALL_MARSHALS from SpecificPeople if any other scope is enabled
+  const otherScopesEnabled = Object.keys(scopeStates.value).some(scope =>
+    scope !== 'SpecificPeople' && scopeStates.value[scope].enabled
+  );
+
+  if (otherScopesEnabled && scopeStates.value.SpecificPeople?.ids.includes('ALL_MARSHALS')) {
+    const allMarshalsIndex = scopeStates.value.SpecificPeople.ids.indexOf('ALL_MARSHALS');
+    scopeStates.value.SpecificPeople.ids.splice(allMarshalsIndex, 1);
+
+    // If no specific people left, disable the scope
+    if (scopeStates.value.SpecificPeople.ids.length === 0) {
+      scopeStates.value.SpecificPeople.enabled = false;
+    }
   }
+
+  isSyncingFromParent = true;
+  const newConfigs = buildScopeConfigurations();
+  emit('update:modelValue', newConfigs);
+  emit('user-changed');
 }, { deep: true });
 
+// Helper functions
+const getItemType = (scope) => {
+  if (needsAreaSelection(scope)) return 'Area';
+  if (needsCheckpointSelection(scope)) return 'Checkpoint';
+  if (needsMarshalSelection(scope)) return 'Marshal';
+  return null;
+};
+
 const needsAreaSelection = (scope) => {
-  return scope === 'EveryoneInAreas' || scope === 'OnePerArea' || scope === 'AreaLead';
+  return scope === 'EveryoneInAreas' || scope === 'OnePerArea' || scope === 'EveryAreaLead' || scope === 'OneLeadPerArea';
 };
 
 const needsCheckpointSelection = (scope) => {
@@ -193,110 +332,229 @@ const needsMarshalSelection = (scope) => {
   return scope === 'SpecificPeople';
 };
 
+const getScopeTypeLabel = (scope) => {
+  const type = scopeTypes.find(t => t.scope === scope);
+  return type ? type.label : scope;
+};
+
 const getScopeHelp = (scope) => {
   const helpText = {
-    'Everyone': 'Every person at the event must complete this (personal completion)',
-    'EveryoneInAreas': 'Every person in the selected areas must complete this (personal completion)',
+    'SpecificPeople': 'Select "Everyone at the event" or choose specific people who must complete this (personal completion)',
     'EveryoneAtCheckpoints': 'Every person at the selected checkpoints must complete this (personal completion)',
-    'SpecificPeople': 'Only the selected people must complete this (personal completion)',
-    'OnePerCheckpoint': 'One completion needed per selected checkpoint (shared completion)',
-    'OnePerArea': 'One completion needed per selected area (shared completion)',
-    'AreaLead': 'Only area leads for the selected areas must complete this (shared per area)',
+    'OnePerCheckpoint': 'One completion needed at each selected checkpoint (shared completion)',
+    'OnePerArea': 'One completion needed in each selected area (shared completion)',
+    'EveryoneInAreas': 'Every person in the selected areas must complete this (personal completion)',
+    'EveryAreaLead': 'Every area lead at the selected areas must complete this individually (personal completion)',
+    'OneLeadPerArea': 'One completion per area, only area leads can complete (shared among leads)',
   };
   return helpText[scope] || '';
 };
 
-const handleScopeChange = (index) => {
-  const config = localConfigs.value[index];
-
-  // Set appropriate itemType based on scope
-  if (config.scope === 'Everyone') {
-    config.itemType = null;
-  } else if (needsAreaSelection(config.scope)) {
-    config.itemType = 'Area';
-  } else if (needsCheckpointSelection(config.scope)) {
-    config.itemType = 'Checkpoint';
-  } else if (needsMarshalSelection(config.scope)) {
-    config.itemType = 'Marshal';
-  }
-
-  // Clear IDs when scope changes
-  config.ids = [];
+const isScopeActive = (scope) => {
+  return scopeStates.value[scope]?.enabled || false;
 };
 
-const toggleId = (configIndex, id) => {
-  const config = localConfigs.value[configIndex];
-  const index = config.ids.indexOf(id);
+const getScopePill = (scope) => {
+  const state = scopeStates.value[scope];
+
+  if (!state || !state.enabled) {
+    return 'No';
+  }
+
+  const ids = state.ids || [];
+
+  if (needsAreaSelection(scope)) {
+    if (ids.includes('ALL_AREAS')) {
+      return 'All areas';
+    }
+    const count = ids.length;
+    return count > 0 ? `${count} area${count !== 1 ? 's' : ''}` : 'Select areas...';
+  }
+
+  if (needsCheckpointSelection(scope)) {
+    if (ids.includes('ALL_CHECKPOINTS')) {
+      return 'All checkpoints';
+    }
+    const count = ids.length;
+    return count > 0 ? `${count} checkpoint${count !== 1 ? 's' : ''}` : 'Select checkpoints...';
+  }
+
+  if (needsMarshalSelection(scope)) {
+    if (ids.includes('ALL_MARSHALS')) {
+      return 'Everyone';
+    }
+    const count = ids.length;
+    return count > 0 ? `${count} ${count !== 1 ? 'people' : 'person'}` : 'Select people...';
+  }
+
+  return 'Configured';
+};
+
+// Modal functions
+const openScopeConfig = (scope) => {
+  editingScope.value = scope;
+  checkpointSearch.value = '';
+  marshalSearch.value = '';
+};
+
+const closeConfigModal = () => {
+  editingScope.value = null;
+};
+
+const clearScope = () => {
+  if (editingScope.value) {
+    scopeStates.value[editingScope.value] = { enabled: false, ids: [] };
+  }
+  closeConfigModal();
+};
+
+// Marshal functions
+const isAllMarshalsSelected = () => {
+  return editingScope.value && scopeStates.value[editingScope.value]?.ids.includes('ALL_MARSHALS');
+};
+
+const toggleAllMarshals = () => {
+  if (!editingScope.value) return;
+
+  const state = scopeStates.value[editingScope.value];
+  if (isAllMarshalsSelected()) {
+    state.ids = [];
+    state.enabled = false;
+  } else {
+    state.ids = ['ALL_MARSHALS'];
+    state.enabled = true;
+  }
+};
+
+const isMarshalSelected = (marshalId) => {
+  return editingScope.value && scopeStates.value[editingScope.value]?.ids.includes(marshalId);
+};
+
+const toggleMarshal = (marshalId) => {
+  if (!editingScope.value) return;
+
+  const state = scopeStates.value[editingScope.value];
+  const index = state.ids.indexOf(marshalId);
 
   if (index >= 0) {
-    config.ids.splice(index, 1);
+    state.ids.splice(index, 1);
+    if (state.ids.length === 0) {
+      state.enabled = false;
+    }
   } else {
-    config.ids.push(id);
+    state.ids.push(marshalId);
+    state.enabled = true;
   }
 };
 
-const getFilteredLocations = (index) => {
-  const search = checkpointSearches.value[index];
+const filteredMarshals = computed(() => {
+  if (!marshalSearch.value) return props.marshals;
+
+  const searchLower = marshalSearch.value.toLowerCase();
+  return props.marshals.filter(marshal =>
+    marshal.name.toLowerCase().includes(searchLower) ||
+    (marshal.email && marshal.email.toLowerCase().includes(searchLower))
+  );
+});
+
+// Area functions
+const isAllAreasSelected = () => {
+  return editingScope.value && scopeStates.value[editingScope.value]?.ids.includes('ALL_AREAS');
+};
+
+const toggleAllAreas = () => {
+  if (!editingScope.value) return;
+
+  const state = scopeStates.value[editingScope.value];
+  if (isAllAreasSelected()) {
+    state.ids = [];
+    state.enabled = false;
+  } else {
+    state.ids = ['ALL_AREAS'];
+    state.enabled = true;
+  }
+};
+
+const isAreaSelected = (areaId) => {
+  return editingScope.value && scopeStates.value[editingScope.value]?.ids.includes(areaId);
+};
+
+const toggleArea = (areaId) => {
+  if (!editingScope.value) return;
+
+  const state = scopeStates.value[editingScope.value];
+  const index = state.ids.indexOf(areaId);
+
+  if (index >= 0) {
+    state.ids.splice(index, 1);
+    if (state.ids.length === 0) {
+      state.enabled = false;
+    }
+  } else {
+    state.ids.push(areaId);
+    state.enabled = true;
+  }
+};
+
+// Checkpoint functions
+const isAllCheckpointsSelected = () => {
+  return editingScope.value && scopeStates.value[editingScope.value]?.ids.includes('ALL_CHECKPOINTS');
+};
+
+const toggleAllCheckpoints = () => {
+  if (!editingScope.value) return;
+
+  const state = scopeStates.value[editingScope.value];
+  if (isAllCheckpointsSelected()) {
+    state.ids = [];
+    state.enabled = false;
+  } else {
+    state.ids = ['ALL_CHECKPOINTS'];
+    state.enabled = true;
+  }
+};
+
+const isCheckpointSelected = (checkpointId) => {
+  return editingScope.value && scopeStates.value[editingScope.value]?.ids.includes(checkpointId);
+};
+
+const toggleCheckpoint = (checkpointId) => {
+  if (!editingScope.value) return;
+
+  const state = scopeStates.value[editingScope.value];
+  const index = state.ids.indexOf(checkpointId);
+
+  if (index >= 0) {
+    state.ids.splice(index, 1);
+    if (state.ids.length === 0) {
+      state.enabled = false;
+    }
+  } else {
+    state.ids.push(checkpointId);
+    state.enabled = true;
+  }
+};
+
+const filteredCheckpoints = computed(() => {
   let filtered = props.locations;
 
-  if (search) {
-    const searchLower = search.toLowerCase();
+  if (checkpointSearch.value) {
+    const searchLower = checkpointSearch.value.toLowerCase();
     filtered = filtered.filter(loc =>
       loc.name.toLowerCase().includes(searchLower) ||
       (loc.description && loc.description.toLowerCase().includes(searchLower))
     );
   }
 
-  // Sort using alphanumeric comparison
   return [...filtered].sort((a, b) => alphanumericCompare(a.name, b.name));
-};
-
-const getFilteredMarshals = (index) => {
-  const search = marshalSearches.value[index];
-  if (!search) return props.marshals;
-
-  const searchLower = search.toLowerCase();
-  return props.marshals.filter(marshal =>
-    marshal.name.toLowerCase().includes(searchLower) ||
-    (marshal.email && marshal.email.toLowerCase().includes(searchLower))
-  );
-};
-
-const addConfiguration = () => {
-  localConfigs.value.push({
-    scope: 'Everyone',
-    itemType: null,
-    ids: []
-  });
-};
-
-const removeConfiguration = (index) => {
-  localConfigs.value.splice(index, 1);
-};
-
-const getSpecificity = (config) => {
-  if (config.itemType === 'Marshal') return 1;
-  if (config.itemType === 'Checkpoint') return 2;
-  if (config.itemType === 'Area') return 3;
-  return 4;
-};
-
-const getSpecificityLabel = (config) => {
-  const labels = {
-    1: 'Most specific - explicit person',
-    2: 'High specificity - checkpoint level',
-    3: 'Medium specificity - area level',
-    4: 'Least specific - everyone'
-  };
-  return labels[getSpecificity(config)];
-};
+});
 </script>
 
 <style scoped>
 .scope-configuration-editor {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .editor-header h4 {
@@ -312,67 +570,215 @@ const getSpecificityLabel = (config) => {
   font-style: italic;
 }
 
-.configurations-list {
+.scope-types-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  overflow: hidden;
 }
 
-.configuration-item {
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 1rem;
-  background: #f9f9f9;
-}
-
-.config-header {
+.scope-type-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid #ddd;
-}
-
-.config-header strong {
-  color: #667eea;
-  font-size: 0.95rem;
-}
-
-.btn-remove {
-  padding: 0.3rem 0.75rem;
-  background: #dc3545;
-  color: white;
-  border: none;
-  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  background: white;
   cursor: pointer;
+  transition: background-color 0.15s;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.scope-type-row:last-child {
+  border-bottom: none;
+}
+
+.scope-type-row:hover {
+  background: #f8f9fa;
+}
+
+.scope-type-row.active {
+  background: #e3f2fd;
+}
+
+.scope-type-row.active:hover {
+  background: #d1e7fd;
+}
+
+.scope-type-label {
+  font-size: 0.9rem;
+  color: #333;
+  font-weight: 500;
+}
+
+.scope-type-pill {
+  padding: 0.25rem 0.75rem;
+  background: #e0e0e0;
+  color: #666;
+  border-radius: 12px;
   font-size: 0.8rem;
-  transition: background-color 0.2s;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
-.btn-remove:hover {
-  background: #c82333;
+.scope-type-row.active .scope-type-pill {
+  background: #667eea;
+  color: white;
 }
 
-.config-body {
+.expand-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: #f8f9fa;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.expand-row:hover {
+  background: #e9ecef;
+}
+
+.expand-label {
+  font-size: 0.85rem;
+  color: #667eea;
+  font-weight: 500;
+}
+
+.expand-icon {
+  font-size: 0.7rem;
+  color: #667eea;
+}
+
+/* Modal styles */
+.scope-config-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 8px;
+  max-width: 600px;
+  width: 100%;
+  max-height: 80vh;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.modal-header h5 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.btn-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #999;
+  cursor: pointer;
+  padding: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.15s;
+}
+
+.btn-close:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.modal-body {
+  padding: 1.25rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.scope-help {
+  margin: 0 0 1rem 0;
+  padding: 0.75rem;
+  background: #f8f9fa;
+  border-left: 3px solid #667eea;
+  font-size: 0.85rem;
+  color: #666;
+  border-radius: 4px;
+}
+
+.scope-enabled-toggle {
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 6px;
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
+  gap: 0.75rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  font-size: 0.9rem;
+  border-radius: 4px;
+  transition: background-color 0.15s;
+}
+
+.checkbox-label:hover {
+  background: #f8f9fa;
+}
+
+.checkbox-label input[type="checkbox"] {
+  cursor: pointer;
+  width: 1.1rem;
+  height: 1.1rem;
+  flex-shrink: 0;
+}
+
+.checkbox-label.special-option {
+  background: #f8f9fa;
+  border: 2px solid #667eea;
+  margin-bottom: 1rem;
+}
+
+.checkbox-label.special-option:hover {
+  background: #e3f2fd;
+}
+
+.specific-selection {
+  display: flex;
+  flex-direction: column;
   gap: 0.5rem;
 }
 
-.form-group label {
-  font-weight: 500;
-  color: #333;
-  font-size: 0.9rem;
-}
-
-select,
 .search-input {
   padding: 0.6rem;
   border: 1px solid #ddd;
@@ -381,46 +787,19 @@ select,
   background: white;
 }
 
-select {
-  cursor: pointer;
-}
-
-.help-text {
-  font-size: 0.8rem;
-  color: #666;
-  font-style: italic;
-  margin-top: 0.25rem;
-}
-
 .checkbox-group {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.75rem;
+  gap: 0.25rem;
+  padding: 0.5rem;
   border: 1px solid #ddd;
   border-radius: 4px;
   background: white;
 }
 
 .checkbox-group.scrollable {
-  max-height: 200px;
+  max-height: 250px;
   overflow-y: auto;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  padding: 0.25rem;
-  font-size: 0.9rem;
-}
-
-.checkbox-label input[type="checkbox"] {
-  cursor: pointer;
-  width: 1.1rem;
-  height: 1.1rem;
-  flex-shrink: 0;
 }
 
 .area-color-dot {
@@ -454,48 +833,39 @@ select {
   text-overflow: ellipsis;
 }
 
-.specificity-info {
-  padding: 0.5rem;
-  background: #e3f2fd;
-  border-radius: 4px;
-  border: 1px solid #90caf9;
+.modal-footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid #e0e0e0;
+  gap: 1rem;
 }
 
-.specificity-info small {
-  color: #1976d2;
-  font-size: 0.8rem;
-}
-
-.btn-add-scope {
-  padding: 0.75rem 1.25rem;
-  background: #6c757d;
-  color: white;
+.btn {
+  padding: 0.6rem 1.5rem;
   border: none;
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.9rem;
   font-weight: 500;
   transition: background-color 0.2s;
-  align-self: flex-start;
 }
 
-.btn-add-scope:hover {
+.btn-primary {
+  background: #007bff;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #0056b3;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: white;
+}
+
+.btn-secondary:hover {
   background: #545b62;
-}
-
-.most-specific-wins-info {
-  padding: 1rem;
-  background: #fff3cd;
-  border: 1px solid #ffc107;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  color: #856404;
-  line-height: 1.6;
-}
-
-.most-specific-wins-info strong {
-  display: block;
-  margin-bottom: 0.25rem;
-  color: #856404;
 }
 </style>

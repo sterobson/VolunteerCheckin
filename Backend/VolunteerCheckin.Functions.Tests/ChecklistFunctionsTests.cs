@@ -26,6 +26,7 @@ public class ChecklistFunctionsTests
     private Mock<IAssignmentRepository> _mockAssignmentRepository = null!;
     private Mock<IAreaRepository> _mockAreaRepository = null!;
     private Mock<ILocationRepository> _mockLocationRepository = null!;
+    private Mock<IAdminUserRepository> _mockAdminUserRepository = null!;
     private ChecklistFunctions _functions = null!;
 
     private const string EventId = "event123";
@@ -45,6 +46,7 @@ public class ChecklistFunctionsTests
         _mockAssignmentRepository = new Mock<IAssignmentRepository>();
         _mockAreaRepository = new Mock<IAreaRepository>();
         _mockLocationRepository = new Mock<ILocationRepository>();
+        _mockAdminUserRepository = new Mock<IAdminUserRepository>();
 
         _functions = new ChecklistFunctions(
             _mockLogger.Object,
@@ -53,7 +55,8 @@ public class ChecklistFunctionsTests
             _mockMarshalRepository.Object,
             _mockAssignmentRepository.Object,
             _mockLocationRepository.Object,
-            _mockAreaRepository.Object
+            _mockAreaRepository.Object,
+            _mockAdminUserRepository.Object
         );
     }
 
@@ -65,7 +68,7 @@ public class ChecklistFunctionsTests
         // Arrange
         CreateChecklistItemRequest request = new(
             Text: "Collect hi-viz vest",
-            ScopeConfigurations: [new ScopeConfiguration { Scope = Constants.ChecklistScopeEveryone, ItemType = null, Ids = [] }],
+            ScopeConfigurations: [new ScopeConfiguration { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [Constants.AllMarshals] }],
             DisplayOrder: 1,
             IsRequired: true,
             VisibleFrom: null,
@@ -92,7 +95,7 @@ public class ChecklistFunctionsTests
         response.EventId.ShouldBe(EventId);
         response.Text.ShouldBe("Collect hi-viz vest");
         response.ScopeConfigurations.Count.ShouldBe(1);
-        response.ScopeConfigurations[0].Scope.ShouldBe(Constants.ChecklistScopeEveryone);
+        response.ScopeConfigurations[0].Scope.ShouldBe(Constants.ChecklistScopeSpecificPeople);
         response.DisplayOrder.ShouldBe(1);
         response.IsRequired.ShouldBeTrue();
 
@@ -122,7 +125,7 @@ public class ChecklistFunctionsTests
         // Arrange
         CreateChecklistItemRequest request = new(
             Text: "Test <script>alert('xss')</script> item",
-            ScopeConfigurations: [new ScopeConfiguration { Scope = Constants.ChecklistScopeEveryone, ItemType = null, Ids = [] }],
+            ScopeConfigurations: [new ScopeConfiguration { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [Constants.AllMarshals] }],
             DisplayOrder: 1,
             IsRequired: true,
             VisibleFrom: null,
@@ -166,7 +169,7 @@ public class ChecklistFunctionsTests
                 Text = "Item 1",
                 ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
                 {
-                    new() { Scope = Constants.ChecklistScopeEveryone, ItemType = null, Ids = [] }
+                    new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [Constants.AllMarshals] }
                 }),
                 DisplayOrder = 1,
                 IsRequired = true,
@@ -227,7 +230,7 @@ public class ChecklistFunctionsTests
             Text = "Test item",
             ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
             {
-                new() { Scope = Constants.ChecklistScopeEveryone, ItemType = null, Ids = [] }
+                new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [Constants.AllMarshals] }
             }),
             DisplayOrder = 1,
             IsRequired = true,
@@ -287,7 +290,7 @@ public class ChecklistFunctionsTests
             Text = "Old text",
             ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
             {
-                new() { Scope = Constants.ChecklistScopeEveryone, ItemType = null, Ids = [] }
+                new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [Constants.AllMarshals] }
             }),
             DisplayOrder = 1,
             IsRequired = true,
@@ -334,7 +337,7 @@ public class ChecklistFunctionsTests
         // Arrange
         UpdateChecklistItemRequest request = new(
             Text: "Updated text",
-            ScopeConfigurations: [new ScopeConfiguration { Scope = Constants.ChecklistScopeEveryone, ItemType = null, Ids = [] }],
+            ScopeConfigurations: [new ScopeConfiguration { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [Constants.AllMarshals] }],
             DisplayOrder: 1,
             IsRequired: true,
             VisibleFrom: null,
@@ -372,7 +375,7 @@ public class ChecklistFunctionsTests
             Text = "Test item",
             ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
             {
-                new() { Scope = Constants.ChecklistScopeEveryone, ItemType = null, Ids = [] }
+                new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [Constants.AllMarshals] }
             }),
             DisplayOrder = 1,
             IsRequired = true,
@@ -428,7 +431,7 @@ public class ChecklistFunctionsTests
             Text = "Test item",
             ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
             {
-                new() { Scope = Constants.ChecklistScopeEveryone, ItemType = null, Ids = [] }
+                new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [Constants.AllMarshals] }
             }),
             DisplayOrder = 1,
             IsRequired = true,
@@ -444,7 +447,7 @@ public class ChecklistFunctionsTests
                 RowKey = $"{ItemId}#completion1",
                 EventId = EventId,
                 ChecklistItemId = ItemId,
-                CompletedByMarshalId = MarshalId,
+                ContextOwnerMarshalId = MarshalId,
                 IsDeleted = false
             }
         ];
@@ -516,7 +519,7 @@ public class ChecklistFunctionsTests
                 Text = "Everyone item",
                 ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
                 {
-                    new() { Scope = Constants.ChecklistScopeEveryone, ItemType = null, Ids = [] }
+                    new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [Constants.AllMarshals] }
                 }),
                 DisplayOrder = 1,
                 IsRequired = true,
@@ -618,7 +621,7 @@ public class ChecklistFunctionsTests
             Text = "Test item",
             ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
             {
-                new() { Scope = Constants.ChecklistScopeEveryone, ItemType = null, Ids = [] }
+                new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [Constants.AllMarshals] }
             }),
             DisplayOrder = 1,
             IsRequired = true,
@@ -678,8 +681,11 @@ public class ChecklistFunctionsTests
         capturedCompletion.ShouldNotBeNull();
         capturedCompletion.EventId.ShouldBe(EventId);
         capturedCompletion.ChecklistItemId.ShouldBe(ItemId);
-        capturedCompletion.CompletedByMarshalId.ShouldBe(MarshalId);
-        capturedCompletion.CompletedByMarshalName.ShouldBe("John Doe");
+        capturedCompletion.ContextOwnerMarshalId.ShouldBe(MarshalId);
+        capturedCompletion.ContextOwnerMarshalName.ShouldBe("John Doe");
+        capturedCompletion.ActorType.ShouldBe(Constants.ActorTypeMarshal);
+        capturedCompletion.ActorId.ShouldBe(MarshalId);
+        capturedCompletion.ActorName.ShouldBe("John Doe");
         capturedCompletion.IsDeleted.ShouldBeFalse();
     }
 
@@ -715,7 +721,7 @@ public class ChecklistFunctionsTests
             Text = "Test item",
             ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
             {
-                new() { Scope = Constants.ChecklistScopeEveryone, ItemType = null, Ids = [] }
+                new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [Constants.AllMarshals] }
             }),
             DisplayOrder = 1,
             IsRequired = true,
@@ -755,7 +761,7 @@ public class ChecklistFunctionsTests
             Text = "Test item",
             ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
             {
-                new() { Scope = Constants.ChecklistScopeEveryone, ItemType = null, Ids = [] }
+                new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [Constants.AllMarshals] }
             }),
             DisplayOrder = 1,
             IsRequired = true,
@@ -780,7 +786,7 @@ public class ChecklistFunctionsTests
                 RowKey = $"{ItemId}#completion1",
                 EventId = EventId,
                 ChecklistItemId = ItemId,
-                CompletedByMarshalId = MarshalId,
+                ContextOwnerMarshalId = MarshalId,
                 CompletionContextType = Constants.ChecklistContextPersonal,
                 CompletionContextId = MarshalId,
                 IsDeleted = false
@@ -839,7 +845,7 @@ public class ChecklistFunctionsTests
             Text = "Test item",
             ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
             {
-                new() { Scope = Constants.ChecklistScopeEveryone, ItemType = null, Ids = [] }
+                new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [Constants.AllMarshals] }
             }),
             DisplayOrder = 1,
             IsRequired = true,
@@ -862,7 +868,7 @@ public class ChecklistFunctionsTests
             RowKey = $"{ItemId}#completion1",
             EventId = EventId,
             ChecklistItemId = ItemId,
-            CompletedByMarshalId = MarshalId,
+            ContextOwnerMarshalId = MarshalId,
             CompletionContextType = Constants.ChecklistContextPersonal,
             CompletionContextId = MarshalId,
             IsDeleted = false
@@ -934,7 +940,7 @@ public class ChecklistFunctionsTests
             Text = "Test item",
             ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
             {
-                new() { Scope = Constants.ChecklistScopeEveryone, ItemType = null, Ids = [] }
+                new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [Constants.AllMarshals] }
             }),
             DisplayOrder = 1,
             IsRequired = true,
@@ -1004,7 +1010,7 @@ public class ChecklistFunctionsTests
                 Text = "Item 1",
                 ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
                 {
-                    new() { Scope = Constants.ChecklistScopeEveryone, ItemType = null, Ids = [] }
+                    new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [Constants.AllMarshals] }
                 }),
                 DisplayOrder = 1,
                 IsRequired = true,
@@ -1021,8 +1027,11 @@ public class ChecklistFunctionsTests
                 RowKey = "item1#completion1",
                 EventId = EventId,
                 ChecklistItemId = "item1",
-                CompletedByMarshalId = MarshalId,
-                CompletedByMarshalName = "John Doe",
+                ContextOwnerMarshalId = MarshalId,
+                ContextOwnerMarshalName = "John Doe",
+                ActorType = Constants.ActorTypeMarshal,
+                ActorId = MarshalId,
+                ActorName = "John Doe",
                 CompletedAt = DateTime.UtcNow,
                 CompletionContextType = Constants.ChecklistContextPersonal,
                 CompletionContextId = MarshalId,
@@ -1170,7 +1179,7 @@ public class ChecklistFunctionsTests
         // Arrange
         CreateChecklistItemRequest request = new(
             Text: "Item 1\nItem 2\nItem 3",
-            ScopeConfigurations: [new ScopeConfiguration { Scope = Constants.ChecklistScopeEveryone, ItemType = null, Ids = [] }],
+            ScopeConfigurations: [new ScopeConfiguration { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [Constants.AllMarshals] }],
             DisplayOrder: 1,
             IsRequired: true,
             VisibleFrom: null,
@@ -1215,7 +1224,7 @@ public class ChecklistFunctionsTests
         // Arrange
         CreateChecklistItemRequest request = new(
             Text: "Item 1\n\n\nItem 2\n  \nItem 3",
-            ScopeConfigurations: [new ScopeConfiguration { Scope = Constants.ChecklistScopeEveryone, ItemType = null, Ids = [] }],
+            ScopeConfigurations: [new ScopeConfiguration { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [Constants.AllMarshals] }],
             DisplayOrder: 10,
             IsRequired: false,
             VisibleFrom: null,
@@ -1248,7 +1257,7 @@ public class ChecklistFunctionsTests
         // Arrange
         CreateChecklistItemRequest request = new(
             Text: "\n\n\n",
-            ScopeConfigurations: [new ScopeConfiguration { Scope = Constants.ChecklistScopeEveryone, ItemType = null, Ids = [] }],
+            ScopeConfigurations: [new ScopeConfiguration { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [Constants.AllMarshals] }],
             DisplayOrder: 1,
             IsRequired: true,
             VisibleFrom: null,
@@ -1296,7 +1305,7 @@ public class ChecklistFunctionsTests
                 Text = "Visible now",
                 ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
                 {
-                    new() { Scope = Constants.ChecklistScopeEveryone, ItemType = null, Ids = [] }
+                    new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [Constants.AllMarshals] }
                 }),
                 DisplayOrder = 1,
                 IsRequired = true,
@@ -1313,7 +1322,7 @@ public class ChecklistFunctionsTests
                 Text = "Not visible yet",
                 ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
                 {
-                    new() { Scope = Constants.ChecklistScopeEveryone, ItemType = null, Ids = [] }
+                    new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [Constants.AllMarshals] }
                 }),
                 DisplayOrder = 2,
                 IsRequired = true,
@@ -1385,7 +1394,7 @@ public class ChecklistFunctionsTests
                 Text = "Still visible",
                 ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
                 {
-                    new() { Scope = Constants.ChecklistScopeEveryone, ItemType = null, Ids = [] }
+                    new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [Constants.AllMarshals] }
                 }),
                 DisplayOrder = 1,
                 IsRequired = true,
@@ -1402,7 +1411,7 @@ public class ChecklistFunctionsTests
                 Text = "Expired",
                 ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
                 {
-                    new() { Scope = Constants.ChecklistScopeEveryone, ItemType = null, Ids = [] }
+                    new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [Constants.AllMarshals] }
                 }),
                 DisplayOrder = 2,
                 IsRequired = true,
@@ -1509,8 +1518,11 @@ public class ChecklistFunctionsTests
             RowKey = $"{ItemId}#completion1",
             EventId = EventId,
             ChecklistItemId = ItemId,
-            CompletedByMarshalId = "other-marshal",
-            CompletedByMarshalName = "Jane Smith",
+            ContextOwnerMarshalId = "other-marshal",
+            ContextOwnerMarshalName = "Jane Smith",
+            ActorType = Constants.ActorTypeMarshal,
+            ActorId = "other-marshal",
+            ActorName = "Jane Smith",
             CompletionContextType = Constants.ChecklistContextCheckpoint,
             CompletionContextId = LocationId,
             IsDeleted = false
@@ -1610,8 +1622,11 @@ public class ChecklistFunctionsTests
             RowKey = $"{ItemId}#completion1",
             EventId = EventId,
             ChecklistItemId = ItemId,
-            CompletedByMarshalId = MarshalId,
-            CompletedByMarshalName = "John Doe",
+            ContextOwnerMarshalId = MarshalId,
+            ContextOwnerMarshalName = "John Doe",
+            ActorType = Constants.ActorTypeMarshal,
+            ActorId = MarshalId,
+            ActorName = "John Doe",
             CompletionContextType = Constants.ChecklistContextArea,
             CompletionContextId = AreaId,
             IsDeleted = false

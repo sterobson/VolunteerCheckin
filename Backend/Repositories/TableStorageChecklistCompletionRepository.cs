@@ -72,7 +72,7 @@ public class TableStorageChecklistCompletionRepository : IChecklistCompletionRep
 
         // EFFICIENT: Single partition scan filtered by marshal
         await foreach (ChecklistCompletionEntity completion in _table.QueryAsync<ChecklistCompletionEntity>(
-            c => c.PartitionKey == partitionKey && c.CompletedByMarshalId == marshalId && c.IsDeleted == false))
+            c => c.PartitionKey == partitionKey && c.ContextOwnerMarshalId == marshalId && c.IsDeleted == false))
         {
             completions.Add(completion);
         }

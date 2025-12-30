@@ -117,10 +117,13 @@ public static class EntityExtensions
             entity.RowKey,
             entity.EventId,
             entity.ChecklistItemId,
-            entity.CompletedByMarshalId,
-            entity.CompletedByMarshalName,
             entity.CompletionContextType,
             entity.CompletionContextId,
+            entity.ContextOwnerMarshalId,
+            entity.ContextOwnerMarshalName,
+            entity.ActorType,
+            entity.ActorId,
+            entity.ActorName,
             entity.CompletedAt,
             entity.IsDeleted
         );

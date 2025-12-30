@@ -236,7 +236,7 @@ public class AreaFunctions
                 // Remove this area from all checkpoints, and assign to default if no other areas
                 foreach (LocationEntity checkpoint in checkpointsInArea)
                 {
-                    List<string> areaIds = System.Text.Json.JsonSerializer.Deserialize<List<string>>(checkpoint.AreaIdsJson) ?? new List<string>();
+                    List<string> areaIds = System.Text.Json.JsonSerializer.Deserialize<List<string>>(checkpoint.AreaIdsJson) ?? [];
 
                     // Remove the area being deleted
                     areaIds.Remove(areaId);
@@ -490,7 +490,7 @@ public class AreaFunctions
 
             if (areaLeadIds.Count == 0)
             {
-                return new OkObjectResult(new List<AreaLeadResponse>());
+                return new OkObjectResult(Array.Empty<AreaLeadResponse>());
             }
 
             // Get marshal details for each area lead

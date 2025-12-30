@@ -176,8 +176,11 @@
     <EditMarshalModal
       :show="showEditMarshal"
       :marshal="selectedMarshal"
+      :event-id="route.params.eventId"
       :assignments="getMarshalAssignmentsForEdit()"
       :availableLocations="availableMarshalLocations"
+      :allLocations="locationStatuses"
+      :areas="areas"
       :isEditing="!!selectedMarshal"
       :isDirty="formDirty"
       @close="closeEditMarshalModal"
@@ -241,6 +244,7 @@
     <EditChecklistItemModal
       :show="showEditChecklistItem"
       :checklist-item="selectedChecklistItem"
+      :initial-tab="checklistItemInitialTab"
       :areas="areas"
       :locations="locationStatuses"
       :marshals="marshals"
@@ -445,6 +449,7 @@ const savedMapZoom = ref(null); // Store map zoom when entering fullscreen
 const checklistItems = ref([]);
 const selectedChecklistItem = ref(null);
 const showEditChecklistItem = ref(false);
+const checklistItemInitialTab = ref('details');
 const checklistCompletionReport = ref(null);
 
 // Computed
@@ -575,8 +580,8 @@ const shareEvent = () => {
   showShareLink.value = true;
 };
 
-const markFormDirty = () => {
-  formDirty.value = true;
+const markFormDirty = (isDirty = true) => {
+  formDirty.value = isDirty;
 };
 
 const markEventDetailsFormDirty = () => {
@@ -789,12 +794,14 @@ const closeEditAreaModal = () => {
 
 const handleAddChecklistItem = () => {
   selectedChecklistItem.value = null;
+  checklistItemInitialTab.value = 'details';
   formDirty.value = false;
   showEditChecklistItem.value = true;
 };
 
-const handleSelectChecklistItem = (item) => {
+const handleSelectChecklistItem = (item, tab = 'details') => {
   selectedChecklistItem.value = item;
+  checklistItemInitialTab.value = tab;
   formDirty.value = false;
   showEditChecklistItem.value = true;
 };
@@ -818,7 +825,8 @@ const handleSaveChecklistItem = async (formData) => {
     closeEditChecklistItemModal();
   } catch (error) {
     console.error('Failed to save checklist item:', error);
-    alert(error.response?.data?.message || 'Failed to save checklist item. Please try again.');
+    const errorMessage = error.response?.data?.message || 'Failed to save checklist item. Please try again.';
+    alert(errorMessage);
   }
 };
 
@@ -1773,6 +1781,36 @@ const handleSaveMarshal = async (formData) => {
           if (assignment.isCheckedIn !== change.shouldBeCheckedIn) {
             await checkInApi.adminCheckIn(route.params.eventId, change.assignmentId);
           }
+        }
+      }
+    }
+
+    // Process checklist changes
+    if (formData.checklistChanges && formData.checklistChanges.length > 0) {
+      for (const change of formData.checklistChanges) {
+        try {
+          const requestBody = {
+            marshalId: selectedMarshal.value.id,
+          };
+
+          // Only include context if it's defined and not empty
+          if (change.contextType && change.contextId) {
+            requestBody.contextType = change.contextType;
+            requestBody.contextId = change.contextId;
+          }
+
+          if (change.complete) {
+            // Complete the item
+            await checklistApi.complete(route.params.eventId, change.itemId, requestBody);
+          } else {
+            // Uncomplete the item
+            await checklistApi.uncomplete(route.params.eventId, change.itemId, requestBody);
+          }
+        } catch (error) {
+          console.error('Failed to process checklist change:', error);
+          const errorMsg = error.response?.data?.message || 'Failed to update checklist item';
+          alert(`Error: ${errorMsg}`);
+          // Continue processing other changes
         }
       }
     }

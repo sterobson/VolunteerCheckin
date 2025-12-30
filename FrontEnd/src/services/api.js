@@ -113,6 +113,7 @@ export const checklistApi = {
   update: (eventId, itemId, data) => api.put(`/checklist-items/${eventId}/${itemId}`, data),
   delete: (eventId, itemId) => api.delete(`/checklist-items/${eventId}/${itemId}`),
   getReport: (eventId) => api.get(`/events/${eventId}/checklist-report`),
+  getMarshalChecklist: (eventId, marshalId) => api.get(`/events/${eventId}/marshals/${marshalId}/checklist`),
   complete: (eventId, itemId, data) => api.post(`/checklist-items/${eventId}/${itemId}/complete`, data),
   uncomplete: (eventId, itemId, data) => api.post(`/checklist-items/${eventId}/${itemId}/uncomplete`, data),
 };

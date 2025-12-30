@@ -3,6 +3,7 @@
 ## Table of Contents
 - [Overview](#overview)
 - [Core Concepts](#core-concepts)
+- [Available Scope Types](#available-scope-types)
 - [Data Models](#data-models)
 - [Checklist Scopes Explained](#checklist-scopes-explained)
 - [Advanced Scope Configuration Examples](#advanced-scope-configuration-examples)
@@ -61,7 +62,7 @@ Determines who can see and complete a checklist item. Each item can have MULTIPL
 ### 4. Flexible Scope System & Most Specific Wins
 
 Each checklist item can have MULTIPLE scope configurations in an array. This allows complex targeting like:
-- "Everyone in area-north + checkpoint-42 + John Doe personally"
+- "All marshals in area-north + checkpoint-42 + John Doe personally"
 
 When a marshal matches multiple configurations, the **Most Specific Wins** rule determines the completion context:
 
@@ -69,7 +70,6 @@ When a marshal matches multiple configurations, the **Most Specific Wins** rule 
 1. **Marshal ID** (specificity = 1) - Explicitly listed marshal
 2. **Checkpoint ID** (specificity = 2) - Assigned to specific checkpoint
 3. **Area ID** (specificity = 3) - Assigned to checkpoint in specific area
-4. **Everyone** (specificity = 4) - No filter
 
 **Example**: Item has configs:
 ```json
@@ -91,9 +91,9 @@ When a marshal matches multiple configurations, the **Most Specific Wins** rule 
 
 ### 5. Completion Context
 For shared items (OnePerCheckpoint, OnePerArea), the context identifies which checkpoint/area was completed:
-- **Personal**: Context = Marshal ID (for Everyone, EveryoneInAreas, etc.)
+- **Personal**: Context = Marshal ID (for SpecificPeople, EveryoneInAreas, etc.)
 - **Checkpoint**: Context = Location ID (for OnePerCheckpoint)
-- **Area**: Context = Area ID (for OnePerArea, AreaLead)
+- **Area**: Context = Area ID (for OnePerArea, OneLeadPerArea)
 
 ### 6. Area Lead
 A marshal designated as a "lead" for a specific area. Area leads have special permissions:
@@ -105,13 +105,68 @@ A marshal designated as a "lead" for a specific area. Area leads have special pe
 
 ---
 
+## Available Scope Types
+
+This section provides a comprehensive overview of all 7 scope types available in the checklist system.
+
+### 1. EveryoneInAreas
+- **Scope Name**: `EveryoneInAreas`
+- **Completion Type**: Personal
+- **Who sees it**: Marshals assigned to checkpoints in specified areas
+- **Filter**: `itemType: "Area"`, `ids: [area IDs]`
+- **Use case**: Area-specific tasks that each marshal in those areas must complete individually, such as "Reviewed area-specific instructions" or "Checked area map"
+
+### 2. EveryoneAtCheckpoints
+- **Scope Name**: `EveryoneAtCheckpoints`
+- **Completion Type**: Personal
+- **Who sees it**: Marshals assigned to specified checkpoints
+- **Filter**: `itemType: "Checkpoint"`, `ids: [checkpoint IDs]`
+- **Use case**: Checkpoint-specific tasks that each marshal at those checkpoints must complete individually, such as "Read checkpoint-specific instructions" or "Collected checkpoint sign"
+
+### 3. SpecificPeople
+- **Scope Name**: `SpecificPeople`
+- **Completion Type**: Personal
+- **Who sees it**: Only the specified marshals
+- **Filter**: `itemType: "Marshal"`, `ids: [marshal IDs]`
+- **Use case**: Tasks assigned to specific individuals, such as "Submit incident report (John)" or "Call coordinator (Sarah)"
+
+### 4. EveryAreaLead
+- **Scope Name**: `EveryAreaLead`
+- **Completion Type**: Personal
+- **Who sees it**: Area leads for specified areas
+- **Filter**: `itemType: "Area"`, `ids: [area IDs]`
+- **Use case**: Tasks that each area lead must complete individually, such as "Attended area lead briefing" or "Collected personal area lead equipment"
+
+### 5. OnePerCheckpoint
+- **Scope Name**: `OnePerCheckpoint`
+- **Completion Type**: Shared
+- **Who sees it**: Marshals assigned to specified checkpoints, and area leads for areas containing those checkpoints
+- **Filter**: `itemType: "Checkpoint"`, `ids: [checkpoint IDs]` OR `itemType: "Area"`, `ids: [area IDs]` (filters checkpoints by area)
+- **Use case**: Tasks that only need one completion per checkpoint, such as "Spoken to traffic management" or "Set up checkpoint signage"
+
+### 6. OnePerArea
+- **Scope Name**: `OnePerArea`
+- **Completion Type**: Shared
+- **Who sees it**: Marshals assigned to checkpoints in specified areas, and area leads for those areas
+- **Filter**: `itemType: "Area"`, `ids: [area IDs]`
+- **Use case**: Tasks that only need one completion per area, such as "Submitted area incident log" or "Verified all checkpoints in area"
+
+### 7. OneLeadPerArea
+- **Scope Name**: `OneLeadPerArea`
+- **Completion Type**: Shared
+- **Who sees it**: Area leads for specified areas (regular marshals cannot see or complete)
+- **Filter**: `itemType: "Area"`, `ids: [area IDs]`
+- **Use case**: Area lead tasks that only need one completion per area, such as "Submitted area lead report" or "Collected all radios for area"
+
+---
+
 ## Data Models
 
 ### ScopeConfiguration
 ```typescript
 interface ScopeConfiguration {
-  scope: string;         // "Everyone", "OnePerCheckpoint", etc.
-  itemType: string | null;  // "Marshal", "Checkpoint", "Area", or null for Everyone
+  scope: string;         // "SpecificPeople", "OnePerCheckpoint", etc.
+  itemType: string | null;  // "Marshal", "Checkpoint", "Area"
   ids: string[];         // IDs to match (marshal IDs, checkpoint IDs, or area IDs)
 }
 ```
@@ -177,33 +232,7 @@ interface AreaLeadResponse {
 
 ## Checklist Scopes Explained
 
-### 1. Everyone
-**Who sees it**: Every marshal in the event
-**Who can complete**: The marshal themselves
-**Context**: Personal (per marshal)
-**Use case**: "Collected hi-viz vest", "Attended safety briefing"
-
-```json
-{
-  "scopeConfigurations": [
-    {
-      "scope": "Everyone",
-      "itemType": null,
-      "ids": []
-    }
-  ]
-}
-```
-
-**Example**:
-- 50 marshals in event
-- All 50 see this item
-- Each completes it individually
-- 50 separate completions possible
-
----
-
-### 2. EveryoneInAreas
+### 1. EveryoneInAreas
 **Who sees it**: Marshals assigned to checkpoints in specified areas
 **Who can complete**: The marshal themselves
 **Context**: Personal (per marshal)
@@ -231,7 +260,7 @@ interface AreaLeadResponse {
 
 ---
 
-### 3. EveryoneAtCheckpoints
+### 2. EveryoneAtCheckpoints
 **Who sees it**: Marshals assigned to specified checkpoints
 **Who can complete**: The marshal themselves
 **Context**: Personal (per marshal)
@@ -259,7 +288,7 @@ interface AreaLeadResponse {
 
 ---
 
-### 4. SpecificPeople
+### 3. SpecificPeople
 **Who sees it**: Only the specified marshals
 **Who can complete**: Those specific marshals
 **Context**: Personal (per marshal)
@@ -284,7 +313,7 @@ interface AreaLeadResponse {
 
 ---
 
-### 5. OnePerCheckpoint
+### 4. OnePerCheckpoint
 **Who sees it**:
 - Marshals assigned to specified checkpoints
 - Area leads for areas containing those checkpoints
@@ -333,9 +362,59 @@ Sarah is NOT assigned to checkpoint 5
 Sarah STILL sees this item and can complete it (because she's area lead)
 ```
 
+#### OnePerCheckpoint Filtered By Areas
+
+You can filter OnePerCheckpoint scope to only checkpoints within specific areas by using **itemType: "Area"** instead of "Checkpoint":
+
+```json
+{
+  "scopeConfigurations": [
+    {
+      "scope": "OnePerCheckpoint",
+      "itemType": "Area",
+      "ids": ["area-north", "area-south"]
+    }
+  ]
+}
+```
+
+**Behavior**:
+- **Completion**: One completion per checkpoint (shared by all marshals at that checkpoint)
+- **Filtering**: Only checkpoints in area-north or area-south are included
+- **Context**: Checkpoint (uses checkpoint ID, not area ID)
+- **Specificity**: 2 (checkpoint-level specificity)
+- **Sentinel support**: Can use `ALL_AREAS` to mean all checkpoints in all areas
+
+**Example**:
+```
+Event has:
+- Checkpoint 1 (in North area)
+- Checkpoint 2 (in North area)
+- Checkpoint 3 (in South area)
+- Checkpoint 4 (in East area)
+
+Item: "Check first aid kit" (OnePerCheckpoint: areas=[North])
+
+Results:
+- Marshal at checkpoint 1 → Sees item (shared completion for checkpoint 1)
+- Marshal at checkpoint 2 → Sees item (shared completion for checkpoint 2)
+- Marshal at checkpoint 3 → Does NOT see item (South area not included)
+- Marshal at checkpoint 4 → Does NOT see item (East area not included)
+```
+
+**Use cases**:
+- "Check first aid kit" - one per checkpoint, but only in medical-critical areas
+- "Confirm radio signal" - one per checkpoint, but only in remote areas
+- "Set up emergency signage" - one per checkpoint, only in high-risk areas
+
+**Why not just list checkpoint IDs?**
+- Future-proof: New checkpoints added to the area automatically get the item
+- Easier management: No need to update checklist items when checkpoints change
+- Organizational: Group requirements by area without losing checkpoint-level completion
+
 ---
 
-### 6. OnePerArea
+### 5. OnePerArea
 **Who sees it**:
 - Marshals assigned to checkpoints in specified areas
 - Area leads for those areas
@@ -370,7 +449,7 @@ Sarah STILL sees this item and can complete it (because she's area lead)
 
 ---
 
-### 7. AreaLead
+### 6. OneLeadPerArea
 **Who sees it**: Area leads for specified areas
 **Who can complete**: Area leads only
 **Context**: Area (per area)
@@ -380,7 +459,7 @@ Sarah STILL sees this item and can complete it (because she's area lead)
 {
   "scopeConfigurations": [
     {
-      "scope": "AreaLead",
+      "scope": "OneLeadPerArea",
       "itemType": "Area",
       "ids": ["area-north"]
     }
@@ -391,8 +470,45 @@ Sarah STILL sees this item and can complete it (because she's area lead)
 **Example**:
 - North area has 3 area leads (Sarah, John, Mike)
 - All 3 see this item
-- Any ONE of them can complete it
+- Any ONE of them can complete it (shared completion)
+- Once completed by Sarah → Shows as "✓ Completed by Sarah" to John and Mike
 - Regular marshals in North area do NOT see it
+
+---
+
+### 7. EveryAreaLead
+**Who sees it**: Area leads for specified areas
+**Who can complete**: Each area lead individually
+**Context**: Personal (per area lead)
+**Use case**: "Attended area lead briefing", "Collected personal area lead equipment", "Acknowledged area lead responsibilities"
+
+```json
+{
+  "scopeConfigurations": [
+    {
+      "scope": "EveryAreaLead",
+      "itemType": "Area",
+      "ids": ["area-north"]
+    }
+  ]
+}
+```
+
+**Example**:
+- North area has 3 area leads (Sarah, John, Mike)
+- All 3 see this item
+- EACH must complete it individually (personal completion)
+- When Sarah completes → Only Sarah's shows complete
+- John and Mike still see it as incomplete for themselves
+- Regular marshals in North area do NOT see it
+
+**Key Difference from OneLeadPerArea**:
+- **OneLeadPerArea** (scope 6): Shared completion - one completion per area
+- **EveryAreaLead** (scope 7): Personal completion - each lead completes separately
+
+**When to use which**:
+- Use **OneLeadPerArea** for: Tasks that only ONE person needs to do per area (e.g., "Submit area report", "Collect all radios")
+- Use **EveryAreaLead** for: Tasks that EACH lead must do individually (e.g., "Attend briefing", "Acknowledge responsibilities")
 
 ---
 
@@ -468,7 +584,7 @@ Sarah STILL sees this item and can complete it (because she's area lead)
       "ids": ["checkpoint-5"]
     },
     {
-      "scope": "AreaLead",
+      "scope": "OneLeadPerArea",
       "itemType": "Area",
       "ids": ["area-north"]
     }
@@ -482,7 +598,7 @@ Sarah STILL sees this item and can complete it (because she's area lead)
 **Completion context**:
 - Regular marshal at checkpoint-5: Matches OnePerCheckpoint → Context: Checkpoint:checkpoint-5
 - Area lead for North at checkpoint-5: Most specific match = Checkpoint (specificity 2) → Context: Checkpoint:checkpoint-5
-- Area lead for North NOT at checkpoint-5: Matches AreaLead → Context: Area:area-north
+- Area lead for North NOT at checkpoint-5: Matches OneLeadPerArea → Context: Area:area-north
 
 ---
 
@@ -525,6 +641,139 @@ Sarah STILL sees this item and can complete it (because she's area lead)
 
 ---
 
+### Scenario 5: Sentinel Values - ALL_CHECKPOINTS, ALL_AREAS, and ALL_MARSHALS
+
+For maximum flexibility, you can use special **sentinel values** to match all current and future checkpoints, areas, or marshals without having to manually update checklist items as new ones are created.
+
+#### Available Sentinel Values:
+- `ALL_CHECKPOINTS` - Matches all checkpoints in the event
+- `ALL_AREAS` - Matches all areas in the event
+- `ALL_MARSHALS` - Matches all marshals in the event
+
+**✅ Benefits:**
+- Automatically includes checkpoints/areas/marshals created after the checklist item
+- No need to manually update items when new areas/checkpoints are added or marshals join
+- Can be mixed with specific IDs in the same configuration
+- `ALL_MARSHALS` provides highest specificity (1) for forcing Personal context
+
+#### Example 1: Equipment Check at All Checkpoints
+```json
+{
+  "text": "Check first aid kit is stocked",
+  "scopeConfigurations": [
+    {
+      "scope": "OnePerCheckpoint",
+      "itemType": "Checkpoint",
+      "ids": ["ALL_CHECKPOINTS"]
+    }
+  ]
+}
+```
+**Who sees it**: Every marshal assigned to any checkpoint in the event
+**Completion**: One completion per checkpoint (shared by all marshals at that checkpoint)
+**Future-proof**: New checkpoints automatically get this item
+
+#### Example 2: Safety Briefing for All Areas
+```json
+{
+  "text": "Wear hi-viz vest",
+  "scopeConfigurations": [
+    {
+      "scope": "EveryoneInAreas",
+      "itemType": "Area",
+      "ids": ["ALL_AREAS"]
+    }
+  ]
+}
+```
+**Who sees it**: Every marshal assigned to any checkpoint in any area
+**Completion**: Personal (each marshal completes individually)
+**Future-proof**: Marshals in new areas automatically see this item
+
+#### Example 3: Area Lead Checklist for All Areas
+```json
+{
+  "text": "Confirm all equipment collected for my area",
+  "scopeConfigurations": [
+    {
+      "scope": "OneLeadPerArea",
+      "itemType": "Area",
+      "ids": ["ALL_AREAS"]
+    }
+  ]
+}
+```
+**Who sees it**: ONLY area leads (for any area)
+**Completion**: One completion per area (by the area lead)
+**Future-proof**: New area leads automatically get this responsibility
+
+#### Example 4: Mixed Sentinel and Specific IDs
+```json
+{
+  "text": "Radio check",
+  "scopeConfigurations": [
+    {
+      "scope": "OnePerCheckpoint",
+      "itemType": "Checkpoint",
+      "ids": ["ALL_CHECKPOINTS"]
+    },
+    {
+      "scope": "SpecificPeople",
+      "itemType": "Marshal",
+      "ids": ["event-coordinator-123"]
+    }
+  ]
+}
+```
+**Who sees it**:
+- All marshals at any checkpoint (shared completion per checkpoint)
+- Event coordinator specifically (personal completion)
+
+**Completion context**:
+- Marshal at checkpoint-5: Matches ALL_CHECKPOINTS (specificity 2) → Context: Checkpoint:checkpoint-5
+- Event coordinator at checkpoint-5: Both match, but Marshal config wins (specificity 1) → Context: Personal:coordinator-123
+
+**Key insight**: Coordinator always has their own personal radio check item, separate from any checkpoint completion.
+
+#### Example 5: ALL_MARSHALS - Force Personal Context
+```json
+{
+  "text": "Individual safety acknowledgment",
+  "scopeConfigurations": [
+    {
+      "scope": "OnePerCheckpoint",
+      "itemType": "Checkpoint",
+      "ids": ["checkpoint-5", "checkpoint-7"]
+    },
+    {
+      "scope": "SpecificPeople",
+      "itemType": "Marshal",
+      "ids": ["ALL_MARSHALS"]
+    }
+  ]
+}
+```
+**Who sees it**: All marshals at checkpoints 5 or 7, and also all other marshals
+
+**Completion context**:
+- Marshal at checkpoint-5: Both match, but ALL_MARSHALS (specificity 1) beats OnePerCheckpoint (specificity 2) → Context: Personal:marshal-id
+- Marshal at checkpoint-7: Same as above → Context: Personal:marshal-id
+- Marshal NOT at checkpoint 5 or 7: Matches ALL_MARSHALS → Context: Personal:marshal-id
+
+**Key insight**: Using `ALL_MARSHALS` with SpecificPeople scope forces Personal context for everyone, overriding any shared checkpoint/area contexts. This is useful when you want individual accountability even though there are checkpoint/area configurations.
+
+**Using ALL_MARSHALS**: This sentinel value makes the item visible to all marshals with specificity 1 (Marshal level), which is the most specific in the "Most Specific Wins" algorithm. This ensures personal completion takes precedence over any checkpoint or area configurations.
+
+#### Important Notes:
+- `ALL_CHECKPOINTS` requires marshal to have at least one checkpoint assignment to match
+- `ALL_AREAS` requires marshal to be assigned to at least one area (via checkpoint) to match
+- `ALL_MARSHALS` matches any marshal in the event (no restrictions)
+- Sentinel values can be mixed with specific IDs in the same `ids` array
+- Sentinel values work with all scope types (Everyone, OnePerCheckpoint, OneLeadPerArea, etc.)
+- Context ID is determined by marshal's first assigned checkpoint/area when using sentinel values (except ALL_MARSHALS which always uses marshal ID)
+
+---
+
 ## API Endpoints
 
 ### Admin: Checklist Management
@@ -542,9 +791,9 @@ X-Admin-Email: admin@example.com
   "text": "Collected hi-viz vest",
   "scopeConfigurations": [
     {
-      "scope": "Everyone",
-      "itemType": null,
-      "ids": []
+      "scope": "SpecificPeople",
+      "itemType": "Marshal",
+      "ids": ["ALL_MARSHALS"]
     }
   ],
   "displayOrder": 1,
@@ -563,9 +812,9 @@ X-Admin-Email: admin@example.com
   "text": "Collected hi-viz vest",
   "scopeConfigurations": [
     {
-      "scope": "Everyone",
-      "itemType": null,
-      "ids": []
+      "scope": "SpecificPeople",
+      "itemType": "Marshal",
+      "ids": ["ALL_MARSHALS"]
     }
   ],
   "displayOrder": 1,
@@ -584,13 +833,12 @@ X-Admin-Email: admin@example.com
 - `text` is required and max 2000 characters
 - `scopeConfigurations` must not be empty (at least one configuration)
 - Each configuration must have valid `scope`, `itemType`, and `ids` fields
-- `scope` must be one of: "Everyone", "EveryoneInAreas", "EveryoneAtCheckpoints", "SpecificPeople", "OnePerArea", "OnePerCheckpoint", "AreaLead"
+- `scope` must be one of: "EveryoneInAreas", "EveryoneAtCheckpoints", "SpecificPeople", "OnePerArea", "OnePerCheckpoint", "OneLeadPerArea", "EveryAreaLead"
 - `itemType` must match the scope type:
-  - "Everyone" → itemType: null
-  - "EveryoneInAreas", "OnePerArea", "AreaLead" → itemType: "Area"
+  - "EveryoneInAreas", "OnePerArea", "OneLeadPerArea", "EveryAreaLead" → itemType: "Area"
   - "EveryoneAtCheckpoints", "OnePerCheckpoint" → itemType: "Checkpoint"
   - "SpecificPeople" → itemType: "Marshal"
-- If itemType is not null, `ids` array must not be empty
+- `ids` array must not be empty
 - HTML/script tags are stripped from `text` for security
 - Multiple scope configurations allow flexible, complex targeting
 
@@ -610,9 +858,9 @@ GET /api/events/{eventId}/checklist-items
     "text": "Collected hi-viz vest",
     "scopeConfigurations": [
       {
-        "scope": "Everyone",
-        "itemType": null,
-        "ids": []
+        "scope": "SpecificPeople",
+        "itemType": "Marshal",
+        "ids": ["ALL_MARSHALS"]
       }
     ]
     // ... full ChecklistItemResponse
@@ -654,9 +902,9 @@ GET /api/checklist-items/{eventId}/{itemId}
   "text": "Collected hi-viz vest",
   "scopeConfigurations": [
     {
-      "scope": "Everyone",
-      "itemType": null,
-      "ids": []
+      "scope": "SpecificPeople",
+      "itemType": "Marshal",
+      "ids": ["ALL_MARSHALS"]
     }
   ]
   // ... full ChecklistItemResponse
@@ -689,9 +937,9 @@ X-Admin-Email: admin@example.com
   "text": "Collected hi-viz vest and ID badge",
   "scopeConfigurations": [
     {
-      "scope": "Everyone",
-      "itemType": null,
-      "ids": []
+      "scope": "SpecificPeople",
+      "itemType": "Marshal",
+      "ids": ["ALL_MARSHALS"]
     }
   ]
   // ... updated fields
@@ -738,9 +986,9 @@ GET /api/events/{eventId}/marshals/{marshalId}/checklist
     "text": "Collected hi-viz vest",
     "scopeConfigurations": [
       {
-        "scope": "Everyone",
-        "itemType": null,
-        "ids": []
+        "scope": "SpecificPeople",
+        "itemType": "Marshal",
+        "ids": ["ALL_MARSHALS"]
       }
     ],
     "displayOrder": 1,
@@ -754,7 +1002,7 @@ GET /api/events/{eventId}/marshals/{marshalId}/checklist
     "completedAt": null,
     "completionContextType": "Personal",
     "completionContextId": "marshal-123",
-    "matchedScope": "Everyone"
+    "matchedScope": "SpecificPeople"
   },
   {
     "itemId": "item-def456",
@@ -1034,7 +1282,7 @@ GET /api/events/{eventId}/checklist-report
     {
       "itemId": "item-abc123",
       "text": "Collected hi-viz vest",
-      "scope": "Everyone",
+      "scope": "SpecificPeople",
       "completionCount": 47,
       "isRequired": true
     },
@@ -1070,8 +1318,8 @@ GET /api/events/{eventId}/checklist-report
 **Frontend calculations**:
 ```typescript
 // Calculate completion percentage for an item
-const everyoneItems = report.completionsByItem.filter(i => i.scope === 'Everyone');
-const vestItem = everyoneItems.find(i => i.text === 'Collected hi-viz vest');
+const specificPeopleItems = report.completionsByItem.filter(i => i.scope === 'SpecificPeople');
+const vestItem = specificPeopleItems.find(i => i.text === 'Collected hi-viz vest');
 const totalMarshals = 50; // From marshals API
 const percentComplete = (vestItem.completionCount / totalMarshals) * 100;
 // "94% of marshals collected vest"
@@ -1089,7 +1337,7 @@ const missingMarshalIds = allMarshalIds.filter(id => !completedMarshalIds.includ
 
 ### Completion Rules
 
-#### Personal Items (Everyone, EveryoneInAreas, EveryoneAtCheckpoints, SpecificPeople)
+#### Personal Items (EveryoneInAreas, EveryoneAtCheckpoints, SpecificPeople, EveryAreaLead)
 - Each marshal completes individually
 - Completion tied to marshal ID
 - Marshal can only complete for themselves
@@ -1102,7 +1350,7 @@ const missingMarshalIds = allMarshalIds.filter(id => !completedMarshalIds.includ
 - Area leads can complete even if not assigned to that checkpoint/area
 - Once completed, checkbox becomes view-only for others
 
-#### Area Lead Items (AreaLead)
+#### Area Lead Items (OneLeadPerArea)
 - Only area leads can see and complete
 - One completion per area
 - Regular marshals in that area cannot see it
@@ -1111,13 +1359,13 @@ const missingMarshalIds = allMarshalIds.filter(id => !completedMarshalIds.includ
 
 | Scope | Regular Marshal | Area Lead (for that area) |
 |-------|----------------|---------------------------|
-| Everyone | ✓ Can complete | ✓ Can complete |
 | EveryoneInAreas | ✓ If in area | ✓ Can complete |
 | EveryoneAtCheckpoints | ✓ If at checkpoint | ✓ Can complete |
 | SpecificPeople | ✓ If in list | ✓ If in list |
+| EveryAreaLead | ✗ Cannot see | ✓ Can complete |
 | OnePerCheckpoint | ✓ If at checkpoint | ✓ For checkpoints in their area |
 | OnePerArea | ✓ If in area | ✓ For their area |
-| AreaLead | ✗ Cannot see | ✓ Can complete |
+| OneLeadPerArea | ✗ Cannot see | ✓ Can complete |
 
 ### Time-Based Visibility
 
@@ -1146,7 +1394,7 @@ const missingMarshalIds = allMarshalIds.filter(id => !completedMarshalIds.includ
    - SpecificPeople: marshalIds not empty
    - OnePerArea: areaIds not empty
    - OnePerCheckpoint: locationIds not empty
-   - AreaLead: areaIds not empty
+   - OneLeadPerArea: areaIds not empty
 4. HTML/scripts stripped from text
 5. X-Admin-Email header required
 
@@ -1161,13 +1409,14 @@ const missingMarshalIds = allMarshalIds.filter(id => !completedMarshalIds.includ
 
 ## Common Workflows
 
-### Workflow 1: Admin Creates "Everyone" Checklist
+### Workflow 1: Admin Creates "All Marshals" Checklist
 ```
 1. Admin navigates to event checklist management
 2. Admin clicks "Add Item"
 3. Admin fills form:
    - Text: "Collected hi-viz vest"
-   - Scope: "Everyone"
+   - Scope: "SpecificPeople"
+   - People: "ALL_MARSHALS" (sentinel value)
    - Required: Yes
    - Display Order: 1
 4. Frontend POSTs to /api/events/{eventId}/checklist-items
@@ -1227,7 +1476,7 @@ Meanwhile:
    POST /api/events/{eventId}/checklist-items
    {
      "text": "Submitted area incident log",
-     "scope": "AreaLead",
+     "scope": "OneLeadPerArea",
      "areaIds": ["area-north"],
      ...
    }
@@ -1443,7 +1692,7 @@ function getScopeDescription(item: ChecklistItemWithStatus): string {
       return 'Can be completed by any marshal at this checkpoint';
     case 'OnePerArea':
       return 'Can be completed by any marshal in this area';
-    case 'AreaLead':
+    case 'OneLeadPerArea':
       return 'Area leads only';
     default:
       return '';
@@ -1520,7 +1769,7 @@ function ScopeSelector({ value, onChange, eventId }) {
 
   // Load dependent data based on scope
   useEffect(() => {
-    if (['EveryoneInAreas', 'OnePerArea', 'AreaLead'].includes(value)) {
+    if (['EveryoneInAreas', 'OnePerArea', 'OneLeadPerArea', 'EveryAreaLead'].includes(value)) {
       loadAreas(eventId).then(setAreas);
     }
     if (['EveryoneAtCheckpoints', 'OnePerCheckpoint'].includes(value)) {
@@ -1535,13 +1784,13 @@ function ScopeSelector({ value, onChange, eventId }) {
     <div className="scope-selector">
       <label>Who should complete this?</label>
       <select value={value} onChange={e => onChange(e.target.value)}>
-        <option value="Everyone">Everyone</option>
         <option value="EveryoneInAreas">Everyone in specific areas</option>
         <option value="EveryoneAtCheckpoints">Everyone at specific checkpoints</option>
         <option value="SpecificPeople">Specific people</option>
         <option value="OnePerCheckpoint">One person per checkpoint</option>
         <option value="OnePerArea">One person per area</option>
-        <option value="AreaLead">Area leads only</option>
+        <option value="OneLeadPerArea">One lead per area</option>
+        <option value="EveryAreaLead">Every area lead</option>
       </select>
 
       {value === 'EveryoneInAreas' && (
@@ -1759,7 +2008,7 @@ Frontend should validate BEFORE sending:
 
 ### Scope Testing
 
-- [ ] **Everyone scope**
+- [ ] **SpecificPeople with ALL_MARSHALS scope**
   - [ ] All marshals see the item
   - [ ] Each can complete independently
   - [ ] Completion doesn't affect other marshals
@@ -1776,7 +2025,7 @@ Frontend should validate BEFORE sending:
   - [ ] Area leads for that checkpoint's area can complete
   - [ ] Area leads for OTHER areas cannot complete
 
-- [ ] **AreaLead scope**
+- [ ] **OneLeadPerArea scope**
   - [ ] Only area leads see it
   - [ ] Regular marshals don't see it
   - [ ] Can be completed by any area lead for that area
@@ -1793,7 +2042,7 @@ Frontend should validate BEFORE sending:
 
 ### Permission Testing
 
-- [ ] Regular marshal cannot complete AreaLead items (checkbox disabled)
+- [ ] Regular marshal cannot complete OneLeadPerArea items (checkbox disabled)
 - [ ] Area lead CAN complete items for checkpoints in their area (even if not assigned)
 - [ ] Area lead CANNOT complete items for checkpoints outside their area
 - [ ] Trying to complete without permission returns 403

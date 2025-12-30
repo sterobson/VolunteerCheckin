@@ -12,7 +12,7 @@ public class ChecklistCompletionEntity : ITableEntity
     public string PartitionKey { get; set; } = string.Empty;
 
     /// <summary>
-    /// Row key format: {ChecklistItemId}#{CompletionId}
+    /// Row key format: {ChecklistItemId}_{CompletionId}
     /// This allows efficient filtering by item within the partition
     /// </summary>
     public string RowKey { get; set; } = Guid.NewGuid().ToString();
@@ -22,8 +22,6 @@ public class ChecklistCompletionEntity : ITableEntity
 
     public string EventId { get; set; } = string.Empty;
     public string ChecklistItemId { get; set; } = string.Empty;
-    public string CompletedByMarshalId { get; set; } = string.Empty;
-    public string CompletedByMarshalName { get; set; } = string.Empty;
 
     /// <summary>
     /// Type of context this completion applies to.
@@ -35,6 +33,34 @@ public class ChecklistCompletionEntity : ITableEntity
     /// The ID of the context (MarshalId for Personal, LocationId for Checkpoint, AreaId for Area)
     /// </summary>
     public string CompletionContextId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The marshal whose checklist context this completion is in (whose task list shows this)
+    /// </summary>
+    public string ContextOwnerMarshalId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Denormalized name of the context owner marshal
+    /// </summary>
+    public string ContextOwnerMarshalName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Who actually performed this completion action.
+    /// Values: "Marshal", "EventAdmin", "AreaLead"
+    /// </summary>
+    public string ActorType { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ID of the actor who performed the completion.
+    /// - For "Marshal" or "AreaLead": MarshalId
+    /// - For "EventAdmin": Admin email
+    /// </summary>
+    public string ActorId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Denormalized name of the actor for display purposes
+    /// </summary>
+    public string ActorName { get; set; } = string.Empty;
 
     /// <summary>
     /// When this item was completed
@@ -69,6 +95,6 @@ public class ChecklistCompletionEntity : ITableEntity
     /// </summary>
     public static string CreateRowKey(string itemId, string completionId)
     {
-        return $"{itemId}#{completionId}";
+        return $"{itemId}_{completionId}";
     }
 }

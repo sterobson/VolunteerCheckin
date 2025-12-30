@@ -44,16 +44,26 @@ public static class Constants
     public const string ErrorChecklistNotAuthorizedToComplete = "You don't have permission to complete this item";
 
     // Checklist Scopes
-    public const string ChecklistScopeEveryone = "Everyone";
     public const string ChecklistScopeEveryoneInAreas = "EveryoneInAreas";
     public const string ChecklistScopeEveryoneAtCheckpoints = "EveryoneAtCheckpoints";
     public const string ChecklistScopeSpecificPeople = "SpecificPeople";
     public const string ChecklistScopeOnePerArea = "OnePerArea";
     public const string ChecklistScopeOnePerCheckpoint = "OnePerCheckpoint";
-    public const string ChecklistScopeAreaLead = "AreaLead";
+    public const string ChecklistScopeOneLeadPerArea = "OneLeadPerArea";
+    public const string ChecklistScopeEveryAreaLead = "EveryAreaLead";
 
     // Checklist Completion Context Types
     public const string ChecklistContextPersonal = "Personal";
     public const string ChecklistContextCheckpoint = "Checkpoint";
     public const string ChecklistContextArea = "Area";
+
+    // Checklist Sentinel Values (for "all" matching)
+    public const string AllCheckpoints = "ALL_CHECKPOINTS";
+    public const string AllAreas = "ALL_AREAS";
+    public const string AllMarshals = "ALL_MARSHALS";
+
+    // Actor Types (who performed an action)
+    public const string ActorTypeMarshal = "Marshal";
+    public const string ActorTypeEventAdmin = "EventAdmin";
+    public const string ActorTypeAreaLead = "AreaLead";
 }

@@ -9,20 +9,20 @@ public class ScopeConfiguration
 {
     /// <summary>
     /// The scope type that determines completion semantics (personal vs shared).
-    /// Values: "Everyone", "EveryoneInAreas", "EveryoneAtCheckpoints", "SpecificPeople",
-    ///         "OnePerCheckpoint", "OnePerArea", "AreaLead"
+    /// Values: "EveryoneInAreas", "EveryoneAtCheckpoints", "SpecificPeople",
+    ///         "OnePerCheckpoint", "OnePerArea", "OneLeadPerArea", "EveryAreaLead"
     /// </summary>
     public string Scope { get; set; } = string.Empty;
 
     /// <summary>
     /// The type of entity being filtered.
-    /// Values: "Marshal" (most specific), "Checkpoint", "Area", null (Everyone - least specific)
+    /// Values: "Marshal" (most specific), "Checkpoint", "Area"
     /// </summary>
     public string? ItemType { get; set; }
 
     /// <summary>
     /// The list of IDs to match against (Marshal IDs, Checkpoint IDs, or Area IDs).
-    /// Empty or null for "Everyone" scope.
+    /// May contain sentinel values like ALL_MARSHALS, ALL_CHECKPOINTS, or ALL_AREAS.
     /// </summary>
     public List<string> Ids { get; set; } = [];
 
@@ -32,7 +32,7 @@ public class ScopeConfiguration
     /// 1 = Marshal (most specific)
     /// 2 = Checkpoint
     /// 3 = Area
-    /// 4 = Everyone (least specific)
+    /// 4 = (least specific)
     /// </summary>
     public int GetSpecificity()
     {

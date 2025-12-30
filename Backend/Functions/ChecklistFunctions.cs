@@ -18,6 +18,7 @@ public class ChecklistFunctions
     private readonly IAssignmentRepository _assignmentRepository;
     private readonly ILocationRepository _locationRepository;
     private readonly IAreaRepository _areaRepository;
+    private readonly IAdminUserRepository _adminUserRepository;
 
     public ChecklistFunctions(
         ILogger<ChecklistFunctions> logger,
@@ -26,7 +27,8 @@ public class ChecklistFunctions
         IMarshalRepository marshalRepository,
         IAssignmentRepository assignmentRepository,
         ILocationRepository locationRepository,
-        IAreaRepository areaRepository)
+        IAreaRepository areaRepository,
+        IAdminUserRepository adminUserRepository)
     {
         _logger = logger;
         _checklistItemRepository = checklistItemRepository;
@@ -35,6 +37,7 @@ public class ChecklistFunctions
         _assignmentRepository = assignmentRepository;
         _locationRepository = locationRepository;
         _areaRepository = areaRepository;
+        _adminUserRepository = adminUserRepository;
     }
 
     /// <summary>
@@ -99,7 +102,7 @@ public class ChecklistFunctions
                     return new BadRequestObjectResult(new { message = "No valid lines found in text" });
                 }
 
-                List<ChecklistItemResponse> createdItems = new();
+                List<ChecklistItemResponse> createdItems = [];
                 int currentDisplayOrder = request.DisplayOrder;
 
                 foreach (string line in lines)
@@ -325,13 +328,21 @@ public class ChecklistFunctions
             List<ChecklistCompletionEntity> allCompletions =
                 (await _checklistCompletionRepository.GetByEventAsync(eventId)).ToList();
 
-            // Filter items relevant to this marshal
-            List<ChecklistItemWithStatus> relevantItems = allItems
-                .Where(item => ChecklistScopeHelper.IsItemRelevantToMarshal(item, context, checkpointLookup))
-                .Where(item => IsItemVisible(item))
-                .OrderBy(item => item.DisplayOrder)
-                .Select(item => BuildItemWithStatus(item, context, checkpointLookup, allCompletions))
-                .ToList();
+            // Build list of items with all their contexts
+            List<ChecklistItemWithStatus> relevantItems = [];
+
+            foreach (ChecklistItemEntity item in allItems.Where(IsItemVisible).OrderBy(i => i.DisplayOrder))
+            {
+                // Get all contexts where this item is relevant to this marshal
+                List<ChecklistScopeHelper.ScopeMatchResult> contexts =
+                    ChecklistScopeHelper.GetAllRelevantContexts(item, context, checkpointLookup);
+
+                // For each context, add an item instance
+                foreach (ChecklistScopeHelper.ScopeMatchResult scopeContext in contexts)
+                {
+                    relevantItems.Add(BuildItemWithStatus(item, context, checkpointLookup, allCompletions, scopeContext));
+                }
+            }
 
             return new OkObjectResult(relevantItems);
         }
@@ -390,7 +401,7 @@ public class ChecklistFunctions
                 return new BadRequestObjectResult(new { message = Constants.ErrorChecklistAlreadyCompleted });
             }
 
-            // Get marshal details for denormalization
+            // Get marshal details for denormalization (context owner)
             MarshalEntity? marshal = await _marshalRepository.GetAsync(eventId, request.MarshalId);
             if (marshal == null)
             {
@@ -402,6 +413,30 @@ public class ChecklistFunctions
                 ? (request.ContextType, request.ContextId, string.Empty)
                 : ChecklistScopeHelper.DetermineCompletionContext(item, context, checkpointLookup);
 
+            // Determine actor (who is actually performing this action)
+            string actorType;
+            string actorId;
+            string actorName;
+            string adminEmail = req.Headers[Constants.AdminEmailHeader].ToString();
+
+            if (!string.IsNullOrWhiteSpace(adminEmail))
+            {
+                // Admin is completing this on behalf of the marshal
+                actorType = Constants.ActorTypeEventAdmin;
+                actorId = adminEmail;
+
+                // Try to get admin name, default to email if not found
+                AdminUserEntity? admin = await _adminUserRepository.GetByEmailAsync(adminEmail);
+                actorName = admin?.Name ?? adminEmail;
+            }
+            else
+            {
+                // Marshal is completing their own task
+                actorType = Constants.ActorTypeMarshal;
+                actorId = request.MarshalId;
+                actorName = marshal.Name;
+            }
+
             // Create completion record
             string completionId = Guid.NewGuid().ToString();
             string partitionKey = ChecklistCompletionEntity.CreatePartitionKey(eventId);
@@ -412,16 +447,19 @@ public class ChecklistFunctions
                 RowKey = rowKey,
                 EventId = eventId,
                 ChecklistItemId = itemId,
-                CompletedByMarshalId = request.MarshalId,
-                CompletedByMarshalName = marshal.Name,
                 CompletionContextType = contextType,
                 CompletionContextId = contextId,
+                ContextOwnerMarshalId = request.MarshalId,
+                ContextOwnerMarshalName = marshal.Name,
+                ActorType = actorType,
+                ActorId = actorId,
+                ActorName = actorName,
                 CompletedAt = DateTime.UtcNow
             };
 
             await _checklistCompletionRepository.AddAsync(completion);
 
-            _logger.LogInformation($"Checklist item {itemId} completed by marshal {request.MarshalId} at {completion.CompletedAt}");
+            _logger.LogInformation($"Checklist item {itemId} completed by {actorType} {actorName} (context owner: {marshal.Name}) at {completion.CompletedAt}");
 
             return new OkObjectResult(completion.ToResponse());
         }
@@ -482,7 +520,7 @@ public class ChecklistFunctions
             if (ChecklistScopeHelper.IsPersonalScope(matchedScope))
             {
                 completion = itemCompletions.FirstOrDefault(c =>
-                    c.CompletedByMarshalId == request.MarshalId &&
+                    c.ContextOwnerMarshalId == request.MarshalId &&
                     !c.IsDeleted);
             }
             else
@@ -549,7 +587,7 @@ public class ChecklistFunctions
                 {
                     MarshalId = marshal.MarshalId,
                     MarshalName = marshal.Name,
-                    CompletionCount = completions.Count(c => c.CompletedByMarshalId == marshal.MarshalId)
+                    CompletionCount = completions.Count(c => c.ContextOwnerMarshalId == marshal.MarshalId)
                 })
             };
 
@@ -618,15 +656,62 @@ public class ChecklistFunctions
         ChecklistItemEntity item,
         ChecklistScopeHelper.MarshalContext context,
         Dictionary<string, LocationEntity> checkpointLookup,
-        List<ChecklistCompletionEntity> allCompletions)
+        List<ChecklistCompletionEntity> allCompletions,
+        ChecklistScopeHelper.ScopeMatchResult? scopeMatchResult = null)
     {
         List<ScopeConfiguration> scopeConfigurations =
             JsonSerializer.Deserialize<List<ScopeConfiguration>>(item.ScopeConfigurationsJson) ?? [];
 
-        bool isCompleted = ChecklistScopeHelper.IsItemCompletedInContext(item, context, checkpointLookup, allCompletions);
+        // Use provided scope match result if available, otherwise determine it
+        string contextType;
+        string contextId;
+        string matchedScope;
+
+        if (scopeMatchResult != null && scopeMatchResult.IsRelevant)
+        {
+            contextType = scopeMatchResult.ContextType;
+            contextId = scopeMatchResult.ContextId;
+            matchedScope = scopeMatchResult.WinningConfig?.Scope ?? string.Empty;
+        }
+        else
+        {
+            (contextType, contextId, matchedScope) = ChecklistScopeHelper.DetermineCompletionContext(item, context, checkpointLookup);
+        }
+
+        // Check completion status for this specific context
+        bool isCompleted;
+        string? actorName = null;
+        string? actorType = null;
+        DateTime? completedAt = null;
+
+        if (ChecklistScopeHelper.IsPersonalScope(matchedScope))
+        {
+            ChecklistCompletionEntity? completion = allCompletions.FirstOrDefault(c =>
+                c.ChecklistItemId == item.ItemId &&
+                c.ContextOwnerMarshalId == context.MarshalId &&
+                !c.IsDeleted);
+
+            isCompleted = completion != null;
+            actorName = completion?.ActorName;
+            actorType = completion?.ActorType;
+            completedAt = completion?.CompletedAt;
+        }
+        else
+        {
+            // For shared scopes, check completion in this specific context
+            ChecklistCompletionEntity? completion = allCompletions.FirstOrDefault(c =>
+                c.ChecklistItemId == item.ItemId &&
+                c.CompletionContextType == contextType &&
+                c.CompletionContextId == contextId &&
+                !c.IsDeleted);
+
+            isCompleted = completion != null;
+            actorName = completion?.ActorName;
+            actorType = completion?.ActorType;
+            completedAt = completion?.CompletedAt;
+        }
+
         bool canComplete = ChecklistScopeHelper.CanMarshalCompleteItem(item, context, checkpointLookup);
-        (string? completedByName, DateTime? completedAt) = ChecklistScopeHelper.GetCompletionDetails(item, context, checkpointLookup, allCompletions);
-        (string contextType, string contextId, string matchedScope) = ChecklistScopeHelper.DetermineCompletionContext(item, context, checkpointLookup);
 
         return new ChecklistItemWithStatus(
             item.ItemId,
@@ -640,7 +725,8 @@ public class ChecklistFunctions
             item.MustCompleteBy,
             isCompleted,
             canComplete,
-            completedByName,
+            actorName,
+            actorType,
             completedAt,
             contextType,
             contextId,

@@ -5,7 +5,7 @@ using Microsoft.Extensions.Hosting;
 using VolunteerCheckin.Functions.Services;
 using VolunteerCheckin.Functions.Repositories;
 
-var builder = FunctionsApplication.CreateBuilder(args);
+FunctionsApplicationBuilder builder = FunctionsApplication.CreateBuilder(args);
 
 builder.ConfigureFunctionsWebApplication();
 

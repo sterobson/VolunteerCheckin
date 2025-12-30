@@ -13,7 +13,8 @@
         v-model="activeTab"
         :tabs="[
           { value: 'details', label: 'Details' },
-          { value: 'checkpoints', label: 'Checkpoints' }
+          { value: 'checkpoints', label: 'Checkpoints' },
+          { value: 'checklist', label: 'Checklist' }
         ]"
       />
     </template>
@@ -35,6 +36,18 @@
       @input="handleInput"
       @remove-assignment="handleRemoveAssignment"
       @assign-to-location="handleAssignToLocation"
+    />
+
+    <!-- Checklist Tab (only when editing) -->
+    <MarshalChecklistView
+      v-if="activeTab === 'checklist' && isEditing"
+      ref="checklistTabRef"
+      v-model="checklistChanges"
+      :event-id="eventId"
+      :marshal-id="marshal.id"
+      :locations="allLocations"
+      :areas="areas"
+      @change="handleChecklistChange"
     />
 
     <!-- Custom footer with left and right aligned buttons -->
@@ -63,6 +76,7 @@ import BaseModal from '../../BaseModal.vue';
 import TabHeader from '../../TabHeader.vue';
 import MarshalDetailsTab from '../tabs/MarshalDetailsTab.vue';
 import MarshalCheckpointsTab from '../tabs/MarshalCheckpointsTab.vue';
+import MarshalChecklistView from '../../MarshalChecklistView.vue';
 
 const props = defineProps({
   show: {
@@ -73,11 +87,23 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  eventId: {
+    type: String,
+    required: true,
+  },
   assignments: {
     type: Array,
     default: () => [],
   },
   availableLocations: {
+    type: Array,
+    default: () => [],
+  },
+  allLocations: {
+    type: Array,
+    default: () => [],
+  },
+  areas: {
     type: Array,
     default: () => [],
   },
@@ -103,6 +129,8 @@ const emit = defineEmits([
 
 const activeTab = ref('details');
 const checkpointsTabRef = ref(null);
+const checklistTabRef = ref(null);
+const checklistChanges = ref([]);
 const form = ref({
   name: '',
   email: '',
@@ -131,9 +159,14 @@ watch(() => props.marshal, (newVal) => {
 watch(() => props.show, (newVal) => {
   if (newVal) {
     activeTab.value = 'details';
+    checklistChanges.value = [];
     // Clear pending changes in checkpoints tab if it exists
     if (checkpointsTabRef.value?.clearPendingChanges) {
       checkpointsTabRef.value.clearPendingChanges();
+    }
+    // Clear pending changes in checklist tab if it exists
+    if (checklistTabRef.value?.resetLocalState) {
+      checklistTabRef.value.resetLocalState();
     }
   }
 });
@@ -142,11 +175,17 @@ const handleInput = () => {
   emit('update:isDirty', true);
 };
 
+const handleChecklistChange = () => {
+  emit('update:isDirty', true);
+};
+
 const handleSave = () => {
   const formData = {
     ...form.value,
     // Include pending check-in changes from checkpoints tab
     checkInChanges: checkpointsTabRef.value?.getPendingChanges?.() || [],
+    // Include pending checklist changes
+    checklistChanges: checklistChanges.value || [],
   };
   emit('save', formData);
 };

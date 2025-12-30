@@ -7,33 +7,61 @@
     :is-dirty="isDirty"
     @close="handleClose"
   >
+    <!-- Tab Headers -->
+    <div class="tab-headers">
+      <button
+        type="button"
+        class="tab-header"
+        :class="{ active: activeTab === 'details' }"
+        @click="activeTab = 'details'"
+      >
+        Details
+      </button>
+      <button
+        type="button"
+        class="tab-header"
+        :class="{ active: activeTab === 'visibility' }"
+        @click="activeTab = 'visibility'"
+      >
+        Visibility
+      </button>
+    </div>
+
     <form @submit.prevent="handleSave" class="checklist-form">
-      <div class="form-group">
-        <label for="text">Checklist text: *</label>
-        <textarea
-          id="text"
-          v-model="form.text"
-          @input="handleInput"
-          required
-          rows="3"
-          :placeholder="form.createSeparateItems ? 'Enter checklist items, one per line...' : 'Enter the checklist item text...'"
-        />
-        <label v-if="!isEditing" class="checkbox-label-inline create-separate-items">
-          <input
-            type="checkbox"
-            v-model="form.createSeparateItems"
-            @change="handleInput"
+      <!-- Details Tab -->
+      <div v-show="activeTab === 'details'" class="tab-content">
+        <div class="form-group">
+          <label for="text">Checklist text: *</label>
+          <textarea
+            id="text"
+            v-model="form.text"
+            @input="handleInput"
+            required
+            rows="3"
+            :placeholder="form.createSeparateItems ? 'Enter checklist items, one per line...' : 'Enter the checklist item text...'"
           />
-          <span>Each line creates a new item</span>
-        </label>
+          <label v-if="!isEditing" class="checkbox-label-inline create-separate-items">
+            <input
+              type="checkbox"
+              v-model="form.createSeparateItems"
+              @change="handleInput"
+            />
+            <span>Each line creates a new item</span>
+          </label>
+        </div>
       </div>
 
-      <ScopeConfigurationEditor
-        v-model="form.scopeConfigurations"
-        :areas="areas"
-        :locations="locations"
-        :marshals="marshals"
-      />
+      <!-- Visibility Tab -->
+      <div v-show="activeTab === 'visibility'" class="tab-content">
+        <ScopeConfigurationEditor
+          v-model="form.scopeConfigurations"
+          :areas="areas"
+          :locations="locations"
+          :marshals="marshals"
+          :is-editing="isEditing"
+          @user-changed="handleInput"
+        />
+      </div>
     </form>
 
     <template #footer>
@@ -46,18 +74,39 @@
         >
           Delete
         </button>
-        <button type="button" @click="handleSave" class="btn btn-primary">
+        <button
+          v-if="!isEditing && activeTab === 'details'"
+          type="button"
+          @click="goToVisibilityTab"
+          class="btn btn-primary"
+        >
+          Next
+        </button>
+        <button
+          v-if="isEditing || activeTab === 'visibility'"
+          type="button"
+          @click="handleSave"
+          class="btn btn-primary"
+        >
           {{ isEditing ? 'Save changes' : 'Create' }}
         </button>
       </div>
     </template>
   </BaseModal>
+
+  <InfoModal
+    :show="showErrorModal"
+    title="Validation Error"
+    :message="errorMessage"
+    @close="showErrorModal = false"
+  />
 </template>
 
 <script setup>
 import { ref, computed, defineProps, defineEmits, watch } from 'vue';
 import BaseModal from '../../BaseModal.vue';
 import ScopeConfigurationEditor from '../ScopeConfigurationEditor.vue';
+import InfoModal from '../../InfoModal.vue';
 
 const props = defineProps({
   show: {
@@ -67,6 +116,10 @@ const props = defineProps({
   checklistItem: {
     type: Object,
     default: null,
+  },
+  initialTab: {
+    type: String,
+    default: 'details',
   },
   areas: {
     type: Array,
@@ -93,6 +146,10 @@ const emit = defineEmits([
   'update:isDirty',
 ]);
 
+const showErrorModal = ref(false);
+const errorMessage = ref('');
+const activeTab = ref('details');
+
 const form = ref({
   text: '',
   scopeConfigurations: [{
@@ -110,14 +167,10 @@ const form = ref({
 
 const isEditing = computed(() => !!props.checklistItem);
 
-// Flag to prevent marking form as dirty during initialization
-let isInitializing = false;
-let initialFormState = null;
-
 watch(() => props.show, (newVal) => {
   if (newVal) {
-    // Set initializing flag to prevent dirty state on form setup
-    isInitializing = true;
+    // Set tab based on initialTab prop when opening modal
+    activeTab.value = props.initialTab;
 
     if (props.checklistItem) {
       form.value = {
@@ -153,25 +206,10 @@ watch(() => props.show, (newVal) => {
       };
     }
 
-    // Reset isDirty to false for clean state
+    // Reset isDirty to false
     emit('update:isDirty', false);
-
-    // Clear initializing flag after allowing child components to fully initialize
-    setTimeout(() => {
-      isInitializing = false;
-      // Store the initial form state after initialization completes
-      initialFormState = JSON.stringify(form.value);
-    }, 100);
   }
 });
-
-// Watch for changes to scopeConfigurations to mark form as dirty
-// Only after modal is open (skip initial setup)
-watch(() => form.value.scopeConfigurations, () => {
-  if (!isInitializing && props.show) {
-    handleInput();
-  }
-}, { deep: true });
 
 const formatDateTimeForInput = (dateString) => {
   if (!dateString) return null;
@@ -187,19 +225,49 @@ const parseDateTime = (inputValue) => {
 };
 
 const handleInput = () => {
-  // Only mark as dirty if form has actually changed from initial state
-  if (initialFormState && JSON.stringify(form.value) !== initialFormState) {
-    emit('update:isDirty', true);
-  } else if (initialFormState) {
-    emit('update:isDirty', false);
-  }
+  emit('update:isDirty', true);
 };
 
 const handleClose = () => {
   emit('close');
 };
 
+const goToVisibilityTab = () => {
+  activeTab.value = 'visibility';
+};
+
+const showError = (message) => {
+  errorMessage.value = message;
+  showErrorModal.value = true;
+};
+
 const handleSave = () => {
+  // Validate text
+  if (!form.value.text || !form.value.text.trim()) {
+    showError('Please enter checklist item text');
+    return;
+  }
+
+  // Validate scope configurations
+  if (!form.value.scopeConfigurations || form.value.scopeConfigurations.length === 0) {
+    showError('Please select at least one scope');
+    return;
+  }
+
+  // Validate that at least one scope has valid configuration
+  const hasValidScope = form.value.scopeConfigurations.some(config => {
+    // SpecificPeople, EveryoneInAreas, etc. must have IDs
+    if (config.itemType !== null && (!config.ids || config.ids.length === 0)) {
+      return false;
+    }
+    return true;
+  });
+
+  if (!hasValidScope) {
+    showError('Please configure at least one scope with valid selections');
+    return;
+  }
+
   const data = {
     text: form.value.text,
     scopeConfigurations: form.value.scopeConfigurations,
@@ -224,6 +292,43 @@ const handleDelete = () => {
 </script>
 
 <style scoped>
+.tab-headers {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid #e0e0e0;
+  margin-bottom: 1.5rem;
+}
+
+.tab-header {
+  padding: 0.75rem 1.5rem;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #666;
+  transition: all 0.2s;
+  margin-bottom: -2px;
+}
+
+.tab-header:hover {
+  color: #333;
+  background: #f8f9fa;
+}
+
+.tab-header.active {
+  color: #007bff;
+  border-bottom-color: #007bff;
+  background: transparent;
+}
+
+.tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
 .checklist-form {
   display: flex;
   flex-direction: column;

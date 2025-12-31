@@ -8,19 +8,36 @@ const api = axios.create({
   },
 });
 
-// Add interceptor to include admin email header
+// Add interceptor to include auth headers
 api.interceptors.request.use((config) => {
   const adminEmail = localStorage.getItem('adminEmail');
   if (adminEmail) {
     config.headers['X-Admin-Email'] = adminEmail;
+  }
+  const sessionToken = localStorage.getItem('sessionToken');
+  if (sessionToken) {
+    config.headers['Authorization'] = `Bearer ${sessionToken}`;
   }
   return config;
 });
 
 // Auth API
 export const authApi = {
+  requestLogin: (email) => api.post('/auth/request-login', { email }),
+  verifyToken: (token) => api.post('/auth/verify-token', { token }),
   instantLogin: (email) => api.post('/auth/instant-login', { email }),
   createAdmin: (email) => api.post('/auth/create-admin', { email }),
+  marshalLogin: (eventId, magicCode) => api.post('/auth/marshal-login', { eventId, magicCode }),
+  getMe: (eventId) => api.get('/auth/me', { params: { eventId } }),
+  logout: () => api.post('/auth/logout'),
+};
+
+// Profile API
+export const profileApi = {
+  getProfile: () => api.get('/auth/profile'),
+  updateProfile: (data) => api.put('/auth/profile', data),
+  getPerson: (personId, eventId) => api.get(`/people/${personId}`, { params: { eventId } }),
+  updatePerson: (personId, eventId, data) => api.put(`/people/${personId}`, data, { params: { eventId } }),
 };
 
 // Events API
@@ -85,6 +102,8 @@ export const marshalsApi = {
   getById: (eventId, marshalId) => api.get(`/marshals/${eventId}/${marshalId}`),
   update: (eventId, marshalId, data) => api.put(`/marshals/${eventId}/${marshalId}`, data),
   delete: (eventId, marshalId) => api.delete(`/marshals/${eventId}/${marshalId}`),
+  getMagicLink: (eventId, marshalId) => api.get(`/marshals/${eventId}/${marshalId}/magic-link`),
+  sendMagicLink: (eventId, marshalId) => api.post(`/marshals/${eventId}/${marshalId}/send-magic-link`),
   importCsv: (eventId, file) => {
     const formData = new FormData();
     formData.append('csv', file);
@@ -114,6 +133,8 @@ export const checklistApi = {
   delete: (eventId, itemId) => api.delete(`/checklist-items/${eventId}/${itemId}`),
   getReport: (eventId) => api.get(`/events/${eventId}/checklist-report`),
   getMarshalChecklist: (eventId, marshalId) => api.get(`/events/${eventId}/marshals/${marshalId}/checklist`),
+  getCheckpointChecklist: (eventId, locationId) => api.get(`/events/${eventId}/locations/${locationId}/checklist`),
+  getAreaChecklist: (eventId, areaId) => api.get(`/events/${eventId}/areas/${areaId}/checklist`),
   complete: (eventId, itemId, data) => api.post(`/checklist-items/${eventId}/${itemId}/complete`, data),
   uncomplete: (eventId, itemId, data) => api.post(`/checklist-items/${eventId}/${itemId}/uncomplete`, data),
 };

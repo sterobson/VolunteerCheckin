@@ -15,6 +15,10 @@ public class TableStorageService
     private const string AreasTable = "Areas";
     private const string ChecklistItemsTable = "ChecklistItems";
     private const string ChecklistCompletionsTable = "ChecklistCompletions";
+    private const string PeopleTable = "People";
+    private const string EventRolesTable = "EventRoles";
+    private const string AuthTokensTable = "AuthTokens";
+    private const string AuthSessionsTable = "AuthSessions";
 
     public TableStorageService(string connectionString)
     {
@@ -33,6 +37,10 @@ public class TableStorageService
         await _tableServiceClient.CreateTableIfNotExistsAsync(AreasTable);
         await _tableServiceClient.CreateTableIfNotExistsAsync(ChecklistItemsTable);
         await _tableServiceClient.CreateTableIfNotExistsAsync(ChecklistCompletionsTable);
+        await _tableServiceClient.CreateTableIfNotExistsAsync(PeopleTable);
+        await _tableServiceClient.CreateTableIfNotExistsAsync(EventRolesTable);
+        await _tableServiceClient.CreateTableIfNotExistsAsync(AuthTokensTable);
+        await _tableServiceClient.CreateTableIfNotExistsAsync(AuthSessionsTable);
     }
 
     public TableClient GetEventsTable() => _tableServiceClient.GetTableClient(EventsTable);
@@ -44,4 +52,8 @@ public class TableStorageService
     public TableClient GetAreasTable() => _tableServiceClient.GetTableClient(AreasTable);
     public TableClient GetChecklistItemsTable() => _tableServiceClient.GetTableClient(ChecklistItemsTable);
     public TableClient GetChecklistCompletionsTable() => _tableServiceClient.GetTableClient(ChecklistCompletionsTable);
+    public TableClient GetPeopleTable() => _tableServiceClient.GetTableClient(PeopleTable);
+    public TableClient GetEventRolesTable() => _tableServiceClient.GetTableClient(EventRolesTable);
+    public TableClient GetAuthTokensTable() => _tableServiceClient.GetTableClient(AuthTokensTable);
+    public TableClient GetAuthSessionsTable() => _tableServiceClient.GetTableClient(AuthSessionsTable);
 }

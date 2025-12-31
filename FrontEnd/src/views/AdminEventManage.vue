@@ -9,6 +9,7 @@
         </div>
       </div>
       <div class="header-actions">
+        <button @click="goToProfile" class="btn btn-secondary">Profile</button>
         <button @click="showUploadRoute = true" class="btn btn-secondary">Upload route</button>
         <button @click="shareEvent" class="btn btn-primary">Share marshal link</button>
       </div>
@@ -17,34 +18,18 @@
     <div class="container">
       <!-- Tabs Navigation -->
       <div class="tabs-nav">
-        <button
-          class="tab-button"
-          :class="{ active: activeTab === 'course' }"
-          @click="switchTab('course')"
-        >
-          Course
-        </button>
-        <button
-          class="tab-button"
-          :class="{ active: activeTab === 'marshals' }"
-          @click="switchTab('marshals')"
-        >
-          Marshals
-        </button>
-        <button
-          class="tab-button"
-          :class="{ active: activeTab === 'checklists' }"
-          @click="switchTab('checklists')"
-        >
-          Checklists
-        </button>
-        <button
-          class="tab-button"
-          :class="{ active: activeTab === 'details' }"
-          @click="switchTab('details')"
-        >
-          Event details
-        </button>
+        <ResponsiveTabHeader
+          :tabs="[
+            { value: 'course', label: 'Course' },
+            { value: 'checkpoints', label: 'Checkpoints' },
+            { value: 'areas', label: 'Areas' },
+            { value: 'marshals', label: 'Marshals' },
+            { value: 'checklists', label: 'Checklists' },
+            { value: 'details', label: 'Event details' }
+          ]"
+          :model-value="activeTab"
+          @update:model-value="switchTab"
+        />
       </div>
 
       <!-- Tab Components -->
@@ -72,6 +57,24 @@
           @add-many-checkpoints-from-map="handleAddMultipleCheckpointsClick"
           @add-area-from-map="handleAddAreaFromMap"
         />
+
+        <div v-if="activeTab === 'checkpoints'" class="tab-panel">
+          <CheckpointsList
+            :locations="locationStatuses"
+            :areas="areas"
+            @open-add-menu="handleOpenAddMenuFromList"
+            @select-location="selectLocation"
+          />
+        </div>
+
+        <div v-if="activeTab === 'areas'" class="tab-panel">
+          <AreasList
+            :areas="areas"
+            :checkpoints="locationStatuses"
+            @add-area="handleAddArea"
+            @select-area="handleSelectArea"
+          />
+        </div>
 
         <MarshalsTab
           v-if="activeTab === 'marshals'"
@@ -127,6 +130,8 @@
       :assignments="selectedLocation?.assignments || []"
       :event-date="event?.eventDate || ''"
       :areas="areas"
+      :event-id="route.params.eventId"
+      :all-locations="locationStatuses"
       :isDirty="formDirty"
       @close="closeEditLocationModal"
       @save="handleUpdateLocation"
@@ -234,11 +239,15 @@
       :marshals="marshals"
       :areas="areas"
       :isDirty="formDirty"
+      :event-id="route.params.eventId"
+      :all-locations="locationStatuses"
+      :assignments="allAssignments"
       @close="closeEditAreaModal"
       @save="handleSaveArea"
       @delete="handleDeleteArea"
       @draw-boundary="handleDrawBoundary"
       @update:isDirty="markFormDirty"
+      @select-checkpoint="selectLocation"
     />
 
     <EditChecklistItemModal
@@ -299,11 +308,10 @@
 // Original file: 2,981 lines → Current file: ~900 lines (70% reduction)
 // Tab components: CourseTab.vue, MarshalsTab.vue, EventDetailsTab.vue
 
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useEventsStore } from '../stores/events';
 import { checkInApi, eventAdminsApi, eventsApi, locationsApi, marshalsApi, areasApi, checklistApi } from '../services/api';
-import { startSignalRConnection, stopSignalRConnection } from '../services/signalr';
 
 // New composables and utilities
 import { useTabs } from '../composables/useTabs';
@@ -319,6 +327,9 @@ import CourseAreasTab from './AdminEventManage/CourseAreasTab.vue';
 import MarshalsTab from './AdminEventManage/MarshalsTab.vue';
 import ChecklistsTab from './AdminEventManage/ChecklistsTab.vue';
 import EventDetailsTab from './AdminEventManage/EventDetailsTab.vue';
+import CheckpointsList from '../components/event-manage/lists/CheckpointsList.vue';
+import AreasList from '../components/event-manage/lists/AreasList.vue';
+import ResponsiveTabHeader from '../components/ResponsiveTabHeader.vue';
 
 // Modal Components
 import ShareLinkModal from '../components/event-manage/modals/ShareLinkModal.vue';
@@ -343,7 +354,7 @@ const router = useRouter();
 const eventsStore = useEventsStore();
 
 // Use composables
-const { activeTab, switchTab } = useTabs('course', ['course', 'marshals', 'checklists', 'areas', 'details']);
+const { activeTab, switchTab } = useTabs('course', ['course', 'checkpoints', 'areas', 'marshals', 'checklists', 'details']);
 const {
   showConfirmModal,
   confirmModalTitle,
@@ -576,6 +587,10 @@ const goBack = () => {
   router.push('/admin/dashboard');
 };
 
+const goToProfile = () => {
+  router.push({ name: 'AdminProfile' });
+};
+
 const shareEvent = () => {
   showShareLink.value = true;
 };
@@ -747,6 +762,32 @@ const handleSaveArea = async (formData) => {
     if (selectedArea.value && selectedArea.value.id) {
       // Update existing area (checkpoints will be automatically recalculated on backend)
       await areasApi.update(route.params.eventId, selectedArea.value.id, formData);
+
+      // Process checklist changes
+      if (formData.checklistChanges && formData.checklistChanges.length > 0) {
+        for (const change of formData.checklistChanges) {
+          try {
+            if (change.complete) {
+              // Complete the item
+              await checklistApi.complete(route.params.eventId, change.itemId, {
+                marshalId: change.marshalId,
+                contextType: change.contextType,
+                contextId: change.contextId,
+              });
+            } else {
+              // Uncomplete the item
+              await checklistApi.uncomplete(route.params.eventId, change.itemId, {
+                marshalId: change.marshalId,
+                contextType: change.contextType,
+                contextId: change.contextId,
+              });
+            }
+          } catch (error) {
+            console.error('Failed to update checklist item:', change, error);
+            // Continue with other changes even if one fails
+          }
+        }
+      }
     } else {
       // Create new area (checkpoints will be automatically assigned on backend)
       await areasApi.create({
@@ -1185,6 +1226,12 @@ const handleAddAreaFromMap = () => {
   };
 };
 
+const handleOpenAddMenuFromList = () => {
+  // When the "Add..." button is clicked from the checkpoints list tab, show options
+  // For now, just open the import modal - could expand to show a menu
+  showImportLocations.value = true;
+};
+
 const handleAddMultipleCheckpointsClick = () => {
   // Find the highest checkpoint number to continue from
   const checkpointNumbers = locationStatuses.value
@@ -1522,6 +1569,32 @@ const handleUpdateLocation = async (formData) => {
           if (assignment.isCheckedIn !== change.shouldBeCheckedIn) {
             await checkInApi.adminCheckIn(route.params.eventId, change.assignmentId);
           }
+        }
+      }
+    }
+
+    // Process checklist changes
+    if (formData.checklistChanges && formData.checklistChanges.length > 0) {
+      for (const change of formData.checklistChanges) {
+        try {
+          if (change.complete) {
+            // Complete the item
+            await checklistApi.complete(route.params.eventId, change.itemId, {
+              marshalId: change.marshalId,
+              contextType: change.contextType,
+              contextId: change.contextId,
+            });
+          } else {
+            // Uncomplete the item
+            await checklistApi.uncomplete(route.params.eventId, change.itemId, {
+              marshalId: change.marshalId,
+              contextType: change.contextType,
+              contextId: change.contextId,
+            });
+          }
+        } catch (error) {
+          console.error('Failed to update checklist item:', change, error);
+          // Continue with other changes even if one fails
         }
       }
     }
@@ -1961,18 +2034,6 @@ const getLocationName = (locationId) => {
 // Lifecycle
 onMounted(async () => {
   await loadEventData();
-
-  try {
-    await startSignalRConnection(route.params.eventId, async () => {
-      await loadEventData();
-    });
-  } catch (error) {
-    console.error('Failed to start SignalR connection:', error);
-  }
-});
-
-onUnmounted(() => {
-  stopSignalRConnection();
 });
 </script>
 
@@ -1981,6 +2042,7 @@ onUnmounted(() => {
 .admin-event-manage {
   min-height: 100vh;
   background: #f5f7fa;
+  overflow: visible;
 }
 
 .header {
@@ -2041,7 +2103,8 @@ onUnmounted(() => {
   gap: 0.5rem;
   margin-bottom: 2rem;
   border-bottom: 2px solid #dee2e6;
-  overflow-y: hidden;
+  overflow-y: visible;
+  position: relative;
 }
 
 .tab-button {
@@ -2070,6 +2133,13 @@ onUnmounted(() => {
 
 .tab-content-wrapper {
   animation: fadeIn 0.3s ease-in;
+}
+
+.tab-panel {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 @keyframes fadeIn {
@@ -2101,10 +2171,12 @@ onUnmounted(() => {
 
   .container {
     padding: 1rem;
+    overflow: visible;
   }
 
   .tabs-nav {
-    overflow-x: auto;
+    overflow-x: visible;
+    overflow-y: visible;
   }
 }
 </style>

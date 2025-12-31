@@ -147,7 +147,10 @@ public static class ChecklistScopeHelper
                 string? assignedArea = FindMatchingArea(targetAreaIds, marshalContext.AssignedAreaIds);
                 if (assignedArea != null)
                 {
-                    return (config, Specificity.Area, assignedArea);
+                    // For personal scopes (EveryoneInAreas), use marshal ID as context
+                    // For shared scopes (OnePerArea), use area ID as context
+                    string contextId = IsPersonalScope(config.Scope) ? marshalContext.MarshalId : assignedArea;
+                    return (config, Specificity.Area, contextId);
                 }
 
                 // For OnePerArea scope, also check if marshal is area lead
@@ -233,7 +236,10 @@ public static class ChecklistScopeHelper
                 string? matchedCheckpoint = FindMatchingCheckpoint(config.Ids, marshalContext);
                 if (matchedCheckpoint != null)
                 {
-                    return (config, Specificity.Checkpoint, matchedCheckpoint);
+                    // For personal scopes (EveryoneAtCheckpoints), use marshal ID as context
+                    // For shared scopes (OnePerCheckpoint), use checkpoint ID as context
+                    string contextId = IsPersonalScope(config.Scope) ? marshalContext.MarshalId : matchedCheckpoint;
+                    return (config, Specificity.Checkpoint, contextId);
                 }
 
                 // For OnePerCheckpoint and OneLeadPerArea scopes, area leads can also see/complete items

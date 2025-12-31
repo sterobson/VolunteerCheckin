@@ -4,6 +4,7 @@
       <h1>Admin Dashboard</h1>
       <div class="header-actions">
         <span class="user-email">{{ authStore.adminEmail }}</span>
+        <button @click="goToProfile" class="btn btn-secondary">Profile</button>
         <button @click="handleLogout" class="btn btn-secondary">Logout</button>
       </div>
     </header>
@@ -190,6 +191,10 @@ const goToEvent = (eventId) => {
     return;
   }
   router.push({ name: 'AdminEventManage', params: { eventId } });
+};
+
+const goToProfile = () => {
+  router.push({ name: 'AdminProfile' });
 };
 
 const handleLogout = () => {

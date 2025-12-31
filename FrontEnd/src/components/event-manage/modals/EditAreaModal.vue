@@ -34,6 +34,24 @@
         >
           Contacts
         </button>
+        <button
+          v-if="area && area.id"
+          class="tab-button"
+          :class="{ active: activeTab === 'checkpoints' }"
+          @click="activeTab = 'checkpoints'"
+          type="button"
+        >
+          Checkpoints
+        </button>
+        <button
+          v-if="area && area.id"
+          class="tab-button"
+          :class="{ active: activeTab === 'checklist' }"
+          @click="activeTab = 'checklist'"
+          type="button"
+        >
+          Checklist
+        </button>
       </div>
     </template>
 
@@ -150,6 +168,81 @@
       </div>
     </div>
 
+    <!-- Checkpoints Tab -->
+    <div v-if="activeTab === 'checkpoints'" class="tab-content">
+      <h3 class="section-title">Checkpoints in {{ area?.name }} ({{ areaCheckpoints.length }})</h3>
+
+      <div v-if="areaCheckpoints.length === 0" class="empty-state">
+        <p>No checkpoints in this area yet.</p>
+      </div>
+
+      <div v-else class="checkpoints-list">
+        <div
+          v-for="checkpoint in sortedAreaCheckpoints"
+          :key="checkpoint.id"
+          class="checkpoint-card"
+          @click="$emit('select-checkpoint', checkpoint)"
+        >
+          <div class="checkpoint-header">
+            <div class="checkpoint-name-section">
+              <h4>{{ checkpoint.name }}</h4>
+              <p v-if="checkpoint.description" class="checkpoint-description">
+                {{ checkpoint.description }}
+              </p>
+            </div>
+            <div class="checkpoint-stats">
+              <div class="stat-badge" :class="getCheckInStatusClass(checkpoint)">
+                {{ getCheckInStatusText(checkpoint) }}
+              </div>
+            </div>
+          </div>
+
+          <div class="checkpoint-details">
+            <div class="detail-row">
+              <span class="detail-label">Marshals:</span>
+              <span class="detail-value">
+                {{ getCheckpointAssignments(checkpoint.id).length }} / {{ checkpoint.requiredMarshals }}
+                <span v-if="getCheckpointAssignments(checkpoint.id).length < checkpoint.requiredMarshals" class="warning-text">
+                  ({{ checkpoint.requiredMarshals - getCheckpointAssignments(checkpoint.id).length }} needed)
+                </span>
+              </span>
+            </div>
+
+            <div class="detail-row">
+              <span class="detail-label">Checked in:</span>
+              <span class="detail-value">
+                {{ getCheckedInCount(checkpoint) }} / {{ getCheckpointAssignments(checkpoint.id).length }}
+              </span>
+            </div>
+
+            <div class="detail-row" v-if="checkpointChecklistStatus[checkpoint.id]">
+              <span class="detail-label">Tasks:</span>
+              <span class="detail-value" :class="getChecklistStatusClass(checkpoint.id)">
+                {{ getChecklistStatusText(checkpoint.id) }}
+              </span>
+            </div>
+            <div class="detail-row" v-else-if="loadingChecklistStatus[checkpoint.id]">
+              <span class="detail-label">Tasks:</span>
+              <span class="detail-value loading-text">Loading...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Checklist Tab -->
+    <CheckpointChecklistView
+      v-if="activeTab === 'checklist'"
+      ref="checklistTabRef"
+      v-model="checklistChanges"
+      :event-id="eventId"
+      :area-id="area.id"
+      :locations="allLocations"
+      :areas="areas"
+      :assignments="areaAssignments"
+      @change="handleChecklistChange"
+    />
+
     <!-- Custom footer with left and right aligned buttons -->
     <template #footer>
       <div class="custom-footer">
@@ -184,7 +277,9 @@
 import { ref, computed, defineProps, defineEmits, watch } from 'vue';
 import BaseModal from '../../BaseModal.vue';
 import MarshalSelectorModal from './MarshalSelectorModal.vue';
+import CheckpointChecklistView from '../../CheckpointChecklistView.vue';
 import { AREA_COLORS, DEFAULT_AREA_COLOR, getNextAvailableColor } from '../../../constants/areaColors';
+import { checklistApi } from '../../../services/api';
 
 const props = defineProps({
   show: {
@@ -211,6 +306,18 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  eventId: {
+    type: String,
+    required: true,
+  },
+  allLocations: {
+    type: Array,
+    default: () => [],
+  },
+  assignments: {
+    type: Array,
+    default: () => [],
+  },
 });
 
 const emit = defineEmits([
@@ -219,10 +326,15 @@ const emit = defineEmits([
   'delete',
   'draw-boundary',
   'update:isDirty',
+  'select-checkpoint',
 ]);
 
 const activeTab = ref('details');
 const showMarshalSelector = ref(false);
+const checklistTabRef = ref(null);
+const checklistChanges = ref([]);
+const checkpointChecklistStatus = ref({});
+const loadingChecklistStatus = ref({});
 
 const form = ref({
   name: '',
@@ -233,6 +345,122 @@ const form = ref({
   polygon: [],
   contacts: [],
 });
+
+// Compute assignments for checkpoints in this area
+const areaAssignments = computed(() => {
+  if (!props.area || !props.area.id) return [];
+
+  // Get all checkpoints in this area
+  const checkpointIds = props.checkpoints
+    .filter(cp => cp.areaIds && cp.areaIds.includes(props.area.id))
+    .map(cp => cp.id);
+
+  // Get all assignments for those checkpoints
+  return props.assignments.filter(a => checkpointIds.includes(a.locationId));
+});
+
+// Get checkpoints in this area
+const areaCheckpoints = computed(() => {
+  if (!props.area || !props.area.id) return [];
+  return props.checkpoints.filter(cp => cp.areaIds && cp.areaIds.includes(props.area.id));
+});
+
+// Sort checkpoints alphanumerically
+const sortedAreaCheckpoints = computed(() => {
+  const sorted = [...areaCheckpoints.value];
+  sorted.sort((a, b) => {
+    // Extract numbers from names for natural sorting
+    const aMatch = a.name.match(/^(\d+)/);
+    const bMatch = b.name.match(/^(\d+)/);
+
+    if (aMatch && bMatch) {
+      const aNum = parseInt(aMatch[1]);
+      const bNum = parseInt(bMatch[1]);
+      if (aNum !== bNum) return aNum - bNum;
+    }
+
+    return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+  });
+  return sorted;
+});
+
+// Get assignments for a specific checkpoint
+const getCheckpointAssignments = (checkpointId) => {
+  return props.assignments.filter(a => a.locationId === checkpointId);
+};
+
+// Get number of checked in marshals for a checkpoint
+const getCheckedInCount = (checkpoint) => {
+  const assignments = getCheckpointAssignments(checkpoint.id);
+  return assignments.filter(a => a.isCheckedIn).length;
+};
+
+// Get check-in status class
+const getCheckInStatusClass = (checkpoint) => {
+  const assignments = getCheckpointAssignments(checkpoint.id);
+  if (assignments.length === 0) return 'status-none';
+
+  const checkedInCount = assignments.filter(a => a.isCheckedIn).length;
+  if (checkedInCount === 0) return 'status-none';
+  if (checkedInCount === assignments.length) return 'status-complete';
+  return 'status-partial';
+};
+
+// Get check-in status text
+const getCheckInStatusText = (checkpoint) => {
+  const assignments = getCheckpointAssignments(checkpoint.id);
+  if (assignments.length === 0) return 'No marshals';
+
+  const checkedInCount = assignments.filter(a => a.isCheckedIn).length;
+  if (checkedInCount === 0) return 'Not checked in';
+  if (checkedInCount === assignments.length) return 'Fully checked in';
+  return `Partially checked in (${checkedInCount}/${assignments.length})`;
+};
+
+// Get checklist status class
+const getChecklistStatusClass = (checkpointId) => {
+  const status = checkpointChecklistStatus.value[checkpointId];
+  if (!status) return '';
+
+  if (status.total === 0) return '';
+  if (status.completed === status.total) return 'status-complete';
+  if (status.completed === 0) return 'status-none';
+  return 'status-partial';
+};
+
+// Get checklist status text
+const getChecklistStatusText = (checkpointId) => {
+  const status = checkpointChecklistStatus.value[checkpointId];
+  if (!status) return '';
+
+  if (status.total === 0) return 'No tasks';
+  if (status.completed === status.total) return 'All tasks completed';
+  return `${status.completed}/${status.total} completed`;
+};
+
+// Lazy load checklist status when checkpoints tab is viewed
+const loadChecklistStatus = async (checkpointId) => {
+  if (checkpointChecklistStatus.value[checkpointId] || loadingChecklistStatus.value[checkpointId]) {
+    return; // Already loaded or loading
+  }
+
+  loadingChecklistStatus.value[checkpointId] = true;
+
+  try {
+    const response = await checklistApi.getCheckpointChecklist(props.eventId, checkpointId);
+    const items = response.data || [];
+
+    checkpointChecklistStatus.value[checkpointId] = {
+      total: items.length,
+      completed: items.filter(item => item.isCompleted).length,
+    };
+  } catch (error) {
+    console.error('Failed to load checklist status for checkpoint:', checkpointId, error);
+    checkpointChecklistStatus.value[checkpointId] = { total: 0, completed: 0 };
+  } finally {
+    loadingChecklistStatus.value[checkpointId] = false;
+  }
+};
 
 watch(() => props.area, (newVal) => {
   if (newVal) {
@@ -271,6 +499,23 @@ watch(() => props.show, (newVal) => {
   if (newVal) {
     activeTab.value = 'details';
     showMarshalSelector.value = false;
+    checklistChanges.value = [];
+    checkpointChecklistStatus.value = {};
+    loadingChecklistStatus.value = {};
+    // Clear pending changes in checklist tab if it exists
+    if (checklistTabRef.value?.resetLocalState) {
+      checklistTabRef.value.resetLocalState();
+    }
+  }
+});
+
+// Watch for activeTab changes to lazy load checklist status
+watch(activeTab, (newTab) => {
+  if (newTab === 'checkpoints' && props.area && props.area.id) {
+    // Lazy load checklist status for all checkpoints in this area
+    areaCheckpoints.value.forEach(checkpoint => {
+      setTimeout(() => loadChecklistStatus(checkpoint.id), 0);
+    });
   }
 });
 
@@ -304,6 +549,11 @@ const removeContact = (index) => {
   handleInput();
 };
 
+const handleChecklistChange = (changes) => {
+  checklistChanges.value = changes;
+  handleInput();
+};
+
 const handleSave = () => {
   // For create: EventId, Name, Description, Color, Contacts (array), Polygon (array or null)
   // For update: Name, Description, Color, Contacts (array), Polygon (array or null), DisplayOrder
@@ -315,6 +565,8 @@ const handleSave = () => {
     contacts: form.value.contacts,
     polygon: form.value.polygon.length > 0 ? form.value.polygon : null,
     displayOrder: form.value.displayOrder,
+    // Include pending checklist changes
+    checklistChanges: checklistChanges.value || [],
   } : {
     // Create request
     name: form.value.name,
@@ -614,5 +866,119 @@ const handleClose = () => {
 
 .btn-danger:hover {
   background: #c82333;
+}
+
+.checkpoint-card {
+  padding: 1rem;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.checkpoint-card:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.checkpoint-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.checkpoint-name-section {
+  flex: 1;
+  min-width: 0;
+}
+
+.checkpoint-name-section h4 {
+  margin: 0;
+  font-size: 1rem;
+  color: #333;
+}
+
+.checkpoint-description {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.checkpoint-stats {
+  flex-shrink: 0;
+}
+
+.stat-badge {
+  padding: 0.375rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.stat-badge.status-complete {
+  background: #d4edda;
+  color: #155724;
+}
+
+.stat-badge.status-partial {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.stat-badge.status-none {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.checkpoint-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+}
+
+.detail-label {
+  color: #666;
+  font-weight: 500;
+}
+
+.detail-value {
+  color: #333;
+}
+
+.detail-value.status-complete {
+  color: #28a745;
+  font-weight: 500;
+}
+
+.detail-value.status-partial {
+  color: #ffc107;
+  font-weight: 500;
+}
+
+.detail-value.status-none {
+  color: #dc3545;
+  font-weight: 500;
+}
+
+.detail-value.loading-text {
+  color: #999;
+  font-style: italic;
+}
+
+.warning-text {
+  color: #dc3545;
+  font-weight: 500;
 }
 </style>

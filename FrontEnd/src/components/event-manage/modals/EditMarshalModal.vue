@@ -1,7 +1,7 @@
 <template>
   <BaseModal
     :show="show"
-    :title="isEditing ? 'Edit marshal' : 'Add marshal'"
+    :title="modalTitle"
     size="large"
     :confirm-on-close="true"
     :is-dirty="isDirty"
@@ -23,6 +23,8 @@
     <MarshalDetailsTab
       v-if="activeTab === 'details' || !isEditing"
       :form="form"
+      :event-id="eventId"
+      :marshal-id="isEditing ? marshal?.id : null"
       @update:form="form = $event"
       @input="handleInput"
     />
@@ -71,7 +73,7 @@
 </template>
 
 <script setup>
-import { ref, defineProps, defineEmits, watch } from 'vue';
+import { ref, computed, defineProps, defineEmits, watch } from 'vue';
 import BaseModal from '../../BaseModal.vue';
 import TabHeader from '../../TabHeader.vue';
 import MarshalDetailsTab from '../tabs/MarshalDetailsTab.vue';
@@ -136,6 +138,12 @@ const form = ref({
   email: '',
   phoneNumber: '',
   notes: '',
+});
+
+const modalTitle = computed(() => {
+  const baseTitle = props.isEditing ? 'Edit marshal' : 'Create marshal';
+  const name = form.value.name?.trim();
+  return name ? `${baseTitle} - ${name}` : baseTitle;
 });
 
 watch(() => props.marshal, (newVal) => {

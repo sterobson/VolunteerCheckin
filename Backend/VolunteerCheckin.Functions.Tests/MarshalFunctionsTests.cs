@@ -21,12 +21,17 @@ namespace VolunteerCheckin.Functions.Tests
     [TestClass]
     public class MarshalFunctionsTests
     {
+        private const string TestSessionToken = "test-session-token";
         private Mock<ILogger<MarshalFunctions>> _mockLogger = null!;
         private Mock<IMarshalRepository> _mockMarshalRepository = null!;
         private Mock<ILocationRepository> _mockLocationRepository = null!;
         private Mock<IAssignmentRepository> _mockAssignmentRepository = null!;
+        private Mock<IEventRepository> _mockEventRepository = null!;
         private Mock<CsvParserService> _mockCsvParser = null!;
+        private Mock<ClaimsService> _mockClaimsService = null!;
+        private Mock<ContactPermissionService> _mockContactPermissionService = null!;
         private MarshalFunctions _marshalFunctions = null!;
+        private UserClaims _adminClaims = null!;
 
         [TestInitialize]
         public void Setup()
@@ -35,14 +40,70 @@ namespace VolunteerCheckin.Functions.Tests
             _mockMarshalRepository = new Mock<IMarshalRepository>();
             _mockLocationRepository = new Mock<ILocationRepository>();
             _mockAssignmentRepository = new Mock<IAssignmentRepository>();
+            _mockEventRepository = new Mock<IEventRepository>();
             _mockCsvParser = new Mock<CsvParserService>();
+            _mockClaimsService = new Mock<ClaimsService>(
+                MockBehavior.Loose,
+                new Mock<IAuthSessionRepository>().Object,
+                new Mock<IPersonRepository>().Object,
+                new Mock<IEventRoleRepository>().Object,
+                new Mock<IMarshalRepository>().Object,
+                new Mock<IUserEventMappingRepository>().Object
+            );
+            _mockContactPermissionService = new Mock<ContactPermissionService>(
+                MockBehavior.Loose,
+                new Mock<IAreaRepository>().Object,
+                new Mock<ILocationRepository>().Object,
+                new Mock<IAssignmentRepository>().Object
+            );
+
+            // Create admin claims for tests
+            _adminClaims = new UserClaims(
+                PersonId: "person-1",
+                PersonName: "Admin User",
+                PersonEmail: "admin@example.com",
+                IsSystemAdmin: false,
+                EventId: "event-123",
+                AuthMethod: Constants.AuthMethodSecureEmailLink,
+                MarshalId: null,
+                EventRoles: new List<EventRoleInfo>
+                {
+                    new EventRoleInfo(Constants.RoleEventAdmin, new List<string>())
+                }
+            );
+
+            // Setup claims service to return admin claims for any event
+            _mockClaimsService
+                .Setup(c => c.GetClaimsAsync(TestSessionToken, It.IsAny<string>()))
+                .ReturnsAsync(_adminClaims);
+
+            // Setup contact permissions for admin (can view/modify all)
+            _mockContactPermissionService
+                .Setup(c => c.GetContactPermissionsAsync(It.IsAny<UserClaims>(), It.IsAny<string>()))
+                .ReturnsAsync(new ContactPermissions(
+                    CanViewAll: true,
+                    ViewableMarshalIds: new HashSet<string>(),
+                    CanModifyAll: true,
+                    ModifiableMarshalIds: new HashSet<string>()
+                ));
+
+            _mockContactPermissionService
+                .Setup(c => c.CanViewContactDetails(It.IsAny<ContactPermissions>(), It.IsAny<string>()))
+                .Returns(true);
+
+            _mockContactPermissionService
+                .Setup(c => c.CanModifyMarshal(It.IsAny<ContactPermissions>(), It.IsAny<string>()))
+                .Returns(true);
 
             _marshalFunctions = new MarshalFunctions(
                 _mockLogger.Object,
                 _mockMarshalRepository.Object,
                 _mockLocationRepository.Object,
                 _mockAssignmentRepository.Object,
-                _mockCsvParser.Object
+                _mockEventRepository.Object,
+                _mockCsvParser.Object,
+                _mockClaimsService.Object,
+                _mockContactPermissionService.Object
             );
         }
 
@@ -60,7 +121,7 @@ namespace VolunteerCheckin.Functions.Tests
                 "Test notes"
             );
 
-            HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAuth(request, TestSessionToken);
 
             // Act
             IActionResult result = await _marshalFunctions.CreateMarshal(httpRequest);
@@ -84,7 +145,7 @@ namespace VolunteerCheckin.Functions.Tests
         public async Task CreateMarshal_NullRequest_ReturnsBadRequest()
         {
             // Arrange
-            HttpRequest httpRequest = TestHelpers.CreateHttpRequest("invalid json");
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAuth("invalid json", TestSessionToken);
 
             // Act
             IActionResult result = await _marshalFunctions.CreateMarshal(httpRequest);
@@ -157,7 +218,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetByMarshalAsync(eventId, "marshal-2"))
                 .ReturnsAsync(new[] { assignments[1] });
 
-            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth(TestSessionToken);
 
             // Act
             IActionResult result = await _marshalFunctions.GetMarshalsByEvent(httpRequest, eventId);
@@ -167,7 +228,7 @@ namespace VolunteerCheckin.Functions.Tests
             OkObjectResult okResult = (OkObjectResult)result;
             okResult.Value.ShouldNotBeNull();
 
-            List<MarshalResponse>? marshalList = okResult.Value as List<MarshalResponse>;
+            List<MarshalWithPermissionsResponse>? marshalList = okResult.Value as List<MarshalWithPermissionsResponse>;
             marshalList.ShouldNotBeNull();
             marshalList.Count.ShouldBe(2);
             marshalList[0].IsCheckedIn.ShouldBeTrue();
@@ -208,7 +269,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetByMarshalAsync(eventId, marshalId))
                 .ReturnsAsync(assignments);
 
-            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth(TestSessionToken);
 
             // Act
             IActionResult result = await _marshalFunctions.GetMarshal(httpRequest, eventId, marshalId);
@@ -225,7 +286,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
                 .ReturnsAsync((MarshalEntity?)null);
 
-            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth(TestSessionToken);
 
             // Act
             IActionResult result = await _marshalFunctions.GetMarshal(httpRequest, "event-123", "marshal-456");
@@ -282,7 +343,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetByMarshalAsync(eventId, marshalId))
                 .ReturnsAsync(assignments);
 
-            HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAuth(request, TestSessionToken);
 
             // Act
             IActionResult result = await _marshalFunctions.UpdateMarshal(httpRequest, eventId, marshalId);
@@ -317,7 +378,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .ReturnsAsync((MarshalEntity?)null);
 
             UpdateMarshalRequest request = new("Name", "email@test.com", "555-1234", "Notes");
-            HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAuth(request, TestSessionToken);
 
             // Act
             IActionResult result = await _marshalFunctions.UpdateMarshal(httpRequest, "event-123", "marshal-456");
@@ -347,7 +408,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetByMarshalAsync(eventId, marshalId))
                 .ReturnsAsync(assignments);
 
-            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth(TestSessionToken);
 
             // Act
             IActionResult result = await _marshalFunctions.DeleteMarshal(httpRequest, eventId, marshalId);

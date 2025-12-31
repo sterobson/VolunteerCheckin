@@ -80,14 +80,6 @@ export const STORAGE_KEYS = {
   LAST_EVENT_ID: 'lastEventId',
 };
 
-// SignalR connection states
-export const CONNECTION_STATE = {
-  DISCONNECTED: 'Disconnected',
-  CONNECTING: 'Connecting',
-  CONNECTED: 'Connected',
-  RECONNECTING: 'Reconnecting',
-};
-
 // Error messages
 export const ERROR_MESSAGES = {
   NETWORK_ERROR: 'Network error. Please check your connection and try again.',

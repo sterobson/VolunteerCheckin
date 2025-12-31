@@ -18,20 +18,40 @@ public class MarshalFunctions
     private readonly IMarshalRepository _marshalRepository;
     private readonly ILocationRepository _locationRepository;
     private readonly IAssignmentRepository _assignmentRepository;
+    private readonly IEventRepository _eventRepository;
     private readonly CsvParserService _csvParser;
+    private readonly ClaimsService _claimsService;
+    private readonly ContactPermissionService _contactPermissionService;
+    private readonly EmailService? _emailService;
 
     public MarshalFunctions(
         ILogger<MarshalFunctions> logger,
         IMarshalRepository marshalRepository,
         ILocationRepository locationRepository,
         IAssignmentRepository assignmentRepository,
-        CsvParserService csvParser)
+        IEventRepository eventRepository,
+        CsvParserService csvParser,
+        ClaimsService claimsService,
+        ContactPermissionService contactPermissionService,
+        EmailService? emailService = null)
     {
         _logger = logger;
         _marshalRepository = marshalRepository;
         _locationRepository = locationRepository;
         _assignmentRepository = assignmentRepository;
+        _eventRepository = eventRepository;
         _csvParser = csvParser;
+        _claimsService = claimsService;
+        _contactPermissionService = contactPermissionService;
+        _emailService = emailService;
+    }
+
+    /// <summary>
+    /// Get session token from request cookie or Authorization header.
+    /// </summary>
+    private static string? GetSessionToken(HttpRequest req)
+    {
+        return req.Cookies["session"] ?? req.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "");
     }
 
     [Function("CreateMarshal")]
@@ -48,6 +68,25 @@ public class MarshalFunctions
                 return new BadRequestObjectResult(new { message = "Invalid request" });
             }
 
+            // Require authentication
+            string? sessionToken = GetSessionToken(req);
+            if (string.IsNullOrWhiteSpace(sessionToken))
+            {
+                return new UnauthorizedObjectResult(new { message = "Authentication required" });
+            }
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, request.EventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
+            }
+
+            // Require EventAdmin role to create marshals
+            if (!claims.IsEventAdmin && !claims.IsSystemAdmin)
+            {
+                return new ObjectResult(new { message = "Event admin permission required" }) { StatusCode = 403 };
+            }
+
             // Sanitize inputs
             string sanitizedName = InputSanitizer.SanitizeName(request.Name);
             if (string.IsNullOrWhiteSpace(sanitizedName))
@@ -60,12 +99,15 @@ public class MarshalFunctions
             string sanitizedNotes = InputSanitizer.SanitizeNotes(request.Notes);
 
             string marshalId = Guid.NewGuid().ToString();
+            string personId = Guid.NewGuid().ToString(); // Each marshal gets their own PersonId
             MarshalEntity marshalEntity = new()
             {
                 PartitionKey = request.EventId,
                 RowKey = marshalId,
                 EventId = request.EventId,
                 MarshalId = marshalId,
+                PersonId = personId,
+                MagicCode = AuthService.GenerateMagicCode(),
                 Name = sanitizedName,
                 Email = sanitizedEmail ?? string.Empty,
                 PhoneNumber = sanitizedPhone,
@@ -104,8 +146,32 @@ public class MarshalFunctions
     {
         try
         {
+            _logger.LogInformation($"GetMarshalsByEvent called for event {eventId}");
+
+            // Require authentication
+            string? sessionToken = GetSessionToken(req);
+            _logger.LogInformation($"Session token present: {!string.IsNullOrWhiteSpace(sessionToken)}");
+            if (string.IsNullOrWhiteSpace(sessionToken))
+            {
+                _logger.LogWarning("No session token provided");
+                return new UnauthorizedObjectResult(new { message = "Authentication required" });
+            }
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            _logger.LogInformation($"Claims resolved: {claims != null}, IsEventAdmin: {claims?.IsEventAdmin}, IsSystemAdmin: {claims?.IsSystemAdmin}");
+            if (claims == null)
+            {
+                _logger.LogWarning("Claims returned null - invalid or expired session");
+                return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
+            }
+
+            // Get contact permissions for this user
+            ContactPermissions permissions = await _contactPermissionService.GetContactPermissionsAsync(claims, eventId);
+            _logger.LogInformation($"Permissions - CanViewAll: {permissions.CanViewAll}, CanModifyAll: {permissions.CanModifyAll}");
+
             IEnumerable<MarshalEntity> marshalEntities = await _marshalRepository.GetByEventAsync(eventId);
-            List<MarshalResponse> marshals = [];
+            _logger.LogInformation($"Found {marshalEntities.Count()} marshals for event {eventId}");
+            List<MarshalWithPermissionsResponse> marshals = [];
 
             foreach (MarshalEntity marshalEntity in marshalEntities)
             {
@@ -124,16 +190,21 @@ public class MarshalFunctions
                     }
                 }
 
-                marshals.Add(new MarshalResponse(
+                bool canViewContact = _contactPermissionService.CanViewContactDetails(permissions, marshalEntity.MarshalId);
+                bool canModify = _contactPermissionService.CanModifyMarshal(permissions, marshalEntity.MarshalId);
+
+                marshals.Add(new MarshalWithPermissionsResponse(
                     marshalEntity.MarshalId,
                     marshalEntity.EventId,
                     marshalEntity.Name,
-                    marshalEntity.Email,
-                    marshalEntity.PhoneNumber,
-                    marshalEntity.Notes,
+                    canViewContact ? marshalEntity.Email : null,
+                    canViewContact ? marshalEntity.PhoneNumber : null,
+                    canViewContact ? marshalEntity.Notes : null,
                     assignedLocationIds,
                     isCheckedIn,
-                    marshalEntity.CreatedDate
+                    marshalEntity.CreatedDate,
+                    canViewContact,
+                    canModify
                 ));
             }
 
@@ -154,12 +225,30 @@ public class MarshalFunctions
     {
         try
         {
+            // Require authentication
+            string? sessionToken = GetSessionToken(req);
+            if (string.IsNullOrWhiteSpace(sessionToken))
+            {
+                return new UnauthorizedObjectResult(new { message = "Authentication required" });
+            }
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
+            }
+
             MarshalEntity? marshalEntity = await _marshalRepository.GetAsync(eventId, marshalId);
 
             if (marshalEntity == null)
             {
                 return new NotFoundObjectResult(new { message = "Marshal not found" });
             }
+
+            // Get contact permissions for this user
+            ContactPermissions permissions = await _contactPermissionService.GetContactPermissionsAsync(claims, eventId);
+            bool canViewContact = _contactPermissionService.CanViewContactDetails(permissions, marshalId);
+            bool canModify = _contactPermissionService.CanModifyMarshal(permissions, marshalId);
 
             // Get assignments for this marshal
             IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByMarshalAsync(eventId, marshalId);
@@ -176,16 +265,18 @@ public class MarshalFunctions
                 }
             }
 
-            MarshalResponse response = new(
+            MarshalWithPermissionsResponse response = new(
                 marshalEntity.MarshalId,
                 marshalEntity.EventId,
                 marshalEntity.Name,
-                marshalEntity.Email,
-                marshalEntity.PhoneNumber,
-                marshalEntity.Notes,
+                canViewContact ? marshalEntity.Email : null,
+                canViewContact ? marshalEntity.PhoneNumber : null,
+                canViewContact ? marshalEntity.Notes : null,
                 assignedLocationIds,
                 isCheckedIn,
-                marshalEntity.CreatedDate
+                marshalEntity.CreatedDate,
+                canViewContact,
+                canModify
             );
 
             return new OkObjectResult(response);
@@ -205,6 +296,26 @@ public class MarshalFunctions
     {
         try
         {
+            // Require authentication
+            string? sessionToken = GetSessionToken(req);
+            if (string.IsNullOrWhiteSpace(sessionToken))
+            {
+                return new UnauthorizedObjectResult(new { message = "Authentication required" });
+            }
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
+            }
+
+            // Check modification permissions
+            ContactPermissions permissions = await _contactPermissionService.GetContactPermissionsAsync(claims, eventId);
+            if (!_contactPermissionService.CanModifyMarshal(permissions, marshalId))
+            {
+                return new ObjectResult(new { message = "You do not have permission to modify this marshal" }) { StatusCode = 403 };
+            }
+
             string body = await new StreamReader(req.Body).ReadToEndAsync();
             UpdateMarshalRequest? request = JsonSerializer.Deserialize<UpdateMarshalRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
@@ -231,10 +342,16 @@ public class MarshalFunctions
             string sanitizedPhone = InputSanitizer.SanitizePhone(request.PhoneNumber);
             string sanitizedNotes = InputSanitizer.SanitizeNotes(request.Notes);
 
+            // Marshals can modify their own details, but only admins can modify notes
             marshalEntity.Name = sanitizedName;
             marshalEntity.Email = sanitizedEmail ?? string.Empty;
             marshalEntity.PhoneNumber = sanitizedPhone;
-            marshalEntity.Notes = sanitizedNotes;
+
+            // Only admins can modify notes (notes may contain sensitive admin-only info)
+            if (claims.IsEventAdmin || claims.IsSystemAdmin)
+            {
+                marshalEntity.Notes = sanitizedNotes;
+            }
 
             await _marshalRepository.UpdateAsync(marshalEntity);
 
@@ -242,7 +359,7 @@ public class MarshalFunctions
             IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByMarshalAsync(eventId, marshalId);
             foreach (AssignmentEntity assignment in assignments)
             {
-                assignment.MarshalName = request.Name;
+                assignment.MarshalName = sanitizedName;
                 await _assignmentRepository.UpdateAsync(assignment);
             }
 
@@ -260,16 +377,21 @@ public class MarshalFunctions
                 }
             }
 
-            MarshalResponse response = new(
+            // Return with appropriate visibility
+            bool canViewContact = _contactPermissionService.CanViewContactDetails(permissions, marshalId);
+
+            MarshalWithPermissionsResponse response = new(
                 marshalEntity.MarshalId,
                 marshalEntity.EventId,
                 marshalEntity.Name,
-                marshalEntity.Email,
-                marshalEntity.PhoneNumber,
-                marshalEntity.Notes,
+                canViewContact ? marshalEntity.Email : null,
+                canViewContact ? marshalEntity.PhoneNumber : null,
+                canViewContact ? marshalEntity.Notes : null,
                 assignedLocationIds,
                 isCheckedIn,
-                marshalEntity.CreatedDate
+                marshalEntity.CreatedDate,
+                canViewContact,
+                true // They can modify since we passed the permission check
             );
 
             _logger.LogInformation($"Marshal updated: {marshalId}");
@@ -291,6 +413,25 @@ public class MarshalFunctions
     {
         try
         {
+            // Require authentication
+            string? sessionToken = GetSessionToken(req);
+            if (string.IsNullOrWhiteSpace(sessionToken))
+            {
+                return new UnauthorizedObjectResult(new { message = "Authentication required" });
+            }
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
+            }
+
+            // Require EventAdmin role to delete marshals
+            if (!claims.IsEventAdmin && !claims.IsSystemAdmin)
+            {
+                return new ObjectResult(new { message = "Event admin permission required" }) { StatusCode = 403 };
+            }
+
             // Delete all assignments for this marshal
             IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByMarshalAsync(eventId, marshalId);
             foreach (AssignmentEntity assignment in assignments)
@@ -312,6 +453,168 @@ public class MarshalFunctions
         }
     }
 
+    [Function("GetMarshalMagicLink")]
+    public async Task<IActionResult> GetMarshalMagicLink(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "marshals/{eventId}/{marshalId}/magic-link")] HttpRequest req,
+        string eventId,
+        string marshalId)
+    {
+        try
+        {
+            // Require authentication
+            string? sessionToken = GetSessionToken(req);
+            if (string.IsNullOrWhiteSpace(sessionToken))
+            {
+                return new UnauthorizedObjectResult(new { message = "Authentication required" });
+            }
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
+            }
+
+            // Require at least area admin permission
+            bool hasAreaAdminRole = claims.HasRole(Constants.RoleEventAreaAdmin);
+            if (!claims.IsEventAdmin && !claims.IsSystemAdmin && !hasAreaAdminRole)
+            {
+                return new ObjectResult(new { message = "Admin permission required" }) { StatusCode = 403 };
+            }
+
+            MarshalEntity? marshalEntity = await _marshalRepository.GetAsync(eventId, marshalId);
+            if (marshalEntity == null)
+            {
+                return new NotFoundObjectResult(new { message = "Marshal not found" });
+            }
+
+            // Generate magic code if not exists
+            if (string.IsNullOrWhiteSpace(marshalEntity.MagicCode))
+            {
+                marshalEntity.MagicCode = AuthService.GenerateMagicCode();
+                await _marshalRepository.UpdateAsync(marshalEntity);
+            }
+
+            // Construct the magic link URL
+            string baseUrl = req.Headers["Origin"].FirstOrDefault()
+                ?? req.Headers["Referer"].FirstOrDefault()?.TrimEnd('/')
+                ?? "https://volunteer-checkin.example.com";
+
+            // Remove any path from the URL to get just the origin
+            if (Uri.TryCreate(baseUrl, UriKind.Absolute, out Uri? uri))
+            {
+                baseUrl = $"{uri.Scheme}://{uri.Host}";
+                if (!uri.IsDefaultPort)
+                {
+                    baseUrl += $":{uri.Port}";
+                }
+            }
+
+            string magicLink = $"{baseUrl}/event/{eventId}?code={marshalEntity.MagicCode}";
+
+            return new OkObjectResult(new MarshalMagicLinkResponse(
+                marshalEntity.MagicCode,
+                magicLink,
+                !string.IsNullOrWhiteSpace(marshalEntity.Email)
+            ));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting marshal magic link");
+            return new StatusCodeResult(500);
+        }
+    }
+
+    [Function("SendMarshalMagicLink")]
+    public async Task<IActionResult> SendMarshalMagicLink(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "marshals/{eventId}/{marshalId}/send-magic-link")] HttpRequest req,
+        string eventId,
+        string marshalId)
+    {
+        try
+        {
+            // Require authentication
+            string? sessionToken = GetSessionToken(req);
+            if (string.IsNullOrWhiteSpace(sessionToken))
+            {
+                return new UnauthorizedObjectResult(new { message = "Authentication required" });
+            }
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
+            }
+
+            // Require at least area admin permission
+            bool hasAreaAdminRole = claims.HasRole(Constants.RoleEventAreaAdmin);
+            if (!claims.IsEventAdmin && !claims.IsSystemAdmin && !hasAreaAdminRole)
+            {
+                return new ObjectResult(new { message = "Admin permission required" }) { StatusCode = 403 };
+            }
+
+            MarshalEntity? marshalEntity = await _marshalRepository.GetAsync(eventId, marshalId);
+            if (marshalEntity == null)
+            {
+                return new NotFoundObjectResult(new { message = "Marshal not found" });
+            }
+
+            if (string.IsNullOrWhiteSpace(marshalEntity.Email))
+            {
+                return new BadRequestObjectResult(new { message = "Marshal does not have an email address" });
+            }
+
+            if (_emailService == null)
+            {
+                return new ObjectResult(new { message = "Email service not configured" }) { StatusCode = 503 };
+            }
+
+            // Generate magic code if not exists
+            if (string.IsNullOrWhiteSpace(marshalEntity.MagicCode))
+            {
+                marshalEntity.MagicCode = AuthService.GenerateMagicCode();
+                await _marshalRepository.UpdateAsync(marshalEntity);
+            }
+
+            // Get event name
+            EventEntity? eventEntity = await _eventRepository.GetAsync(eventId);
+            string eventName = eventEntity?.Name ?? "Event";
+
+            // Construct the magic link URL
+            string baseUrl = req.Headers["Origin"].FirstOrDefault()
+                ?? req.Headers["Referer"].FirstOrDefault()?.TrimEnd('/')
+                ?? "https://volunteer-checkin.example.com";
+
+            // Remove any path from the URL to get just the origin
+            if (Uri.TryCreate(baseUrl, UriKind.Absolute, out Uri? uri))
+            {
+                baseUrl = $"{uri.Scheme}://{uri.Host}";
+                if (!uri.IsDefaultPort)
+                {
+                    baseUrl += $":{uri.Port}";
+                }
+            }
+
+            string magicLink = $"{baseUrl}/event/{eventId}?code={marshalEntity.MagicCode}";
+
+            // Send the email
+            await _emailService.SendMarshalMagicLinkEmailAsync(
+                marshalEntity.Email,
+                marshalEntity.Name,
+                eventName,
+                magicLink
+            );
+
+            _logger.LogInformation($"Sent magic link email to marshal {marshalId} at {marshalEntity.Email}");
+
+            return new OkObjectResult(new { message = "Magic link sent successfully" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending marshal magic link");
+            return new StatusCodeResult(500);
+        }
+    }
+
     [Function("ImportMarshals")]
     public async Task<IActionResult> ImportMarshals(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "marshals/import/{eventId}")] HttpRequest req,
@@ -319,6 +622,25 @@ public class MarshalFunctions
     {
         try
         {
+            // Require authentication
+            string? sessionToken = GetSessionToken(req);
+            if (string.IsNullOrWhiteSpace(sessionToken))
+            {
+                return new UnauthorizedObjectResult(new { message = "Authentication required" });
+            }
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
+            }
+
+            // Require EventAdmin role to import marshals
+            if (!claims.IsEventAdmin && !claims.IsSystemAdmin)
+            {
+                return new ObjectResult(new { message = "Event admin permission required" }) { StatusCode = 403 };
+            }
+
             // Get the uploaded file
             if (req.Form.Files.Count == 0)
             {
@@ -437,6 +759,7 @@ public class MarshalFunctions
             RowKey = newMarshalId,
             EventId = eventId,
             MarshalId = newMarshalId,
+            MagicCode = AuthService.GenerateMagicCode(),
             Name = row.Name,
             Email = row.Email,
             PhoneNumber = row.Phone,

@@ -9,7 +9,8 @@
       "Bash(wc:*)",
       "Bash(dotnet build:*)",
       "Bash(ls:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(npm run build:*)"
     ]
   }
 }

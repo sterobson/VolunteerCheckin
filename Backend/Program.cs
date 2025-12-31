@@ -36,6 +36,9 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddSingleton<GpxParserService>();
 builder.Services.AddSingleton<CsvParserService>();
 builder.Services.AddSingleton<GpsService>();
+builder.Services.AddSingleton<AuthService>();
+builder.Services.AddSingleton<ClaimsService>();
+builder.Services.AddSingleton<ContactPermissionService>();
 
 // Register repositories
 builder.Services.AddSingleton<ILocationRepository, TableStorageLocationRepository>();
@@ -47,5 +50,9 @@ builder.Services.AddSingleton<IUserEventMappingRepository, TableStorageUserEvent
 builder.Services.AddSingleton<IAreaRepository, TableStorageAreaRepository>();
 builder.Services.AddSingleton<IChecklistItemRepository, TableStorageChecklistItemRepository>();
 builder.Services.AddSingleton<IChecklistCompletionRepository, TableStorageChecklistCompletionRepository>();
+builder.Services.AddSingleton<IPersonRepository, TableStoragePersonRepository>();
+builder.Services.AddSingleton<IEventRoleRepository, TableStorageEventRoleRepository>();
+builder.Services.AddSingleton<IAuthTokenRepository, TableStorageAuthTokenRepository>();
+builder.Services.AddSingleton<IAuthSessionRepository, TableStorageAuthSessionRepository>();
 
 builder.Build().Run();

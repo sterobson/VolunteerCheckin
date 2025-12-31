@@ -1,5 +1,5 @@
 <template>
-  <div class="marshal-checklist-view">
+  <div class="checkpoint-checklist-view">
     <div v-if="loading" class="loading-state">
       Loading checklist...
     </div>
@@ -11,14 +11,19 @@
       </button>
     </div>
 
+    <div v-else-if="noMarshalsAssigned" class="empty-state">
+      <p>No marshals assigned to this checkpoint yet.</p>
+      <p class="help-text">Assign marshals to enable checklist completion.</p>
+    </div>
+
     <div v-else-if="items.length === 0" class="empty-state">
-      <p>No checklist items for this person.</p>
+      <p>No checklist items for this checkpoint.</p>
     </div>
 
     <div v-else class="checklist-items">
       <div
         v-for="item in itemsWithLocalState"
-        :key="item.itemId"
+        :key="`${item.itemId}-${item.completionContextId}`"
         class="checklist-item"
         :class="{
           'item-completed': item.localIsCompleted,
@@ -29,7 +34,7 @@
           <input
             type="checkbox"
             :checked="item.localIsCompleted"
-            :disabled="!item.canBeCompletedByMe"
+            :disabled="!item.canBeCompletedByMe && !item.localIsCompleted"
             @change="handleToggleComplete(item)"
           />
         </div>
@@ -68,7 +73,7 @@
           </div>
 
           <div v-if="!item.canBeCompletedByMe && !item.localIsCompleted" class="disabled-reason">
-            {{ getDisabledReason(item) }}
+            Already completed by someone else
           </div>
         </div>
       </div>
@@ -85,15 +90,23 @@ const props = defineProps({
     type: String,
     required: true,
   },
-  marshalId: {
+  locationId: {
     type: String,
-    required: true,
+    default: null,
+  },
+  areaId: {
+    type: String,
+    default: null,
   },
   locations: {
     type: Array,
     default: () => [],
   },
   areas: {
+    type: Array,
+    default: () => [],
+  },
+  assignments: {
     type: Array,
     default: () => [],
   },
@@ -108,11 +121,15 @@ const emit = defineEmits(['update:modelValue', 'change']);
 const items = ref([]);
 const loading = ref(false);
 const error = ref(null);
-const localCompletions = ref(new Map()); // itemId -> { complete: boolean }
+const localCompletions = ref(new Map()); // itemId -> { complete: boolean, contextType, contextId }
+
+const noMarshalsAssigned = computed(() => {
+  return props.assignments.length === 0;
+});
 
 const itemsWithLocalState = computed(() => {
   return items.value.map(item => {
-    const localState = localCompletions.value.get(item.itemId);
+    const localState = localCompletions.value.get(`${item.itemId}|||${item.completionContextId}`);
     const localIsCompleted = localState !== undefined ? localState.complete : item.isCompleted;
     const isModified = localState !== undefined && localState.complete !== item.isCompleted;
 
@@ -125,20 +142,22 @@ const itemsWithLocalState = computed(() => {
 });
 
 const loadChecklist = async () => {
-  if (!props.eventId || !props.marshalId) return;
+  if (!props.eventId || (!props.locationId && !props.areaId)) return;
 
   loading.value = true;
   error.value = null;
 
   try {
-    const response = await checklistApi.getMarshalChecklist(props.eventId, props.marshalId);
+    const response = props.locationId
+      ? await checklistApi.getCheckpointChecklist(props.eventId, props.locationId)
+      : await checklistApi.getAreaChecklist(props.eventId, props.areaId);
     items.value = response.data || [];
 
     // Initialize local completions from modelValue if provided
     if (props.modelValue && props.modelValue.length > 0) {
       const newMap = new Map();
       props.modelValue.forEach(completion => {
-        newMap.set(completion.itemId, {
+        newMap.set(`${completion.itemId}|||${completion.contextId}`, {
           complete: completion.complete,
           contextType: completion.contextType,
           contextId: completion.contextId,
@@ -155,14 +174,21 @@ const loadChecklist = async () => {
 };
 
 const handleToggleComplete = (item) => {
-  const currentLocal = localCompletions.value.get(item.itemId);
+  // For personal items, use the owner's marshal ID
+  // For shared items, use the first assigned marshal
+  const marshalId = item.contextOwnerMarshalId || (props.assignments.length > 0 ? props.assignments[0].marshalId : null);
+  if (!marshalId) return;
+
+  const key = `${item.itemId}|||${item.completionContextId}`;
+  const currentLocal = localCompletions.value.get(key);
   const currentState = currentLocal !== undefined ? currentLocal.complete : item.isCompleted;
 
   // Toggle the local state
-  localCompletions.value.set(item.itemId, {
+  localCompletions.value.set(key, {
     complete: !currentState,
     contextType: item.completionContextType,
     contextId: item.completionContextId,
+    marshalId: marshalId,
   });
 
   // Emit the changes
@@ -172,14 +198,16 @@ const handleToggleComplete = (item) => {
 const emitChanges = () => {
   const changes = [];
 
-  for (const [itemId, localState] of localCompletions.value.entries()) {
-    const item = items.value.find(i => i.itemId === itemId);
+  for (const [key, localState] of localCompletions.value.entries()) {
+    const [itemId, contextId] = key.split('|||');
+    const item = items.value.find(i => i.itemId === itemId && i.completionContextId === contextId);
     if (item && localState.complete !== item.isCompleted) {
       changes.push({
         itemId,
         complete: localState.complete,
         contextType: localState.contextType,
         contextId: localState.contextId,
+        marshalId: localState.marshalId,
       });
     }
   }
@@ -194,10 +222,11 @@ const resetLocalState = () => {
   if (props.modelValue && props.modelValue.length > 0) {
     const newMap = new Map();
     props.modelValue.forEach(completion => {
-      newMap.set(completion.itemId, {
+      newMap.set(`${completion.itemId}|||${completion.contextId}`, {
         complete: completion.complete,
         contextType: completion.contextType,
         contextId: completion.contextId,
+        marshalId: completion.marshalId,
       });
     });
     localCompletions.value = newMap;
@@ -227,7 +256,7 @@ const getScopeLabel = (item) => {
 const getScopeTooltip = (item) => {
   const tooltips = {
     'Everyone': 'This item is for everyone at the event',
-    'SpecificPeople': 'This item is specifically assigned to this person',
+    'SpecificPeople': 'This item is specifically assigned to certain people',
     'EveryoneInAreas': 'This item is for everyone in certain areas',
     'EveryoneAtCheckpoints': 'This item is for everyone at certain checkpoints',
     'OnePerCheckpoint': 'One person at the checkpoint needs to complete this',
@@ -237,13 +266,6 @@ const getScopeTooltip = (item) => {
   };
 
   return tooltips[item.matchedScope] || '';
-};
-
-const getDisabledReason = (item) => {
-  if (item.completionContextType === 'Checkpoint' || item.completionContextType === 'Area') {
-    return 'Already completed by someone else';
-  }
-  return 'Cannot be completed';
 };
 
 const getContextName = (item) => {
@@ -283,13 +305,13 @@ const formatDateTime = (dateString) => {
 };
 
 // Watch for changes and reload
-watch(() => [props.eventId, props.marshalId], () => {
+watch(() => [props.eventId, props.locationId, props.areaId], () => {
   loadChecklist();
 }, { immediate: true });
 </script>
 
 <style scoped>
-.marshal-checklist-view {
+.checkpoint-checklist-view {
   padding: 1rem 0;
 }
 
@@ -427,9 +449,9 @@ watch(() => [props.eventId, props.marshalId], () => {
   color: #999;
 }
 
-.disabled-reason {
+.pending-info {
   font-size: 0.85rem;
-  color: #dc3545;
+  color: #999;
   font-style: italic;
 }
 
@@ -443,6 +465,18 @@ watch(() => [props.eventId, props.marshalId], () => {
 .uncomplete-info {
   font-size: 0.85rem;
   color: #dc3545;
+}
+
+.disabled-reason {
+  font-size: 0.85rem;
+  color: #dc3545;
+  font-style: italic;
+}
+
+.help-text {
+  font-size: 0.8rem;
+  color: #999;
+  margin-top: 0.5rem;
 }
 
 .btn {

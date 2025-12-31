@@ -43,6 +43,18 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  userLocation: {
+    type: Object,
+    default: null,
+  },
+  highlightLocationId: {
+    type: String,
+    default: null,
+  },
+  marshalMode: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const emit = defineEmits(['location-click', 'map-click', 'area-click', 'polygon-complete', 'polygon-drawing']);
@@ -75,6 +87,7 @@ const showDescriptionsForIds = ref(new Set());
 const areaLayers = ref([]);
 let drawControl = null;
 let drawnItems = null;
+let userLocationMarker = null;
 
 const checkVisibleMarkersAndUpdate = () => {
   if (!map) return;
@@ -89,6 +102,56 @@ const checkVisibleMarkersAndUpdate = () => {
     showDescriptionsForIds.value = newShowDescriptionsForIds;
     updateMarkers();
   }
+};
+
+const updateUserLocationMarker = () => {
+  if (userLocationMarker) {
+    userLocationMarker.remove();
+    userLocationMarker = null;
+  }
+
+  if (!map || !props.userLocation) return;
+
+  const userIcon = L.divIcon({
+    className: 'user-location-marker',
+    html: `
+      <div style="
+        position: relative;
+        width: 20px;
+        height: 20px;
+      ">
+        <div style="
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: 20px;
+          height: 20px;
+          background-color: #4285f4;
+          border: 3px solid white;
+          border-radius: 50%;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        "></div>
+        <div style="
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: 40px;
+          height: 40px;
+          background-color: rgba(66, 133, 244, 0.2);
+          border-radius: 50%;
+          animation: pulse 2s ease-out infinite;
+        "></div>
+      </div>
+    `,
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
+  });
+
+  userLocationMarker = L.marker([props.userLocation.lat, props.userLocation.lng], { icon: userIcon })
+    .addTo(map)
+    .bindPopup('Your location');
 };
 
 const initMap = () => {
@@ -140,6 +203,7 @@ const initMap = () => {
   updateMarkers();
   updateRoute();
   updateAreaPolygons();
+  updateUserLocationMarker();
   initDrawingMode();
 };
 
@@ -367,8 +431,16 @@ const updateMarkers = () => {
     const requiredMarshals = location.requiredMarshals || 1;
     const isFull = checkedInCount >= requiredMarshals;
     const isMissing = checkedInCount === 0;
+    const isHighlighted = props.highlightLocationId === location.id;
+    const isGrayed = props.marshalMode && !isHighlighted;
 
-    const color = isFull ? 'green' : isMissing ? 'red' : 'orange';
+    // In marshal mode, gray out non-assigned checkpoints
+    let color;
+    if (isGrayed) {
+      color = '#999';
+    } else {
+      color = isFull ? 'green' : isMissing ? 'red' : 'orange';
+    }
 
     // Area color indicator
     const areaColor = location.areaColor || '#999';
@@ -379,12 +451,35 @@ const updateMarkers = () => {
       ? `${location.name}: ${truncateText(location.description, 50)}`
       : location.name;
 
+    // Highlight ring for assigned location
+    const highlightRing = isHighlighted ? `
+      <div style="
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 50px;
+        height: 50px;
+        border: 3px solid #667eea;
+        border-radius: 50%;
+        animation: highlight-pulse 1.5s ease-out infinite;
+      "></div>
+    ` : '';
+
+    // Style adjustments for grayed/highlighted markers
+    const markerOpacity = isGrayed ? '0.6' : '1';
+    const markerSize = isHighlighted ? '36px' : '30px';
+    const labelBg = isHighlighted ? '#667eea' : isGrayed ? '#e0e0e0' : 'white';
+    const labelColor = isHighlighted ? 'white' : isGrayed ? '#888' : '#333';
+    const borderColor = isHighlighted ? '#667eea' : 'white';
+
     const icon = L.divIcon({
       className: 'custom-marker',
       html: `
-        <div style="display: flex; flex-direction: column; align-items: center;">
+        <div style="display: flex; flex-direction: column; align-items: center; position: relative; opacity: ${markerOpacity};">
+          ${highlightRing}
           <div style="position: relative; display: flex; align-items: center; gap: 4px;">
-            ${hasArea ? `<div style="
+            ${hasArea && !isGrayed ? `<div style="
               width: 8px;
               height: 8px;
               border-radius: 50%;
@@ -394,28 +489,28 @@ const updateMarkers = () => {
             "></div>` : ''}
             <div style="
               background-color: ${color};
-              width: 30px;
-              height: 30px;
+              width: ${markerSize};
+              height: ${markerSize};
               border-radius: 50%;
-              border: 3px solid white;
+              border: 3px solid ${borderColor};
               box-shadow: 0 2px 5px rgba(0,0,0,0.3);
               display: flex;
               align-items: center;
               justify-content: center;
               color: white;
               font-weight: bold;
-              font-size: 12px;
+              font-size: ${isHighlighted ? '14px' : '12px'};
             ">
               ${checkedInCount}/${requiredMarshals}
             </div>
           </div>
           <div style="
-            background-color: white;
+            background-color: ${labelBg};
             padding: 2px 6px;
             border-radius: 3px;
-            font-size: 11px;
+            font-size: ${isHighlighted ? '12px' : '11px'};
             font-weight: bold;
-            color: #333;
+            color: ${labelColor};
             white-space: nowrap;
             box-shadow: 0 1px 3px rgba(0,0,0,0.3);
             margin-top: 2px;
@@ -575,6 +670,28 @@ watch(
     initDrawingMode();
   }
 );
+
+watch(
+  () => props.userLocation,
+  () => {
+    updateUserLocationMarker();
+  },
+  { deep: true }
+);
+
+watch(
+  () => props.highlightLocationId,
+  () => {
+    updateMarkers();
+  }
+);
+
+watch(
+  () => props.marshalMode,
+  () => {
+    updateMarkers();
+  }
+);
 </script>
 
 <style scoped>
@@ -593,5 +710,32 @@ watch(
   /* Ensure the marker doesn't have conflicting positioning */
   background: transparent;
   border: none;
+}
+
+.leaflet-marker-icon.user-location-marker {
+  background: transparent;
+  border: none;
+}
+
+@keyframes pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2);
+    opacity: 0;
+  }
+}
+
+@keyframes highlight-pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 0;
+  }
 }
 </style>

@@ -25,6 +25,8 @@ namespace VolunteerCheckin.Functions.Tests
         private Mock<ILogger<EventFunctions>> _mockLogger = null!;
         private Mock<IEventRepository> _mockEventRepository = null!;
         private Mock<IUserEventMappingRepository> _mockUserEventMappingRepository = null!;
+        private Mock<IPersonRepository> _mockPersonRepository = null!;
+        private Mock<IEventRoleRepository> _mockEventRoleRepository = null!;
         private Mock<GpxParserService> _mockGpxParser = null!;
         private EventFunctions _eventFunctions = null!;
 
@@ -34,12 +36,16 @@ namespace VolunteerCheckin.Functions.Tests
             _mockLogger = new Mock<ILogger<EventFunctions>>();
             _mockEventRepository = new Mock<IEventRepository>();
             _mockUserEventMappingRepository = new Mock<IUserEventMappingRepository>();
+            _mockPersonRepository = new Mock<IPersonRepository>();
+            _mockEventRoleRepository = new Mock<IEventRoleRepository>();
             _mockGpxParser = new Mock<GpxParserService>();
 
             _eventFunctions = new EventFunctions(
                 _mockLogger.Object,
                 _mockEventRepository.Object,
                 _mockUserEventMappingRepository.Object,
+                _mockPersonRepository.Object,
+                _mockEventRoleRepository.Object,
                 _mockGpxParser.Object
             );
         }

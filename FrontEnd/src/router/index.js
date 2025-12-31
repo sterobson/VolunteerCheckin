@@ -1,7 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import Home from '../views/Home.vue';
 import AdminLogin from '../views/AdminLogin.vue';
+import AdminVerify from '../views/AdminVerify.vue';
 import AdminDashboard from '../views/AdminDashboard.vue';
+import AdminProfile from '../views/AdminProfile.vue';
 import AdminEventManage from '../views/AdminEventManage.vue';
 import MarshalView from '../views/MarshalView.vue';
 
@@ -17,9 +19,20 @@ const routes = [
     component: AdminLogin,
   },
   {
+    path: '/admin/verify',
+    name: 'AdminVerify',
+    component: AdminVerify,
+  },
+  {
     path: '/admin/dashboard',
     name: 'AdminDashboard',
     component: AdminDashboard,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/admin/profile',
+    name: 'AdminProfile',
+    component: AdminProfile,
     meta: { requiresAuth: true },
   },
   {

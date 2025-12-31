@@ -18,7 +18,7 @@
       </div>
 
       <!-- Visibility Filters -->
-      <div class="visibility-filters" :class="{ collapsed: filtersCollapsed }" v-if="!addMenuExpanded && !listAddButtonPosition">
+      <div class="visibility-filters" :class="{ collapsed: filtersCollapsed }" v-if="!addMenuExpanded">
         <button
           @click="toggleFilters"
           class="filters-toggle"
@@ -56,7 +56,7 @@
       </div>
 
       <!-- Add Button -->
-      <div v-if="filtersCollapsed && !listAddButtonPosition" class="add-menu" :class="{ expanded: addMenuExpanded }">
+      <div v-if="filtersCollapsed" class="add-menu" :class="{ expanded: addMenuExpanded }">
         <button
           @click="toggleAddMenu"
           class="add-toggle"
@@ -82,78 +82,12 @@
         </div>
       </div>
     </div>
-
-    <!-- Sub-tabs for Checkpoints and Areas -->
-    <div class="sub-tabs">
-      <button
-        class="sub-tab-button"
-        :class="{ active: activeSubTab === 'checkpoints' }"
-        @click="activeSubTab = 'checkpoints'"
-      >
-        Checkpoints
-      </button>
-      <button
-        class="sub-tab-button"
-        :class="{ active: activeSubTab === 'areas' }"
-        @click="activeSubTab = 'areas'"
-      >
-        Areas
-      </button>
-    </div>
-
-    <!-- Tab Content -->
-    <div class="tab-content">
-      <!-- Checkpoints Tab -->
-      <div v-if="activeSubTab === 'checkpoints'" class="content-panel" style="position: relative;">
-        <CheckpointsList
-          :locations="checkpoints"
-          :areas="areas"
-          @open-add-menu="handleOpenAddMenu"
-          @select-location="$emit('select-location', $event)"
-        />
-
-        <!-- Add popup when triggered from checkpoints list -->
-        <div
-          v-if="addMenuExpanded && listAddButtonPosition"
-          class="list-add-popup"
-          :style="listAddPopupStyle"
-        >
-          <button @click="closeListPopup" class="popup-close-btn">✕</button>
-          <div class="add-menu-content">
-            <button @click="handleAddOption('checkpoint')" class="add-menu-item">
-              Checkpoint
-            </button>
-            <button @click="handleAddOption('many-checkpoints')" class="add-menu-item">
-              Many checkpoints
-            </button>
-            <button @click="handleAddOption('area')" class="add-menu-item">
-              Area
-            </button>
-            <button @click="handleImportCheckpoints" class="add-menu-item">
-              Import checkpoints...
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Areas Tab -->
-      <div v-if="activeSubTab === 'areas'" class="content-panel">
-        <AreasList
-          :areas="areas"
-          :checkpoints="checkpoints"
-          @add-area="handleAddAreaFromList"
-          @select-area="$emit('select-area', $event)"
-        />
-      </div>
-    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch, defineProps, defineEmits } from 'vue';
 import MapView from '../../components/MapView.vue';
-import CheckpointsList from '../../components/event-manage/lists/CheckpointsList.vue';
-import AreasList from '../../components/event-manage/lists/AreasList.vue';
 import AreasSelection from '../../components/event-manage/AreasSelection.vue';
 import { alphanumericCompare } from '../../utils/sortUtils';
 
@@ -197,13 +131,11 @@ const emit = defineEmits([
   'add-area-from-map',
 ]);
 
-const activeSubTab = ref('checkpoints');
 const mapSection = ref(null);
 const mapView = ref(null);
 const filtersCollapsed = ref(true);
 const addMenuExpanded = ref(false);
 const addButtonRef = ref(null);
-const listAddButtonPosition = ref(null);
 
 const filters = ref({
   showRoute: true,
@@ -247,54 +179,7 @@ const handleAddOption = (option) => {
 
 const handleImportCheckpoints = () => {
   addMenuExpanded.value = false;
-  listAddButtonPosition.value = null;
   emit('import-checkpoints');
-};
-
-const listAddPopupStyle = computed(() => {
-  if (!listAddButtonPosition.value) return {};
-
-  return {
-    top: `${listAddButtonPosition.value.top}px`,
-    left: `${listAddButtonPosition.value.left}px`,
-  };
-});
-
-const closeListPopup = () => {
-  addMenuExpanded.value = false;
-  listAddButtonPosition.value = null;
-};
-
-const handleOpenAddMenu = (event) => {
-  // If called from list button with position info
-  if (event && event.buttonElement) {
-    const rect = event.buttonElement.getBoundingClientRect();
-    const panel = event.buttonElement.closest('.content-panel');
-    const panelRect = panel?.getBoundingClientRect();
-
-    if (panelRect) {
-      listAddButtonPosition.value = {
-        top: rect.bottom - panelRect.top + 8,
-        left: rect.left - panelRect.left,
-      };
-    }
-
-    addMenuExpanded.value = true;
-    filtersCollapsed.value = true;
-  } else {
-    // Called from map - use map popup
-    listAddButtonPosition.value = null;
-    filtersCollapsed.value = true;
-    addMenuExpanded.value = true;
-    scrollMapIntoView();
-  }
-};
-
-const handleAddAreaFromList = () => {
-  // Trigger the add area from map flow
-  emit('add-area-from-map');
-  // Scroll map into view
-  scrollMapIntoView();
 };
 
 
@@ -405,51 +290,6 @@ const visibleAreas = computed(() => {
   overflow: hidden;
   position: relative;
   z-index: 1;
-}
-
-.sub-tabs {
-  display: flex;
-  gap: 0.5rem;
-  border-bottom: 2px solid #e0e0e0;
-  padding: 0 0.5rem;
-  overflow-y: hidden;
-}
-
-.sub-tab-button {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  background: none;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 500;
-  color: #666;
-  border-bottom: 3px solid transparent;
-  transition: all 0.2s;
-  position: relative;
-  bottom: -2px;
-}
-
-.sub-tab-button:hover {
-  color: #333;
-  background: #f5f5f5;
-}
-
-.sub-tab-button.active {
-  color: #007bff;
-  border-bottom-color: #007bff;
-  background: white;
-}
-
-.tab-content {
-  background: white;
-  border-radius: 8px;
-  padding: 1.5rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  min-height: 400px;
-}
-
-.content-panel {
-  width: 100%;
 }
 
 /* Visibility Filters */
@@ -606,36 +446,6 @@ const visibleAreas = computed(() => {
   border-radius: 0 0 8px 8px;
 }
 
-/* List Add Popup */
-.list-add-popup {
-  position: absolute;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 1000;
-  min-width: 200px;
-  padding-top: 2rem;
-}
-
-.popup-close-btn {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  background: transparent;
-  border: none;
-  font-size: 1.2rem;
-  cursor: pointer;
-  color: #666;
-  padding: 0.25rem;
-  line-height: 1;
-  transition: color 0.2s;
-  z-index: 10;
-}
-
-.popup-close-btn:hover {
-  color: #333;
-}
-
 @media (max-width: 768px) {
   .map-section {
     height: 350px;
@@ -660,14 +470,6 @@ const visibleAreas = computed(() => {
   .add-menu-content {
     max-height: calc(100vh - 14rem);
     overflow-y: auto;
-  }
-
-  .sub-tabs {
-    overflow-x: auto;
-  }
-
-  .sub-tab-button {
-    white-space: nowrap;
   }
 }
 </style>

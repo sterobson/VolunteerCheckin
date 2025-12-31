@@ -62,4 +62,47 @@ public class EmailService
         await client.SendAsync(message);
         await client.DisconnectAsync(true);
     }
+
+    public async Task SendMarshalMagicLinkEmailAsync(string toEmail, string marshalName, string eventName, string magicLink)
+    {
+        MimeMessage message = new();
+        message.From.Add(new MailboxAddress(_fromName, _fromEmail));
+        message.To.Add(new MailboxAddress(marshalName, toEmail));
+        message.Subject = $"Your Marshal Login Link for {eventName}";
+
+        BodyBuilder bodyBuilder = new()
+        {
+            HtmlBody = $@"
+                <html>
+                <body>
+                    <h2>Marshal Login for {eventName}</h2>
+                    <p>Hi {marshalName},</p>
+                    <p>Click the link below to access your marshal dashboard:</p>
+                    <p><a href='{magicLink}' style='display: inline-block; padding: 12px 24px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px;'>Open Marshal Dashboard</a></p>
+                    <p>Or copy and paste this link into your browser:</p>
+                    <p style='word-break: break-all;'>{magicLink}</p>
+                    <p>This link is unique to you - please don't share it with others.</p>
+                </body>
+                </html>
+            ",
+            TextBody = $@"
+                Marshal Login for {eventName}
+
+                Hi {marshalName},
+
+                Click the link below to access your marshal dashboard:
+                {magicLink}
+
+                This link is unique to you - please don't share it with others.
+            "
+        };
+
+        message.Body = bodyBuilder.ToMessageBody();
+
+        using SmtpClient client = new();
+        await client.ConnectAsync(_smtpHost, _smtpPort, MailKit.Security.SecureSocketOptions.StartTls);
+        await client.AuthenticateAsync(_smtpUsername, _smtpPassword);
+        await client.SendAsync(message);
+        await client.DisconnectAsync(true);
+    }
 }

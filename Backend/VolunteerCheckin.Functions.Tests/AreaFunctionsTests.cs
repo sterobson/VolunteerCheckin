@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using VolunteerCheckin.Functions.Functions;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Repositories;
+using VolunteerCheckin.Functions.Services;
 
 namespace VolunteerCheckin.Functions.Tests
 {
@@ -23,6 +24,9 @@ namespace VolunteerCheckin.Functions.Tests
         private Mock<IAreaRepository> _mockAreaRepository = null!;
         private Mock<ILocationRepository> _mockLocationRepository = null!;
         private Mock<IMarshalRepository> _mockMarshalRepository = null!;
+        private Mock<IAssignmentRepository> _mockAssignmentRepository = null!;
+        private Mock<ClaimsService> _mockClaimsService = null!;
+        private Mock<ContactPermissionService> _mockContactPermissionService = null!;
         private AreaFunctions _areaFunctions = null!;
 
         [TestInitialize]
@@ -32,12 +36,29 @@ namespace VolunteerCheckin.Functions.Tests
             _mockAreaRepository = new Mock<IAreaRepository>();
             _mockLocationRepository = new Mock<ILocationRepository>();
             _mockMarshalRepository = new Mock<IMarshalRepository>();
+            _mockAssignmentRepository = new Mock<IAssignmentRepository>();
+            _mockClaimsService = new Mock<ClaimsService>(
+                MockBehavior.Loose,
+                new Mock<IAuthSessionRepository>().Object,
+                new Mock<IPersonRepository>().Object,
+                new Mock<IEventRoleRepository>().Object,
+                new Mock<IMarshalRepository>().Object,
+                new Mock<IUserEventMappingRepository>().Object
+            );
+            _mockContactPermissionService = new Mock<ContactPermissionService>(
+                MockBehavior.Loose,
+                new Mock<IAreaRepository>().Object,
+                new Mock<ILocationRepository>().Object,
+                new Mock<IAssignmentRepository>().Object
+            );
 
             _areaFunctions = new AreaFunctions(
                 _mockLogger.Object,
                 _mockAreaRepository.Object,
                 _mockLocationRepository.Object,
-                _mockMarshalRepository.Object
+                _mockMarshalRepository.Object,
+                _mockClaimsService.Object,
+                _mockContactPermissionService.Object
             );
         }
 

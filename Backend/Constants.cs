@@ -66,4 +66,23 @@ public static class Constants
     public const string ActorTypeMarshal = "Marshal";
     public const string ActorTypeEventAdmin = "EventAdmin";
     public const string ActorTypeAreaLead = "AreaLead";
+
+    // Event Roles (what permissions a person has in an event)
+    public const string RoleEventAdmin = "EventAdmin";
+    public const string RoleEventAreaAdmin = "EventAreaAdmin";
+    public const string RoleEventAreaLead = "EventAreaLead";
+
+    // Authentication Methods
+    public const string AuthMethodMarshalMagicCode = "MarshalMagicCode";
+    public const string AuthMethodSecureEmailLink = "SecureEmailLink";
+
+    // Authentication Settings
+    public const int MagicLinkExpiryMinutes = 15;
+    public const int AdminSessionExpiryHours = 24;
+    public const int MagicCodeLength = 6;
+
+    // Rate Limiting
+    public const int MaxMagicLinkRequestsPerEmailPerHour = 5;
+    public const int MaxMarshalCodeAttemptsPerIpPerMinute = 10;
+    public const int MaxMarshalCodeAttemptsPerEventPerHour = 100;
 }

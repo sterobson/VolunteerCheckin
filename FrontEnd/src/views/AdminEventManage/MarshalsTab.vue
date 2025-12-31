@@ -22,18 +22,6 @@
                 {{ sortOrder === 'asc' ? '▲' : '▼' }}
               </span>
             </th>
-            <th @click="changeSortColumn('email')" class="sortable hide-on-mobile">
-              Email
-              <span class="sort-indicator" v-if="sortBy === 'email'">
-                {{ sortOrder === 'asc' ? '▲' : '▼' }}
-              </span>
-            </th>
-            <th @click="changeSortColumn('phone')" class="sortable hide-on-mobile">
-              Phone
-              <span class="sort-indicator" v-if="sortBy === 'phone'">
-                {{ sortOrder === 'asc' ? '▲' : '▼' }}
-              </span>
-            </th>
             <th @click="changeSortColumn('checkpoint')" class="sortable">
               Checkpoint
               <span class="sort-indicator" v-if="sortBy === 'checkpoint'">
@@ -60,12 +48,6 @@
               >
                 <td v-if="index === 0" :rowspan="getMarshalAssignments(marshal.id).length">
                   {{ marshal.name }}
-                </td>
-                <td v-if="index === 0" :rowspan="getMarshalAssignments(marshal.id).length" class="hide-on-mobile">
-                  {{ marshal.email || '-' }}
-                </td>
-                <td v-if="index === 0" :rowspan="getMarshalAssignments(marshal.id).length" class="hide-on-mobile">
-                  {{ marshal.phoneNumber || '-' }}
                 </td>
                 <td>{{ getLocationName(assignment.locationId) }}</td>
                 <td @click.stop>
@@ -98,8 +80,6 @@
             </template>
             <tr v-else class="marshal-row" @click="$emit('select-marshal', marshal)">
               <td>{{ marshal.name }}</td>
-              <td class="hide-on-mobile">{{ marshal.email || '-' }}</td>
-              <td class="hide-on-mobile">{{ marshal.phoneNumber || '-' }}</td>
               <td style="color: #999; font-style: italic;">No checkpoint assigned</td>
               <td>
                 <span class="hide-on-mobile">-</span>
@@ -180,14 +160,6 @@ const sortedMarshals = computed(() => {
 
     if (sortBy.value === 'name') {
       compareValue = a.name.localeCompare(b.name);
-    } else if (sortBy.value === 'email') {
-      const aEmail = a.email || '';
-      const bEmail = b.email || '';
-      compareValue = aEmail.localeCompare(bEmail);
-    } else if (sortBy.value === 'phone') {
-      const aPhone = a.phoneNumber || '';
-      const bPhone = b.phoneNumber || '';
-      compareValue = aPhone.localeCompare(bPhone);
     } else if (sortBy.value === 'checkpoint') {
       const aAssignments = getMarshalAssignments(a.id);
       const bAssignments = getMarshalAssignments(b.id);

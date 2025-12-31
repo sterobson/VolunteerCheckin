@@ -6,6 +6,7 @@ using System.Text.Json;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Repositories;
 using VolunteerCheckin.Functions.Helpers;
+using VolunteerCheckin.Functions.Services;
 
 namespace VolunteerCheckin.Functions.Functions;
 
@@ -15,17 +16,28 @@ public class AreaFunctions
     private readonly IAreaRepository _areaRepository;
     private readonly ILocationRepository _locationRepository;
     private readonly IMarshalRepository _marshalRepository;
+    private readonly ClaimsService _claimsService;
+    private readonly ContactPermissionService _contactPermissionService;
 
     public AreaFunctions(
         ILogger<AreaFunctions> logger,
         IAreaRepository areaRepository,
         ILocationRepository locationRepository,
-        IMarshalRepository marshalRepository)
+        IMarshalRepository marshalRepository,
+        ClaimsService claimsService,
+        ContactPermissionService contactPermissionService)
     {
         _logger = logger;
         _areaRepository = areaRepository;
         _locationRepository = locationRepository;
         _marshalRepository = marshalRepository;
+        _claimsService = claimsService;
+        _contactPermissionService = contactPermissionService;
+    }
+
+    private static string? GetSessionToken(HttpRequest req)
+    {
+        return req.Cookies["session"] ?? req.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "");
     }
 
     [Function("CreateArea")]
@@ -378,6 +390,25 @@ public class AreaFunctions
     {
         try
         {
+            // Require authentication
+            string? sessionToken = GetSessionToken(req);
+            if (string.IsNullOrWhiteSpace(sessionToken))
+            {
+                return new UnauthorizedObjectResult(new { message = "Authentication required" });
+            }
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
+            }
+
+            // Only event admins can add area leads
+            if (!claims.IsEventAdmin && !claims.IsSystemAdmin)
+            {
+                return new ForbidResult();
+            }
+
             string body = await new StreamReader(req.Body).ReadToEndAsync();
             AddAreaLeadRequest? request = JsonSerializer.Deserialize<AddAreaLeadRequest>(body,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
@@ -417,6 +448,7 @@ public class AreaFunctions
 
             _logger.LogInformation($"Added marshal {request.MarshalId} as area lead for area {areaId}");
 
+            // Event admins can see contact details
             return new OkObjectResult(new AreaLeadResponse(
                 marshal.MarshalId,
                 marshal.Name,
@@ -439,6 +471,25 @@ public class AreaFunctions
     {
         try
         {
+            // Require authentication
+            string? sessionToken = GetSessionToken(req);
+            if (string.IsNullOrWhiteSpace(sessionToken))
+            {
+                return new UnauthorizedObjectResult(new { message = "Authentication required" });
+            }
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
+            }
+
+            // Only event admins can remove area leads
+            if (!claims.IsEventAdmin && !claims.IsSystemAdmin)
+            {
+                return new ForbidResult();
+            }
+
             AreaEntity? area = await _areaRepository.GetAsync(eventId, areaId);
             if (area == null)
             {
@@ -479,6 +530,19 @@ public class AreaFunctions
     {
         try
         {
+            // Require authentication
+            string? sessionToken = GetSessionToken(req);
+            if (string.IsNullOrWhiteSpace(sessionToken))
+            {
+                return new UnauthorizedObjectResult(new { message = "Authentication required" });
+            }
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
+            }
+
             AreaEntity? area = await _areaRepository.GetAsync(eventId, areaId);
             if (area == null)
             {
@@ -493,11 +557,18 @@ public class AreaFunctions
                 return new OkObjectResult(Array.Empty<AreaLeadResponse>());
             }
 
+            // Get contact permissions for this user
+            ContactPermissions permissions = await _contactPermissionService.GetContactPermissionsAsync(claims, eventId);
+
             // Get marshal details for each area lead
             IEnumerable<MarshalEntity> allMarshals = await _marshalRepository.GetByEventAsync(eventId);
             List<AreaLeadResponse> areaLeads = allMarshals
                 .Where(m => areaLeadIds.Contains(m.MarshalId))
-                .Select(m => new AreaLeadResponse(m.MarshalId, m.Name, m.Email))
+                .Select(m => new AreaLeadResponse(
+                    m.MarshalId,
+                    m.Name,
+                    _contactPermissionService.CanViewContactDetails(permissions, m.MarshalId) ? m.Email : string.Empty
+                ))
                 .ToList();
 
             return new OkObjectResult(areaLeads);

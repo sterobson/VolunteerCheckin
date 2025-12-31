@@ -353,6 +353,376 @@ public class ChecklistFunctions
         }
     }
 
+    [Function("GetCheckpointChecklist")]
+    public async Task<IActionResult> GetCheckpointChecklist(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/{eventId}/locations/{locationId}/checklist")] HttpRequest req,
+        string eventId,
+        string locationId)
+    {
+        try
+        {
+            // Get the location to verify it exists and get its areas
+            LocationEntity? location = await _locationRepository.GetAsync(eventId, locationId);
+            if (location == null)
+            {
+                return new NotFoundObjectResult(new { message = Constants.ErrorLocationNotFound });
+            }
+
+            List<string> locationAreaIds = JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson) ?? [];
+
+            // Get all marshals assigned to this checkpoint
+            IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByLocationAsync(eventId, locationId);
+            List<string> assignedMarshalIds = assignments.Select(a => a.MarshalId).Distinct().ToList();
+
+            // Build checkpoint lookup dictionary
+            IEnumerable<LocationEntity> allLocations = await _locationRepository.GetByEventAsync(eventId);
+            Dictionary<string, LocationEntity> checkpointLookup = allLocations.ToDictionary(l => l.RowKey);
+
+            // Get all checklist items for event
+            IEnumerable<ChecklistItemEntity> allItems = await _checklistItemRepository.GetByEventAsync(eventId);
+
+            // Get all completions for event
+            List<ChecklistCompletionEntity> allCompletions =
+                (await _checklistCompletionRepository.GetByEventAsync(eventId)).ToList();
+
+            // Get area leads for checkpoint's areas
+            IEnumerable<AreaEntity> areas = await _areaRepository.GetByEventAsync(eventId);
+            List<string> areaLeadIds = areas
+                .Where(a => locationAreaIds.Contains(a.RowKey))
+                .SelectMany(a => JsonSerializer.Deserialize<List<string>>(a.AreaLeadMarshalIdsJson) ?? [])
+                .Distinct()
+                .ToList();
+
+            // Build set of all relevant marshal IDs (assigned + area leads)
+            HashSet<string> relevantMarshalIds = [.. assignedMarshalIds, .. areaLeadIds];
+
+            // Get all marshals to get their names
+            IEnumerable<MarshalEntity> allMarshals = await _marshalRepository.GetByEventAsync(eventId);
+            Dictionary<string, string> marshalNames = allMarshals.ToDictionary(m => m.RowKey, m => m.Name);
+
+            // Build list of relevant items - iterate through each marshal to get their personal items
+            List<ChecklistItemWithStatus> relevantItems = [];
+
+            foreach (ChecklistItemEntity item in allItems.Where(IsItemVisible).OrderBy(i => i.DisplayOrder))
+            {
+                _logger.LogInformation($"Processing item: {item.Text} ({item.ItemId})");
+
+                // For each marshal at this checkpoint, get their view of this item
+                foreach (string marshalId in relevantMarshalIds)
+                {
+                    // Build context for this specific marshal
+                    ChecklistScopeHelper.MarshalContext marshalContext = await BuildMarshalContext(eventId, marshalId);
+
+                    _logger.LogInformation($"  Marshal {marshalNames.GetValueOrDefault(marshalId, marshalId)}: Areas={string.Join(",", marshalContext.AssignedAreaIds)}");
+
+                    // Get all contexts where this item is relevant to this marshal
+                    List<ChecklistScopeHelper.ScopeMatchResult> contexts =
+                        ChecklistScopeHelper.GetAllRelevantContexts(item, marshalContext, checkpointLookup);
+
+                    _logger.LogInformation($"    Found {contexts.Count} context(s)");
+
+                    // Only include contexts that are for this checkpoint or its areas
+                    foreach (ChecklistScopeHelper.ScopeMatchResult scopeContext in contexts)
+                    {
+                        // Include if:
+                        // 1. Personal item that's scoped to this checkpoint or its areas
+                        // 2. Shared item for this checkpoint
+                        // 3. Shared item for this checkpoint's area
+                        bool shouldInclude = false;
+
+                        if (scopeContext.ContextType == "Personal")
+                        {
+                            // Personal items - always include if the marshal matches the scope
+                            // The marshal already matched the scope (that's why we got this context),
+                            // so we just need to verify it's relevant to THIS checkpoint
+                            ScopeConfiguration? winningConfig = scopeContext.WinningConfig;
+
+                            _logger.LogInformation($"      Personal context: Scope={winningConfig?.Scope}, ItemType={winningConfig?.ItemType}, IDs={string.Join(",", winningConfig?.Ids ?? [])}");
+
+                            if (winningConfig != null)
+                            {
+                                // Include if:
+                                // - Scoped to Everyone (always relevant)
+                                // - Scoped to specific marshals (always relevant if this marshal matched)
+                                // - Scoped to checkpoints that include THIS checkpoint
+                                // - Scoped to areas where THIS marshal is in those areas
+                                if (winningConfig.Scope == "Everyone")
+                                {
+                                    shouldInclude = true;
+                                    _logger.LogInformation($"        Everyone scope - INCLUDING");
+                                }
+                                else if (winningConfig.Scope == "SpecificPeople" && winningConfig.ItemType == "Marshal")
+                                {
+                                    shouldInclude = true;
+                                    _logger.LogInformation($"        SpecificPeople scope - INCLUDING");
+                                }
+                                else if (winningConfig.Scope == "EveryoneAtCheckpoints")
+                                {
+                                    // Include if scoped to this checkpoint or ALL checkpoints
+                                    shouldInclude = winningConfig.Ids.Contains(locationId) ||
+                                                   winningConfig.Ids.Contains(Constants.AllCheckpoints);
+                                    _logger.LogInformation($"        EveryoneAtCheckpoints - {(shouldInclude ? "INCLUDING" : "EXCLUDING")}");
+                                }
+                                else if (winningConfig.Scope == "EveryoneInAreas")
+                                {
+                                    // Include if the marshal is in any of the scoped areas AND those areas overlap with this checkpoint's areas
+                                    // OR if it's ALL_AREAS
+                                    if (winningConfig.Ids.Contains(Constants.AllAreas))
+                                    {
+                                        // ALL_AREAS - include for any marshal at this checkpoint
+                                        shouldInclude = true;
+                                        _logger.LogInformation($"        EveryoneInAreas (ALL_AREAS) - INCLUDING");
+                                    }
+                                    else
+                                    {
+                                        // Specific areas - include if marshal is in any of those areas
+                                        // Check if the marshal's assigned areas overlap with the scoped areas
+                                        shouldInclude = marshalContext.AssignedAreaIds.Any(areaId => winningConfig.Ids.Contains(areaId));
+                                        _logger.LogInformation($"        EveryoneInAreas (specific) - {(shouldInclude ? "INCLUDING" : "EXCLUDING")}");
+                                    }
+                                }
+                                else if (winningConfig.Scope == "EveryAreaLead")
+                                {
+                                    // Area leads - include if marshal is a lead for any of the scoped areas
+                                    if (winningConfig.Ids.Contains(Constants.AllAreas))
+                                    {
+                                        shouldInclude = true;
+                                        _logger.LogInformation($"        EveryAreaLead (ALL_AREAS) - INCLUDING");
+                                    }
+                                    else
+                                    {
+                                        shouldInclude = marshalContext.AreaLeadForAreaIds.Any(areaId => winningConfig.Ids.Contains(areaId));
+                                        _logger.LogInformation($"        EveryAreaLead (specific) - {(shouldInclude ? "INCLUDING" : "EXCLUDING")}");
+                                    }
+                                }
+                                else
+                                {
+                                    _logger.LogInformation($"        Unknown scope {winningConfig.Scope} - EXCLUDING");
+                                }
+                            }
+                        }
+                        else if (scopeContext.ContextType == "Checkpoint")
+                        {
+                            // Shared checkpoint items - include if it's THIS checkpoint
+                            if (scopeContext.ContextId == locationId)
+                            {
+                                shouldInclude = true;
+                            }
+                        }
+                        else if (scopeContext.ContextType == "Area")
+                        {
+                            // Shared area items - include if it's one of this checkpoint's areas
+                            if (locationAreaIds.Contains(scopeContext.ContextId))
+                            {
+                                shouldInclude = true;
+                            }
+                        }
+
+                        if (shouldInclude)
+                        {
+                            _logger.LogInformation($"        Checking deduplication: ItemId={item.ItemId}, ContextType={scopeContext.ContextType}, ContextId={scopeContext.ContextId}");
+
+                            // Check if we already have this exact item instance
+                            bool alreadyAdded = relevantItems.Any(existing =>
+                                existing.ItemId == item.ItemId &&
+                                existing.CompletionContextType == scopeContext.ContextType &&
+                                existing.CompletionContextId == scopeContext.ContextId);
+
+                            _logger.LogInformation($"        Already added: {alreadyAdded}");
+
+                            if (!alreadyAdded)
+                            {
+                                ChecklistItemWithStatus itemStatus = BuildItemWithStatus(item, marshalContext, checkpointLookup, allCompletions, scopeContext);
+
+                                // Set context owner name for personal items
+                                if (scopeContext.ContextType == "Personal" && marshalNames.TryGetValue(marshalId, out string? marshalName))
+                                {
+                                    itemStatus = itemStatus with { ContextOwnerName = marshalName };
+                                }
+
+                                _logger.LogInformation($"        ADDED item for {marshalNames.GetValueOrDefault(marshalId, marshalId)}");
+                                relevantItems.Add(itemStatus);
+                            }
+                            else
+                            {
+                                _logger.LogInformation($"        SKIPPED (duplicate)");
+                            }
+                        }
+                    }
+                }
+            }
+
+            return new OkObjectResult(relevantItems);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting checkpoint checklist");
+            return new StatusCodeResult(500);
+        }
+    }
+
+    [Function("GetAreaChecklist")]
+    public async Task<IActionResult> GetAreaChecklist(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/{eventId}/areas/{areaId}/checklist")] HttpRequest req,
+        string eventId,
+        string areaId)
+    {
+        try
+        {
+            // Get the area to verify it exists
+            AreaEntity? area = await _areaRepository.GetAsync(eventId, areaId);
+            if (area == null)
+            {
+                return new NotFoundObjectResult(new { message = "Area not found" });
+            }
+
+            // Get all checkpoints in this area
+            IEnumerable<LocationEntity> allLocations = await _locationRepository.GetByEventAsync(eventId);
+            List<LocationEntity> areaCheckpoints = allLocations
+                .Where(l => {
+                    List<string> locationAreaIds = JsonSerializer.Deserialize<List<string>>(l.AreaIdsJson) ?? [];
+                    return locationAreaIds.Contains(areaId);
+                })
+                .ToList();
+
+            List<string> checkpointIds = areaCheckpoints.Select(l => l.RowKey).ToList();
+
+            // Get all marshals assigned to checkpoints in this area
+            List<string> assignedMarshalIds = [];
+            foreach (string checkpointId in checkpointIds)
+            {
+                IEnumerable<AssignmentEntity> checkpointAssignments =
+                    await _assignmentRepository.GetByLocationAsync(eventId, checkpointId);
+                assignedMarshalIds.AddRange(checkpointAssignments.Select(a => a.MarshalId));
+            }
+            assignedMarshalIds = assignedMarshalIds.Distinct().ToList();
+
+            // Build checkpoint lookup dictionary
+            Dictionary<string, LocationEntity> checkpointLookup = allLocations.ToDictionary(l => l.RowKey);
+
+            // Get all checklist items for event
+            IEnumerable<ChecklistItemEntity> allItems = await _checklistItemRepository.GetByEventAsync(eventId);
+
+            // Get all completions for event
+            List<ChecklistCompletionEntity> allCompletions =
+                (await _checklistCompletionRepository.GetByEventAsync(eventId)).ToList();
+
+            // Get area leads for this area
+            List<string> areaLeadIds = JsonSerializer.Deserialize<List<string>>(area.AreaLeadMarshalIdsJson) ?? [];
+
+            // Build set of all relevant marshal IDs (assigned + area leads)
+            HashSet<string> relevantMarshalIds = [.. assignedMarshalIds, .. areaLeadIds];
+
+            // Get all marshals to get their names
+            IEnumerable<MarshalEntity> allMarshals = await _marshalRepository.GetByEventAsync(eventId);
+            Dictionary<string, string> marshalNames = allMarshals.ToDictionary(m => m.RowKey, m => m.Name);
+
+            // Build list of relevant items - iterate through each marshal to get their personal items
+            List<ChecklistItemWithStatus> relevantItems = [];
+
+            foreach (ChecklistItemEntity item in allItems.Where(IsItemVisible).OrderBy(i => i.DisplayOrder))
+            {
+                // For each marshal in this area, get their view of this item
+                foreach (string marshalId in relevantMarshalIds)
+                {
+                    // Build context for this specific marshal
+                    ChecklistScopeHelper.MarshalContext marshalContext = await BuildMarshalContext(eventId, marshalId);
+
+                    // Get all contexts where this item is relevant to this marshal
+                    List<ChecklistScopeHelper.ScopeMatchResult> contexts =
+                        ChecklistScopeHelper.GetAllRelevantContexts(item, marshalContext, checkpointLookup);
+
+                    foreach (ChecklistScopeHelper.ScopeMatchResult scopeContext in contexts)
+                    {
+                        if (scopeContext.IsRelevant && scopeContext.WinningConfig != null)
+                        {
+                            bool shouldInclude = false;
+
+                            // Check if this context is relevant to this area
+                            if (scopeContext.ContextType == "Personal")
+                            {
+                                // Personal items - include if marshal is in this area
+                                ScopeConfiguration winningConfig = scopeContext.WinningConfig;
+
+                                if (winningConfig.Scope == "Everyone")
+                                {
+                                    shouldInclude = true;
+                                }
+                                else if (winningConfig.Scope == "SpecificPeople")
+                                {
+                                    shouldInclude = true;
+                                }
+                                else if (winningConfig.Scope == "EveryoneAtCheckpoints")
+                                {
+                                    // Include if scoped to checkpoints in this area
+                                    shouldInclude = winningConfig.Ids.Any(id => checkpointIds.Contains(id)) ||
+                                                   winningConfig.Ids.Contains(Constants.AllCheckpoints);
+                                }
+                                else if (winningConfig.Scope == "EveryoneInAreas")
+                                {
+                                    // Include if scoped to this area or ALL areas
+                                    shouldInclude = winningConfig.Ids.Contains(areaId) ||
+                                                   winningConfig.Ids.Contains(Constants.AllAreas);
+                                }
+                                else if (winningConfig.Scope == "EveryAreaLead")
+                                {
+                                    // Include if scoped to this area or ALL areas
+                                    shouldInclude = winningConfig.Ids.Contains(areaId) ||
+                                                   winningConfig.Ids.Contains(Constants.AllAreas);
+                                }
+                            }
+                            else if (scopeContext.ContextType == "Checkpoint")
+                            {
+                                // Shared checkpoint items - include if checkpoint is in this area
+                                if (checkpointIds.Contains(scopeContext.ContextId))
+                                {
+                                    shouldInclude = true;
+                                }
+                            }
+                            else if (scopeContext.ContextType == "Area")
+                            {
+                                // Shared area items - include if it's this area
+                                if (scopeContext.ContextId == areaId)
+                                {
+                                    shouldInclude = true;
+                                }
+                            }
+
+                            if (shouldInclude)
+                            {
+                                // Check if we already have this exact item instance
+                                bool alreadyAdded = relevantItems.Any(existing =>
+                                    existing.ItemId == item.ItemId &&
+                                    existing.CompletionContextType == scopeContext.ContextType &&
+                                    existing.CompletionContextId == scopeContext.ContextId);
+
+                                if (!alreadyAdded)
+                                {
+                                    ChecklistItemWithStatus itemStatus = BuildItemWithStatus(item, marshalContext, checkpointLookup, allCompletions, scopeContext);
+
+                                    // Set context owner name for personal items
+                                    if (scopeContext.ContextType == "Personal" && marshalNames.TryGetValue(marshalId, out string? marshalName))
+                                    {
+                                        itemStatus = itemStatus with { ContextOwnerName = marshalName };
+                                    }
+
+                                    relevantItems.Add(itemStatus);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return new OkObjectResult(relevantItems);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting area checklist");
+            return new StatusCodeResult(500);
+        }
+    }
+
     [Function("CompleteChecklistItem")]
     public async Task<IActionResult> CompleteChecklistItem(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "checklist-items/{eventId}/{itemId}/complete")] HttpRequest req,
@@ -425,9 +795,9 @@ public class ChecklistFunctions
                 actorType = Constants.ActorTypeEventAdmin;
                 actorId = adminEmail;
 
-                // Try to get admin name, default to email if not found
+                // Try to get admin name, default to email if not found or empty
                 AdminUserEntity? admin = await _adminUserRepository.GetByEmailAsync(adminEmail);
-                actorName = admin?.Name ?? adminEmail;
+                actorName = !string.IsNullOrWhiteSpace(admin?.Name) ? admin.Name : adminEmail;
             }
             else
             {
@@ -730,7 +1100,9 @@ public class ChecklistFunctions
             completedAt,
             contextType,
             contextId,
-            matchedScope
+            matchedScope,
+            null,  // ContextOwnerName - will be set by caller if needed
+            ChecklistScopeHelper.IsPersonalScope(matchedScope) ? context.MarshalId : null  // ContextOwnerMarshalId
         );
     }
 }

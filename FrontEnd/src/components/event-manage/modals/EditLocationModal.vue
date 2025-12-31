@@ -14,7 +14,8 @@
         :tabs="[
           { value: 'details', label: 'Details' },
           { value: 'location', label: 'Location' },
-          { value: 'marshals', label: 'Marshals' }
+          { value: 'marshals', label: 'Marshals' },
+          { value: 'checklist', label: 'Checklist' }
         ]"
       />
     </template>
@@ -53,6 +54,19 @@
       @assign-marshal="handleAssignMarshal"
     />
 
+    <!-- Checklist Tab -->
+    <CheckpointChecklistView
+      v-if="activeTab === 'checklist'"
+      ref="checklistTabRef"
+      v-model="checklistChanges"
+      :event-id="eventId"
+      :location-id="location.id"
+      :locations="allLocations"
+      :areas="areas"
+      :assignments="assignments"
+      @change="handleChecklistChange"
+    />
+
     <!-- Custom footer with left and right aligned buttons -->
     <template #footer>
       <div class="custom-footer">
@@ -78,6 +92,7 @@ import TabHeader from '../../TabHeader.vue';
 import LocationDetailsTab from '../tabs/LocationDetailsTab.vue';
 import LocationCoordinatesTab from '../tabs/LocationCoordinatesTab.vue';
 import LocationAssignmentsTab from '../tabs/LocationAssignmentsTab.vue';
+import CheckpointChecklistView from '../../CheckpointChecklistView.vue';
 import { formatDateForInput } from '../../../utils/dateFormatters';
 
 const props = defineProps({
@@ -105,6 +120,14 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  eventId: {
+    type: String,
+    required: true,
+  },
+  allLocations: {
+    type: Array,
+    default: () => [],
+  },
 });
 
 const emit = defineEmits([
@@ -121,6 +144,8 @@ const emit = defineEmits([
 const activeTab = ref('details');
 const isMoving = ref(false);
 const assignmentsTabRef = ref(null);
+const checklistTabRef = ref(null);
+const checklistChanges = ref([]);
 const form = ref({
   name: '',
   description: '',
@@ -167,9 +192,14 @@ watch(() => props.show, (newVal) => {
   if (newVal) {
     activeTab.value = 'details';
     isMoving.value = false;
+    checklistChanges.value = [];
     // Clear pending changes in assignments tab if it exists
     if (assignmentsTabRef.value?.clearPendingChanges) {
       assignmentsTabRef.value.clearPendingChanges();
+    }
+    // Clear pending changes in checklist tab if it exists
+    if (checklistTabRef.value?.resetLocalState) {
+      checklistTabRef.value.resetLocalState();
     }
   }
 });
@@ -181,6 +211,11 @@ const handleInput = () => {
 const handleMoveLocation = () => {
   isMoving.value = !isMoving.value;
   emit('move-location', isMoving.value);
+};
+
+const handleChecklistChange = (changes) => {
+  checklistChanges.value = changes;
+  handleInput();
 };
 
 const handleSave = () => {
@@ -195,6 +230,8 @@ const handleSave = () => {
       : null,
     // Include pending check-in changes from assignments tab
     checkInChanges: assignmentsTabRef.value?.getPendingChanges?.() || [],
+    // Include pending checklist changes
+    checklistChanges: checklistChanges.value || [],
   };
 
   emit('save', formData);

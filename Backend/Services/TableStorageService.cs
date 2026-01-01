@@ -19,6 +19,7 @@ public class TableStorageService
     private const string EventRolesTable = "EventRoles";
     private const string AuthTokensTable = "AuthTokens";
     private const string AuthSessionsTable = "AuthSessions";
+    private const string NotesTable = "Notes";
 
     public TableStorageService(string connectionString)
     {
@@ -41,6 +42,7 @@ public class TableStorageService
         await _tableServiceClient.CreateTableIfNotExistsAsync(EventRolesTable);
         await _tableServiceClient.CreateTableIfNotExistsAsync(AuthTokensTable);
         await _tableServiceClient.CreateTableIfNotExistsAsync(AuthSessionsTable);
+        await _tableServiceClient.CreateTableIfNotExistsAsync(NotesTable);
     }
 
     public TableClient GetEventsTable() => _tableServiceClient.GetTableClient(EventsTable);
@@ -56,4 +58,5 @@ public class TableStorageService
     public TableClient GetEventRolesTable() => _tableServiceClient.GetTableClient(EventRolesTable);
     public TableClient GetAuthTokensTable() => _tableServiceClient.GetTableClient(AuthTokensTable);
     public TableClient GetAuthSessionsTable() => _tableServiceClient.GetTableClient(AuthSessionsTable);
+    public TableClient GetNotesTable() => _tableServiceClient.GetTableClient(NotesTable);
 }

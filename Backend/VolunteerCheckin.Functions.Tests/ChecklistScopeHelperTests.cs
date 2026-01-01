@@ -993,12 +993,13 @@ public class ChecklistScopeHelperTests
     [TestMethod]
     public void EvaluateScopeConfigurations_MultipleMatchesSameSpecificity_TieBreaker()
     {
-        // Arrange - Item for two different checkpoints, marshal assigned to both
-        // Should use ThenBy(contextId) to break tie
+        // Arrange - Item for two different checkpoints with SHARED scope (OnePerCheckpoint),
+        // marshal assigned to both. For shared scopes, contextId is the checkpoint ID.
+        // Should use ThenBy(contextId) to break tie alphabetically.
         List<ScopeConfiguration> configs =
         [
-            new ScopeConfiguration { Scope = Constants.ChecklistScopeEveryoneAtCheckpoints, ItemType = "Checkpoint", Ids = [LocationId2] },
-            new ScopeConfiguration { Scope = Constants.ChecklistScopeEveryoneAtCheckpoints, ItemType = "Checkpoint", Ids = [LocationId1] }
+            new ScopeConfiguration { Scope = Constants.ChecklistScopeOnePerCheckpoint, ItemType = "Checkpoint", Ids = [LocationId2] },
+            new ScopeConfiguration { Scope = Constants.ChecklistScopeOnePerCheckpoint, ItemType = "Checkpoint", Ids = [LocationId1] }
         ];
         ChecklistScopeHelper.MarshalContext context = CreateMarshalContext(
             assignedLocationIds: [LocationId1, LocationId2]);
@@ -1010,7 +1011,7 @@ public class ChecklistScopeHelperTests
         // Assert
         result.IsRelevant.ShouldBeTrue();
         result.Specificity.ShouldBe(2);
-        // Should pick LocationId1 due to alphabetical tie-breaking
+        // Should pick LocationId1 ("location1") due to alphabetical tie-breaking
         result.ContextId.ShouldBe(LocationId1);
     }
 

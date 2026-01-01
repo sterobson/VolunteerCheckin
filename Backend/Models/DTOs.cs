@@ -63,7 +63,9 @@ public record LocationResponse(
 public record AreaContact(
     string MarshalId,
     string MarshalName,
-    string Role
+    string Role,
+    string? Phone = null,
+    string? Email = null
 );
 
 public record CreateAreaRequest(
@@ -505,4 +507,69 @@ public record PersonDetailsResponse(
     bool IsSystemAdmin,
     List<EventRoleInfo> EventRoles,
     DateTime CreatedAt
+);
+
+// Note-related DTOs
+
+/// <summary>
+/// Request to create a new note
+/// </summary>
+public record CreateNoteRequest(
+    string Title,
+    string Content,
+    List<ScopeConfiguration> ScopeConfigurations,
+    int DisplayOrder = 0,
+    string Priority = Constants.NotePriorityNormal,
+    string? Category = null,
+    bool IsPinned = false
+);
+
+/// <summary>
+/// Request to update an existing note
+/// </summary>
+public record UpdateNoteRequest(
+    string Title,
+    string Content,
+    List<ScopeConfiguration> ScopeConfigurations,
+    int DisplayOrder,
+    string Priority,
+    string? Category,
+    bool IsPinned
+);
+
+/// <summary>
+/// Note response for admin views (includes all details)
+/// </summary>
+public record NoteResponse(
+    string NoteId,
+    string EventId,
+    string Title,
+    string Content,
+    List<ScopeConfiguration> ScopeConfigurations,
+    int DisplayOrder,
+    string Priority,
+    string? Category,
+    bool IsPinned,
+    string CreatedByPersonId,
+    string CreatedByName,
+    DateTime CreatedAt,
+    string? UpdatedByPersonId,
+    string? UpdatedByName,
+    DateTime? UpdatedAt
+);
+
+/// <summary>
+/// Note response for marshal views (simplified, with relevance info)
+/// </summary>
+public record NoteForMarshalResponse(
+    string NoteId,
+    string EventId,
+    string Title,
+    string Content,
+    string Priority,
+    string? Category,
+    bool IsPinned,
+    DateTime CreatedAt,
+    string CreatedByName,
+    string MatchedScope  // Which scope configuration matched for this marshal
 );

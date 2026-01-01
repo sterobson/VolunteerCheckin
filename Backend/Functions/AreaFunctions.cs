@@ -112,9 +112,46 @@ public class AreaFunctions
             }
 
             int checkpointCount = await _locationRepository.CountByAreaAsync(eventId, areaId);
-            AreaResponse response = areaEntity.ToResponse(checkpointCount);
+            AreaResponse baseResponse = areaEntity.ToResponse(checkpointCount);
 
-            return new OkObjectResult(response);
+            // Enrich contacts with phone/email from marshal data
+            if (baseResponse.Contacts.Count > 0)
+            {
+                IEnumerable<MarshalEntity> marshals = await _marshalRepository.GetByEventAsync(eventId);
+                Dictionary<string, MarshalEntity> marshalLookup = marshals.ToDictionary(m => m.MarshalId);
+
+                List<AreaContact> enrichedContacts = baseResponse.Contacts
+                    .Select(c => {
+                        marshalLookup.TryGetValue(c.MarshalId, out MarshalEntity? marshal);
+                        return new AreaContact(
+                            c.MarshalId,
+                            c.MarshalName,
+                            c.Role,
+                            marshal?.PhoneNumber,
+                            marshal?.Email
+                        );
+                    })
+                    .ToList();
+
+                // Create new response with enriched contacts
+                AreaResponse response = new AreaResponse(
+                    baseResponse.Id,
+                    baseResponse.EventId,
+                    baseResponse.Name,
+                    baseResponse.Description,
+                    baseResponse.Color,
+                    enrichedContacts,
+                    baseResponse.Polygon,
+                    baseResponse.IsDefault,
+                    baseResponse.DisplayOrder,
+                    baseResponse.CheckpointCount,
+                    baseResponse.CreatedDate
+                );
+
+                return new OkObjectResult(response);
+            }
+
+            return new OkObjectResult(baseResponse);
         }
         catch (Exception ex)
         {

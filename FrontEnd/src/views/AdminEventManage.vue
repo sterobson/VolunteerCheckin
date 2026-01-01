@@ -9,6 +9,9 @@
         </div>
       </div>
       <div class="header-actions">
+        <button v-if="canSwitchToMarshal" @click="switchToMarshalMode" class="btn btn-marshal-mode">
+          Switch to Marshal
+        </button>
         <button @click="goToProfile" class="btn btn-secondary">Profile</button>
         <button @click="showUploadRoute = true" class="btn btn-secondary">Upload route</button>
         <button @click="shareEvent" class="btn btn-primary">Share marshal link</button>
@@ -311,7 +314,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useEventsStore } from '../stores/events';
-import { checkInApi, eventAdminsApi, eventsApi, locationsApi, marshalsApi, areasApi, checklistApi } from '../services/api';
+import { authApi, checkInApi, eventAdminsApi, eventsApi, locationsApi, marshalsApi, areasApi, checklistApi } from '../services/api';
 
 // New composables and utilities
 import { useTabs } from '../composables/useTabs';
@@ -462,6 +465,16 @@ const selectedChecklistItem = ref(null);
 const showEditChecklistItem = ref(false);
 const checklistItemInitialTab = ref('details');
 const checklistCompletionReport = ref(null);
+const userClaims = ref(null);
+
+// Mode switching
+const canSwitchToMarshal = computed(() => {
+  return userClaims.value?.marshalId != null;
+});
+
+const switchToMarshalMode = () => {
+  router.push(`/event/${route.params.eventId}`);
+};
 
 // Computed
 const marshalLink = computed(() => {
@@ -1072,8 +1085,16 @@ const handleMapClick = async (coords) => {
     // Don't mark dirty for map click - only mark dirty when user types in form fields
   } else if (isMovingLocation.value) {
     // User is moving an existing location
+    // Update both editLocationForm and selectedLocation so the modal sees the change
     editLocationForm.value.latitude = coords.lat;
     editLocationForm.value.longitude = coords.lng;
+    if (selectedLocation.value) {
+      selectedLocation.value = {
+        ...selectedLocation.value,
+        latitude: coords.lat,
+        longitude: coords.lng,
+      };
+    }
     isMovingLocation.value = false;
     showEditLocation.value = true;
     markFormDirty();
@@ -1308,6 +1329,14 @@ const handleFullscreenDone = () => {
     if (tempLocationCoords.value) {
       editLocationForm.value.latitude = tempLocationCoords.value.lat;
       editLocationForm.value.longitude = tempLocationCoords.value.lng;
+      // Also update selectedLocation so the modal sees the change
+      if (selectedLocation.value) {
+        selectedLocation.value = {
+          ...selectedLocation.value,
+          latitude: tempLocationCoords.value.lat,
+          longitude: tempLocationCoords.value.lng,
+        };
+      }
       markFormDirty();
     }
     // Exit fullscreen and reopen modal
@@ -2034,6 +2063,14 @@ const getLocationName = (locationId) => {
 // Lifecycle
 onMounted(async () => {
   await loadEventData();
+
+  // Fetch user claims to check if user has marshal access
+  try {
+    const claimsResponse = await authApi.getMe(route.params.eventId);
+    userClaims.value = claimsResponse.data;
+  } catch (error) {
+    console.warn('Failed to fetch user claims:', error);
+  }
 });
 </script>
 
@@ -2090,6 +2127,23 @@ onMounted(async () => {
 .header-actions {
   display: flex;
   gap: 1rem;
+}
+
+.btn-marshal-mode {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-marshal-mode:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(102, 126, 234, 0.4);
 }
 
 .container {

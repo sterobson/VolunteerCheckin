@@ -34,94 +34,252 @@
 
       <!-- Marshal Dashboard -->
       <div v-else class="dashboard">
-        <div class="welcome-card">
-          <h2>Welcome, {{ currentPerson?.name || 'Marshal' }}!</h2>
-          <p v-if="currentPerson?.email" class="email-info">{{ currentPerson.email }}</p>
+        <div class="welcome-bar">
+          <div class="welcome-info">
+            <span class="welcome-name">{{ currentPerson?.name || 'Marshal' }}</span>
+            <span v-if="currentPerson?.email" class="welcome-email">{{ currentPerson.email }}</span>
+          </div>
+          <div v-if="canSwitchToAdmin" class="mode-switch">
+            <button @click="switchToAdminMode" class="btn-mode-switch">
+              Switch to Admin
+            </button>
+          </div>
+          <div v-else-if="isAdminButNeedsReauth" class="mode-switch">
+            <span class="reauth-hint" title="Login via admin flow to access admin features">
+              Admin access requires re-login
+            </span>
+          </div>
         </div>
 
-        <!-- Assignment Info -->
-        <div v-if="assignment" class="assignment-card">
-          <h3>Your Assignment</h3>
-          <div class="location-info">
-            <strong>{{ assignedLocation?.name }}</strong>
-            <p v-if="assignedLocation?.description">{{ assignedLocation.description }}</p>
-            <p v-if="assignedLocation?.startTime || assignedLocation?.endTime" class="time-range">
-              {{ formatTimeRange(assignedLocation.startTime, assignedLocation.endTime) }}
-            </p>
-          </div>
+        <!-- Accordion Sections -->
+        <div class="accordion">
+          <!-- Assignments Section -->
+          <div class="accordion-section">
+            <button
+              class="accordion-header"
+              :class="{ active: expandedSection === 'assignments' }"
+              @click="toggleSection('assignments')"
+            >
+              <span class="accordion-title">Your Assignments ({{ assignments.length }})</span>
+              <span class="accordion-icon">{{ expandedSection === 'assignments' ? '−' : '+' }}</span>
+            </button>
+            <div v-if="expandedSection === 'assignments'" class="accordion-content">
+              <div v-if="assignments.length === 0" class="empty-state">
+                <p>You don't have any checkpoint assignments yet.</p>
+              </div>
+              <div v-else class="assignments-list">
+                <div v-for="assign in assignmentsWithDetails" :key="assign.id" class="assignment-item">
+                  <div class="assignment-header">
+                    <strong>{{ assign.location?.name || assign.locationName }}</strong>
+                    <span v-if="assign.areaName" class="area-badge">{{ assign.areaName }}</span>
+                  </div>
+                  <p v-if="assign.location?.description" class="assignment-description">{{ assign.location.description }}</p>
+                  <p v-if="assign.location?.startTime || assign.location?.endTime" class="time-range">
+                    {{ formatTimeRange(assign.location.startTime, assign.location.endTime) }}
+                  </p>
 
-          <div v-if="assignment.isCheckedIn" class="checked-in-status">
-            <span class="check-icon">✓</span>
-            <div>
-              <strong>Checked In</strong>
-              <p class="check-time">{{ formatTime(assignment.checkInTime) }}</p>
-              <p class="check-method">Method: {{ assignment.checkInMethod }}</p>
+                  <!-- Marshals on this checkpoint -->
+                  <div class="checkpoint-marshals">
+                    <div class="marshals-label">Marshals:</div>
+                    <div class="marshals-list">
+                      <span
+                        v-for="m in assign.allMarshals"
+                        :key="m.marshalId"
+                        class="marshal-tag"
+                        :class="{ 'is-you': m.marshalId === currentMarshalId, 'checked-in': m.isCheckedIn }"
+                      >
+                        {{ m.marshalName }}{{ m.marshalId === currentMarshalId ? ' (you)' : '' }}
+                        <span v-if="m.isCheckedIn" class="check-badge">✓</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- Check-in status and actions -->
+                  <div v-if="assign.isCheckedIn" class="checked-in-status">
+                    <span class="check-icon">✓</span>
+                    <div>
+                      <strong>Checked In</strong>
+                      <p class="check-time">{{ formatTime(assign.checkInTime) }}</p>
+                    </div>
+                  </div>
+                  <div v-else class="check-in-actions">
+                    <button
+                      @click="handleCheckIn(assign)"
+                      class="btn btn-primary"
+                      :disabled="checkingIn === assign.id"
+                    >
+                      {{ checkingIn === assign.id ? 'Checking in...' : 'GPS Check-In' }}
+                    </button>
+                    <button
+                      @click="handleManualCheckIn(assign)"
+                      class="btn btn-secondary"
+                      :disabled="checkingIn === assign.id"
+                    >
+                      Manual
+                    </button>
+                  </div>
+                  <div v-if="checkInError && checkingInAssignment === assign.id" class="error">{{ checkInError }}</div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div v-else class="check-in-actions">
+          <!-- Checklist Section -->
+          <div class="accordion-section">
             <button
-              @click="handleCheckIn"
-              class="btn btn-primary btn-large"
-              :disabled="checkingIn"
+              class="accordion-header"
+              :class="{ active: expandedSection === 'checklist' }"
+              @click="toggleSection('checklist')"
             >
-              {{ checkingIn ? 'Checking in...' : 'Check In with GPS' }}
+              <span class="accordion-title">Your Checklist ({{ checklistItems.length }})</span>
+              <span class="accordion-icon">{{ expandedSection === 'checklist' ? '−' : '+' }}</span>
             </button>
-
-            <button
-              @click="handleManualCheckIn"
-              class="btn btn-secondary"
-              :disabled="checkingIn"
-            >
-              Manual Check-In
-            </button>
-
-            <div v-if="checkInError" class="error">{{ checkInError }}</div>
-          </div>
-        </div>
-
-        <div v-else class="assignment-card">
-          <h3>Your Assignment</h3>
-          <p class="no-assignment">You don't have a checkpoint assignment yet.</p>
-        </div>
-
-        <!-- Personal Checklist -->
-        <div class="checklist-card">
-          <h3>Your Checklist</h3>
-          <div v-if="checklistLoading" class="loading">Loading checklist...</div>
-          <div v-else-if="checklistError" class="error">{{ checklistError }}</div>
-          <div v-else-if="checklistItems.length === 0" class="empty-state">
-            <p>No checklist items for you.</p>
-          </div>
-          <div v-else class="checklist-items">
-            <div
-              v-for="item in checklistItems"
-              :key="item.itemId"
-              class="checklist-item"
-              :class="{ 'item-completed': item.isCompleted }"
-            >
-              <div class="item-checkbox">
-                <input
-                  type="checkbox"
-                  :checked="item.isCompleted"
-                  :disabled="!item.canBeCompletedByMe || savingChecklist"
-                  @change="handleToggleChecklist(item)"
-                />
+            <div v-if="expandedSection === 'checklist'" class="accordion-content">
+              <div v-if="checklistLoading" class="loading">Loading checklist...</div>
+              <div v-else-if="checklistError" class="error">{{ checklistError }}</div>
+              <div v-else-if="checklistItems.length === 0" class="empty-state">
+                <p>No checklist items for you.</p>
               </div>
-              <div class="item-content">
-                <div class="item-text">{{ item.text }}</div>
-                <div v-if="getContextName(item)" class="item-context">
-                  {{ getContextName(item) }}
-                </div>
-                <div v-if="item.isCompleted" class="completion-info">
-                  <span class="completion-text">
-                    Completed by {{ item.completedByActorName || 'Unknown' }}
-                  </span>
-                  <span class="completion-time">
-                    {{ formatDateTime(item.completedAt) }}
-                  </span>
+              <div v-else class="checklist-items">
+                <div
+                  v-for="item in checklistItems"
+                  :key="item.itemId"
+                  class="checklist-item"
+                  :class="{ 'item-completed': item.isCompleted }"
+                >
+                  <div class="item-checkbox">
+                    <input
+                      type="checkbox"
+                      :checked="item.isCompleted"
+                      :disabled="!item.canBeCompletedByMe || savingChecklist"
+                      @change="handleToggleChecklist(item)"
+                    />
+                  </div>
+                  <div class="item-content">
+                    <div class="item-text">{{ item.text }}</div>
+                    <div v-if="getContextName(item)" class="item-context">
+                      {{ getContextName(item) }}
+                    </div>
+                    <div v-if="item.isCompleted" class="completion-info">
+                      <span class="completion-text">
+                        Completed by {{ item.completedByActorName || 'Unknown' }}
+                      </span>
+                      <span class="completion-time">
+                        {{ formatDateTime(item.completedAt) }}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <!-- Area Contacts Section -->
+          <div v-if="areaContactsByArea.length > 0" class="accordion-section">
+            <button
+              class="accordion-header"
+              :class="{ active: expandedSection === 'areaContacts' }"
+              @click="toggleSection('areaContacts')"
+            >
+              <span class="accordion-title">Area Contacts ({{ totalAreaContacts }})</span>
+              <span class="accordion-icon">{{ expandedSection === 'areaContacts' ? '−' : '+' }}</span>
+            </button>
+            <div v-if="expandedSection === 'areaContacts'" class="accordion-content">
+              <div v-for="area in areaContactsByArea" :key="area.areaId" class="area-contacts-group">
+                <h4 class="area-group-title">{{ area.areaName }}</h4>
+                <div class="contact-list">
+                  <div v-for="contact in area.contacts" :key="contact.marshalId" class="contact-item">
+                    <div class="contact-info">
+                      <div class="contact-name">{{ contact.marshalName }}</div>
+                      <div v-if="contact.role" class="contact-role">{{ contact.role }}</div>
+                      <div v-if="contact.phone" class="contact-detail">{{ contact.phone }}</div>
+                      <div v-if="contact.email" class="contact-detail">{{ contact.email }}</div>
+                    </div>
+                    <div class="contact-actions">
+                      <a v-if="contact.phone" :href="`tel:${contact.phone}`" class="contact-link">
+                        <svg class="contact-icon" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+                        </svg>
+                        Call
+                      </a>
+                      <a v-if="contact.phone" :href="`sms:${contact.phone}`" class="contact-link">
+                        <svg class="contact-icon" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+                        </svg>
+                        Text
+                      </a>
+                      <a v-if="contact.email" :href="`mailto:${contact.email}`" class="contact-link">
+                        <svg class="contact-icon" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                        </svg>
+                        Email
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Event Contacts Section -->
+          <div v-if="eventContacts.length > 0" class="accordion-section">
+            <button
+              class="accordion-header"
+              :class="{ active: expandedSection === 'eventContacts' }"
+              @click="toggleSection('eventContacts')"
+            >
+              <span class="accordion-title">Event Contacts ({{ eventContacts.length }})</span>
+              <span class="accordion-icon">{{ expandedSection === 'eventContacts' ? '−' : '+' }}</span>
+            </button>
+            <div v-if="expandedSection === 'eventContacts'" class="accordion-content">
+              <div class="contact-list">
+                <div v-for="(contact, index) in eventContacts" :key="index" class="contact-item">
+                  <div class="contact-info">
+                    <div class="contact-name">{{ contact.name }}</div>
+                    <div v-if="contact.role" class="contact-role">{{ contact.role }}</div>
+                  </div>
+                  <div class="contact-actions">
+                    <a v-if="contact.phone" :href="`tel:${contact.phone}`" class="contact-link">
+                      <svg class="contact-icon" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+                      </svg>
+                      Call
+                    </a>
+                    <a v-if="contact.phone" :href="`sms:${contact.phone}`" class="contact-link">
+                      <svg class="contact-icon" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+                      </svg>
+                      Text
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Map Section -->
+          <div class="accordion-section">
+            <button
+              class="accordion-header"
+              :class="{ active: expandedSection === 'map' }"
+              @click="toggleSection('map')"
+            >
+              <span class="accordion-title">
+                Map
+                <span v-if="userLocation" class="location-status active">GPS Active</span>
+                <span v-else class="location-status">GPS Inactive</span>
+              </span>
+              <span class="accordion-icon">{{ expandedSection === 'map' ? '−' : '+' }}</span>
+            </button>
+            <div v-if="expandedSection === 'map'" class="accordion-content map-content">
+              <MapView
+                :locations="allLocations"
+                :center="mapCenter"
+                :zoom="15"
+                :user-location="userLocation"
+                :highlight-location-id="primaryAssignment?.locationId"
+                :marshal-mode="true"
+              />
             </div>
           </div>
         </div>
@@ -134,23 +292,6 @@
           :marshal-id="currentMarshalId"
           @checklist-updated="loadChecklist"
         />
-
-        <!-- Map View -->
-        <div class="map-card">
-          <h3>
-            Your Location
-            <span v-if="userLocation" class="location-status active">GPS Active</span>
-            <span v-else class="location-status">GPS Inactive</span>
-          </h3>
-          <MapView
-            :locations="allLocations"
-            :center="mapCenter"
-            :zoom="15"
-            :user-location="userLocation"
-            :highlight-location-id="assignment?.locationId"
-            :marshal-mode="true"
-          />
-        </div>
       </div>
     </div>
 
@@ -174,7 +315,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { authApi, checkInApi, checklistApi, eventsApi, assignmentsApi, locationsApi } from '../services/api';
+import { authApi, checkInApi, checklistApi, eventsApi, assignmentsApi, locationsApi, areasApi } from '../services/api';
 import MapView from '../components/MapView.vue';
 import ConfirmModal from '../components/ConfirmModal.vue';
 import EmergencyContactModal from '../components/event-manage/modals/EmergencyContactModal.vue';
@@ -200,14 +341,40 @@ const areaLeadAreaIds = computed(() => {
 
 const isAreaLead = computed(() => areaLeadAreaIds.value.length > 0);
 
+// Check if user is an event admin
+const isEventAdmin = computed(() => {
+  if (!userClaims.value?.eventRoles) return false;
+  return userClaims.value.eventRoles.some(r => r.role === 'EventAdmin');
+});
+
+// Check if user can switch to admin mode (logged in via SecureEmailLink AND is admin)
+const canSwitchToAdmin = computed(() => {
+  return userClaims.value?.authMethod === 'SecureEmailLink' && isEventAdmin.value;
+});
+
+// Check if user is admin but logged in via magic code (needs re-auth for admin)
+const isAdminButNeedsReauth = computed(() => {
+  return userClaims.value?.authMethod === 'MarshalMagicCode' && isEventAdmin.value;
+});
+
+// Switch to admin mode
+const switchToAdminMode = () => {
+  router.push(`/admin/events/${route.params.eventId}`);
+};
+
 // Event data
 const event = ref(null);
 const allLocations = ref([]);
-const assignment = ref(null);
+const assignments = ref([]);
+const areas = ref([]);
 const loading = ref(true);
 
+// Accordion state
+const expandedSection = ref('assignments');
+
 // Check-in state
-const checkingIn = ref(false);
+const checkingIn = ref(null); // Now stores the assignment ID being checked in
+const checkingInAssignment = ref(null);
 const checkInError = ref(null);
 
 // Checklist state
@@ -227,9 +394,79 @@ const confirmModalCallback = ref(null);
 const userLocation = ref(null);
 let locationWatchId = null;
 
+// Toggle accordion section
+const toggleSection = (section) => {
+  expandedSection.value = expandedSection.value === section ? null : section;
+};
+
+// Assignments with details (location info, area name, all marshals on checkpoint)
+const assignmentsWithDetails = computed(() => {
+  return assignments.value.map(assign => {
+    const location = allLocations.value.find(loc => loc.id === assign.locationId);
+
+    // Get area name from the location's area IDs
+    const areaIds = location?.areaIds || location?.AreaIds || [];
+    let areaName = null;
+    if (areaIds.length > 0 && areas.value.length > 0) {
+      const area = areas.value.find(a => areaIds.includes(a.id));
+      areaName = area?.name;
+    }
+
+    // Get all marshals assigned to this checkpoint
+    const allMarshals = location?.assignments || [];
+
+    return {
+      ...assign,
+      location,
+      areaName,
+      allMarshals,
+      locationName: location?.name || 'Unknown Location',
+    };
+  });
+});
+
+// Primary assignment (first one) for map highlighting
+const primaryAssignment = computed(() => {
+  return assignments.value.length > 0 ? assignments.value[0] : null;
+});
+
 const assignedLocation = computed(() => {
-  if (!assignment.value || !allLocations.value.length) return null;
-  return allLocations.value.find(loc => loc.id === assignment.value.locationId);
+  if (!primaryAssignment.value || !allLocations.value.length) return null;
+  return allLocations.value.find(loc => loc.id === primaryAssignment.value.locationId);
+});
+
+// Event contacts (emergency contacts from event)
+const eventContacts = computed(() => {
+  return event.value?.emergencyContacts || [];
+});
+
+// Area contacts - loaded from API, grouped by area
+const areaContactsRaw = ref([]);
+
+// Area contacts grouped by area
+const areaContactsByArea = computed(() => {
+  if (areaContactsRaw.value.length === 0) return [];
+
+  // Group by area
+  const grouped = {};
+  for (const contact of areaContactsRaw.value) {
+    const key = contact.areaId || 'unknown';
+    if (!grouped[key]) {
+      grouped[key] = {
+        areaId: contact.areaId,
+        areaName: contact.areaName || 'Unknown Area',
+        contacts: [],
+      };
+    }
+    grouped[key].contacts.push(contact);
+  }
+
+  return Object.values(grouped);
+});
+
+// Total area contacts count
+const totalAreaContacts = computed(() => {
+  return areaContactsRaw.value.length;
 });
 
 const mapCenter = computed(() => {
@@ -340,6 +577,16 @@ const loadEventData = async () => {
     console.error('Failed to load event:', error.response?.status, error.response?.data);
   }
 
+  // Load areas for the event
+  try {
+    console.log('Fetching areas...');
+    const areasResponse = await areasApi.getByEvent(eventId);
+    areas.value = areasResponse.data || [];
+    console.log('Areas loaded:', areas.value.length);
+  } catch (error) {
+    console.error('Failed to load areas:', error.response?.status, error.response?.data);
+  }
+
   // Load locations with assignments using event status endpoint
   try {
     console.log('Fetching event status (locations + assignments)...');
@@ -347,19 +594,18 @@ const loadEventData = async () => {
     allLocations.value = statusResponse.data?.locations || [];
     console.log('Locations loaded:', allLocations.value.length);
 
-    // Find current marshal's assignment from all locations
+    // Find ALL of current marshal's assignments from all locations
     if (currentMarshalId.value) {
+      const myAssignments = [];
       for (const location of allLocations.value) {
         const myAssignment = location.assignments?.find(a => a.marshalId === currentMarshalId.value);
         if (myAssignment) {
-          assignment.value = myAssignment;
-          console.log('My assignment found:', assignment.value, 'at location:', location.name);
-          break;
+          myAssignments.push(myAssignment);
+          console.log('Assignment found:', myAssignment.id, 'at location:', location.name);
         }
       }
-      if (!assignment.value) {
-        console.log('No assignment found for marshal:', currentMarshalId.value);
-      }
+      assignments.value = myAssignments;
+      console.log('Total assignments found:', assignments.value.length);
     }
   } catch (error) {
     console.error('Failed to load event status:', error.response?.status, error.response?.data);
@@ -367,6 +613,56 @@ const loadEventData = async () => {
 
   // Load checklist
   await loadChecklist();
+
+  // Load area contacts for the checkpoint's areas
+  await loadAreaContacts();
+};
+
+const loadAreaContacts = async () => {
+  // Get unique area IDs from all assignments
+  const uniqueAreaIds = new Set();
+  for (const assign of assignments.value) {
+    const location = allLocations.value.find(loc => loc.id === assign.locationId);
+    const areaIds = location?.areaIds || location?.AreaIds || [];
+    areaIds.forEach(id => uniqueAreaIds.add(id));
+  }
+
+  if (uniqueAreaIds.size === 0) {
+    console.log('No area IDs for any checkpoint');
+    return;
+  }
+  console.log('Loading area contacts for areas:', [...uniqueAreaIds]);
+
+  const eventId = route.params.eventId;
+  const allContacts = [];
+
+  for (const areaId of uniqueAreaIds) {
+    try {
+      // Fetch the full area details which includes contacts
+      const response = await areasApi.getById(eventId, areaId);
+      const area = response.data;
+      // Handle both camelCase and PascalCase
+      const contacts = area?.contacts || area?.Contacts || [];
+      console.log(`Area ${area?.name || areaId} has ${contacts.length} contacts`);
+
+      if (contacts.length > 0) {
+        allContacts.push(...contacts.map(contact => ({
+          marshalId: contact.marshalId || contact.MarshalId,
+          marshalName: contact.marshalName || contact.MarshalName,
+          role: contact.role || contact.Role,
+          phone: contact.phone || contact.Phone,
+          email: contact.email || contact.Email,
+          areaId: areaId,
+          areaName: area?.name || area?.Name,
+        })));
+      }
+    } catch (error) {
+      console.warn(`Failed to load area contacts for area ${areaId}:`, error);
+    }
+  }
+
+  areaContactsRaw.value = allContacts;
+  console.log('Area contacts loaded:', areaContactsRaw.value.length);
 };
 
 const loadChecklist = async () => {
@@ -485,8 +781,9 @@ const stopLocationTracking = () => {
   }
 };
 
-const handleCheckIn = async () => {
-  checkingIn.value = true;
+const handleCheckIn = async (assign) => {
+  checkingIn.value = assign.id;
+  checkingInAssignment.value = assign.id;
   checkInError.value = null;
 
   try {
@@ -503,13 +800,17 @@ const handleCheckIn = async () => {
 
     const response = await checkInApi.checkIn({
       eventId: route.params.eventId,
-      assignmentId: assignment.value.id,
+      assignmentId: assign.id,
       latitude: position.coords.latitude,
       longitude: position.coords.longitude,
       manualCheckIn: false,
     });
 
-    assignment.value = response.data;
+    // Update the assignment in the list
+    const index = assignments.value.findIndex(a => a.id === assign.id);
+    if (index !== -1) {
+      assignments.value[index] = response.data;
+    }
   } catch (error) {
     if (error.response?.data?.message) {
       checkInError.value = error.response.data.message;
@@ -519,31 +820,38 @@ const handleCheckIn = async () => {
       checkInError.value = 'Failed to check in. Please try manual check-in.';
     }
   } finally {
-    checkingIn.value = false;
+    checkingIn.value = null;
+    checkingInAssignment.value = null;
   }
 };
 
-const handleManualCheckIn = () => {
+const handleManualCheckIn = (assign) => {
   confirmModalTitle.value = 'Manual Check-In';
   confirmModalMessage.value = 'Are you sure you want to check in manually? This should only be used if GPS is not available.';
   confirmModalCallback.value = async () => {
-    checkingIn.value = true;
+    checkingIn.value = assign.id;
+    checkingInAssignment.value = assign.id;
     checkInError.value = null;
 
     try {
       const response = await checkInApi.checkIn({
         eventId: route.params.eventId,
-        assignmentId: assignment.value.id,
+        assignmentId: assign.id,
         latitude: null,
         longitude: null,
         manualCheckIn: true,
       });
 
-      assignment.value = response.data;
+      // Update the assignment in the list
+      const index = assignments.value.findIndex(a => a.id === assign.id);
+      if (index !== -1) {
+        assignments.value[index] = response.data;
+      }
     } catch (error) {
       checkInError.value = 'Failed to check in manually. Please contact the admin.';
     } finally {
-      checkingIn.value = false;
+      checkingIn.value = null;
+      checkingInAssignment.value = null;
     }
   };
   showConfirmModal.value = true;
@@ -575,8 +883,9 @@ const handleLogout = async () => {
   isAuthenticated.value = false;
   currentPerson.value = null;
   currentMarshalId.value = null;
-  assignment.value = null;
+  assignments.value = [];
   checklistItems.value = [];
+  areaContactsRaw.value = [];
 
   // Redirect to home
   router.push('/');
@@ -709,6 +1018,7 @@ onUnmounted(() => {
 .welcome-card,
 .assignment-card,
 .checklist-card,
+.contacts-card,
 .map-card {
   background: white;
   border-radius: 12px;
@@ -725,9 +1035,66 @@ onUnmounted(() => {
 .welcome-card h2,
 .assignment-card h3,
 .checklist-card h3,
+.contacts-card h3,
 .map-card h3 {
   margin: 0 0 1rem 0;
   color: #333;
+}
+
+/* Contact list styles */
+.contact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.contact-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  background: #f5f7fa;
+  border-radius: 8px;
+  gap: 1rem;
+}
+
+.contact-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.contact-role {
+  font-weight: 400;
+  color: #666;
+}
+
+.contact-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.contact-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  background: #667eea;
+  color: white;
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.contact-link:hover {
+  background: #5568d3;
+}
+
+.contact-icon {
+  width: 1rem;
+  height: 1rem;
 }
 
 .instruction {
@@ -741,14 +1108,61 @@ onUnmounted(() => {
   color: #666;
 }
 
-.email-info {
-  color: #666;
-  margin: 0;
-  font-size: 0.9rem;
+/* Welcome bar - compact horizontal layout */
+.welcome-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  border-radius: 10px;
+  padding: 0.75rem 1.25rem;
+  margin-bottom: 0.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.welcome-card {
-  text-align: center;
+.welcome-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.welcome-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 1rem;
+}
+
+.welcome-email {
+  color: #666;
+  font-size: 0.8rem;
+}
+
+.mode-switch {
+  flex-shrink: 0;
+}
+
+.btn-mode-switch {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-mode-switch:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(102, 126, 234, 0.4);
+}
+
+.reauth-hint {
+  font-size: 0.75rem;
+  color: #999;
+  font-style: italic;
+  cursor: help;
 }
 
 .location-info {
@@ -808,8 +1222,9 @@ onUnmounted(() => {
 
 .check-in-actions {
   display: flex;
-  flex-direction: column;
-  gap: 1rem;
+  flex-direction: row;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
 }
 
 .btn {
@@ -973,6 +1388,195 @@ onUnmounted(() => {
   margin-top: 1rem;
 }
 
+/* Accordion styles */
+.accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.accordion-section {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.accordion-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  background: white;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #333;
+  transition: background 0.2s;
+}
+
+.accordion-header:hover {
+  background: #f8f9fa;
+}
+
+.accordion-header.active {
+  background: #f0f4ff;
+  color: #667eea;
+}
+
+.accordion-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.accordion-icon {
+  font-size: 1.5rem;
+  font-weight: 300;
+  color: #667eea;
+}
+
+.accordion-content {
+  padding: 1rem 1.5rem 1.5rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+.map-content {
+  padding-bottom: 0;
+}
+
+.map-content :deep(.map-container) {
+  height: 350px;
+  border-radius: 0 0 12px 12px;
+  margin: 0 -1.5rem -1.5rem;
+}
+
+/* Assignment list styles */
+.assignments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.assignment-item {
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.assignment-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.assignment-header strong {
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.assignment-description {
+  color: #666;
+  font-size: 0.9rem;
+  margin: 0 0 0.5rem 0;
+}
+
+.area-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  background: #667eea;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 12px;
+}
+
+/* Checkpoint marshals list */
+.checkpoint-marshals {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  background: #fff;
+  border-radius: 8px;
+}
+
+.marshals-label {
+  font-size: 0.8rem;
+  color: #666;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.marshals-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.marshal-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3rem 0.6rem;
+  background: #e8e8e8;
+  border-radius: 16px;
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.marshal-tag.is-you {
+  background: #e3e9ff;
+  color: #667eea;
+  font-weight: 500;
+}
+
+.marshal-tag.checked-in {
+  background: #e8f5e9;
+  color: #4caf50;
+}
+
+.marshal-tag.is-you.checked-in {
+  background: linear-gradient(135deg, #e3e9ff 50%, #e8f5e9 50%);
+}
+
+.check-badge {
+  font-size: 0.75rem;
+}
+
+/* Area contacts group */
+.area-contacts-group {
+  margin-bottom: 1.5rem;
+}
+
+.area-contacts-group:last-child {
+  margin-bottom: 0;
+}
+
+.area-group-title {
+  margin: 0 0 0.75rem 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #667eea;
+  color: #333;
+  font-size: 1rem;
+}
+
+.contact-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.contact-detail {
+  font-size: 0.85rem;
+  color: #555;
+}
+
 @media (max-width: 768px) {
   .header {
     flex-direction: column;
@@ -992,12 +1596,57 @@ onUnmounted(() => {
   .welcome-card,
   .assignment-card,
   .checklist-card,
+  .contacts-card,
   .map-card {
     padding: 1.5rem;
   }
 
   .map-card :deep(.map-container) {
     height: 300px;
+  }
+
+  .contact-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .contact-actions {
+    width: 100%;
+  }
+
+  .contact-link {
+    flex: 1;
+    justify-content: center;
+  }
+
+  /* Accordion mobile adjustments */
+  .accordion-header {
+    padding: 1rem;
+  }
+
+  .accordion-content {
+    padding: 1rem;
+  }
+
+  .map-content :deep(.map-container) {
+    height: 300px;
+    margin: 0 -1rem -1rem;
+  }
+
+  .assignment-item {
+    padding: 0.75rem;
+  }
+
+  .check-in-actions {
+    flex-direction: row;
+    gap: 0.5rem;
+  }
+
+  .check-in-actions .btn {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+    flex: 1;
   }
 }
 </style>

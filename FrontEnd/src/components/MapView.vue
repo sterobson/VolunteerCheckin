@@ -434,17 +434,18 @@ const updateMarkers = () => {
     const isHighlighted = props.highlightLocationId === location.id;
     const isGrayed = props.marshalMode && !isHighlighted;
 
-    // In marshal mode, gray out non-assigned checkpoints
+    // In marshal mode, gray out non-assigned checkpoints and hide counts
     let color;
-    if (isGrayed) {
-      color = '#999';
+    if (props.marshalMode) {
+      // In marshal mode: highlighted = purple, others = gray
+      color = isHighlighted ? '#667eea' : '#999';
     } else {
       color = isFull ? 'green' : isMissing ? 'red' : 'orange';
     }
 
-    // Area color indicator
+    // Area color indicator (hide in marshal mode)
     const areaColor = location.areaColor || '#999';
-    const hasArea = location.areaId;
+    const hasArea = location.areaId && !props.marshalMode;
 
     const shouldShowDesc = showDescriptionsForIds.value.has(location.id);
     const labelText = shouldShowDesc && location.description
@@ -468,10 +469,17 @@ const updateMarkers = () => {
 
     // Style adjustments for grayed/highlighted markers
     const markerOpacity = isGrayed ? '0.6' : '1';
-    const markerSize = isHighlighted ? '36px' : '30px';
+    const markerSize = isHighlighted ? '36px' : props.marshalMode ? '20px' : '30px';
     const labelBg = isHighlighted ? '#667eea' : isGrayed ? '#e0e0e0' : 'white';
     const labelColor = isHighlighted ? 'white' : isGrayed ? '#888' : '#333';
     const borderColor = isHighlighted ? '#667eea' : 'white';
+
+    // In marshal mode, don't show counts - just a simple dot for non-highlighted checkpoints
+    const markerContent = props.marshalMode && !isHighlighted
+      ? '' // Empty dot for non-assigned checkpoints in marshal mode
+      : props.marshalMode
+        ? '' // No count even for highlighted checkpoint in marshal mode
+        : `${checkedInCount}/${requiredMarshals}`;
 
     const icon = L.divIcon({
       className: 'custom-marker',
@@ -479,7 +487,7 @@ const updateMarkers = () => {
         <div style="display: flex; flex-direction: column; align-items: center; position: relative; opacity: ${markerOpacity};">
           ${highlightRing}
           <div style="position: relative; display: flex; align-items: center; gap: 4px;">
-            ${hasArea && !isGrayed ? `<div style="
+            ${hasArea ? `<div style="
               width: 8px;
               height: 8px;
               border-radius: 50%;
@@ -501,7 +509,7 @@ const updateMarkers = () => {
               font-weight: bold;
               font-size: ${isHighlighted ? '14px' : '12px'};
             ">
-              ${checkedInCount}/${requiredMarshals}
+              ${markerContent}
             </div>
           </div>
           <div style="
@@ -523,13 +531,14 @@ const updateMarkers = () => {
       iconAnchor: [15, 25],
     });
 
+    // Popup content - simpler in marshal mode (no counts)
+    const popupContent = props.marshalMode
+      ? `<b>${location.name}</b>${location.description ? `<br>${location.description}` : ''}`
+      : `<b>${location.name}</b><br>${location.description || ''}<br>Checked in: ${checkedInCount}/${requiredMarshals}`;
+
     const marker = L.marker([location.latitude, location.longitude], { icon })
       .addTo(map)
-      .bindPopup(`
-        <b>${location.name}</b><br>
-        ${location.description || ''}<br>
-        Checked in: ${checkedInCount}/${requiredMarshals}
-      `);
+      .bindPopup(popupContent);
 
     marker.on('click', () => {
       emit('location-click', location);

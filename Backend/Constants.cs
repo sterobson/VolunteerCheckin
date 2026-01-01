@@ -85,4 +85,14 @@ public static class Constants
     public const int MaxMagicLinkRequestsPerEmailPerHour = 5;
     public const int MaxMarshalCodeAttemptsPerIpPerMinute = 10;
     public const int MaxMarshalCodeAttemptsPerEventPerHour = 100;
+
+    // Note Priority Levels
+    public const string NotePriorityLow = "Low";
+    public const string NotePriorityNormal = "Normal";
+    public const string NotePriorityHigh = "High";
+    public const string NotePriorityUrgent = "Urgent";
+
+    // Note Error Messages
+    public const string ErrorNoteNotFound = "Note not found";
+    public const string ErrorNotAuthorizedToManageNotes = "Not authorized to manage notes";
 }

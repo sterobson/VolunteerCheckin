@@ -477,11 +477,12 @@ namespace VolunteerCheckin.Functions.Tests
         }
 
         [TestMethod]
-        public async Task DeleteArea_HasCheckpoints_ReturnsBadRequest()
+        public async Task DeleteArea_HasCheckpoints_ReassignsToDefaultAndDeletes()
         {
             // Arrange
             string eventId = "event-123";
             string areaId = "area-456";
+            string defaultAreaId = "default-area";
 
             AreaEntity area = new()
             {
@@ -490,25 +491,54 @@ namespace VolunteerCheckin.Functions.Tests
                 IsDefault = false
             };
 
+            AreaEntity defaultArea = new()
+            {
+                RowKey = defaultAreaId,
+                EventId = eventId,
+                IsDefault = true
+            };
+
+            List<LocationEntity> checkpoints = new()
+            {
+                new LocationEntity
+                {
+                    RowKey = "loc-1",
+                    EventId = eventId,
+                    Name = "Checkpoint 1",
+                    AreaIdsJson = $"[\"{areaId}\"]"
+                }
+            };
+
             _mockAreaRepository
                 .Setup(r => r.GetAsync(eventId, areaId))
                 .ReturnsAsync(area);
 
+            _mockAreaRepository
+                .Setup(r => r.GetDefaultAreaAsync(eventId))
+                .ReturnsAsync(defaultArea);
+
             _mockLocationRepository
-                .Setup(r => r.CountByAreaAsync(eventId, areaId))
-                .ReturnsAsync(5); // Has checkpoints
+                .Setup(r => r.GetByAreaAsync(eventId, areaId))
+                .ReturnsAsync(checkpoints);
 
             HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
 
             // Act
             IActionResult result = await _areaFunctions.DeleteArea(httpRequest, eventId, areaId);
 
-            // Assert
-            result.ShouldBeOfType<BadRequestObjectResult>();
+            // Assert - Area is deleted after checkpoints are reassigned
+            result.ShouldBeOfType<NoContentResult>();
 
+            // Verify checkpoint was updated (reassigned to default area)
+            _mockLocationRepository.Verify(
+                r => r.UpdateAsync(It.Is<LocationEntity>(l => l.RowKey == "loc-1")),
+                Times.Once
+            );
+
+            // Verify area was deleted
             _mockAreaRepository.Verify(
-                r => r.DeleteAsync(It.IsAny<string>(), It.IsAny<string>()),
-                Times.Never
+                r => r.DeleteAsync(eventId, areaId),
+                Times.Once
             );
         }
 

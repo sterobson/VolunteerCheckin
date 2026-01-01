@@ -122,6 +122,7 @@ export const areasApi = {
   delete: (eventId, areaId) => api.delete(`/areas/${eventId}/${areaId}`),
   recalculate: (eventId) => api.post(`/areas/recalculate/${eventId}`),
   getCheckpoints: (eventId, areaId) => api.get(`/areas/${eventId}/${areaId}/locations`),
+  getAreaLeads: (eventId, areaId) => api.get(`/areas/${eventId}/${areaId}/leads`),
 };
 
 // Checklist API

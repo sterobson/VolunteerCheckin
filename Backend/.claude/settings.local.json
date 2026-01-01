@@ -10,7 +10,11 @@
       "Bash(dotnet build:*)",
       "Bash(ls:*)",
       "Bash(echo:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(move CHECKLIST_API_DOCUMENTATION.md DocumentationAPIChecklists.md)",
+      "Bash(move NOTES_API_DOCUMENTATION.md DocumentationAPINotes.md)",
+      "Bash(move AUTHENTICATION.md DocumentationArchitectureAuthentication.md)",
+      "Bash(move:*)"
     ]
   }
 }

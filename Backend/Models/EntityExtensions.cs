@@ -19,7 +19,11 @@ public static class EntityExtensions
             emergencyContacts,
             route,
             entity.IsActive,
-            entity.CreatedDate
+            entity.CreatedDate,
+            entity.PeopleTerm,
+            entity.CheckpointTerm,
+            entity.AreaTerm,
+            entity.ChecklistTerm
         );
     }
 

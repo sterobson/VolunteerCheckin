@@ -12,9 +12,10 @@
       <TabHeader
         v-model="activeTab"
         :tabs="[
-          { value: 'details', label: 'Details' },
-          { value: 'checkpoints', label: 'Checkpoints' },
-          { value: 'checklist', label: 'Checklist' }
+          { value: 'details', label: 'Details', icon: 'details' },
+          { value: 'checkpoints', label: 'Checkpoints', icon: 'checkpoint' },
+          { value: 'checklist', label: 'Checklist', icon: 'checklist' },
+          { value: 'notes', label: 'Notes', icon: 'notes' }
         ]"
       />
     </template>
@@ -52,6 +53,17 @@
       @change="handleChecklistChange"
     />
 
+    <!-- Notes Tab (only when editing) -->
+    <NotesView
+      v-if="activeTab === 'notes' && isEditing"
+      :event-id="eventId"
+      :marshal-id="marshal?.id"
+      :all-notes="eventNotes"
+      :locations="allLocations"
+      :areas="areas"
+      :assignments="assignments"
+    />
+
     <!-- Custom footer with left and right aligned buttons -->
     <template #footer>
       <div class="custom-footer">
@@ -79,6 +91,7 @@ import TabHeader from '../../TabHeader.vue';
 import MarshalDetailsTab from '../tabs/MarshalDetailsTab.vue';
 import MarshalCheckpointsTab from '../tabs/MarshalCheckpointsTab.vue';
 import MarshalChecklistView from '../../MarshalChecklistView.vue';
+import NotesView from '../../NotesView.vue';
 
 const props = defineProps({
   show: {
@@ -116,6 +129,10 @@ const props = defineProps({
   isDirty: {
     type: Boolean,
     default: false,
+  },
+  eventNotes: {
+    type: Array,
+    default: () => [],
   },
 });
 

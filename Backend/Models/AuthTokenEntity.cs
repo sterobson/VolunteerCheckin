@@ -15,9 +15,9 @@ public class AuthTokenEntity : ITableEntity
     public string PartitionKey { get; set; } = "AUTHTOKEN";
 
     /// <summary>
-    /// Row key: TokenId (GUID)
+    /// Row key: TokenHash (enables O(1) lookup by token)
     /// </summary>
-    public string RowKey { get; set; } = Guid.NewGuid().ToString();
+    public string RowKey { get; set; } = string.Empty;
 
     public DateTimeOffset? Timestamp { get; set; }
     public ETag ETag { get; set; }

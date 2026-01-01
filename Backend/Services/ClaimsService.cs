@@ -161,7 +161,7 @@ public class ClaimsService
         {
             SessionId = sessionId,
             PartitionKey = "SESSION",
-            RowKey = sessionId,
+            RowKey = tokenHash,
             SessionTokenHash = tokenHash,
             PersonId = personId,
             EventId = eventId,
@@ -187,7 +187,7 @@ public class ClaimsService
         AuthSessionEntity? session = await _sessionRepository.GetBySessionTokenHashAsync(tokenHash);
         if (session != null)
         {
-            await _sessionRepository.RevokeAsync(session.SessionId);
+            await _sessionRepository.RevokeAsync(session.SessionTokenHash);
         }
     }
 
@@ -201,11 +201,15 @@ public class ClaimsService
 
     /// <summary>
     /// Hash a token using SHA256.
+    /// Uses URL-safe Base64 encoding to avoid Azure Table Storage RowKey invalid characters.
     /// </summary>
     private static string HashToken(string token)
     {
         byte[] bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
-        return Convert.ToBase64String(bytes);
+        return Convert.ToBase64String(bytes)
+            .Replace('+', '-')
+            .Replace('/', '_')
+            .Replace("=", "");
     }
 
     /// <summary>

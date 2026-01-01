@@ -28,6 +28,7 @@ namespace VolunteerCheckin.Functions.Tests
         private Mock<IPersonRepository> _mockPersonRepository = null!;
         private Mock<IEventRoleRepository> _mockEventRoleRepository = null!;
         private Mock<GpxParserService> _mockGpxParser = null!;
+        private Mock<ClaimsService> _mockClaimsService = null!;
         private EventFunctions _eventFunctions = null!;
 
         [TestInitialize]
@@ -39,6 +40,13 @@ namespace VolunteerCheckin.Functions.Tests
             _mockPersonRepository = new Mock<IPersonRepository>();
             _mockEventRoleRepository = new Mock<IEventRoleRepository>();
             _mockGpxParser = new Mock<GpxParserService>();
+            _mockClaimsService = new Mock<ClaimsService>(
+                Mock.Of<IAuthSessionRepository>(),
+                Mock.Of<IPersonRepository>(),
+                Mock.Of<IEventRoleRepository>(),
+                Mock.Of<IMarshalRepository>(),
+                Mock.Of<IUserEventMappingRepository>()
+            );
 
             _eventFunctions = new EventFunctions(
                 _mockLogger.Object,
@@ -46,8 +54,30 @@ namespace VolunteerCheckin.Functions.Tests
                 _mockUserEventMappingRepository.Object,
                 _mockPersonRepository.Object,
                 _mockEventRoleRepository.Object,
-                _mockGpxParser.Object
+                _mockGpxParser.Object,
+                _mockClaimsService.Object
             );
+        }
+
+        private UserClaims CreateAdminClaims(string eventId)
+        {
+            return new UserClaims(
+                PersonId: "person-123",
+                PersonName: "Admin User",
+                PersonEmail: "admin@example.com",
+                IsSystemAdmin: false,
+                EventId: eventId,
+                AuthMethod: Constants.AuthMethodSecureEmailLink,
+                MarshalId: null,
+                EventRoles: new List<EventRoleInfo> { new(Constants.RoleEventAdmin, new List<string>()) }
+            );
+        }
+
+        private void SetupAdminAuth(string eventId)
+        {
+            _mockClaimsService
+                .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), eventId))
+                .ReturnsAsync(CreateAdminClaims(eventId));
         }
 
         #region CreateEvent Tests
@@ -599,10 +629,98 @@ namespace VolunteerCheckin.Functions.Tests
         #region GetEventAdmins Tests
 
         [TestMethod]
+        public async Task GetEventAdmins_NoAuth_ReturnsUnauthorized()
+        {
+            // Arrange
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
+
+            // Act
+            IActionResult result = await _eventFunctions.GetEventAdmins(httpRequest, "event-123");
+
+            // Assert
+            result.ShouldBeOfType<UnauthorizedObjectResult>();
+        }
+
+        [TestMethod]
+        public async Task GetEventAdmins_InvalidSession_ReturnsUnauthorized()
+        {
+            // Arrange
+            _mockClaimsService
+                .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), It.IsAny<string>()))
+                .ReturnsAsync((UserClaims?)null);
+
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth("invalid-token");
+
+            // Act
+            IActionResult result = await _eventFunctions.GetEventAdmins(httpRequest, "event-123");
+
+            // Assert
+            result.ShouldBeOfType<UnauthorizedObjectResult>();
+        }
+
+        [TestMethod]
+        public async Task GetEventAdmins_MarshalAuth_ReturnsForbid()
+        {
+            // Arrange - user logged in via magic code (not elevated)
+            UserClaims marshalClaims = new(
+                PersonId: "person-123",
+                PersonName: "Marshal User",
+                PersonEmail: "marshal@example.com",
+                IsSystemAdmin: false,
+                EventId: "event-123",
+                AuthMethod: Constants.AuthMethodMarshalMagicCode,
+                MarshalId: "marshal-123",
+                EventRoles: new List<EventRoleInfo>()
+            );
+
+            _mockClaimsService
+                .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), It.IsAny<string>()))
+                .ReturnsAsync(marshalClaims);
+
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth("some-token");
+
+            // Act
+            IActionResult result = await _eventFunctions.GetEventAdmins(httpRequest, "event-123");
+
+            // Assert
+            result.ShouldBeOfType<ForbidResult>();
+        }
+
+        [TestMethod]
+        public async Task GetEventAdmins_NotEventAdmin_ReturnsForbid()
+        {
+            // Arrange - user is authenticated via email but not an event admin
+            UserClaims nonAdminClaims = new(
+                PersonId: "person-123",
+                PersonName: "Regular User",
+                PersonEmail: "user@example.com",
+                IsSystemAdmin: false,
+                EventId: "event-123",
+                AuthMethod: Constants.AuthMethodSecureEmailLink,
+                MarshalId: null,
+                EventRoles: new List<EventRoleInfo>()
+            );
+
+            _mockClaimsService
+                .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), It.IsAny<string>()))
+                .ReturnsAsync(nonAdminClaims);
+
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth("some-token");
+
+            // Act
+            IActionResult result = await _eventFunctions.GetEventAdmins(httpRequest, "event-123");
+
+            // Assert
+            result.ShouldBeOfType<ForbidResult>();
+        }
+
+        [TestMethod]
         public async Task GetEventAdmins_ReturnsAllAdmins()
         {
             // Arrange
             string eventId = "event-123";
+
+            SetupAdminAuth(eventId);
 
             List<UserEventMappingEntity> admins = new()
             {
@@ -614,7 +732,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetByEventAsync(eventId))
                 .ReturnsAsync(admins);
 
-            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth("valid-token");
 
             // Act
             IActionResult result = await _eventFunctions.GetEventAdmins(httpRequest, eventId);

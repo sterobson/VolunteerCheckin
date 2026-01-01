@@ -320,6 +320,9 @@ import MapView from '../components/MapView.vue';
 import ConfirmModal from '../components/ConfirmModal.vue';
 import EmergencyContactModal from '../components/event-manage/modals/EmergencyContactModal.vue';
 import AreaLeadSection from '../components/AreaLeadSection.vue';
+import { setTerminology, useTerminology } from '../composables/useTerminology';
+
+const { terms } = useTerminology();
 
 const route = useRoute();
 const router = useRouter();

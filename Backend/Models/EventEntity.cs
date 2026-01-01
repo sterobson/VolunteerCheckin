@@ -19,4 +19,11 @@ public class EventEntity : ITableEntity
     public string GpxRouteJson { get; set; } = "[]";
     public bool IsActive { get; set; } = true;
     public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
+
+    // Terminology settings - allows customizing the wording used in the UI
+    // Default values match the original application terminology
+    public string PeopleTerm { get; set; } = "Marshals";      // People, Marshals, Volunteers, Helpers, Staff
+    public string CheckpointTerm { get; set; } = "Checkpoints"; // Checkpoints, Stations, Locations
+    public string AreaTerm { get; set; } = "Areas";           // Areas, Zones
+    public string ChecklistTerm { get; set; } = "Checklists"; // Checklists, Tasks
 }

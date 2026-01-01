@@ -140,4 +140,15 @@ export const checklistApi = {
   uncomplete: (eventId, itemId, data) => api.post(`/checklist-items/${eventId}/${itemId}/uncomplete`, data),
 };
 
+// Notes API
+export const notesApi = {
+  create: (eventId, data) => api.post(`/events/${eventId}/notes`, data),
+  getByEvent: (eventId) => api.get(`/events/${eventId}/notes`),
+  getById: (eventId, noteId) => api.get(`/events/${eventId}/notes/${noteId}`),
+  update: (eventId, noteId, data) => api.put(`/events/${eventId}/notes/${noteId}`, data),
+  delete: (eventId, noteId) => api.delete(`/events/${eventId}/notes/${noteId}`),
+  getMarshalNotes: (eventId, marshalId) => api.get(`/events/${eventId}/marshals/${marshalId}/notes`),
+  getMyNotes: (eventId) => api.get(`/events/${eventId}/my-notes`),
+};
+
 export default api;

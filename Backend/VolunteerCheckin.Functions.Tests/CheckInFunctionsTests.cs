@@ -5,6 +5,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Shouldly;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Text.Json;
@@ -23,6 +24,7 @@ namespace VolunteerCheckin.Functions.Tests
         private Mock<IAssignmentRepository> _mockAssignmentRepository = null!;
         private Mock<ILocationRepository> _mockLocationRepository = null!;
         private Mock<GpsService> _mockGpsService = null!;
+        private Mock<ClaimsService> _mockClaimsService = null!;
         private CheckInFunctions _checkInFunctions = null!;
 
         [TestInitialize]
@@ -32,6 +34,13 @@ namespace VolunteerCheckin.Functions.Tests
             _mockAssignmentRepository = new Mock<IAssignmentRepository>();
             _mockLocationRepository = new Mock<ILocationRepository>();
             _mockGpsService = new Mock<GpsService>();
+            _mockClaimsService = new Mock<ClaimsService>(
+                Mock.Of<IAuthSessionRepository>(),
+                Mock.Of<IPersonRepository>(),
+                Mock.Of<IEventRoleRepository>(),
+                Mock.Of<IMarshalRepository>(),
+                Mock.Of<IUserEventMappingRepository>()
+            );
 
             // Setup default GPS service behavior - close enough (within 100m)
             _mockGpsService
@@ -42,7 +51,8 @@ namespace VolunteerCheckin.Functions.Tests
                 _mockLogger.Object,
                 _mockAssignmentRepository.Object,
                 _mockLocationRepository.Object,
-                _mockGpsService.Object
+                _mockGpsService.Object,
+                _mockClaimsService.Object
             );
         }
 
@@ -335,12 +345,121 @@ namespace VolunteerCheckin.Functions.Tests
 
         #region AdminCheckIn Tests
 
+        private UserClaims CreateAdminClaims(string eventId)
+        {
+            return new UserClaims(
+                PersonId: "person-123",
+                PersonName: "Admin User",
+                PersonEmail: "admin@example.com",
+                IsSystemAdmin: false,
+                EventId: eventId,
+                AuthMethod: Constants.AuthMethodSecureEmailLink,
+                MarshalId: null,
+                EventRoles: new List<EventRoleInfo> { new(Constants.RoleEventAdmin, new List<string>()) }
+            );
+        }
+
+        private void SetupAdminAuth(string eventId)
+        {
+            _mockClaimsService
+                .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), eventId))
+                .ReturnsAsync(CreateAdminClaims(eventId));
+        }
+
+        [TestMethod]
+        public async Task AdminCheckIn_NoAuth_ReturnsUnauthorized()
+        {
+            // Arrange
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
+
+            // Act
+            IActionResult result = await _checkInFunctions.AdminCheckIn(httpRequest, "event-123", "assignment-456");
+
+            // Assert
+            result.ShouldBeOfType<UnauthorizedObjectResult>();
+        }
+
+        [TestMethod]
+        public async Task AdminCheckIn_InvalidSession_ReturnsUnauthorized()
+        {
+            // Arrange
+            _mockClaimsService
+                .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), It.IsAny<string>()))
+                .ReturnsAsync((UserClaims?)null);
+
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth("invalid-token");
+
+            // Act
+            IActionResult result = await _checkInFunctions.AdminCheckIn(httpRequest, "event-123", "assignment-456");
+
+            // Assert
+            result.ShouldBeOfType<UnauthorizedObjectResult>();
+        }
+
+        [TestMethod]
+        public async Task AdminCheckIn_MarshalAuth_ReturnsForbid()
+        {
+            // Arrange - user logged in via magic code (not elevated)
+            UserClaims marshalClaims = new(
+                PersonId: "person-123",
+                PersonName: "Marshal User",
+                PersonEmail: "marshal@example.com",
+                IsSystemAdmin: false,
+                EventId: "event-123",
+                AuthMethod: Constants.AuthMethodMarshalMagicCode, // Not elevated!
+                MarshalId: "marshal-123",
+                EventRoles: new List<EventRoleInfo>()
+            );
+
+            _mockClaimsService
+                .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), It.IsAny<string>()))
+                .ReturnsAsync(marshalClaims);
+
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth("some-token");
+
+            // Act
+            IActionResult result = await _checkInFunctions.AdminCheckIn(httpRequest, "event-123", "assignment-456");
+
+            // Assert
+            result.ShouldBeOfType<ForbidResult>();
+        }
+
+        [TestMethod]
+        public async Task AdminCheckIn_NotEventAdmin_ReturnsForbid()
+        {
+            // Arrange - user is authenticated via email but not an event admin
+            UserClaims nonAdminClaims = new(
+                PersonId: "person-123",
+                PersonName: "Regular User",
+                PersonEmail: "user@example.com",
+                IsSystemAdmin: false,
+                EventId: "event-123",
+                AuthMethod: Constants.AuthMethodSecureEmailLink,
+                MarshalId: null,
+                EventRoles: new List<EventRoleInfo>() // No admin role
+            );
+
+            _mockClaimsService
+                .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), It.IsAny<string>()))
+                .ReturnsAsync(nonAdminClaims);
+
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth("some-token");
+
+            // Act
+            IActionResult result = await _checkInFunctions.AdminCheckIn(httpRequest, "event-123", "assignment-456");
+
+            // Assert
+            result.ShouldBeOfType<ForbidResult>();
+        }
+
         [TestMethod]
         public async Task AdminCheckIn_NotCheckedIn_ChecksIn()
         {
             // Arrange
             string eventId = "event-123";
             string assignmentId = "assignment-456";
+
+            SetupAdminAuth(eventId);
 
             AssignmentEntity assignment = new()
             {
@@ -365,7 +484,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetAsync(eventId, "location-789"))
                 .ReturnsAsync(location);
 
-            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth("valid-token");
 
             // Act
             IActionResult result = await _checkInFunctions.AdminCheckIn(httpRequest, eventId, assignmentId);
@@ -396,6 +515,8 @@ namespace VolunteerCheckin.Functions.Tests
             string eventId = "event-123";
             string assignmentId = "assignment-456";
 
+            SetupAdminAuth(eventId);
+
             AssignmentEntity assignment = new()
             {
                 RowKey = assignmentId,
@@ -421,7 +542,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetAsync(eventId, "location-789"))
                 .ReturnsAsync(location);
 
-            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth("valid-token");
 
             // Act
             IActionResult result = await _checkInFunctions.AdminCheckIn(httpRequest, eventId, assignmentId);
@@ -450,11 +571,13 @@ namespace VolunteerCheckin.Functions.Tests
         public async Task AdminCheckIn_AssignmentNotFound_ReturnsNotFound()
         {
             // Arrange
+            SetupAdminAuth("event-123");
+
             _mockAssignmentRepository
                 .Setup(r => r.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
                 .ReturnsAsync((AssignmentEntity?)null);
 
-            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth("valid-token");
 
             // Act
             IActionResult result = await _checkInFunctions.AdminCheckIn(httpRequest, "event-123", "assignment-456");
@@ -467,6 +590,8 @@ namespace VolunteerCheckin.Functions.Tests
         public async Task AdminCheckIn_LocationNotFound_ReturnsNotFound()
         {
             // Arrange
+            SetupAdminAuth("event-123");
+
             AssignmentEntity assignment = new()
             {
                 RowKey = "assignment-456",
@@ -483,13 +608,67 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
                 .ReturnsAsync((LocationEntity?)null);
 
-            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth("valid-token");
 
             // Act
             IActionResult result = await _checkInFunctions.AdminCheckIn(httpRequest, "event-123", "assignment-456");
 
             // Assert
             result.ShouldBeOfType<NotFoundObjectResult>();
+        }
+
+        [TestMethod]
+        public async Task AdminCheckIn_SystemAdmin_Succeeds()
+        {
+            // Arrange - system admin can check in for any event
+            string eventId = "event-123";
+            string assignmentId = "assignment-456";
+
+            UserClaims systemAdminClaims = new(
+                PersonId: "person-123",
+                PersonName: "System Admin",
+                PersonEmail: "sysadmin@example.com",
+                IsSystemAdmin: true,
+                EventId: eventId,
+                AuthMethod: Constants.AuthMethodSecureEmailLink,
+                MarshalId: null,
+                EventRoles: new List<EventRoleInfo>() // No explicit event admin role needed
+            );
+
+            _mockClaimsService
+                .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), eventId))
+                .ReturnsAsync(systemAdminClaims);
+
+            AssignmentEntity assignment = new()
+            {
+                RowKey = assignmentId,
+                EventId = eventId,
+                LocationId = "location-789",
+                IsCheckedIn = false
+            };
+
+            LocationEntity location = new()
+            {
+                RowKey = "location-789",
+                EventId = eventId,
+                CheckedInCount = 0
+            };
+
+            _mockAssignmentRepository
+                .Setup(r => r.GetAsync(eventId, assignmentId))
+                .ReturnsAsync(assignment);
+
+            _mockLocationRepository
+                .Setup(r => r.GetAsync(eventId, "location-789"))
+                .ReturnsAsync(location);
+
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth("valid-token");
+
+            // Act
+            IActionResult result = await _checkInFunctions.AdminCheckIn(httpRequest, eventId, assignmentId);
+
+            // Assert
+            result.ShouldBeOfType<OkObjectResult>();
         }
 
         #endregion

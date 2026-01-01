@@ -1,11 +1,14 @@
 using Azure.Data.Tables;
 using VolunteerCheckin.Functions.Models;
+using System.Collections.Concurrent;
 
 namespace VolunteerCheckin.Functions.Services;
 
 public class TableStorageService
 {
     private readonly TableServiceClient _tableServiceClient;
+    private readonly ConcurrentDictionary<string, bool> _initializedTables = new();
+
     private const string EventsTable = "Events";
     private const string LocationsTable = "Locations";
     private const string AssignmentsTable = "Assignments";
@@ -20,43 +23,44 @@ public class TableStorageService
     private const string AuthTokensTable = "AuthTokens";
     private const string AuthSessionsTable = "AuthSessions";
     private const string NotesTable = "Notes";
+    private const string PersonEmailIndexTable = "PersonEmailIndex";
 
     public TableStorageService(string connectionString)
     {
         _tableServiceClient = new TableServiceClient(connectionString);
-        InitializeTables().Wait();
+        // Tables are now initialized lazily on first access
     }
 
-    private async Task InitializeTables()
+    /// <summary>
+    /// Gets a table client and ensures the table exists.
+    /// Uses lazy initialization to avoid blocking in constructor.
+    /// </summary>
+    private TableClient GetOrCreateTable(string tableName)
     {
-        await _tableServiceClient.CreateTableIfNotExistsAsync(EventsTable);
-        await _tableServiceClient.CreateTableIfNotExistsAsync(LocationsTable);
-        await _tableServiceClient.CreateTableIfNotExistsAsync(AssignmentsTable);
-        await _tableServiceClient.CreateTableIfNotExistsAsync(AdminUsersTable);
-        await _tableServiceClient.CreateTableIfNotExistsAsync(UserEventMappingsTable);
-        await _tableServiceClient.CreateTableIfNotExistsAsync(MarshalsTable);
-        await _tableServiceClient.CreateTableIfNotExistsAsync(AreasTable);
-        await _tableServiceClient.CreateTableIfNotExistsAsync(ChecklistItemsTable);
-        await _tableServiceClient.CreateTableIfNotExistsAsync(ChecklistCompletionsTable);
-        await _tableServiceClient.CreateTableIfNotExistsAsync(PeopleTable);
-        await _tableServiceClient.CreateTableIfNotExistsAsync(EventRolesTable);
-        await _tableServiceClient.CreateTableIfNotExistsAsync(AuthTokensTable);
-        await _tableServiceClient.CreateTableIfNotExistsAsync(AuthSessionsTable);
-        await _tableServiceClient.CreateTableIfNotExistsAsync(NotesTable);
+        // Check if already initialized to avoid repeated calls
+        if (!_initializedTables.ContainsKey(tableName))
+        {
+            // CreateTableIfNotExists is idempotent and thread-safe
+            _tableServiceClient.CreateTableIfNotExists(tableName);
+            _initializedTables.TryAdd(tableName, true);
+        }
+
+        return _tableServiceClient.GetTableClient(tableName);
     }
 
-    public TableClient GetEventsTable() => _tableServiceClient.GetTableClient(EventsTable);
-    public TableClient GetLocationsTable() => _tableServiceClient.GetTableClient(LocationsTable);
-    public TableClient GetAssignmentsTable() => _tableServiceClient.GetTableClient(AssignmentsTable);
-    public TableClient GetAdminUsersTable() => _tableServiceClient.GetTableClient(AdminUsersTable);
-    public TableClient GetUserEventMappingsTable() => _tableServiceClient.GetTableClient(UserEventMappingsTable);
-    public TableClient GetMarshalsTable() => _tableServiceClient.GetTableClient(MarshalsTable);
-    public TableClient GetAreasTable() => _tableServiceClient.GetTableClient(AreasTable);
-    public TableClient GetChecklistItemsTable() => _tableServiceClient.GetTableClient(ChecklistItemsTable);
-    public TableClient GetChecklistCompletionsTable() => _tableServiceClient.GetTableClient(ChecklistCompletionsTable);
-    public TableClient GetPeopleTable() => _tableServiceClient.GetTableClient(PeopleTable);
-    public TableClient GetEventRolesTable() => _tableServiceClient.GetTableClient(EventRolesTable);
-    public TableClient GetAuthTokensTable() => _tableServiceClient.GetTableClient(AuthTokensTable);
-    public TableClient GetAuthSessionsTable() => _tableServiceClient.GetTableClient(AuthSessionsTable);
-    public TableClient GetNotesTable() => _tableServiceClient.GetTableClient(NotesTable);
+    public TableClient GetEventsTable() => GetOrCreateTable(EventsTable);
+    public TableClient GetLocationsTable() => GetOrCreateTable(LocationsTable);
+    public TableClient GetAssignmentsTable() => GetOrCreateTable(AssignmentsTable);
+    public TableClient GetAdminUsersTable() => GetOrCreateTable(AdminUsersTable);
+    public TableClient GetUserEventMappingsTable() => GetOrCreateTable(UserEventMappingsTable);
+    public TableClient GetMarshalsTable() => GetOrCreateTable(MarshalsTable);
+    public TableClient GetAreasTable() => GetOrCreateTable(AreasTable);
+    public TableClient GetChecklistItemsTable() => GetOrCreateTable(ChecklistItemsTable);
+    public TableClient GetChecklistCompletionsTable() => GetOrCreateTable(ChecklistCompletionsTable);
+    public TableClient GetPeopleTable() => GetOrCreateTable(PeopleTable);
+    public TableClient GetEventRolesTable() => GetOrCreateTable(EventRolesTable);
+    public TableClient GetAuthTokensTable() => GetOrCreateTable(AuthTokensTable);
+    public TableClient GetAuthSessionsTable() => GetOrCreateTable(AuthSessionsTable);
+    public TableClient GetNotesTable() => GetOrCreateTable(NotesTable);
+    public TableClient GetPersonEmailIndexTable() => GetOrCreateTable(PersonEmailIndexTable);
 }

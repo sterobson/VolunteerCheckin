@@ -9,50 +9,10 @@
   >
     <!-- Tabs in header -->
     <template #tab-header>
-      <div class="tabs">
-        <button
-          class="tab-button"
-          :class="{ active: activeTab === 'details' }"
-          @click="activeTab = 'details'"
-          type="button"
-        >
-          Details
-        </button>
-        <button
-          class="tab-button"
-          :class="{ active: activeTab === 'boundary' }"
-          @click="activeTab = 'boundary'"
-          type="button"
-        >
-          Boundary
-        </button>
-        <button
-          class="tab-button"
-          :class="{ active: activeTab === 'contacts' }"
-          @click="activeTab = 'contacts'"
-          type="button"
-        >
-          Contacts
-        </button>
-        <button
-          v-if="area && area.id"
-          class="tab-button"
-          :class="{ active: activeTab === 'checkpoints' }"
-          @click="activeTab = 'checkpoints'"
-          type="button"
-        >
-          Checkpoints
-        </button>
-        <button
-          v-if="area && area.id"
-          class="tab-button"
-          :class="{ active: activeTab === 'checklist' }"
-          @click="activeTab = 'checklist'"
-          type="button"
-        >
-          Checklist
-        </button>
-      </div>
+      <TabHeader
+        v-model="activeTab"
+        :tabs="availableTabs"
+      />
     </template>
 
     <!-- Details Tab -->
@@ -243,6 +203,17 @@
       @change="handleChecklistChange"
     />
 
+    <!-- Notes Tab -->
+    <NotesView
+      v-if="activeTab === 'notes'"
+      :event-id="eventId"
+      :area-id="area?.id"
+      :all-notes="notes"
+      :locations="allLocations"
+      :areas="areas"
+      :assignments="assignments"
+    />
+
     <!-- Custom footer with left and right aligned buttons -->
     <template #footer>
       <div class="custom-footer">
@@ -276,8 +247,10 @@
 <script setup>
 import { ref, computed, defineProps, defineEmits, watch } from 'vue';
 import BaseModal from '../../BaseModal.vue';
+import TabHeader from '../../TabHeader.vue';
 import MarshalSelectorModal from './MarshalSelectorModal.vue';
 import CheckpointChecklistView from '../../CheckpointChecklistView.vue';
+import NotesView from '../../NotesView.vue';
 import { AREA_COLORS, DEFAULT_AREA_COLOR, getNextAvailableColor } from '../../../constants/areaColors';
 import { checklistApi } from '../../../services/api';
 
@@ -318,6 +291,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  notes: {
+    type: Array,
+    default: () => [],
+  },
 });
 
 const emit = defineEmits([
@@ -344,6 +321,26 @@ const form = ref({
   isDefault: false,
   polygon: [],
   contacts: [],
+});
+
+// Compute available tabs based on whether we're editing or creating
+const availableTabs = computed(() => {
+  const baseTabs = [
+    { value: 'details', label: 'Details', icon: 'details' },
+    { value: 'boundary', label: 'Boundary', icon: 'area' },
+    { value: 'contacts', label: 'Contacts', icon: 'marshal' },
+  ];
+
+  if (props.area && props.area.id) {
+    return [
+      ...baseTabs,
+      { value: 'checkpoints', label: 'Checkpoints', icon: 'checkpoint' },
+      { value: 'checklist', label: 'Checklist', icon: 'checklist' },
+      { value: 'notes', label: 'Notes', icon: 'notes' },
+    ];
+  }
+
+  return baseTabs;
 });
 
 // Compute assignments for checkpoints in this area
@@ -589,33 +586,6 @@ const handleClose = () => {
 </script>
 
 <style scoped>
-.tabs {
-  display: flex;
-  gap: 0.5rem;
-  padding: 0.5rem 0;
-}
-
-.tab-button {
-  padding: 0.5rem 1rem;
-  border: none;
-  background: transparent;
-  color: #666;
-  cursor: pointer;
-  font-size: 0.9rem;
-  border-bottom: 2px solid transparent;
-  transition: all 0.2s;
-}
-
-.tab-button:hover {
-  color: #333;
-}
-
-.tab-button.active {
-  color: #007bff;
-  border-bottom-color: #007bff;
-  font-weight: 500;
-}
-
 .tab-content {
   padding-top: 0.5rem;
 }

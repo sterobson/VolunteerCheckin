@@ -1,7 +1,7 @@
 <template>
   <div class="scope-configuration-editor">
     <div class="editor-header">
-      <h4>Who can see and complete this item?</h4>
+      <h4>{{ headerText }}</h4>
     </div>
 
     <div class="scope-types-list">
@@ -169,6 +169,14 @@ const props = defineProps({
   isEditing: {
     type: Boolean,
     default: false
+  },
+  excludeScopes: {
+    type: Array,
+    default: () => []
+  },
+  headerText: {
+    type: String,
+    default: 'Who can see and complete this item?'
   }
 });
 
@@ -205,23 +213,28 @@ const showAllScopes = ref(!props.isEditing);
 let isInitializing = true;
 let isSyncingFromParent = false;
 
+// Filter out excluded scopes
+const availableScopeTypes = computed(() => {
+  return scopeTypes.filter(st => !props.excludeScopes.includes(st.scope));
+});
+
 // Computed properties for collapsible scope list
 const displayedScopeTypes = computed(() => {
   if (showAllScopes.value) {
-    return scopeTypes;
+    return availableScopeTypes.value;
   }
   // Only show scopes that are active (have values)
-  return scopeTypes.filter(st => isScopeActive(st.scope));
+  return availableScopeTypes.value.filter(st => isScopeActive(st.scope));
 });
 
 const hasHiddenScopes = computed(() => {
-  const activeCount = scopeTypes.filter(st => isScopeActive(st.scope)).length;
-  return activeCount < scopeTypes.length;
+  const activeCount = availableScopeTypes.value.filter(st => isScopeActive(st.scope)).length;
+  return activeCount < availableScopeTypes.value.length;
 });
 
 const hiddenScopeCount = computed(() => {
-  const activeCount = scopeTypes.filter(st => isScopeActive(st.scope)).length;
-  return scopeTypes.length - activeCount;
+  const activeCount = availableScopeTypes.value.filter(st => isScopeActive(st.scope)).length;
+  return availableScopeTypes.value.length - activeCount;
 });
 
 // Initialize from modelValue

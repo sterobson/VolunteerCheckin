@@ -1,10 +1,10 @@
 <template>
   <div class="marshals-tab">
     <div class="marshals-tab-header">
-      <h2>Marshals management</h2>
+      <h2>{{ terms.people }} management</h2>
       <div class="button-group">
         <button @click="$emit('add-marshal')" class="btn btn-primary">
-          Add marshal
+          Add {{ terms.person.toLowerCase() }}
         </button>
         <button @click="$emit('import-marshals')" class="btn btn-secondary">
           Import CSV
@@ -23,7 +23,7 @@
               </span>
             </th>
             <th @click="changeSortColumn('checkpoint')" class="sortable">
-              Checkpoint
+              {{ terms.checkpoint }}
               <span class="sort-indicator" v-if="sortBy === 'checkpoint'">
                 {{ sortOrder === 'asc' ? '▲' : '▼' }}
               </span>
@@ -80,7 +80,7 @@
             </template>
             <tr v-else class="marshal-row" @click="$emit('select-marshal', marshal)">
               <td>{{ marshal.name }}</td>
-              <td style="color: #999; font-style: italic;">No checkpoint assigned</td>
+              <td style="color: #999; font-style: italic;">No {{ terms.checkpoint.toLowerCase() }} assigned</td>
               <td>
                 <span class="hide-on-mobile">-</span>
                 <span class="status-icon show-on-mobile" style="color: #999;">-</span>
@@ -107,6 +107,9 @@
 import { ref, computed, defineProps, defineEmits } from 'vue';
 import { sortAlphanumeric } from '../../utils/sortingHelpers';
 import { getStatusIcon } from '../../utils/statusHelpers';
+import { useTerminology } from '../../composables/useTerminology';
+
+const { terms } = useTerminology();
 
 const props = defineProps({
   marshals: {

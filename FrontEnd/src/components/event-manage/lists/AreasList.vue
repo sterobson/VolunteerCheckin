@@ -1,9 +1,9 @@
 <template>
   <div>
-    <h3>Areas ({{ areas.length }})</h3>
+    <h3>{{ terms.areas }} ({{ areas.length }})</h3>
     <div class="button-group">
       <button @click="$emit('add-area')" class="btn btn-small btn-primary">
-        Add area
+        Add {{ terms.area.toLowerCase() }}
       </button>
     </div>
 
@@ -25,7 +25,7 @@
           </p>
           <div class="area-stats">
             <span class="stat-badge">
-              {{ getCheckpointCount(area) }} checkpoint{{ getCheckpointCount(area) === 1 ? '' : 's' }}
+              {{ formatCount('checkpoint', getCheckpointCount(area)) }}
             </span>
             <span class="stat-badge">
               {{ getContactCount(area) }} contact{{ getContactCount(area) === 1 ? '' : 's' }}
@@ -35,7 +35,7 @@
       </div>
 
       <div v-if="areas.length === 0" class="empty-state">
-        <p>No areas yet. Click "Add area" to create one.</p>
+        <p>No {{ terms.areas.toLowerCase() }} yet. Click "Add {{ terms.area.toLowerCase() }}" to create one.</p>
       </div>
     </div>
   </div>
@@ -44,6 +44,9 @@
 <script setup>
 import { defineProps, defineEmits, computed } from 'vue';
 import { alphanumericCompare } from '../../../utils/sortUtils';
+import { useTerminology } from '../../../composables/useTerminology';
+
+const { terms, formatCount } = useTerminology();
 
 const props = defineProps({
   areas: {

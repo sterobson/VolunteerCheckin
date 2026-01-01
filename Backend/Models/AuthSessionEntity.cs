@@ -16,9 +16,9 @@ public class AuthSessionEntity : ITableEntity
     public string PartitionKey { get; set; } = "SESSION";
 
     /// <summary>
-    /// Row key: SessionId (GUID)
+    /// Row key: SessionTokenHash (enables O(1) lookup by token)
     /// </summary>
-    public string RowKey { get; set; } = Guid.NewGuid().ToString();
+    public string RowKey { get; set; } = string.Empty;
 
     public DateTimeOffset? Timestamp { get; set; }
     public ETag ETag { get; set; }

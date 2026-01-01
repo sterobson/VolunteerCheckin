@@ -16,33 +16,30 @@ public class TableStorageAuthTokenRepository : IAuthTokenRepository
 
     public async Task<AuthTokenEntity> AddAsync(AuthTokenEntity token)
     {
+        // Ensure RowKey is set to TokenHash for O(1) lookup
+        if (string.IsNullOrEmpty(token.RowKey))
+        {
+            token.RowKey = token.TokenHash;
+        }
         await _table.AddEntityAsync(token);
         return token;
     }
 
-    public async Task<AuthTokenEntity?> GetAsync(string tokenId)
+    /// <summary>
+    /// Get token by hash using O(1) direct lookup.
+    /// TokenHash is used as the RowKey for efficient retrieval.
+    /// </summary>
+    public async Task<AuthTokenEntity?> GetByTokenHashAsync(string tokenHash)
     {
         try
         {
-            Response<AuthTokenEntity> response = await _table.GetEntityAsync<AuthTokenEntity>("AUTHTOKEN", tokenId);
+            Response<AuthTokenEntity> response = await _table.GetEntityAsync<AuthTokenEntity>("AUTHTOKEN", tokenHash);
             return response.Value;
         }
         catch (RequestFailedException ex) when (ex.Status == 404)
         {
             return null;
         }
-    }
-
-    public async Task<AuthTokenEntity?> GetByTokenHashAsync(string tokenHash)
-    {
-        await foreach (AuthTokenEntity token in _table.QueryAsync<AuthTokenEntity>(t => t.PartitionKey == "AUTHTOKEN"))
-        {
-            if (token.TokenHash == tokenHash)
-            {
-                return token;
-            }
-        }
-        return null;
     }
 
     public async Task<IEnumerable<AuthTokenEntity>> GetByPersonAsync(string personId)
@@ -63,9 +60,9 @@ public class TableStorageAuthTokenRepository : IAuthTokenRepository
         await _table.UpdateEntityAsync(token, token.ETag);
     }
 
-    public async Task DeleteAsync(string tokenId)
+    public async Task DeleteAsync(string tokenHash)
     {
-        await _table.DeleteEntityAsync("AUTHTOKEN", tokenId);
+        await _table.DeleteEntityAsync("AUTHTOKEN", tokenHash);
     }
 
     public async Task DeleteExpiredTokensAsync()

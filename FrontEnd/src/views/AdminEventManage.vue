@@ -22,14 +22,7 @@
       <!-- Tabs Navigation -->
       <div class="tabs-nav">
         <ResponsiveTabHeader
-          :tabs="[
-            { value: 'course', label: 'Course' },
-            { value: 'checkpoints', label: 'Checkpoints' },
-            { value: 'areas', label: 'Areas' },
-            { value: 'marshals', label: 'Marshals' },
-            { value: 'checklists', label: 'Checklists' },
-            { value: 'details', label: 'Event details' }
-          ]"
+          :tabs="mainTabs"
           :model-value="activeTab"
           @update:model-value="switchTab"
         />
@@ -102,6 +95,16 @@
           @select-checklist-item="handleSelectChecklistItem"
         />
 
+        <NotesTab
+          v-if="activeTab === 'notes'"
+          :notes="notes"
+          :areas="areas"
+          :locations="locationStatuses"
+          :marshals="marshals"
+          @add-note="handleAddNote"
+          @select-note="handleSelectNote"
+        />
+
         <EventDetailsTab
           v-if="activeTab === 'details'"
           :event-data="eventDetailsForm"
@@ -135,6 +138,7 @@
       :areas="areas"
       :event-id="route.params.eventId"
       :all-locations="locationStatuses"
+      :notes="notes"
       :isDirty="formDirty"
       @close="closeEditLocationModal"
       @save="handleUpdateLocation"
@@ -190,6 +194,7 @@
       :allLocations="locationStatuses"
       :areas="areas"
       :isEditing="!!selectedMarshal"
+      :eventNotes="notes"
       :isDirty="formDirty"
       @close="closeEditMarshalModal"
       @save="handleSaveMarshal"
@@ -245,6 +250,7 @@
       :event-id="route.params.eventId"
       :all-locations="locationStatuses"
       :assignments="allAssignments"
+      :notes="notes"
       @close="closeEditAreaModal"
       @save="handleSaveArea"
       @delete="handleDeleteArea"
@@ -264,6 +270,20 @@
       @close="closeEditChecklistItemModal"
       @save="handleSaveChecklistItem"
       @delete="handleDeleteChecklistItem"
+      @update:isDirty="markFormDirty"
+    />
+
+    <EditNoteModal
+      :show="showEditNote"
+      :note="selectedNote"
+      :initial-tab="noteInitialTab"
+      :areas="areas"
+      :locations="locationStatuses"
+      :marshals="marshals"
+      :isDirty="formDirty"
+      @close="closeEditNoteModal"
+      @save="handleSaveNote"
+      @delete="handleDeleteNote"
       @update:isDirty="markFormDirty"
     />
 
@@ -314,11 +334,12 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useEventsStore } from '../stores/events';
-import { authApi, checkInApi, eventAdminsApi, eventsApi, locationsApi, marshalsApi, areasApi, checklistApi } from '../services/api';
+import { authApi, checkInApi, eventAdminsApi, eventsApi, locationsApi, marshalsApi, areasApi, checklistApi, notesApi } from '../services/api';
 
 // New composables and utilities
 import { useTabs } from '../composables/useTabs';
 import { useConfirmDialog } from '../composables/useConfirmDialog';
+import { setTerminology, useTerminology } from '../composables/useTerminology';
 import { formatDate as formatEventDate, formatDateForInput } from '../utils/dateFormatters';
 import { isValidWhat3Words } from '../utils/validators';
 import { calculateDistance } from '../utils/coordinateUtils';
@@ -329,6 +350,7 @@ import { CHECK_IN_RADIUS_METERS } from '../constants/app';
 import CourseAreasTab from './AdminEventManage/CourseAreasTab.vue';
 import MarshalsTab from './AdminEventManage/MarshalsTab.vue';
 import ChecklistsTab from './AdminEventManage/ChecklistsTab.vue';
+import NotesTab from './AdminEventManage/NotesTab.vue';
 import EventDetailsTab from './AdminEventManage/EventDetailsTab.vue';
 import CheckpointsList from '../components/event-manage/lists/CheckpointsList.vue';
 import AreasList from '../components/event-manage/lists/AreasList.vue';
@@ -347,6 +369,7 @@ import AssignMarshalModal from '../components/event-manage/modals/AssignMarshalM
 import ShiftCheckpointTimesModal from '../components/event-manage/modals/ShiftCheckpointTimesModal.vue';
 import EditAreaModal from '../components/event-manage/modals/EditAreaModal.vue';
 import EditChecklistItemModal from '../components/event-manage/modals/EditChecklistItemModal.vue';
+import EditNoteModal from '../components/event-manage/modals/EditNoteModal.vue';
 import InfoModal from '../components/InfoModal.vue';
 import ConfirmModal from '../components/ConfirmModal.vue';
 import FullscreenMapOverlay from '../components/FullscreenMapOverlay.vue';
@@ -357,7 +380,7 @@ const router = useRouter();
 const eventsStore = useEventsStore();
 
 // Use composables
-const { activeTab, switchTab } = useTabs('course', ['course', 'checkpoints', 'areas', 'marshals', 'checklists', 'details']);
+const { activeTab, switchTab } = useTabs('course', ['course', 'checkpoints', 'areas', 'marshals', 'checklists', 'notes', 'details']);
 const {
   showConfirmModal,
   confirmModalTitle,
@@ -366,6 +389,20 @@ const {
   handleConfirmModalConfirm,
   handleConfirmModalCancel,
 } = useConfirmDialog();
+
+// Terminology
+const { tabLabels } = useTerminology();
+
+// Computed tabs with dynamic labels from terminology
+const mainTabs = computed(() => [
+  { value: 'course', label: 'Course', icon: 'course' },
+  { value: 'checkpoints', label: tabLabels.value.checkpoints, icon: 'checkpoint' },
+  { value: 'areas', label: tabLabels.value.areas, icon: 'area' },
+  { value: 'marshals', label: tabLabels.value.marshals, icon: 'marshal' },
+  { value: 'checklists', label: tabLabels.value.checklists, icon: 'checklist' },
+  { value: 'notes', label: 'Notes', icon: 'notes' },
+  { value: 'details', label: 'Event details', icon: 'details' },
+]);
 
 // State
 const event = ref(null);
@@ -465,6 +502,10 @@ const selectedChecklistItem = ref(null);
 const showEditChecklistItem = ref(false);
 const checklistItemInitialTab = ref('details');
 const checklistCompletionReport = ref(null);
+const notes = ref([]);
+const selectedNote = ref(null);
+const showEditNote = ref(false);
+const noteInitialTab = ref('details');
 const userClaims = ref(null);
 
 // Mode switching
@@ -616,8 +657,13 @@ const markEventDetailsFormDirty = () => {
   eventDetailsFormDirty.value = true;
 };
 
-const handleUpdateEvent = async () => {
+const handleUpdateEvent = async (formData) => {
   try {
+    // Update the parent's form with the child's data
+    if (formData) {
+      eventDetailsForm.value = { ...formData };
+    }
+
     const oldEventDate = event.value.eventDate;
     const newEventDate = eventDetailsForm.value.eventDate;
 
@@ -707,8 +753,14 @@ const loadEventData = async () => {
         description: event.value.description || '',
         eventDate: formatDateForInput(event.value.eventDate),
         timeZoneId: event.value.timeZoneId || 'UTC',
+        peopleTerm: event.value.peopleTerm || 'Marshals',
+        checkpointTerm: event.value.checkpointTerm || 'Checkpoints',
+        areaTerm: event.value.areaTerm || 'Areas',
+        checklistTerm: event.value.checklistTerm || 'Checklists',
       };
       eventDetailsFormDirty.value = false;
+      // Update global terminology settings
+      setTerminology(event.value);
     }
 
     await eventsStore.fetchLocations(route.params.eventId);
@@ -721,6 +773,7 @@ const loadEventData = async () => {
     await loadMarshals();
     await loadAreas();
     await loadChecklists();
+    await loadNotes();
   } catch (error) {
     console.error('Failed to load event data:', error);
   }
@@ -754,6 +807,15 @@ const loadChecklists = async () => {
     checklistCompletionReport.value = reportResponse.data;
   } catch (error) {
     console.error('Failed to load checklists:', error);
+  }
+};
+
+const loadNotes = async () => {
+  try {
+    const response = await notesApi.getByEvent(route.params.eventId);
+    notes.value = response.data;
+  } catch (error) {
+    console.error('Failed to load notes:', error);
   }
 };
 
@@ -900,6 +962,57 @@ const handleDeleteChecklistItem = async (itemId) => {
 const closeEditChecklistItemModal = () => {
   showEditChecklistItem.value = false;
   selectedChecklistItem.value = null;
+  formDirty.value = false;
+};
+
+// Notes handlers
+const handleAddNote = () => {
+  selectedNote.value = null;
+  noteInitialTab.value = 'details';
+  formDirty.value = false;
+  showEditNote.value = true;
+};
+
+const handleSelectNote = (note) => {
+  selectedNote.value = note;
+  noteInitialTab.value = 'details';
+  formDirty.value = false;
+  showEditNote.value = true;
+};
+
+const handleSaveNote = async (formData) => {
+  try {
+    if (selectedNote.value && selectedNote.value.noteId) {
+      await notesApi.update(route.params.eventId, selectedNote.value.noteId, formData);
+    } else {
+      await notesApi.create(route.params.eventId, formData);
+    }
+
+    await loadNotes();
+    closeEditNoteModal();
+  } catch (error) {
+    console.error('Failed to save note:', error);
+    const errorMessage = error.response?.data?.message || 'Failed to save note. Please try again.';
+    alert(errorMessage);
+  }
+};
+
+const handleDeleteNote = async (noteId) => {
+  showConfirm('Delete Note', 'Are you sure you want to delete this note?', async () => {
+    try {
+      await notesApi.delete(route.params.eventId, noteId);
+      await loadNotes();
+      closeEditNoteModal();
+    } catch (error) {
+      console.error('Failed to delete note:', error);
+      alert(error.response?.data?.message || 'Failed to delete note. Please try again.');
+    }
+  });
+};
+
+const closeEditNoteModal = () => {
+  showEditNote.value = false;
+  selectedNote.value = null;
   formDirty.value = false;
 };
 

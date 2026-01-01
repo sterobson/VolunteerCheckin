@@ -12,10 +12,11 @@
       <TabHeader
         v-model="activeTab"
         :tabs="[
-          { value: 'details', label: 'Details' },
-          { value: 'location', label: 'Location' },
-          { value: 'marshals', label: 'Marshals' },
-          { value: 'checklist', label: 'Checklist' }
+          { value: 'details', label: 'Details', icon: 'details' },
+          { value: 'location', label: 'Location', icon: 'location' },
+          { value: 'marshals', label: 'Marshals', icon: 'marshal' },
+          { value: 'checklist', label: 'Checklist', icon: 'checklist' },
+          { value: 'notes', label: 'Notes', icon: 'notes' }
         ]"
       />
     </template>
@@ -67,6 +68,17 @@
       @change="handleChecklistChange"
     />
 
+    <!-- Notes Tab -->
+    <NotesView
+      v-if="activeTab === 'notes'"
+      :event-id="eventId"
+      :location-id="location?.id"
+      :all-notes="notes"
+      :locations="allLocations"
+      :areas="areas"
+      :assignments="assignments"
+    />
+
     <!-- Custom footer with left and right aligned buttons -->
     <template #footer>
       <div class="custom-footer">
@@ -93,7 +105,11 @@ import LocationDetailsTab from '../tabs/LocationDetailsTab.vue';
 import LocationCoordinatesTab from '../tabs/LocationCoordinatesTab.vue';
 import LocationAssignmentsTab from '../tabs/LocationAssignmentsTab.vue';
 import CheckpointChecklistView from '../../CheckpointChecklistView.vue';
+import NotesView from '../../NotesView.vue';
 import { formatDateForInput } from '../../../utils/dateFormatters';
+import { useTerminology } from '../../../composables/useTerminology';
+
+const { terms, termsLower } = useTerminology();
 
 const props = defineProps({
   show: {
@@ -125,6 +141,10 @@ const props = defineProps({
     required: true,
   },
   allLocations: {
+    type: Array,
+    default: () => [],
+  },
+  notes: {
     type: Array,
     default: () => [],
   },

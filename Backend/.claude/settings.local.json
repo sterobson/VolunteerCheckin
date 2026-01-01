@@ -14,7 +14,14 @@
       "Bash(move CHECKLIST_API_DOCUMENTATION.md DocumentationAPIChecklists.md)",
       "Bash(move NOTES_API_DOCUMENTATION.md DocumentationAPINotes.md)",
       "Bash(move AUTHENTICATION.md DocumentationArchitectureAuthentication.md)",
-      "Bash(move:*)"
+      "Bash(move:*)",
+      "Bash($env:RUN_PERFORMANCE_TESTS=\"true\")",
+      "Bash(cmd /c \"set RUN_PERFORMANCE_TESTS=true && dotnet test --no-build --filter TestCategory=Performance --logger console;verbosity=detailed\")",
+      "Bash(powershell -Command:*)",
+      "Bash(dotnet tool list:*)",
+      "Bash(findstr:*)",
+      "Bash(del \"C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\Backend\\\\QueryAdmins.csx\")",
+      "Bash(del \"C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\Backend\\\\VolunteerCheckin.Functions.Tests\\\\AdminQueryTests.cs\")"
     ]
   }
 }

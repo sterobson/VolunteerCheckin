@@ -12,7 +12,24 @@ public record CreateEventRequest(
     DateTime EventDate,
     string TimeZoneId,
     string AdminEmail,
-    List<EmergencyContact> EmergencyContacts
+    List<EmergencyContact> EmergencyContacts,
+    // Terminology settings (optional, defaults will be used if not provided)
+    string? PeopleTerm = null,
+    string? CheckpointTerm = null,
+    string? AreaTerm = null,
+    string? ChecklistTerm = null
+);
+
+public record UpdateEventRequest(
+    string Name,
+    string Description,
+    DateTime EventDate,
+    string TimeZoneId,
+    // Terminology settings (optional, keeps existing values if not provided)
+    string? PeopleTerm = null,
+    string? CheckpointTerm = null,
+    string? AreaTerm = null,
+    string? ChecklistTerm = null
 );
 
 public record RoutePoint(
@@ -30,7 +47,12 @@ public record EventResponse(
     List<EmergencyContact> EmergencyContacts,
     List<RoutePoint> Route,
     bool IsActive,
-    DateTime CreatedDate
+    DateTime CreatedDate,
+    // Terminology settings
+    string PeopleTerm,
+    string CheckpointTerm,
+    string AreaTerm,
+    string ChecklistTerm
 );
 
 public record CreateLocationRequest(

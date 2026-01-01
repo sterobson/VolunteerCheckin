@@ -196,6 +196,7 @@ public class AreaFunctions
         {
             (UpdateAreaRequest? request, IActionResult? error) = await FunctionHelpers.TryDeserializeRequestAsync<UpdateAreaRequest>(req);
             if (error != null) return error;
+            if (request == null) return new BadRequestObjectResult(new { message = "Request body is required" });
 
             AreaEntity? areaEntity = await _areaRepository.GetAsync(eventId, areaId);
 
@@ -205,7 +206,7 @@ public class AreaFunctions
             }
 
             // Prevent renaming default area
-            if (areaEntity.IsDefault && request!.Name != Constants.DefaultAreaName)
+            if (areaEntity.IsDefault && request.Name != Constants.DefaultAreaName)
             {
                 return new BadRequestObjectResult(new { message = "Cannot rename default area" });
             }

@@ -139,7 +139,14 @@ public class NoteFunctions
             }
 
             IEnumerable<NoteEntity> notes = await _noteRepository.GetByEventAsync(eventId);
-            List<NoteResponse> responses = notes.Select(ToNoteResponse).ToList();
+
+            // Build a lookup of current marshal names by PersonId
+            IEnumerable<MarshalEntity> marshals = await _marshalRepository.GetByEventAsync(eventId);
+            Dictionary<string, string> personNameLookup = marshals
+                .Where(m => !string.IsNullOrEmpty(m.PersonId))
+                .ToDictionary(m => m.PersonId, m => m.Name);
+
+            List<NoteResponse> responses = notes.Select(n => ToNoteResponse(n, personNameLookup)).ToList();
 
             return new OkObjectResult(responses);
         }
@@ -175,7 +182,13 @@ public class NoteFunctions
                 return new NotFoundObjectResult(new { message = Constants.ErrorNoteNotFound });
             }
 
-            return new OkObjectResult(ToNoteResponse(note));
+            // Build a lookup of current marshal names by PersonId
+            IEnumerable<MarshalEntity> marshals = await _marshalRepository.GetByEventAsync(eventId);
+            Dictionary<string, string> personNameLookup = marshals
+                .Where(m => !string.IsNullOrEmpty(m.PersonId))
+                .ToDictionary(m => m.PersonId, m => m.Name);
+
+            return new OkObjectResult(ToNoteResponse(note, personNameLookup));
         }
         catch (Exception ex)
         {
@@ -248,7 +261,13 @@ public class NoteFunctions
 
             _logger.LogInformation("Note {NoteId} updated for event {EventId} by {PersonId}", noteId, eventId, claims.PersonId);
 
-            return new OkObjectResult(ToNoteResponse(note));
+            // Build a lookup of current marshal names by PersonId
+            IEnumerable<MarshalEntity> marshals = await _marshalRepository.GetByEventAsync(eventId);
+            Dictionary<string, string> personNameLookup = marshals
+                .Where(m => !string.IsNullOrEmpty(m.PersonId))
+                .ToDictionary(m => m.PersonId, m => m.Name);
+
+            return new OkObjectResult(ToNoteResponse(note, personNameLookup));
         }
         catch (Exception ex)
         {
@@ -320,6 +339,12 @@ public class NoteFunctions
             // Build checkpoint lookup for scope evaluation
             Dictionary<string, LocationEntity> checkpointLookup = await BuildCheckpointLookupAsync(eventId);
 
+            // Build a lookup of current marshal names by PersonId
+            IEnumerable<MarshalEntity> marshals = await _marshalRepository.GetByEventAsync(eventId);
+            Dictionary<string, string> personNameLookup = marshals
+                .Where(m => !string.IsNullOrEmpty(m.PersonId))
+                .ToDictionary(m => m.PersonId, m => m.Name);
+
             // Filter notes based on scope
             List<NoteForMarshalResponse> relevantNotes = [];
             foreach (NoteEntity note in allNotes)
@@ -332,6 +357,15 @@ public class NoteFunctions
 
                 if (result.IsRelevant)
                 {
+                    // Look up current name
+                    string createdByName = note.CreatedByName;
+                    if (!string.IsNullOrEmpty(note.CreatedByPersonId) &&
+                        personNameLookup.TryGetValue(note.CreatedByPersonId, out string? currentName) &&
+                        !string.IsNullOrEmpty(currentName))
+                    {
+                        createdByName = currentName;
+                    }
+
                     relevantNotes.Add(new NoteForMarshalResponse(
                         NoteId: note.NoteId,
                         EventId: note.EventId,
@@ -341,7 +375,7 @@ public class NoteFunctions
                         Category: string.IsNullOrEmpty(note.Category) ? null : note.Category,
                         IsPinned: note.IsPinned,
                         CreatedAt: note.CreatedAt,
-                        CreatedByName: note.CreatedByName,
+                        CreatedByName: createdByName,
                         MatchedScope: result.WinningConfig?.Scope ?? string.Empty
                     ));
                 }
@@ -388,18 +422,37 @@ public class NoteFunctions
                 if (claims.IsEventAdmin)
                 {
                     IEnumerable<NoteEntity> allNotes = await _noteRepository.GetByEventAsync(eventId);
-                    List<NoteForMarshalResponse> allNotesResponse = allNotes.Select(n => new NoteForMarshalResponse(
-                        NoteId: n.NoteId,
-                        EventId: n.EventId,
-                        Title: n.Title,
-                        Content: n.Content,
-                        Priority: n.Priority,
-                        Category: string.IsNullOrEmpty(n.Category) ? null : n.Category,
-                        IsPinned: n.IsPinned,
-                        CreatedAt: n.CreatedAt,
-                        CreatedByName: n.CreatedByName,
-                        MatchedScope: "Admin"
-                    )).ToList();
+
+                    // Build a lookup of current marshal names by PersonId
+                    IEnumerable<MarshalEntity> marshals = await _marshalRepository.GetByEventAsync(eventId);
+                    Dictionary<string, string> personNameLookup = marshals
+                        .Where(m => !string.IsNullOrEmpty(m.PersonId))
+                        .ToDictionary(m => m.PersonId, m => m.Name);
+
+                    List<NoteForMarshalResponse> allNotesResponse = allNotes.Select(n =>
+                    {
+                        // Look up current name
+                        string createdByName = n.CreatedByName;
+                        if (!string.IsNullOrEmpty(n.CreatedByPersonId) &&
+                            personNameLookup.TryGetValue(n.CreatedByPersonId, out string? currentName) &&
+                            !string.IsNullOrEmpty(currentName))
+                        {
+                            createdByName = currentName;
+                        }
+
+                        return new NoteForMarshalResponse(
+                            NoteId: n.NoteId,
+                            EventId: n.EventId,
+                            Title: n.Title,
+                            Content: n.Content,
+                            Priority: n.Priority,
+                            Category: string.IsNullOrEmpty(n.Category) ? null : n.Category,
+                            IsPinned: n.IsPinned,
+                            CreatedAt: n.CreatedAt,
+                            CreatedByName: createdByName,
+                            MatchedScope: "Admin"
+                        );
+                    }).ToList();
                     return new OkObjectResult(allNotesResponse);
                 }
 
@@ -507,10 +560,27 @@ public class NoteFunctions
         return checkpoints.ToDictionary(c => c.RowKey);
     }
 
-    private static NoteResponse ToNoteResponse(NoteEntity note)
+    private static NoteResponse ToNoteResponse(NoteEntity note, Dictionary<string, string>? personNameLookup = null)
     {
         List<ScopeConfiguration> configs = JsonSerializer.Deserialize<List<ScopeConfiguration>>(
             note.ScopeConfigurationsJson) ?? [];
+
+        // Look up current name if lookup is provided, otherwise fall back to stored name
+        string createdByName = note.CreatedByName;
+        if (personNameLookup != null && !string.IsNullOrEmpty(note.CreatedByPersonId) &&
+            personNameLookup.TryGetValue(note.CreatedByPersonId, out string? currentName) &&
+            !string.IsNullOrEmpty(currentName))
+        {
+            createdByName = currentName;
+        }
+
+        string? updatedByName = note.UpdatedByName;
+        if (personNameLookup != null && !string.IsNullOrEmpty(note.UpdatedByPersonId) &&
+            personNameLookup.TryGetValue(note.UpdatedByPersonId, out string? currentUpdaterName) &&
+            !string.IsNullOrEmpty(currentUpdaterName))
+        {
+            updatedByName = currentUpdaterName;
+        }
 
         return new NoteResponse(
             NoteId: note.NoteId,
@@ -523,10 +593,10 @@ public class NoteFunctions
             Category: string.IsNullOrEmpty(note.Category) ? null : note.Category,
             IsPinned: note.IsPinned,
             CreatedByPersonId: note.CreatedByPersonId,
-            CreatedByName: note.CreatedByName,
+            CreatedByName: createdByName,
             CreatedAt: note.CreatedAt,
             UpdatedByPersonId: note.UpdatedByPersonId,
-            UpdatedByName: note.UpdatedByName,
+            UpdatedByName: updatedByName,
             UpdatedAt: note.UpdatedAt
         );
     }

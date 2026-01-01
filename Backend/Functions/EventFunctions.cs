@@ -20,6 +20,7 @@ public class EventFunctions
     private readonly IPersonRepository _personRepository;
     private readonly IEventRoleRepository _eventRoleRepository;
     private readonly GpxParserService _gpxParser;
+    private readonly ClaimsService _claimsService;
 
     public EventFunctions(
         ILogger<EventFunctions> logger,
@@ -27,7 +28,8 @@ public class EventFunctions
         IUserEventMappingRepository userEventMappingRepository,
         IPersonRepository personRepository,
         IEventRoleRepository eventRoleRepository,
-        GpxParserService gpxParser)
+        GpxParserService gpxParser,
+        ClaimsService claimsService)
     {
         _logger = logger;
         _eventRepository = eventRepository;
@@ -35,6 +37,7 @@ public class EventFunctions
         _personRepository = personRepository;
         _eventRoleRepository = eventRoleRepository;
         _gpxParser = gpxParser;
+        _claimsService = claimsService;
     }
 
     private async Task<bool> IsUserAuthorizedForEvent(string eventId, string userEmail)
@@ -69,7 +72,12 @@ public class EventFunctions
                 EventDate = eventDateUtc,
                 TimeZoneId = request.TimeZoneId,
                 AdminEmail = request.AdminEmail,
-                EmergencyContactsJson = JsonSerializer.Serialize(request.EmergencyContacts ?? [])
+                EmergencyContactsJson = JsonSerializer.Serialize(request.EmergencyContacts ?? []),
+                // Terminology settings (use defaults if not provided)
+                PeopleTerm = request.PeopleTerm ?? "Marshals",
+                CheckpointTerm = request.CheckpointTerm ?? "Checkpoints",
+                AreaTerm = request.AreaTerm ?? "Areas",
+                ChecklistTerm = request.ChecklistTerm ?? "Checklists"
             };
 
             await _eventRepository.AddAsync(eventEntity);
@@ -133,6 +141,7 @@ public class EventFunctions
             // Get admin email from header
             (string? adminEmail, IActionResult? error) = FunctionHelpers.GetAdminEmailFromHeader(req);
             if (error != null) return error;
+            if (string.IsNullOrEmpty(adminEmail)) return new UnauthorizedObjectResult(new { message = "Admin email required" });
 
             // Get all events where user is an admin
             IEnumerable<UserEventMappingEntity> userMappings = await _userEventMappingRepository.GetByUserAsync(adminEmail);
@@ -177,14 +186,8 @@ public class EventFunctions
                 return new UnauthorizedObjectResult(new { message = "You are not authorized to update this event" });
             }
 
-            (CreateEventRequest? request, IActionResult? error) = await FunctionHelpers.TryDeserializeRequestAsync<CreateEventRequest>(req);
+            (UpdateEventRequest? request, IActionResult? error) = await FunctionHelpers.TryDeserializeRequestAsync<UpdateEventRequest>(req);
             if (error != null) return error;
-
-            // Validate admin email
-            if (!Validators.IsValidEmail(request!.AdminEmail))
-            {
-                return new BadRequestObjectResult(new { message = "Invalid email address format" });
-            }
 
             EventEntity? eventEntity = await _eventRepository.GetAsync(eventId);
 
@@ -194,14 +197,17 @@ public class EventFunctions
             }
 
             // Convert the event date to UTC
-            DateTime eventDateUtc = FunctionHelpers.ConvertToUtc(request.EventDate, request.TimeZoneId);
+            DateTime eventDateUtc = FunctionHelpers.ConvertToUtc(request!.EventDate, request.TimeZoneId);
 
             eventEntity.Name = request.Name;
             eventEntity.Description = request.Description;
             eventEntity.EventDate = eventDateUtc;
             eventEntity.TimeZoneId = request.TimeZoneId;
-            eventEntity.AdminEmail = request.AdminEmail;
-            eventEntity.EmergencyContactsJson = JsonSerializer.Serialize(request.EmergencyContacts ?? []);
+            // Only update terminology if provided
+            if (request.PeopleTerm != null) eventEntity.PeopleTerm = request.PeopleTerm;
+            if (request.CheckpointTerm != null) eventEntity.CheckpointTerm = request.CheckpointTerm;
+            if (request.AreaTerm != null) eventEntity.AreaTerm = request.AreaTerm;
+            if (request.ChecklistTerm != null) eventEntity.ChecklistTerm = request.ChecklistTerm;
 
             await _eventRepository.UpdateAsync(eventEntity);
 
@@ -257,6 +263,30 @@ public class EventFunctions
     {
         try
         {
+            // Require authentication and admin permissions
+            string? sessionToken = req.Cookies["session"] ?? req.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "");
+            if (string.IsNullOrWhiteSpace(sessionToken))
+            {
+                return new UnauthorizedObjectResult(new { message = "Authentication required" });
+            }
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
+            }
+
+            // Must have elevated permissions and be event admin or system admin
+            if (!claims.CanUseElevatedPermissions)
+            {
+                return new ForbidResult();
+            }
+
+            if (!claims.IsEventAdmin && !claims.IsSystemAdmin)
+            {
+                return new ForbidResult();
+            }
+
             IEnumerable<UserEventMappingEntity> mappings = await _userEventMappingRepository.GetByEventAsync(eventId);
 
             List<UserEventMappingResponse> admins = mappings.Select(m => m.ToResponse()).ToList();

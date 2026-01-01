@@ -1,6 +1,6 @@
 <template>
   <div>
-    <h3>Checkpoints ({{ locations.length }})</h3>
+    <h3>{{ terms.checkpoints }} ({{ locations.length }})</h3>
     <div class="button-group">
       <button
         ref="addButtonRef"
@@ -12,14 +12,14 @@
     </div>
 
     <div v-if="areas.length > 0" class="filter-group">
-      <h4>Filter by area:</h4>
+      <h4>Filter by {{ terms.area.toLowerCase() }}:</h4>
       <label class="filter-checkbox">
         <input
           type="checkbox"
           :checked="showAllAreas"
           @change="handleAllAreasToggle"
         />
-        All areas ({{ locations.length }})
+        All {{ terms.areas.toLowerCase() }} ({{ locations.length }})
       </label>
       <AreasSelection
         v-if="!showAllAreas"
@@ -78,6 +78,9 @@
 import { defineProps, defineEmits, computed, ref } from 'vue';
 import { alphanumericCompare } from '../../../utils/sortUtils';
 import AreasSelection from '../AreasSelection.vue';
+import { useTerminology } from '../../../composables/useTerminology';
+
+const { terms } = useTerminology();
 
 const props = defineProps({
   locations: {

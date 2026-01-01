@@ -16,17 +16,20 @@ public class AuthFunctions
     private readonly AuthService _authService;
     private readonly ClaimsService _claimsService;
     private readonly IPersonRepository _personRepository;
+    private readonly RateLimitService _rateLimitService;
 
     public AuthFunctions(
         ILogger<AuthFunctions> logger,
         AuthService authService,
         ClaimsService claimsService,
-        IPersonRepository personRepository)
+        IPersonRepository personRepository,
+        RateLimitService rateLimitService)
     {
         _logger = logger;
         _authService = authService;
         _claimsService = claimsService;
         _personRepository = personRepository;
+        _rateLimitService = rateLimitService;
     }
 
     /// <summary>
@@ -52,6 +55,19 @@ public class AuthFunctions
                     Success: false,
                     Message: "Email is required"
                 ));
+            }
+
+            // Rate limit check
+            if (!_rateLimitService.IsAllowedMagicLinkRequest(request.Email))
+            {
+                _logger.LogWarning($"Rate limit exceeded for magic link request: {request.Email}");
+                return new ObjectResult(new RequestLoginResponse(
+                    Success: false,
+                    Message: "Too many login requests. Please try again later."
+                ))
+                {
+                    StatusCode = 429 // Too Many Requests
+                };
             }
 
             // Get IP address for audit trail
@@ -198,6 +214,38 @@ public class AuthFunctions
 
             // Get IP address for audit trail
             string ipAddress = req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+            // Rate limit check - per IP
+            if (!_rateLimitService.IsAllowedMarshalCodeAttempt(ipAddress))
+            {
+                _logger.LogWarning($"Rate limit exceeded for marshal code attempt from IP: {ipAddress}");
+                return new ObjectResult(new MarshalLoginResponse(
+                    Success: false,
+                    SessionToken: null,
+                    Person: null,
+                    MarshalId: null,
+                    Message: "Too many login attempts. Please try again in a minute."
+                ))
+                {
+                    StatusCode = 429
+                };
+            }
+
+            // Rate limit check - per event
+            if (!_rateLimitService.IsAllowedMarshalCodeAttemptForEvent(request.EventId))
+            {
+                _logger.LogWarning($"Rate limit exceeded for marshal code attempts for event: {request.EventId}");
+                return new ObjectResult(new MarshalLoginResponse(
+                    Success: false,
+                    SessionToken: null,
+                    Person: null,
+                    MarshalId: null,
+                    Message: "Too many login attempts for this event. Please try again later."
+                ))
+                {
+                    StatusCode = 429
+                };
+            }
 
             (bool success, string? sessionToken, PersonInfo? person, string? marshalId, string? message) =
                 await _authService.AuthenticateWithMagicCodeAsync(request.EventId, request.MagicCode, ipAddress);

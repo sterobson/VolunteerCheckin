@@ -80,7 +80,7 @@ public class AuthService
         {
             TokenId = tokenId,
             PartitionKey = "AUTHTOKEN",
-            RowKey = tokenId,
+            RowKey = tokenHash,  // Must match TokenHash for O(1) lookup
             TokenHash = tokenHash,
             PersonId = person.PersonId,
             CreatedAt = DateTime.UtcNow,
@@ -311,7 +311,12 @@ public class AuthService
     private static string HashToken(string token)
     {
         byte[] bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
-        return Convert.ToBase64String(bytes);
+        // Use URL-safe Base64 encoding to avoid Azure Table Storage RowKey invalid characters
+        // Standard Base64 uses +/= which are invalid for RowKey
+        return Convert.ToBase64String(bytes)
+            .Replace('+', '-')
+            .Replace('/', '_')
+            .Replace("=", "");
     }
 
     /// <summary>

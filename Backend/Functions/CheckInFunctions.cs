@@ -17,17 +17,20 @@ public class CheckInFunctions
     private readonly IAssignmentRepository _assignmentRepository;
     private readonly ILocationRepository _locationRepository;
     private readonly GpsService _gpsService;
+    private readonly ClaimsService _claimsService;
 
     public CheckInFunctions(
         ILogger<CheckInFunctions> logger,
         IAssignmentRepository assignmentRepository,
         ILocationRepository locationRepository,
-        GpsService gpsService)
+        GpsService gpsService,
+        ClaimsService claimsService)
     {
         _logger = logger;
         _assignmentRepository = assignmentRepository;
         _locationRepository = locationRepository;
         _gpsService = gpsService;
+        _claimsService = claimsService;
     }
 
     [Function("CheckIn")]
@@ -99,18 +102,41 @@ public class CheckInFunctions
                 return new BadRequestObjectResult(new { message = "Either provide GPS coordinates or request manual check-in" });
             }
 
-            // Update assignment
+            // Prepare assignment update
             assignment.IsCheckedIn = true;
             assignment.CheckInTime = DateTime.UtcNow;
             assignment.CheckInLatitude = request.Latitude;
             assignment.CheckInLongitude = request.Longitude;
             assignment.CheckInMethod = checkInMethod;
 
+            // Update assignment first
             await _assignmentRepository.UpdateAsync(assignment);
 
-            // Update location checked-in count
-            location.CheckedInCount++;
-            await _locationRepository.UpdateAsync(location);
+            // Update location checked-in count with rollback on failure
+            try
+            {
+                location.CheckedInCount++;
+                await _locationRepository.UpdateAsync(location);
+            }
+            catch (Exception locationEx)
+            {
+                // Attempt to rollback assignment change
+                _logger.LogError(locationEx, "Failed to update location count, attempting rollback");
+                try
+                {
+                    assignment.IsCheckedIn = false;
+                    assignment.CheckInTime = null;
+                    assignment.CheckInLatitude = null;
+                    assignment.CheckInLongitude = null;
+                    assignment.CheckInMethod = string.Empty;
+                    await _assignmentRepository.UpdateAsync(assignment);
+                }
+                catch (Exception rollbackEx)
+                {
+                    _logger.LogError(rollbackEx, "Failed to rollback assignment, data may be inconsistent");
+                }
+                throw; // Re-throw original exception
+            }
 
             AssignmentResponse response = assignment.ToResponse();
 
@@ -133,6 +159,31 @@ public class CheckInFunctions
     {
         try
         {
+            // Require authentication and admin permissions
+            string? sessionToken = req.Cookies["session"] ?? req.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "");
+            if (string.IsNullOrWhiteSpace(sessionToken))
+            {
+                return new UnauthorizedObjectResult(new { message = "Authentication required" });
+            }
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
+            }
+
+            // Must have elevated permissions (logged in via email, not magic code)
+            if (!claims.CanUseElevatedPermissions)
+            {
+                return new ForbidResult();
+            }
+
+            // Must be event admin or system admin
+            if (!claims.IsEventAdmin && !claims.IsSystemAdmin)
+            {
+                return new ForbidResult();
+            }
+
             // Find the assignment using partition key query
             AssignmentEntity? assignment = await _assignmentRepository.GetAsync(eventId, assignmentId);
 
@@ -148,6 +199,14 @@ public class CheckInFunctions
             {
                 return new NotFoundObjectResult(new { message = Constants.ErrorLocationNotFound });
             }
+
+            // Store original state for rollback
+            bool wasCheckedIn = assignment.IsCheckedIn;
+            DateTime? originalCheckInTime = assignment.CheckInTime;
+            double? originalLat = assignment.CheckInLatitude;
+            double? originalLon = assignment.CheckInLongitude;
+            string originalMethod = assignment.CheckInMethod;
+            int originalCount = location.CheckedInCount;
 
             // If already checked in, undo the check-in
             if (assignment.IsCheckedIn)
@@ -168,8 +227,33 @@ public class CheckInFunctions
                 location.CheckedInCount++;
             }
 
+            // Update assignment first
             await _assignmentRepository.UpdateAsync(assignment);
-            await _locationRepository.UpdateAsync(location);
+
+            // Update location with rollback on failure
+            try
+            {
+                await _locationRepository.UpdateAsync(location);
+            }
+            catch (Exception locationEx)
+            {
+                // Attempt to rollback assignment change
+                _logger.LogError(locationEx, "Failed to update location count in admin check-in, attempting rollback");
+                try
+                {
+                    assignment.IsCheckedIn = wasCheckedIn;
+                    assignment.CheckInTime = originalCheckInTime;
+                    assignment.CheckInLatitude = originalLat;
+                    assignment.CheckInLongitude = originalLon;
+                    assignment.CheckInMethod = originalMethod;
+                    await _assignmentRepository.UpdateAsync(assignment);
+                }
+                catch (Exception rollbackEx)
+                {
+                    _logger.LogError(rollbackEx, "Failed to rollback assignment in admin check-in, data may be inconsistent");
+                }
+                throw;
+            }
 
             AssignmentResponse response = assignment.ToResponse();
 

@@ -5,7 +5,11 @@
       "Bash(cat:*)",
       "Bash(npm install:*)",
       "Bash(npm run build:*)",
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "Bash(tasklist:*)",
+      "Bash(netstat:*)",
+      "Bash(dotnet test:*)",
+      "Bash(taskkill:*)"
     ]
   }
 }

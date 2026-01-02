@@ -102,6 +102,7 @@ public static class Constants
     public const string ContactRoleMedicalLead = "MedicalLead";
     public const string ContactRoleSafetyOfficer = "SafetyOfficer";
     public const string ContactRoleLogistics = "Logistics";
+    public const string ContactRoleAreaLead = "AreaLead";
 
     // Event Contact Error Messages
     public const string ErrorContactNotFound = "Contact not found";

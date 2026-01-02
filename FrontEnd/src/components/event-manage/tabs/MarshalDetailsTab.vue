@@ -50,14 +50,14 @@
       <div v-if="loadingMagicLink" class="loading-text">Loading link...</div>
 
       <div v-else-if="magicLink" class="magic-link-container">
-        <input
-          type="text"
-          :value="magicLink"
-          readonly
-          class="form-input magic-link-input"
-          @focus="$event.target.select()"
-        />
-        <div class="magic-link-actions">
+        <div class="magic-link-row">
+          <input
+            type="text"
+            :value="magicLink"
+            readonly
+            class="form-input magic-link-input"
+            @focus="$event.target.select()"
+          />
           <button
             type="button"
             class="btn btn-secondary"
@@ -65,8 +65,9 @@
           >
             {{ copySuccess ? 'Copied!' : 'Copy link' }}
           </button>
+        </div>
+        <div v-if="hasEmail" class="magic-link-actions">
           <button
-            v-if="hasEmail"
             type="button"
             class="btn btn-primary"
             :disabled="sendingEmail"
@@ -242,10 +243,23 @@ textarea.form-input {
   gap: 0.75rem;
 }
 
+.magic-link-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
 .magic-link-input {
+  flex: 1;
+  min-width: 0;
   background-color: #f8f9fa;
   font-family: monospace;
   font-size: 0.85rem;
+}
+
+.magic-link-row .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .magic-link-actions {

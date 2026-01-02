@@ -7,6 +7,7 @@ using Shouldly;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -25,6 +26,8 @@ namespace VolunteerCheckin.Functions.Tests
         private Mock<ILocationRepository> _mockLocationRepository = null!;
         private Mock<IMarshalRepository> _mockMarshalRepository = null!;
         private Mock<IAssignmentRepository> _mockAssignmentRepository = null!;
+        private Mock<IChecklistItemRepository> _mockChecklistItemRepository = null!;
+        private Mock<IChecklistCompletionRepository> _mockChecklistCompletionRepository = null!;
         private Mock<ClaimsService> _mockClaimsService = null!;
         private Mock<ContactPermissionService> _mockContactPermissionService = null!;
         private AreaFunctions _areaFunctions = null!;
@@ -37,6 +40,8 @@ namespace VolunteerCheckin.Functions.Tests
             _mockLocationRepository = new Mock<ILocationRepository>();
             _mockMarshalRepository = new Mock<IMarshalRepository>();
             _mockAssignmentRepository = new Mock<IAssignmentRepository>();
+            _mockChecklistItemRepository = new Mock<IChecklistItemRepository>();
+            _mockChecklistCompletionRepository = new Mock<IChecklistCompletionRepository>();
             _mockClaimsService = new Mock<ClaimsService>(
                 MockBehavior.Loose,
                 new Mock<IAuthSessionRepository>().Object,
@@ -57,6 +62,9 @@ namespace VolunteerCheckin.Functions.Tests
                 _mockAreaRepository.Object,
                 _mockLocationRepository.Object,
                 _mockMarshalRepository.Object,
+                _mockAssignmentRepository.Object,
+                _mockChecklistItemRepository.Object,
+                _mockChecklistCompletionRepository.Object,
                 _mockClaimsService.Object,
                 _mockContactPermissionService.Object
             );
@@ -95,9 +103,10 @@ namespace VolunteerCheckin.Functions.Tests
                 }
             );
 
+            // Now uses batch loading for marshal validation
             _mockMarshalRepository
-                .Setup(r => r.GetAsync(eventId, marshalId))
-                .ReturnsAsync(marshal);
+                .Setup(r => r.GetByEventAsync(eventId))
+                .ReturnsAsync([marshal]);
 
             _mockLocationRepository
                 .Setup(r => r.CountByAreaAsync(It.IsAny<string>(), It.IsAny<string>()))
@@ -141,9 +150,10 @@ namespace VolunteerCheckin.Functions.Tests
                 null
             );
 
+            // Now uses batch loading, so mock GetByEventAsync to return empty list
             _mockMarshalRepository
-                .Setup(r => r.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
-                .ReturnsAsync((MarshalEntity?)null);
+                .Setup(r => r.GetByEventAsync(eventId))
+                .ReturnsAsync([]);
 
             HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
 
@@ -246,13 +256,22 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetByEventAsync(eventId))
                 .ReturnsAsync(areas);
 
-            _mockLocationRepository
-                .Setup(r => r.CountByAreaAsync(eventId, "area-1"))
-                .ReturnsAsync(3);
+            // Now uses batch loading for checkpoint counts - preload locations and count in memory
+            List<LocationEntity> locations = new()
+            {
+                new LocationEntity { RowKey = "loc-1", AreaIdsJson = "[\"area-1\"]" },
+                new LocationEntity { RowKey = "loc-2", AreaIdsJson = "[\"area-1\"]" },
+                new LocationEntity { RowKey = "loc-3", AreaIdsJson = "[\"area-1\"]" },
+                new LocationEntity { RowKey = "loc-4", AreaIdsJson = "[\"area-2\"]" },
+                new LocationEntity { RowKey = "loc-5", AreaIdsJson = "[\"area-2\"]" },
+                new LocationEntity { RowKey = "loc-6", AreaIdsJson = "[\"area-2\"]" },
+                new LocationEntity { RowKey = "loc-7", AreaIdsJson = "[\"area-2\"]" },
+                new LocationEntity { RowKey = "loc-8", AreaIdsJson = "[\"area-2\"]" }
+            };
 
             _mockLocationRepository
-                .Setup(r => r.CountByAreaAsync(eventId, "area-2"))
-                .ReturnsAsync(5);
+                .Setup(r => r.GetByEventAsync(eventId))
+                .ReturnsAsync(locations);
 
             HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
 
@@ -267,6 +286,8 @@ namespace VolunteerCheckin.Functions.Tests
             List<AreaResponse>? areaList = okResult.Value as List<AreaResponse>;
             areaList.ShouldNotBeNull();
             areaList.Count.ShouldBe(2);
+            areaList.First(a => a.Id == "area-1").CheckpointCount.ShouldBe(3);
+            areaList.First(a => a.Id == "area-2").CheckpointCount.ShouldBe(5);
         }
 
         #endregion
@@ -317,9 +338,10 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetAsync(eventId, areaId))
                 .ReturnsAsync(existingArea);
 
+            // Now uses batch loading for marshal validation
             _mockMarshalRepository
-                .Setup(r => r.GetAsync(eventId, marshalId))
-                .ReturnsAsync(marshal);
+                .Setup(r => r.GetByEventAsync(eventId))
+                .ReturnsAsync([marshal]);
 
             _mockLocationRepository
                 .Setup(r => r.CountByAreaAsync(eventId, areaId))

@@ -16,6 +16,9 @@ public class AreaFunctions
     private readonly IAreaRepository _areaRepository;
     private readonly ILocationRepository _locationRepository;
     private readonly IMarshalRepository _marshalRepository;
+    private readonly IAssignmentRepository _assignmentRepository;
+    private readonly IChecklistItemRepository _checklistItemRepository;
+    private readonly IChecklistCompletionRepository _checklistCompletionRepository;
     private readonly ClaimsService _claimsService;
     private readonly ContactPermissionService _contactPermissionService;
 
@@ -24,6 +27,9 @@ public class AreaFunctions
         IAreaRepository areaRepository,
         ILocationRepository locationRepository,
         IMarshalRepository marshalRepository,
+        IAssignmentRepository assignmentRepository,
+        IChecklistItemRepository checklistItemRepository,
+        IChecklistCompletionRepository checklistCompletionRepository,
         ClaimsService claimsService,
         ContactPermissionService contactPermissionService)
     {
@@ -31,6 +37,9 @@ public class AreaFunctions
         _areaRepository = areaRepository;
         _locationRepository = locationRepository;
         _marshalRepository = marshalRepository;
+        _assignmentRepository = assignmentRepository;
+        _checklistItemRepository = checklistItemRepository;
+        _checklistCompletionRepository = checklistCompletionRepository;
         _claimsService = claimsService;
         _contactPermissionService = contactPermissionService;
     }
@@ -49,13 +58,18 @@ public class AreaFunctions
             (CreateAreaRequest? request, IActionResult? error) = await FunctionHelpers.TryDeserializeRequestAsync<CreateAreaRequest>(req);
             if (error != null) return error;
 
-            // Validate contacts reference valid marshals
-            foreach (AreaContact contact in request!.Contacts)
+            // Validate contacts reference valid marshals (batch load instead of N queries)
+            if (request!.Contacts.Count > 0)
             {
-                MarshalEntity? marshal = await _marshalRepository.GetAsync(request.EventId, contact.MarshalId);
-                if (marshal == null)
+                IEnumerable<MarshalEntity> allMarshals = await _marshalRepository.GetByEventAsync(request.EventId);
+                HashSet<string> validMarshalIds = allMarshals.Select(m => m.MarshalId).ToHashSet();
+
+                foreach (AreaContact contact in request.Contacts)
                 {
-                    return new BadRequestObjectResult(new { message = $"Marshal not found: {contact.MarshalId}" });
+                    if (!validMarshalIds.Contains(contact.MarshalId))
+                    {
+                        return new BadRequestObjectResult(new { message = $"Marshal not found: {contact.MarshalId}" });
+                    }
                 }
             }
 
@@ -169,13 +183,22 @@ public class AreaFunctions
         {
             IEnumerable<AreaEntity> areaEntities = await _areaRepository.GetByEventAsync(eventId);
 
-            // Get checkpoint counts for each area
-            List<AreaResponse> areas = new();
-            foreach (AreaEntity area in areaEntities)
+            // Preload all locations and calculate checkpoint counts in memory (1 query instead of N)
+            IEnumerable<LocationEntity> allLocations = await _locationRepository.GetByEventAsync(eventId);
+            Dictionary<string, int> checkpointCountsByArea = new();
+
+            foreach (LocationEntity location in allLocations)
             {
-                int checkpointCount = await _locationRepository.CountByAreaAsync(eventId, area.RowKey);
-                areas.Add(area.ToResponse(checkpointCount));
+                List<string> areaIds = JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson) ?? [];
+                foreach (string areaId in areaIds)
+                {
+                    checkpointCountsByArea[areaId] = checkpointCountsByArea.GetValueOrDefault(areaId, 0) + 1;
+                }
             }
+
+            List<AreaResponse> areas = areaEntities
+                .Select(area => area.ToResponse(checkpointCountsByArea.GetValueOrDefault(area.RowKey, 0)))
+                .ToList();
 
             return new OkObjectResult(areas);
         }
@@ -211,13 +234,18 @@ public class AreaFunctions
                 return new BadRequestObjectResult(new { message = "Cannot rename default area" });
             }
 
-            // Validate contacts reference valid marshals
-            foreach (AreaContact contact in request.Contacts)
+            // Validate contacts reference valid marshals (batch load instead of N queries)
+            if (request.Contacts.Count > 0)
             {
-                MarshalEntity? marshal = await _marshalRepository.GetAsync(eventId, contact.MarshalId);
-                if (marshal == null)
+                IEnumerable<MarshalEntity> allMarshals = await _marshalRepository.GetByEventAsync(eventId);
+                HashSet<string> validMarshalIds = allMarshals.Select(m => m.MarshalId).ToHashSet();
+
+                foreach (AreaContact contact in request.Contacts)
                 {
-                    return new BadRequestObjectResult(new { message = $"Marshal not found: {contact.MarshalId}" });
+                    if (!validMarshalIds.Contains(contact.MarshalId))
+                    {
+                        return new BadRequestObjectResult(new { message = $"Marshal not found: {contact.MarshalId}" });
+                    }
                 }
             }
 
@@ -284,6 +312,8 @@ public class AreaFunctions
                 }
 
                 // Remove this area from all checkpoints, and assign to default if no other areas
+                // Prepare all updates first, then execute in parallel
+                List<Task> updateTasks = [];
                 foreach (LocationEntity checkpoint in checkpointsInArea)
                 {
                     List<string> areaIds = System.Text.Json.JsonSerializer.Deserialize<List<string>>(checkpoint.AreaIdsJson) ?? [];
@@ -299,8 +329,11 @@ public class AreaFunctions
 
                     // Update the checkpoint with new area assignments
                     checkpoint.AreaIdsJson = System.Text.Json.JsonSerializer.Serialize(areaIds);
-                    await _locationRepository.UpdateAsync(checkpoint);
+                    updateTasks.Add(_locationRepository.UpdateAsync(checkpoint));
                 }
+
+                // Execute all updates in parallel
+                await Task.WhenAll(updateTasks);
 
                 _logger.LogInformation($"Reassigned {checkpointsInArea.Count()} checkpoints from area {areaId}");
             }
@@ -403,7 +436,8 @@ public class AreaFunctions
             return;
         }
 
-        // Recalculate area assignments for each checkpoint
+        // Recalculate area assignments for each checkpoint and execute updates in parallel
+        List<Task> updateTasks = [];
         foreach (LocationEntity checkpoint in checkpoints)
         {
             List<string> areaIds = Helpers.GeometryHelper.CalculateCheckpointAreas(
@@ -414,8 +448,10 @@ public class AreaFunctions
             );
 
             checkpoint.AreaIdsJson = JsonSerializer.Serialize(areaIds);
-            await _locationRepository.UpdateAsync(checkpoint);
+            updateTasks.Add(_locationRepository.UpdateAsync(checkpoint));
         }
+
+        await Task.WhenAll(updateTasks);
 
         _logger.LogInformation($"Recalculated area assignments for {checkpoints.Count()} checkpoints in event {eventId}");
     }
@@ -614,6 +650,280 @@ public class AreaFunctions
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting area leads");
+            return new StatusCodeResult(500);
+        }
+    }
+
+    /// <summary>
+    /// Efficient endpoint for area lead dashboard.
+    /// Returns all checkpoints in the lead's areas with marshals, check-in status, and outstanding tasks.
+    /// Single API call to minimize latency.
+    /// </summary>
+    [Function("GetAreaLeadDashboard")]
+    public async Task<IActionResult> GetAreaLeadDashboard(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/{eventId}/area-lead-dashboard")] HttpRequest req,
+        string eventId)
+    {
+        try
+        {
+            // Require authentication
+            string? sessionToken = GetSessionToken(req);
+            if (string.IsNullOrWhiteSpace(sessionToken))
+            {
+                return new UnauthorizedObjectResult(new { message = "Authentication required" });
+            }
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
+            }
+
+            // Get area IDs this user leads
+            List<string> leadAreaIds = claims.EventRoles
+                .Where(r => r.Role == Constants.RoleEventAreaLead)
+                .SelectMany(r => r.AreaIds)
+                .Distinct()
+                .ToList();
+
+            if (leadAreaIds.Count == 0)
+            {
+                return new OkObjectResult(new AreaLeadDashboardResponse([], []));
+            }
+
+            // Batch load all data in parallel for efficiency
+            Task<IEnumerable<AreaEntity>> areasTask = _areaRepository.GetByEventAsync(eventId);
+            Task<IEnumerable<LocationEntity>> locationsTask = _locationRepository.GetByEventAsync(eventId);
+            Task<IEnumerable<MarshalEntity>> marshalsTask = _marshalRepository.GetByEventAsync(eventId);
+            Task<IEnumerable<AssignmentEntity>> assignmentsTask = _assignmentRepository.GetByEventAsync(eventId);
+            Task<IEnumerable<ChecklistItemEntity>> checklistItemsTask = _checklistItemRepository.GetByEventAsync(eventId);
+            Task<IEnumerable<ChecklistCompletionEntity>> completionsTask = _checklistCompletionRepository.GetByEventAsync(eventId);
+
+            await Task.WhenAll(areasTask, locationsTask, marshalsTask, assignmentsTask, checklistItemsTask, completionsTask);
+
+            IEnumerable<AreaEntity> areas = areasTask.Result;
+            List<LocationEntity> locationsList = locationsTask.Result.ToList();
+            IEnumerable<MarshalEntity> marshals = marshalsTask.Result;
+            IEnumerable<AssignmentEntity> assignments = assignmentsTask.Result;
+            IEnumerable<ChecklistItemEntity> checklistItems = checklistItemsTask.Result;
+            IEnumerable<ChecklistCompletionEntity> completions = completionsTask.Result;
+
+            // Check if any checkpoints are missing area assignments and auto-calculate
+            List<LocationEntity> checkpointsNeedingAreas = locationsList
+                .Where(l => string.IsNullOrEmpty(l.AreaIdsJson) || l.AreaIdsJson == "[]")
+                .ToList();
+
+            if (checkpointsNeedingAreas.Count > 0)
+            {
+                _logger.LogInformation("Found {Count} checkpoints without area assignments in area lead dashboard. Calculating...", checkpointsNeedingAreas.Count);
+
+                // Ensure default area exists
+                AreaEntity? defaultArea = areas.FirstOrDefault(a => a.IsDefault);
+                if (defaultArea == null)
+                {
+                    defaultArea = new AreaEntity
+                    {
+                        PartitionKey = eventId,
+                        RowKey = Guid.NewGuid().ToString(),
+                        EventId = eventId,
+                        Name = "Default Area",
+                        Color = "#808080",
+                        IsDefault = true,
+                        DisplayOrder = 0
+                    };
+                    await _areaRepository.AddAsync(defaultArea);
+                    // Refresh areas list
+                    areas = await _areaRepository.GetByEventAsync(eventId);
+                }
+
+                // Calculate and update area assignments for each checkpoint
+                List<Task> updateTasks = [];
+                foreach (LocationEntity checkpoint in checkpointsNeedingAreas)
+                {
+                    List<string> calculatedAreaIds = Helpers.GeometryHelper.CalculateCheckpointAreas(
+                        checkpoint.Latitude,
+                        checkpoint.Longitude,
+                        areas,
+                        defaultArea.RowKey
+                    );
+                    checkpoint.AreaIdsJson = JsonSerializer.Serialize(calculatedAreaIds);
+                    updateTasks.Add(_locationRepository.UpdateAsync(checkpoint));
+                }
+                await Task.WhenAll(updateTasks);
+                _logger.LogInformation("Automatically assigned areas to {Count} checkpoints", checkpointsNeedingAreas.Count);
+            }
+
+            // Create lookups for efficient access
+            Dictionary<string, MarshalEntity> marshalLookup = marshals.ToDictionary(m => m.MarshalId);
+            Dictionary<string, AreaEntity> areaLookup = areas.ToDictionary(a => a.RowKey);
+
+            // Get checkpoints in lead's areas
+            List<LocationEntity> checkpointsInAreas = locationsList
+                .Where(loc => {
+                    if (string.IsNullOrEmpty(loc.AreaIdsJson))
+                        return false;
+                    List<string> locAreaIds = JsonSerializer.Deserialize<List<string>>(loc.AreaIdsJson) ?? [];
+                    return locAreaIds.Any(areaId => leadAreaIds.Contains(areaId));
+                })
+                .OrderBy(loc => loc.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            HashSet<string> checkpointIds = checkpointsInAreas.Select(c => c.RowKey).ToHashSet();
+
+            // Get assignments for these checkpoints
+            List<AssignmentEntity> relevantAssignments = assignments
+                .Where(a => checkpointIds.Contains(a.LocationId))
+                .ToList();
+
+            // Get marshal IDs from assignments
+            HashSet<string> marshalIds = relevantAssignments.Select(a => a.MarshalId).ToHashSet();
+
+            // Build completion lookup (key: itemId_contextType_contextId)
+            // Only include non-deleted completions
+            Dictionary<string, ChecklistCompletionEntity> completionLookup = new();
+            foreach (ChecklistCompletionEntity completion in completions.Where(c => !c.IsDeleted))
+            {
+                string key = $"{completion.ChecklistItemId}_{completion.CompletionContextType}_{completion.CompletionContextId}";
+                completionLookup[key] = completion;
+            }
+
+            // Calculate outstanding tasks for checkpoints and marshals
+            Dictionary<string, List<AreaLeadTaskInfo>> tasksByCheckpoint = new();
+            Dictionary<string, List<AreaLeadTaskInfo>> tasksByMarshal = new();
+
+            foreach (ChecklistItemEntity item in checklistItems)
+            {
+                List<ScopeConfiguration> configs = JsonSerializer.Deserialize<List<ScopeConfiguration>>(item.ScopeConfigurationsJson) ?? [];
+
+                foreach (ScopeConfiguration config in configs)
+                {
+                    // Check if this scope applies to our checkpoints or marshals
+                    if (config.Scope == Constants.ChecklistScopeEveryoneAtCheckpoints ||
+                        config.Scope == Constants.ChecklistScopeOnePerCheckpoint)
+                    {
+                        // Checkpoint-scoped tasks
+                        foreach (string checkpointId in checkpointIds)
+                        {
+                            if (config.Ids.Contains(Constants.AllCheckpoints) || config.Ids.Contains(checkpointId))
+                            {
+                                string completionKey = $"{item.ItemId}_{Constants.ChecklistContextCheckpoint}_{checkpointId}";
+                                bool isCompleted = completionLookup.ContainsKey(completionKey);
+
+                                if (!isCompleted)
+                                {
+                                    if (!tasksByCheckpoint.ContainsKey(checkpointId))
+                                        tasksByCheckpoint[checkpointId] = [];
+
+                                    tasksByCheckpoint[checkpointId].Add(new AreaLeadTaskInfo(
+                                        item.ItemId,
+                                        item.Text,
+                                        config.Scope,
+                                        Constants.ChecklistContextCheckpoint,
+                                        checkpointId,
+                                        null
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                    else if (config.Scope == Constants.ChecklistScopeSpecificPeople)
+                    {
+                        // Personal tasks for marshals
+                        // Check if ALL_MARSHALS is used - if so, apply to all marshals in our checkpoints
+                        bool appliesToAll = config.Ids.Contains(Constants.AllMarshals);
+
+                        foreach (string marshalId in marshalIds)
+                        {
+                            // Check if this task applies to this marshal
+                            bool appliesToMarshal = appliesToAll || config.Ids.Contains(marshalId);
+
+                            if (appliesToMarshal)
+                            {
+                                string completionKey = $"{item.ItemId}_{Constants.ChecklistContextPersonal}_{marshalId}";
+                                bool isCompleted = completionLookup.ContainsKey(completionKey);
+
+                                if (!isCompleted)
+                                {
+                                    if (!tasksByMarshal.ContainsKey(marshalId))
+                                        tasksByMarshal[marshalId] = [];
+
+                                    tasksByMarshal[marshalId].Add(new AreaLeadTaskInfo(
+                                        item.ItemId,
+                                        item.Text,
+                                        config.Scope,
+                                        Constants.ChecklistContextPersonal,
+                                        marshalId,
+                                        marshalId
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Build checkpoint data
+            List<AreaLeadCheckpointInfo> checkpointInfos = [];
+            foreach (LocationEntity checkpoint in checkpointsInAreas)
+            {
+                List<string> checkpointAreaIds = JsonSerializer.Deserialize<List<string>>(checkpoint.AreaIdsJson) ?? [];
+                string? areaName = checkpointAreaIds.Count > 0 && areaLookup.TryGetValue(checkpointAreaIds[0], out AreaEntity? area)
+                    ? area.Name
+                    : null;
+
+                // Get marshals at this checkpoint
+                List<AssignmentEntity> checkpointAssignments = relevantAssignments
+                    .Where(a => a.LocationId == checkpoint.RowKey)
+                    .ToList();
+
+                List<AreaLeadMarshalInfo> marshalInfos = [];
+                foreach (AssignmentEntity assignment in checkpointAssignments)
+                {
+                    if (marshalLookup.TryGetValue(assignment.MarshalId, out MarshalEntity? marshal))
+                    {
+                        List<AreaLeadTaskInfo> marshalTasks = tasksByMarshal.GetValueOrDefault(assignment.MarshalId, []);
+
+                        marshalInfos.Add(new AreaLeadMarshalInfo(
+                            marshal.MarshalId,
+                            marshal.Name,
+                            marshal.Email,
+                            marshal.PhoneNumber,
+                            assignment.IsCheckedIn,
+                            assignment.CheckInTime,
+                            assignment.CheckInMethod,
+                            marshalTasks.Count,
+                            marshalTasks
+                        ));
+                    }
+                }
+
+                List<AreaLeadTaskInfo> checkpointTasks = tasksByCheckpoint.GetValueOrDefault(checkpoint.RowKey, []);
+
+                checkpointInfos.Add(new AreaLeadCheckpointInfo(
+                    checkpoint.RowKey,
+                    checkpoint.Name,
+                    checkpoint.Description,
+                    checkpoint.Latitude,
+                    checkpoint.Longitude,
+                    areaName,
+                    checkpointAreaIds,
+                    marshalInfos,
+                    checkpointTasks.Count,
+                    checkpointTasks
+                ));
+            }
+
+            // Build area info
+            List<AreaLeadAreaInfo> areaInfos = areas
+                .Where(a => leadAreaIds.Contains(a.RowKey))
+                .Select(a => new AreaLeadAreaInfo(a.RowKey, a.Name, a.Color))
+                .ToList();
+
+            return new OkObjectResult(new AreaLeadDashboardResponse(areaInfos, checkpointInfos));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting area lead dashboard for event {EventId}", eventId);
             return new StatusCodeResult(500);
         }
     }

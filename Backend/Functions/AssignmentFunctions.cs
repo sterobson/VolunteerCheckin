@@ -253,7 +253,8 @@ public class AssignmentFunctions
 
                 IEnumerable<AreaEntity> areas = await _areaRepository.GetByEventAsync(eventId);
 
-                // Calculate and update area assignments for each checkpoint
+                // Calculate and update area assignments for each checkpoint (parallel updates)
+                List<Task> updateTasks = [];
                 foreach (LocationEntity checkpoint in checkpointsNeedingAreas)
                 {
                     List<string> areaIds = GeometryHelper.CalculateCheckpointAreas(
@@ -264,18 +265,24 @@ public class AssignmentFunctions
                     );
 
                     checkpoint.AreaIdsJson = JsonSerializer.Serialize(areaIds);
-                    await _locationRepository.UpdateAsync(checkpoint);
+                    updateTasks.Add(_locationRepository.UpdateAsync(checkpoint));
                 }
+                await Task.WhenAll(updateTasks);
 
                 _logger.LogInformation($"Automatically assigned areas to {checkpointsNeedingAreas.Count} checkpoints");
             }
+
+            // Group assignments by location ID once (O(N) instead of O(N*M))
+            Dictionary<string, List<AssignmentEntity>> assignmentsByLocation = assignments
+                .GroupBy(a => a.LocationId)
+                .ToDictionary(g => g.Key, g => g.ToList());
 
             List<LocationStatusResponse> locationStatuses = [];
 
             foreach (LocationEntity location in locationsList)
             {
-                List<AssignmentResponse> locationAssignments = assignments
-                    .Where(a => a.LocationId == location.RowKey)
+                List<AssignmentResponse> locationAssignments = assignmentsByLocation
+                    .GetValueOrDefault(location.RowKey, [])
                     .Select(a => a.ToResponse())
                     .ToList();
 

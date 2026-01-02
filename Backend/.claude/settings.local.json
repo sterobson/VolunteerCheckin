@@ -24,7 +24,8 @@
       "Bash(del \"C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\Backend\\\\VolunteerCheckin.Functions.Tests\\\\AdminQueryTests.cs\")",
       "Bash(where:*)",
       "Bash(python -c:*)",
-      "Bash(dir \"C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\Backend\\\\Documentation\\\\schema.png\")"
+      "Bash(dir \"C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\Backend\\\\Documentation\\\\schema.png\")",
+      "Bash(dir /S \"C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\Backend\\\\Functions\")"
     ]
   }
 }

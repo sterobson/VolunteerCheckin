@@ -261,13 +261,8 @@ public class NoteFunctions
 
             _logger.LogInformation("Note {NoteId} updated for event {EventId} by {PersonId}", noteId, eventId, claims.PersonId);
 
-            // Build a lookup of current marshal names by PersonId
-            IEnumerable<MarshalEntity> marshals = await _marshalRepository.GetByEventAsync(eventId);
-            Dictionary<string, string> personNameLookup = marshals
-                .Where(m => !string.IsNullOrEmpty(m.PersonId))
-                .ToDictionary(m => m.PersonId, m => m.Name);
-
-            return new OkObjectResult(ToNoteResponse(note, personNameLookup));
+            // Note already has current names stored (UpdatedByName = claims.PersonName), no need to fetch all marshals
+            return new OkObjectResult(ToNoteResponse(note));
         }
         catch (Exception ex)
         {
@@ -326,8 +321,10 @@ public class NoteFunctions
     {
         try
         {
-            // Build marshal context for scope evaluation
-            ScopeEvaluator.MarshalContext? marshalContext = await BuildMarshalContextAsync(eventId, marshalId);
+            // Build marshal context and checkpoint lookup together (avoids duplicate location fetch)
+            (ScopeEvaluator.MarshalContext? marshalContext, Dictionary<string, LocationEntity> checkpointLookup,
+             Dictionary<string, string> personNameLookup) = await BuildMarshalContextWithLookupsAsync(eventId, marshalId);
+
             if (marshalContext == null)
             {
                 return new NotFoundObjectResult(new { message = Constants.ErrorMarshalNotFound });
@@ -335,15 +332,6 @@ public class NoteFunctions
 
             // Get all notes for the event
             IEnumerable<NoteEntity> allNotes = await _noteRepository.GetByEventAsync(eventId);
-
-            // Build checkpoint lookup for scope evaluation
-            Dictionary<string, LocationEntity> checkpointLookup = await BuildCheckpointLookupAsync(eventId);
-
-            // Build a lookup of current marshal names by PersonId
-            IEnumerable<MarshalEntity> marshals = await _marshalRepository.GetByEventAsync(eventId);
-            Dictionary<string, string> personNameLookup = marshals
-                .Where(m => !string.IsNullOrEmpty(m.PersonId))
-                .ToDictionary(m => m.PersonId, m => m.Name);
 
             // Filter notes based on scope
             List<NoteForMarshalResponse> relevantNotes = [];
@@ -504,21 +492,31 @@ public class NoteFunctions
         return false;
     }
 
-    private async Task<ScopeEvaluator.MarshalContext?> BuildMarshalContextAsync(string eventId, string marshalId)
+    /// <summary>
+    /// Builds marshal context, checkpoint lookup, and person name lookup together to avoid duplicate fetches.
+    /// </summary>
+    private async Task<(ScopeEvaluator.MarshalContext?, Dictionary<string, LocationEntity>, Dictionary<string, string>)>
+        BuildMarshalContextWithLookupsAsync(string eventId, string marshalId)
     {
         MarshalEntity? marshal = await _marshalRepository.GetAsync(eventId, marshalId);
         if (marshal == null)
         {
-            return null;
+            return (null, new Dictionary<string, LocationEntity>(), new Dictionary<string, string>());
         }
 
         // Get marshal's assignments
         IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByMarshalAsync(eventId, marshalId);
         List<string> assignedLocationIds = assignments.Select(a => a.LocationId).ToList();
 
-        // Get checkpoints to determine areas
+        // Get checkpoints ONCE (will be reused for both context building and scope evaluation)
         IEnumerable<LocationEntity> checkpoints = await _locationRepository.GetByEventAsync(eventId);
         Dictionary<string, LocationEntity> checkpointLookup = checkpoints.ToDictionary(c => c.RowKey);
+
+        // Get all marshals ONCE (for person name lookup)
+        IEnumerable<MarshalEntity> allMarshals = await _marshalRepository.GetByEventAsync(eventId);
+        Dictionary<string, string> personNameLookup = allMarshals
+            .Where(m => !string.IsNullOrEmpty(m.PersonId))
+            .ToDictionary(m => m.PersonId, m => m.Name);
 
         // Get areas from assigned checkpoints
         HashSet<string> assignedAreaIds = [];
@@ -546,18 +544,14 @@ public class NoteFunctions
             }
         }
 
-        return new ScopeEvaluator.MarshalContext(
+        ScopeEvaluator.MarshalContext context = new(
             MarshalId: marshalId,
             AssignedAreaIds: assignedAreaIds.ToList(),
             AssignedLocationIds: assignedLocationIds,
             AreaLeadForAreaIds: areaLeadForAreaIds
         );
-    }
 
-    private async Task<Dictionary<string, LocationEntity>> BuildCheckpointLookupAsync(string eventId)
-    {
-        IEnumerable<LocationEntity> checkpoints = await _locationRepository.GetByEventAsync(eventId);
-        return checkpoints.ToDictionary(c => c.RowKey);
+        return (context, checkpointLookup, personNameLookup);
     }
 
     private static NoteResponse ToNoteResponse(NoteEntity note, Dictionary<string, string>? personNameLookup = null)

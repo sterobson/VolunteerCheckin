@@ -361,22 +361,26 @@ public class ChecklistFunctions
     {
         try
         {
+            // Preload all event data in batch (3 DB calls instead of N*3)
+            PreloadedEventData preloaded = await PreloadEventDataAsync(eventId);
+
             // Get the location to verify it exists and get its areas
-            LocationEntity? location = await _locationRepository.GetAsync(eventId, locationId);
-            if (location == null)
+            if (!preloaded.LocationsById.TryGetValue(locationId, out LocationEntity? location))
             {
                 return new NotFoundObjectResult(new { message = Constants.ErrorLocationNotFound });
             }
 
             List<string> locationAreaIds = JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson) ?? [];
 
-            // Get all marshals assigned to this checkpoint
-            IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByLocationAsync(eventId, locationId);
-            List<string> assignedMarshalIds = assignments.Select(a => a.MarshalId).Distinct().ToList();
+            // Get all marshals assigned to this checkpoint (from preloaded data)
+            List<string> assignedMarshalIds = preloaded.AssignmentsByMarshal
+                .Where(kvp => kvp.Value.Any(a => a.LocationId == locationId))
+                .Select(kvp => kvp.Key)
+                .Distinct()
+                .ToList();
 
-            // Build checkpoint lookup dictionary
-            IEnumerable<LocationEntity> allLocations = await _locationRepository.GetByEventAsync(eventId);
-            Dictionary<string, LocationEntity> checkpointLookup = allLocations.ToDictionary(l => l.RowKey);
+            // Build checkpoint lookup dictionary from preloaded data
+            Dictionary<string, LocationEntity> checkpointLookup = preloaded.LocationsById;
 
             // Get all checklist items for event
             IEnumerable<ChecklistItemEntity> allItems = await _checklistItemRepository.GetByEventAsync(eventId);
@@ -385,9 +389,8 @@ public class ChecklistFunctions
             List<ChecklistCompletionEntity> allCompletions =
                 (await _checklistCompletionRepository.GetByEventAsync(eventId)).ToList();
 
-            // Get area leads for checkpoint's areas
-            IEnumerable<AreaEntity> areas = await _areaRepository.GetByEventAsync(eventId);
-            List<string> areaLeadIds = areas
+            // Get area leads for checkpoint's areas (from preloaded data)
+            List<string> areaLeadIds = preloaded.Areas
                 .Where(a => locationAreaIds.Contains(a.RowKey))
                 .SelectMany(a => JsonSerializer.Deserialize<List<string>>(a.AreaLeadMarshalIdsJson) ?? [])
                 .Distinct()
@@ -400,6 +403,10 @@ public class ChecklistFunctions
             IEnumerable<MarshalEntity> allMarshals = await _marshalRepository.GetByEventAsync(eventId);
             Dictionary<string, string> marshalNames = allMarshals.ToDictionary(m => m.RowKey, m => m.Name);
 
+            // Build marshal contexts for all relevant marshals at once (no DB calls in loop)
+            Dictionary<string, ChecklistScopeHelper.MarshalContext> marshalContexts =
+                BuildMarshalContextsFromPreloaded(relevantMarshalIds, preloaded);
+
             // Build list of relevant items - iterate through each marshal to get their personal items
             List<ChecklistItemWithStatus> relevantItems = [];
 
@@ -410,8 +417,8 @@ public class ChecklistFunctions
                 // For each marshal at this checkpoint, get their view of this item
                 foreach (string marshalId in relevantMarshalIds)
                 {
-                    // Build context for this specific marshal
-                    ChecklistScopeHelper.MarshalContext marshalContext = await BuildMarshalContext(eventId, marshalId);
+                    // Get context from prebuilt dictionary (no DB call)
+                    ChecklistScopeHelper.MarshalContext marshalContext = marshalContexts[marshalId];
 
                     _logger.LogInformation($"  Marshal {marshalNames.GetValueOrDefault(marshalId, marshalId)}: Areas={string.Join(",", marshalContext.AssignedAreaIds)}");
 
@@ -569,16 +576,18 @@ public class ChecklistFunctions
     {
         try
         {
+            // Preload all event data in batch (3 DB calls instead of N*3)
+            PreloadedEventData preloaded = await PreloadEventDataAsync(eventId);
+
             // Get the area to verify it exists
-            AreaEntity? area = await _areaRepository.GetAsync(eventId, areaId);
+            AreaEntity? area = preloaded.Areas.FirstOrDefault(a => a.RowKey == areaId);
             if (area == null)
             {
                 return new NotFoundObjectResult(new { message = "Area not found" });
             }
 
-            // Get all checkpoints in this area
-            IEnumerable<LocationEntity> allLocations = await _locationRepository.GetByEventAsync(eventId);
-            List<LocationEntity> areaCheckpoints = allLocations
+            // Get all checkpoints in this area (from preloaded data)
+            List<LocationEntity> areaCheckpoints = preloaded.LocationsById.Values
                 .Where(l => {
                     List<string> locationAreaIds = JsonSerializer.Deserialize<List<string>>(l.AreaIdsJson) ?? [];
                     return locationAreaIds.Contains(areaId);
@@ -587,18 +596,15 @@ public class ChecklistFunctions
 
             List<string> checkpointIds = areaCheckpoints.Select(l => l.RowKey).ToList();
 
-            // Get all marshals assigned to checkpoints in this area
-            List<string> assignedMarshalIds = [];
-            foreach (string checkpointId in checkpointIds)
-            {
-                IEnumerable<AssignmentEntity> checkpointAssignments =
-                    await _assignmentRepository.GetByLocationAsync(eventId, checkpointId);
-                assignedMarshalIds.AddRange(checkpointAssignments.Select(a => a.MarshalId));
-            }
-            assignedMarshalIds = assignedMarshalIds.Distinct().ToList();
+            // Get all marshals assigned to checkpoints in this area (from preloaded data, no loop DB calls)
+            List<string> assignedMarshalIds = preloaded.AssignmentsByMarshal
+                .Where(kvp => kvp.Value.Any(a => checkpointIds.Contains(a.LocationId)))
+                .Select(kvp => kvp.Key)
+                .Distinct()
+                .ToList();
 
-            // Build checkpoint lookup dictionary
-            Dictionary<string, LocationEntity> checkpointLookup = allLocations.ToDictionary(l => l.RowKey);
+            // Build checkpoint lookup dictionary from preloaded data
+            Dictionary<string, LocationEntity> checkpointLookup = preloaded.LocationsById;
 
             // Get all checklist items for event
             IEnumerable<ChecklistItemEntity> allItems = await _checklistItemRepository.GetByEventAsync(eventId);
@@ -617,6 +623,10 @@ public class ChecklistFunctions
             IEnumerable<MarshalEntity> allMarshals = await _marshalRepository.GetByEventAsync(eventId);
             Dictionary<string, string> marshalNames = allMarshals.ToDictionary(m => m.RowKey, m => m.Name);
 
+            // Build marshal contexts for all relevant marshals at once (no DB calls in loop)
+            Dictionary<string, ChecklistScopeHelper.MarshalContext> marshalContexts =
+                BuildMarshalContextsFromPreloaded(relevantMarshalIds, preloaded);
+
             // Build list of relevant items - iterate through each marshal to get their personal items
             List<ChecklistItemWithStatus> relevantItems = [];
 
@@ -625,8 +635,8 @@ public class ChecklistFunctions
                 // For each marshal in this area, get their view of this item
                 foreach (string marshalId in relevantMarshalIds)
                 {
-                    // Build context for this specific marshal
-                    ChecklistScopeHelper.MarshalContext marshalContext = await BuildMarshalContext(eventId, marshalId);
+                    // Get context from prebuilt dictionary (no DB call)
+                    ChecklistScopeHelper.MarshalContext marshalContext = marshalContexts[marshalId];
 
                     // Get all contexts where this item is relevant to this marshal
                     List<ChecklistScopeHelper.ScopeMatchResult> contexts =
@@ -1002,6 +1012,91 @@ public class ChecklistFunctions
             assignedAreaIds,
             assignedLocationIds,
             areaLeadForAreaIds
+        );
+    }
+
+    /// <summary>
+    /// Preloaded event data for building marshal contexts efficiently.
+    /// Load once per request, then build multiple contexts without additional DB calls.
+    /// </summary>
+    private record PreloadedEventData(
+        Dictionary<string, List<AssignmentEntity>> AssignmentsByMarshal,
+        Dictionary<string, LocationEntity> LocationsById,
+        List<AreaEntity> Areas
+    );
+
+    /// <summary>
+    /// Loads all data needed for building marshal contexts in a single batch.
+    /// This avoids N+1 queries when processing multiple marshals.
+    /// </summary>
+    private async Task<PreloadedEventData> PreloadEventDataAsync(string eventId)
+    {
+        // Load all assignments for event (single DB call)
+        IEnumerable<AssignmentEntity> allAssignments = await _assignmentRepository.GetByEventAsync(eventId);
+        Dictionary<string, List<AssignmentEntity>> assignmentsByMarshal = allAssignments
+            .GroupBy(a => a.MarshalId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        // Load all locations for event (single DB call)
+        IEnumerable<LocationEntity> allLocations = await _locationRepository.GetByEventAsync(eventId);
+        Dictionary<string, LocationEntity> locationsById = allLocations.ToDictionary(l => l.RowKey);
+
+        // Load all areas for event (single DB call)
+        List<AreaEntity> areas = (await _areaRepository.GetByEventAsync(eventId)).ToList();
+
+        return new PreloadedEventData(assignmentsByMarshal, locationsById, areas);
+    }
+
+    /// <summary>
+    /// Builds marshal context using preloaded data (no DB calls).
+    /// </summary>
+    private static ChecklistScopeHelper.MarshalContext BuildMarshalContextFromPreloaded(
+        string marshalId,
+        PreloadedEventData preloaded)
+    {
+        // Get marshal's assignments from preloaded data
+        List<AssignmentEntity> assignments = preloaded.AssignmentsByMarshal.GetValueOrDefault(marshalId, []);
+        List<string> assignedLocationIds = assignments.Select(a => a.LocationId).ToList();
+
+        // Determine areas from assigned locations
+        List<string> assignedAreaIds = assignedLocationIds
+            .Where(locId => preloaded.LocationsById.ContainsKey(locId))
+            .SelectMany(locId =>
+            {
+                LocationEntity loc = preloaded.LocationsById[locId];
+                return JsonSerializer.Deserialize<List<string>>(loc.AreaIdsJson) ?? [];
+            })
+            .Distinct()
+            .ToList();
+
+        // Check if marshal is area lead for any areas
+        List<string> areaLeadForAreaIds = preloaded.Areas
+            .Where(a =>
+            {
+                List<string> areaLeadIds = JsonSerializer.Deserialize<List<string>>(a.AreaLeadMarshalIdsJson) ?? [];
+                return areaLeadIds.Contains(marshalId);
+            })
+            .Select(a => a.RowKey)
+            .ToList();
+
+        return new ChecklistScopeHelper.MarshalContext(
+            marshalId,
+            assignedAreaIds,
+            assignedLocationIds,
+            areaLeadForAreaIds
+        );
+    }
+
+    /// <summary>
+    /// Builds marshal contexts for multiple marshals using preloaded data (no DB calls in loop).
+    /// </summary>
+    private static Dictionary<string, ChecklistScopeHelper.MarshalContext> BuildMarshalContextsFromPreloaded(
+        IEnumerable<string> marshalIds,
+        PreloadedEventData preloaded)
+    {
+        return marshalIds.ToDictionary(
+            marshalId => marshalId,
+            marshalId => BuildMarshalContextFromPreloaded(marshalId, preloaded)
         );
     }
 

@@ -448,12 +448,13 @@ public class EventFunctions
             PersonEntity? person = await _personRepository.GetByEmailAsync(email);
             if (person != null)
             {
-                // Get all EventAdmin roles for this person in this event
+                // Get all EventAdmin roles for this person in this event and delete in parallel
                 IEnumerable<EventRoleEntity> roles = await _eventRoleRepository.GetByPersonAndEventAsync(person.PersonId, eventId);
-                foreach (EventRoleEntity role in roles.Where(r => r.Role == Constants.RoleEventAdmin))
-                {
-                    await _eventRoleRepository.DeleteAsync(person.PersonId, role.RowKey);
-                }
+                List<Task> deleteTasks = roles
+                    .Where(r => r.Role == Constants.RoleEventAdmin)
+                    .Select(role => _eventRoleRepository.DeleteAsync(person.PersonId, role.RowKey))
+                    .ToList();
+                await Task.WhenAll(deleteTasks);
             }
 
             _logger.LogInformation($"Admin removed from event {eventId}: {email}");

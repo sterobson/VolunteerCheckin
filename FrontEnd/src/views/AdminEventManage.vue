@@ -513,6 +513,11 @@ const eventDetailsForm = ref({
   description: '',
   eventDate: '',
   timeZoneId: 'UTC',
+  peopleTerm: 'Marshals',
+  checkpointTerm: 'Checkpoints',
+  areaTerm: 'Areas',
+  checklistTerm: 'Checklists',
+  courseTerm: 'Course',
 });
 const eventDetailsFormDirty = ref(false);
 const showShiftCheckpointTimes = ref(false);
@@ -811,6 +816,7 @@ const loadEventData = async () => {
         checkpointTerm: event.value.checkpointTerm || 'Checkpoints',
         areaTerm: event.value.areaTerm || 'Areas',
         checklistTerm: event.value.checklistTerm || 'Checklists',
+        courseTerm: event.value.courseTerm || 'Course',
       };
       eventDetailsFormDirty.value = false;
       // Update global terminology settings

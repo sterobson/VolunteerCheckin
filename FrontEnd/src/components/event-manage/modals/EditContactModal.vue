@@ -324,6 +324,10 @@ watch(() => props.show, (newVal) => {
 
 const formatRoleName = (role) => {
   if (!role) return '';
+  // Special handling for AreaLead - use terminology
+  if (role === 'AreaLead') {
+    return `${terms.value.area} Lead`;
+  }
   return role
     .replace(/([A-Z])/g, ' $1')
     .replace(/^./, str => str.toUpperCase())

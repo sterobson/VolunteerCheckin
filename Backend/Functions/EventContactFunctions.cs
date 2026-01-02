@@ -23,6 +23,7 @@ public class EventContactFunctions
     private readonly IMarshalRepository _marshalRepository;
     private readonly IAssignmentRepository _assignmentRepository;
     private readonly IAreaRepository _areaRepository;
+    private readonly IEventRoleRepository _eventRoleRepository;
     private readonly ClaimsService _claimsService;
 
     // Built-in contact roles
@@ -32,7 +33,8 @@ public class EventContactFunctions
         Constants.ContactRoleEventDirector,
         Constants.ContactRoleMedicalLead,
         Constants.ContactRoleSafetyOfficer,
-        Constants.ContactRoleLogistics
+        Constants.ContactRoleLogistics,
+        Constants.ContactRoleAreaLead
     ];
 
     public EventContactFunctions(
@@ -42,6 +44,7 @@ public class EventContactFunctions
         IMarshalRepository marshalRepository,
         IAssignmentRepository assignmentRepository,
         IAreaRepository areaRepository,
+        IEventRoleRepository eventRoleRepository,
         ClaimsService claimsService)
     {
         _logger = logger;
@@ -50,6 +53,7 @@ public class EventContactFunctions
         _marshalRepository = marshalRepository;
         _assignmentRepository = assignmentRepository;
         _areaRepository = areaRepository;
+        _eventRoleRepository = eventRoleRepository;
         _claimsService = claimsService;
     }
 
@@ -135,6 +139,9 @@ public class EventContactFunctions
             };
 
             await _contactRepository.AddAsync(contact);
+
+            // Sync area lead role if this contact is linked to a marshal
+            await SyncAreaLeadRoleAsync(eventId, request.MarshalId, request.Role, scopeConfigs, claims.PersonId);
 
             _logger.LogInformation("Contact {ContactId} created for event {EventId} by {PersonId}", contactId, eventId, claims.PersonId);
 
@@ -251,6 +258,10 @@ public class EventContactFunctions
                 return new NotFoundObjectResult(new { message = Constants.ErrorContactNotFound });
             }
 
+            // Store old marshal ID for potential role cleanup
+            string? oldMarshalId = contact.MarshalId;
+            string oldRole = contact.Role;
+
             // Parse request
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
             UpdateEventContactRequest? request = JsonSerializer.Deserialize<UpdateEventContactRequest>(requestBody, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
@@ -299,6 +310,18 @@ public class EventContactFunctions
 
             await _contactRepository.UpdateAsync(contact);
 
+            // Handle area lead role changes
+            List<ScopeConfiguration> scopeConfigs = request.ScopeConfigurations ?? [];
+
+            // If marshal changed, remove role from old marshal first
+            if (oldMarshalId != request.MarshalId && !string.IsNullOrEmpty(oldMarshalId) && oldRole == Constants.ContactRoleAreaLead)
+            {
+                await RemoveAreaLeadRoleAsync(eventId, oldMarshalId);
+            }
+
+            // Sync area lead role for the current marshal
+            await SyncAreaLeadRoleAsync(eventId, request.MarshalId, request.Role, scopeConfigs, claims.PersonId);
+
             _logger.LogInformation("Contact {ContactId} updated for event {EventId} by {PersonId}", contactId, eventId, claims.PersonId);
 
             return new OkObjectResult(ToContactResponse(contact, linkedMarshal?.Name));
@@ -335,6 +358,12 @@ public class EventContactFunctions
                 return new NotFoundObjectResult(new { message = Constants.ErrorContactNotFound });
             }
 
+            // Remove area lead role if this was an AreaLead contact linked to a marshal
+            if (contact.Role == Constants.ContactRoleAreaLead && !string.IsNullOrEmpty(contact.MarshalId))
+            {
+                await RemoveAreaLeadRoleAsync(eventId, contact.MarshalId);
+            }
+
             await _contactRepository.DeleteAsync(eventId, contactId);
 
             _logger.LogInformation("Contact {ContactId} deleted for event {EventId} by {PersonId}", contactId, eventId, claims.PersonId);
@@ -360,8 +389,10 @@ public class EventContactFunctions
     {
         try
         {
-            // Build marshal context for scope evaluation
-            ScopeEvaluator.MarshalContext? marshalContext = await BuildMarshalContextAsync(eventId, marshalId);
+            // Build marshal context and checkpoint lookup together (avoids duplicate location fetch)
+            (ScopeEvaluator.MarshalContext? marshalContext, Dictionary<string, LocationEntity> checkpointLookup) =
+                await BuildMarshalContextWithCheckpointsAsync(eventId, marshalId);
+
             if (marshalContext == null)
             {
                 return new NotFoundObjectResult(new { message = Constants.ErrorMarshalNotFound });
@@ -369,9 +400,6 @@ public class EventContactFunctions
 
             // Get all contacts for the event
             IEnumerable<EventContactEntity> allContacts = await _contactRepository.GetByEventAsync(eventId);
-
-            // Build checkpoint lookup for scope evaluation
-            Dictionary<string, LocationEntity> checkpointLookup = await BuildCheckpointLookupAsync(eventId);
 
             // Filter contacts based on scope
             List<EventContactForMarshalResponse> relevantContacts = [];
@@ -519,19 +547,22 @@ public class EventContactFunctions
         return await _claimsService.GetClaimsAsync(sessionToken, eventId);
     }
 
-    private async Task<ScopeEvaluator.MarshalContext?> BuildMarshalContextAsync(string eventId, string marshalId)
+    /// <summary>
+    /// Builds marshal context and checkpoint lookup together to avoid duplicate location fetches.
+    /// </summary>
+    private async Task<(ScopeEvaluator.MarshalContext?, Dictionary<string, LocationEntity>)> BuildMarshalContextWithCheckpointsAsync(string eventId, string marshalId)
     {
         MarshalEntity? marshal = await _marshalRepository.GetAsync(eventId, marshalId);
         if (marshal == null)
         {
-            return null;
+            return (null, new Dictionary<string, LocationEntity>());
         }
 
         // Get marshal's assignments
         IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByMarshalAsync(eventId, marshalId);
         List<string> assignedLocationIds = assignments.Select(a => a.LocationId).ToList();
 
-        // Get checkpoints to determine areas
+        // Get checkpoints ONCE (will be reused for both context building and scope evaluation)
         IEnumerable<LocationEntity> checkpoints = await _locationRepository.GetByEventAsync(eventId);
         Dictionary<string, LocationEntity> checkpointLookup = checkpoints.ToDictionary(c => c.RowKey);
 
@@ -561,18 +592,14 @@ public class EventContactFunctions
             }
         }
 
-        return new ScopeEvaluator.MarshalContext(
+        ScopeEvaluator.MarshalContext context = new(
             MarshalId: marshalId,
             AssignedAreaIds: assignedAreaIds.ToList(),
             AssignedLocationIds: assignedLocationIds,
             AreaLeadForAreaIds: areaLeadForAreaIds
         );
-    }
 
-    private async Task<Dictionary<string, LocationEntity>> BuildCheckpointLookupAsync(string eventId)
-    {
-        IEnumerable<LocationEntity> checkpoints = await _locationRepository.GetByEventAsync(eventId);
-        return checkpoints.ToDictionary(c => c.RowKey);
+        return (context, checkpointLookup);
     }
 
     private static EventContactResponse ToContactResponse(EventContactEntity contact, string? marshalName)
@@ -596,6 +623,138 @@ public class EventContactFunctions
             CreatedAt: contact.CreatedAt,
             UpdatedAt: contact.UpdatedAt
         );
+    }
+
+    /// <summary>
+    /// Synchronizes the EventAreaLead role for a marshal based on their contact role.
+    /// If the contact has the AreaLead role and is linked to a marshal, the marshal gets promoted.
+    /// If the contact role changes or is deleted, the marshal is demoted.
+    /// </summary>
+    private async Task SyncAreaLeadRoleAsync(
+        string eventId,
+        string? marshalId,
+        string contactRole,
+        List<ScopeConfiguration> scopeConfigs,
+        string grantedByPersonId)
+    {
+        if (string.IsNullOrEmpty(marshalId))
+        {
+            return; // No marshal linked, nothing to do
+        }
+
+        // Get the marshal to find their PersonId
+        MarshalEntity? marshal = await _marshalRepository.GetAsync(eventId, marshalId);
+        if (marshal == null || string.IsNullOrEmpty(marshal.PersonId))
+        {
+            return;
+        }
+
+        string personId = marshal.PersonId;
+
+        // Find existing area lead role for this person/event
+        IEnumerable<EventRoleEntity> existingRoles = await _eventRoleRepository.GetByPersonAndEventAsync(personId, eventId);
+        EventRoleEntity? existingAreaLeadRole = existingRoles.FirstOrDefault(r => r.Role == Constants.RoleEventAreaLead);
+
+        if (contactRole == Constants.ContactRoleAreaLead)
+        {
+            // Extract area IDs from scope configurations
+            List<string> areaIds = [];
+            foreach (ScopeConfiguration config in scopeConfigs)
+            {
+                if (config.ItemType == "Area" && config.Ids != null)
+                {
+                    // If ALL_AREAS, get all area IDs for the event
+                    if (config.Ids.Contains(Constants.AllAreas))
+                    {
+                        IEnumerable<AreaEntity> allAreas = await _areaRepository.GetByEventAsync(eventId);
+                        areaIds.AddRange(allAreas.Select(a => a.RowKey));
+                    }
+                    else
+                    {
+                        areaIds.AddRange(config.Ids);
+                    }
+                }
+            }
+
+            // Remove duplicates
+            areaIds = areaIds.Distinct().ToList();
+
+            if (areaIds.Count == 0)
+            {
+                // No areas specified, cannot be an area lead without areas
+                // Remove existing role if any
+                if (existingAreaLeadRole != null)
+                {
+                    await _eventRoleRepository.DeleteAsync(personId, existingAreaLeadRole.RowKey);
+                    _logger.LogInformation("Removed EventAreaLead role for person {PersonId} in event {EventId} (no areas specified)", personId, eventId);
+                }
+                return;
+            }
+
+            if (existingAreaLeadRole != null)
+            {
+                // Update existing role with new area IDs
+                existingAreaLeadRole.AreaIdsJson = JsonSerializer.Serialize(areaIds);
+                await _eventRoleRepository.UpdateAsync(existingAreaLeadRole);
+                _logger.LogInformation("Updated EventAreaLead role for person {PersonId} in event {EventId} with areas: {AreaIds}", personId, eventId, string.Join(", ", areaIds));
+            }
+            else
+            {
+                // Create new area lead role
+                string roleId = Guid.NewGuid().ToString();
+                EventRoleEntity newRole = new EventRoleEntity
+                {
+                    PartitionKey = personId,
+                    RowKey = EventRoleEntity.CreateRowKey(eventId, roleId),
+                    PersonId = personId,
+                    EventId = eventId,
+                    Role = Constants.RoleEventAreaLead,
+                    AreaIdsJson = JsonSerializer.Serialize(areaIds),
+                    GrantedByPersonId = grantedByPersonId,
+                    GrantedAt = DateTime.UtcNow
+                };
+                await _eventRoleRepository.AddAsync(newRole);
+                _logger.LogInformation("Granted EventAreaLead role to person {PersonId} in event {EventId} for areas: {AreaIds}", personId, eventId, string.Join(", ", areaIds));
+            }
+        }
+        else
+        {
+            // Contact role is not AreaLead, remove any existing area lead role
+            if (existingAreaLeadRole != null)
+            {
+                await _eventRoleRepository.DeleteAsync(personId, existingAreaLeadRole.RowKey);
+                _logger.LogInformation("Removed EventAreaLead role for person {PersonId} in event {EventId} (contact role changed)", personId, eventId);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Removes area lead role when a contact is deleted.
+    /// </summary>
+    private async Task RemoveAreaLeadRoleAsync(string eventId, string? marshalId)
+    {
+        if (string.IsNullOrEmpty(marshalId))
+        {
+            return;
+        }
+
+        MarshalEntity? marshal = await _marshalRepository.GetAsync(eventId, marshalId);
+        if (marshal == null || string.IsNullOrEmpty(marshal.PersonId))
+        {
+            return;
+        }
+
+        string personId = marshal.PersonId;
+
+        // Find and delete existing area lead role
+        IEnumerable<EventRoleEntity> existingRoles = await _eventRoleRepository.GetByPersonAndEventAsync(personId, eventId);
+        EventRoleEntity? existingAreaLeadRole = existingRoles.FirstOrDefault(r => r.Role == Constants.RoleEventAreaLead);
+
+        if (existingAreaLeadRole != null)
+        {
+            await _eventRoleRepository.DeleteAsync(personId, existingAreaLeadRole.RowKey);
+            _logger.LogInformation("Removed EventAreaLead role for person {PersonId} in event {EventId} (contact deleted)", personId, eventId);
+        }
     }
 
     #endregion

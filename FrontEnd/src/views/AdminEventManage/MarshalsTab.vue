@@ -34,7 +34,6 @@
                 {{ sortOrder === 'asc' ? '▲' : '▼' }}
               </span>
             </th>
-            <th class="hide-on-mobile">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -66,16 +65,6 @@
                     {{ getStatusIcon(assignment) }}
                   </span>
                 </td>
-                <td v-if="index === 0" :rowspan="getMarshalAssignments(marshal.id).length" class="hide-on-mobile">
-                  <div class="action-buttons" @click.stop>
-                    <button @click="$emit('select-marshal', marshal)" class="btn btn-small btn-secondary">
-                      Edit
-                    </button>
-                    <button @click="$emit('delete-marshal', marshal)" class="btn btn-small btn-danger">
-                      Delete
-                    </button>
-                  </div>
-                </td>
               </tr>
             </template>
             <tr v-else class="marshal-row" @click="$emit('select-marshal', marshal)">
@@ -84,16 +73,6 @@
               <td>
                 <span class="hide-on-mobile">-</span>
                 <span class="status-icon show-on-mobile" style="color: #999;">-</span>
-              </td>
-              <td class="hide-on-mobile">
-                <div class="action-buttons" @click.stop>
-                  <button @click="$emit('select-marshal', marshal)" class="btn btn-small btn-secondary">
-                    Edit
-                  </button>
-                  <button @click="$emit('delete-marshal', marshal)" class="btn btn-small btn-danger">
-                    Delete
-                  </button>
-                </div>
               </td>
             </tr>
           </template>

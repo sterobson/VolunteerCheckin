@@ -3,7 +3,7 @@
     <!-- Header with add button -->
     <div class="preview-actions">
       <p class="preview-header">
-        {{ termsLower.checklists }} that will apply at this {{ termsLower.checkpoint }}:
+        {{ isEditing ? `Add new ${termsLower.checklist} for this ${termsLower.checkpoint}:` : `${termsLower.checklists} that will apply at this ${termsLower.checkpoint}:` }}
       </p>
       <button
         type="button"
@@ -68,16 +68,16 @@
       </div>
     </div>
 
-    <!-- Empty state -->
-    <div v-if="filteredItems.length === 0 && pendingNewItems.length === 0" class="empty-state">
+    <!-- Empty state (only shown when creating, not editing) -->
+    <div v-if="!isEditing && filteredItems.length === 0 && pendingNewItems.length === 0" class="empty-state">
       <p>No {{ termsLower.checklists }} will apply based on the current {{ termsLower.area }} assignments.</p>
       <p v-if="pendingAreaIds.length === 0" class="help-text">
         Assign {{ termsLower.areas }} to see relevant {{ termsLower.checklists }}.
       </p>
     </div>
 
-    <!-- Existing items that match -->
-    <div v-if="filteredItems.length > 0" class="checklist-items">
+    <!-- Existing items that match (only shown when creating, not editing) -->
+    <div v-if="!isEditing && filteredItems.length > 0" class="checklist-items">
       <div
         v-for="item in filteredItems"
         :key="item.id"

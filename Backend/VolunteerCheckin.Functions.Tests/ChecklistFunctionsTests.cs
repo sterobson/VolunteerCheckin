@@ -1670,4 +1670,218 @@ public class ChecklistFunctionsTests
     }
 
     #endregion
+
+    #region N+1 Query Fix Tests
+
+    [TestMethod]
+    public async Task GetCheckpointChecklist_UsesPreloadedData_NoNPlusOneQueries()
+    {
+        // Arrange
+        LocationEntity location = new()
+        {
+            PartitionKey = EventId,
+            RowKey = LocationId,
+            EventId = EventId,
+            Name = "Test Location",
+            Latitude = 51.5074,
+            Longitude = -0.1278,
+            AreaIdsJson = JsonSerializer.Serialize(new[] { AreaId })
+        };
+
+        List<AssignmentEntity> allAssignments = new()
+        {
+            new AssignmentEntity { EventId = EventId, MarshalId = "marshal-1", LocationId = LocationId },
+            new AssignmentEntity { EventId = EventId, MarshalId = "marshal-2", LocationId = LocationId },
+            new AssignmentEntity { EventId = EventId, MarshalId = "marshal-3", LocationId = "other-location" }
+        };
+
+        AreaEntity area = new()
+        {
+            PartitionKey = EventId,
+            RowKey = AreaId,
+            EventId = EventId,
+            Name = "Test Area",
+            AreaLeadMarshalIdsJson = "[]"
+        };
+
+        _mockLocationRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([location]);
+
+        // Batch load - should be called once
+        _mockAssignmentRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync(allAssignments);
+
+        _mockAreaRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([area]);
+
+        _mockChecklistItemRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([]);
+
+        _mockChecklistCompletionRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([]);
+
+        _mockMarshalRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([]);
+
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(new { });
+
+        // Act
+        IActionResult result = await _functions.GetCheckpointChecklist(httpRequest, EventId, LocationId);
+
+        // Assert
+        result.ShouldBeOfType<OkObjectResult>();
+
+        // Verify batch loading was used (each called exactly once)
+        _mockAssignmentRepository.Verify(r => r.GetByEventAsync(EventId), Times.Once);
+        _mockLocationRepository.Verify(r => r.GetByEventAsync(EventId), Times.Once);
+        _mockAreaRepository.Verify(r => r.GetByEventAsync(EventId), Times.Once);
+
+        // Verify individual marshal queries were NOT called (N+1 prevention)
+        _mockAssignmentRepository.Verify(r => r.GetByMarshalAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        _mockAssignmentRepository.Verify(r => r.GetByLocationAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [TestMethod]
+    public async Task GetAreaChecklist_UsesPreloadedData_NoNPlusOneQueries()
+    {
+        // Arrange
+        LocationEntity location1 = new()
+        {
+            PartitionKey = EventId,
+            RowKey = "loc-1",
+            EventId = EventId,
+            Name = "Location 1",
+            Latitude = 51.5074,
+            Longitude = -0.1278,
+            AreaIdsJson = JsonSerializer.Serialize(new[] { AreaId })
+        };
+
+        LocationEntity location2 = new()
+        {
+            PartitionKey = EventId,
+            RowKey = "loc-2",
+            EventId = EventId,
+            Name = "Location 2",
+            Latitude = 51.5075,
+            Longitude = -0.1279,
+            AreaIdsJson = JsonSerializer.Serialize(new[] { AreaId })
+        };
+
+        List<AssignmentEntity> allAssignments = new()
+        {
+            new AssignmentEntity { EventId = EventId, MarshalId = "marshal-1", LocationId = "loc-1" },
+            new AssignmentEntity { EventId = EventId, MarshalId = "marshal-2", LocationId = "loc-2" },
+            new AssignmentEntity { EventId = EventId, MarshalId = "marshal-3", LocationId = "other-area-loc" }
+        };
+
+        AreaEntity area = new()
+        {
+            PartitionKey = EventId,
+            RowKey = AreaId,
+            EventId = EventId,
+            Name = "Test Area",
+            AreaLeadMarshalIdsJson = "[]"
+        };
+
+        _mockLocationRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([location1, location2]);
+
+        // Batch load - should be called once
+        _mockAssignmentRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync(allAssignments);
+
+        _mockAreaRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([area]);
+
+        _mockChecklistItemRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([]);
+
+        _mockChecklistCompletionRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([]);
+
+        _mockMarshalRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([]);
+
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(new { });
+
+        // Act
+        IActionResult result = await _functions.GetAreaChecklist(httpRequest, EventId, AreaId);
+
+        // Assert
+        result.ShouldBeOfType<OkObjectResult>();
+
+        // Verify batch loading was used (each called exactly once)
+        _mockAssignmentRepository.Verify(r => r.GetByEventAsync(EventId), Times.Once);
+        _mockLocationRepository.Verify(r => r.GetByEventAsync(EventId), Times.Once);
+        _mockAreaRepository.Verify(r => r.GetByEventAsync(EventId), Times.Once);
+
+        // Verify individual queries were NOT called (N+1 prevention)
+        _mockAssignmentRepository.Verify(r => r.GetByMarshalAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        _mockAssignmentRepository.Verify(r => r.GetByLocationAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        _mockAreaRepository.Verify(r => r.GetAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [TestMethod]
+    public async Task GetCheckpointChecklist_LocationNotFound_ReturnsNotFound()
+    {
+        // Arrange - Empty locations means the requested location doesn't exist
+        _mockLocationRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([]);
+
+        _mockAssignmentRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([]);
+
+        _mockAreaRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([]);
+
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(new { });
+
+        // Act
+        IActionResult result = await _functions.GetCheckpointChecklist(httpRequest, EventId, "non-existent-location");
+
+        // Assert
+        result.ShouldBeOfType<NotFoundObjectResult>();
+    }
+
+    [TestMethod]
+    public async Task GetAreaChecklist_AreaNotFound_ReturnsNotFound()
+    {
+        // Arrange - Empty areas means the requested area doesn't exist
+        _mockLocationRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([]);
+
+        _mockAssignmentRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([]);
+
+        _mockAreaRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([]);
+
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(new { });
+
+        // Act
+        IActionResult result = await _functions.GetAreaChecklist(httpRequest, EventId, "non-existent-area");
+
+        // Assert
+        result.ShouldBeOfType<NotFoundObjectResult>();
+    }
+
+    #endregion
 }

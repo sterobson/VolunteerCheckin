@@ -691,3 +691,65 @@ public record ContactRolesResponse(
     List<string> BuiltInRoles,
     List<string> CustomRoles
 );
+
+// Area Lead Dashboard DTOs
+
+/// <summary>
+/// Response for the area lead dashboard - contains all data in a single call
+/// </summary>
+public record AreaLeadDashboardResponse(
+    List<AreaLeadAreaInfo> Areas,
+    List<AreaLeadCheckpointInfo> Checkpoints
+);
+
+/// <summary>
+/// Area information for area lead dashboard
+/// </summary>
+public record AreaLeadAreaInfo(
+    string AreaId,
+    string Name,
+    string Color
+);
+
+/// <summary>
+/// Checkpoint information for area lead dashboard
+/// </summary>
+public record AreaLeadCheckpointInfo(
+    string CheckpointId,
+    string Name,
+    string Description,
+    double Latitude,
+    double Longitude,
+    string? AreaName,
+    List<string> AreaIds,
+    List<AreaLeadMarshalInfo> Marshals,
+    int OutstandingTaskCount,
+    List<AreaLeadTaskInfo> OutstandingTasks
+);
+
+/// <summary>
+/// Marshal information for area lead dashboard
+/// </summary>
+public record AreaLeadMarshalInfo(
+    string MarshalId,
+    string Name,
+    string? Email,
+    string? PhoneNumber,
+    bool IsCheckedIn,
+    DateTime? CheckInTime,
+    string? CheckInMethod,
+    int OutstandingTaskCount,
+    List<AreaLeadTaskInfo> OutstandingTasks
+);
+
+/// <summary>
+/// Task information for area lead dashboard
+/// </summary>
+public record AreaLeadTaskInfo(
+    string ItemId,
+    string Text,
+    string Scope,
+    string ContextType,
+    string ContextId,
+    string? MarshalId
+);

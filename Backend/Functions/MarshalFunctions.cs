@@ -251,24 +251,22 @@ public class MarshalFunctions
 
             IEnumerable<MarshalEntity> marshalEntities = await _marshalRepository.GetByEventAsync(eventId);
             _logger.LogInformation($"Found {marshalEntities.Count()} marshals for event {eventId}");
+
+            // Preload all assignments for the event (single DB call instead of N calls)
+            IEnumerable<AssignmentEntity> allAssignments = await _assignmentRepository.GetByEventAsync(eventId);
+            Dictionary<string, List<AssignmentEntity>> assignmentsByMarshal = allAssignments
+                .GroupBy(a => a.MarshalId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
             List<MarshalWithPermissionsResponse> marshals = [];
 
             foreach (MarshalEntity marshalEntity in marshalEntities)
             {
-                // Get assignments for this marshal
-                IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByMarshalAsync(eventId, marshalEntity.MarshalId);
+                // Get assignments from preloaded dictionary (O(1) lookup instead of DB call)
+                List<AssignmentEntity> assignments = assignmentsByMarshal.GetValueOrDefault(marshalEntity.MarshalId, []);
 
-                List<string> assignedLocationIds = [];
-                bool isCheckedIn = false;
-
-                foreach (AssignmentEntity assignment in assignments)
-                {
-                    assignedLocationIds.Add(assignment.LocationId);
-                    if (assignment.IsCheckedIn)
-                    {
-                        isCheckedIn = true;
-                    }
-                }
+                List<string> assignedLocationIds = assignments.Select(a => a.LocationId).ToList();
+                bool isCheckedIn = assignments.Any(a => a.IsCheckedIn);
 
                 bool canViewContact = _contactPermissionService.CanViewContactDetails(permissions, marshalEntity.MarshalId);
                 bool canModify = _contactPermissionService.CanModifyMarshal(permissions, marshalEntity.MarshalId);
@@ -575,21 +573,8 @@ public class MarshalFunctions
             }
 
             // Construct the magic link URL
-            string baseUrl = req.Headers["Origin"].FirstOrDefault()
-                ?? req.Headers["Referer"].FirstOrDefault()?.TrimEnd('/')
-                ?? "https://volunteer-checkin.example.com";
-
-            // Remove any path from the URL to get just the origin
-            if (Uri.TryCreate(baseUrl, UriKind.Absolute, out Uri? uri))
-            {
-                baseUrl = $"{uri.Scheme}://{uri.Host}";
-                if (!uri.IsDefaultPort)
-                {
-                    baseUrl += $":{uri.Port}";
-                }
-            }
-
-            string magicLink = $"{baseUrl}/#/event/{eventId}?code={marshalEntity.MagicCode}";
+            string frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:5174";
+            string magicLink = $"{frontendUrl}/#/event/{eventId}?code={marshalEntity.MagicCode}";
 
             return new OkObjectResult(new MarshalMagicLinkResponse(
                 marshalEntity.MagicCode,
@@ -660,21 +645,8 @@ public class MarshalFunctions
             string eventName = eventEntity?.Name ?? "Event";
 
             // Construct the magic link URL
-            string baseUrl = req.Headers["Origin"].FirstOrDefault()
-                ?? req.Headers["Referer"].FirstOrDefault()?.TrimEnd('/')
-                ?? "https://volunteer-checkin.example.com";
-
-            // Remove any path from the URL to get just the origin
-            if (Uri.TryCreate(baseUrl, UriKind.Absolute, out Uri? uri))
-            {
-                baseUrl = $"{uri.Scheme}://{uri.Host}";
-                if (!uri.IsDefaultPort)
-                {
-                    baseUrl += $":{uri.Port}";
-                }
-            }
-
-            string magicLink = $"{baseUrl}/#/event/{eventId}?code={marshalEntity.MagicCode}";
+            string frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:5174";
+            string magicLink = $"{frontendUrl}/#/event/{eventId}?code={marshalEntity.MagicCode}";
 
             // Send the email
             await _emailService.SendMarshalMagicLinkEmailAsync(

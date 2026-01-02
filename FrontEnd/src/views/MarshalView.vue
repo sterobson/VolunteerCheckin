@@ -7,7 +7,7 @@
           Emergency Info
         </button>
         <button v-if="isAuthenticated" @click="handleLogout" class="btn-logout">
-          Logout
+          Logout {{ currentPerson?.name || '' }}
         </button>
       </div>
     </header>
@@ -34,9 +34,8 @@
 
       <!-- Marshal Dashboard -->
       <div v-else class="dashboard">
-        <div class="welcome-bar">
+        <div v-if="canSwitchToAdmin || isAdminButNeedsReauth" class="welcome-bar">
           <div class="welcome-info">
-            <span class="welcome-name">{{ currentPerson?.name || 'Marshal' }}</span>
             <span v-if="currentPerson?.email" class="welcome-email">{{ currentPerson.email }}</span>
           </div>
           <div v-if="canSwitchToAdmin" class="mode-switch">
@@ -77,6 +76,34 @@
                   <p class="detail-value">{{ event.description }}</p>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <!-- Route/Map Section -->
+          <div class="accordion-section">
+            <button
+              class="accordion-header"
+              :class="{ active: expandedSection === 'map' }"
+              @click="toggleSection('map')"
+            >
+              <span class="accordion-title">
+                <span class="section-icon" v-html="getIcon('course')"></span>
+                {{ terms.course }}
+                <span v-if="userLocation" class="location-status active">GPS Active</span>
+                <span v-else class="location-status">GPS Inactive</span>
+              </span>
+              <span class="accordion-icon">{{ expandedSection === 'map' ? '−' : '+' }}</span>
+            </button>
+            <div v-if="expandedSection === 'map'" class="accordion-content map-content">
+              <MapView
+                :locations="allLocations"
+                :route="eventRoute"
+                :center="mapCenter"
+                :zoom="15"
+                :user-location="userLocation"
+                :highlight-location-ids="assignmentLocationIds"
+                :marshal-mode="true"
+              />
             </div>
           </div>
 
@@ -224,19 +251,19 @@
             >
               <span class="accordion-title">
                 <span class="section-icon" v-html="getIcon('checklist')"></span>
-                Your {{ termsLower.checklists }} ({{ completedChecklistCount }} of {{ checklistItems.length }} complete)
+                Your {{ termsLower.checklists }} ({{ completedChecklistCount }} of {{ visibleChecklistItems.length }} complete)
               </span>
               <span class="accordion-icon">{{ expandedSection === 'checklist' ? '−' : '+' }}</span>
             </button>
             <div v-if="expandedSection === 'checklist'" class="accordion-content">
               <div v-if="checklistLoading" class="loading">Loading checklist...</div>
               <div v-else-if="checklistError" class="error">{{ checklistError }}</div>
-              <div v-else-if="checklistItems.length === 0" class="empty-state">
+              <div v-else-if="visibleChecklistItems.length === 0" class="empty-state">
                 <p>No {{ termsLower.checklists }} for you.</p>
               </div>
               <div v-else class="checklist-items">
                 <div
-                  v-for="item in checklistItems"
+                  v-for="item in visibleChecklistItems"
                   :key="item.itemId"
                   class="checklist-item"
                   :class="{ 'item-completed': item.isCompleted }"
@@ -250,7 +277,7 @@
                     />
                   </div>
                   <div class="item-content">
-                    <div class="item-text">{{ item.text }}</div>
+                    <div class="item-text" :class="{ 'text-completed': item.isCompleted }">{{ item.text }}</div>
                     <div v-if="getContextName(item)" class="item-context">
                       {{ getContextName(item) }}
                     </div>
@@ -277,7 +304,7 @@
             >
               <span class="accordion-title">
                 <span class="section-icon" v-html="getIcon('contacts')"></span>
-                Contacts ({{ eventContacts.length }})
+                Your contacts ({{ eventContacts.length }})
               </span>
               <span class="accordion-icon">{{ expandedSection === 'eventContacts' ? '−' : '+' }}</span>
             </button>
@@ -329,7 +356,7 @@
             >
               <span class="accordion-title">
                 <span class="section-icon" v-html="getIcon('notes')"></span>
-                Notes ({{ notes.length }})
+                Your notes ({{ notes.length }})
               </span>
               <span class="accordion-icon">{{ expandedSection === 'notes' ? '−' : '+' }}</span>
             </button>
@@ -347,50 +374,48 @@
             </div>
           </div>
 
-          <!-- Map Section -->
-          <div class="accordion-section">
+          <!-- Area Lead Section (if user is an area lead) -->
+          <div v-if="isAreaLead" class="accordion-section">
             <button
               class="accordion-header"
-              :class="{ active: expandedSection === 'map' }"
-              @click="toggleSection('map')"
+              :class="{ active: expandedSection === 'areaLead' }"
+              @click="toggleSection('areaLead')"
             >
               <span class="accordion-title">
-                <span class="section-icon" v-html="getIcon('map')"></span>
-                Map
-                <span v-if="userLocation" class="location-status active">GPS Active</span>
-                <span v-else class="location-status">GPS Inactive</span>
+                <span class="section-icon" v-html="getIcon('checkpoint')"></span>
+                {{ terms.checkpoints }} in your {{ termsLower.areas }}
+                <span v-if="areaLeadRef?.areas?.length > 0" class="area-lead-badges">
+                  <span
+                    v-for="area in areaLeadRef.areas"
+                    :key="area.areaId"
+                    class="area-lead-badge"
+                    :style="{ backgroundColor: area.color || '#667eea' }"
+                  >
+                    {{ area.name }}
+                  </span>
+                </span>
               </span>
-              <span class="accordion-icon">{{ expandedSection === 'map' ? '−' : '+' }}</span>
+              <span class="accordion-icon">{{ expandedSection === 'areaLead' ? '−' : '+' }}</span>
             </button>
-            <div v-if="expandedSection === 'map'" class="accordion-content map-content">
-              <MapView
-                :locations="allLocations"
+            <div v-if="expandedSection === 'areaLead'" class="accordion-content area-lead-accordion-content">
+              <AreaLeadSection
+                ref="areaLeadRef"
+                :event-id="route.params.eventId"
+                :area-ids="areaLeadAreaIds"
+                :marshal-id="currentMarshalId"
                 :route="eventRoute"
-                :center="mapCenter"
-                :zoom="15"
-                :user-location="userLocation"
-                :highlight-location-ids="assignmentLocationIds"
-                :marshal-mode="true"
+                @checklist-updated="loadChecklist"
               />
             </div>
           </div>
         </div>
-
-        <!-- Area Lead Section (if user is an area lead) -->
-        <AreaLeadSection
-          v-if="isAreaLead"
-          :event-id="route.params.eventId"
-          :area-ids="areaLeadAreaIds"
-          :marshal-id="currentMarshalId"
-          @checklist-updated="loadChecklist"
-        />
       </div>
     </div>
 
     <!-- Emergency Contact Modal -->
     <EmergencyContactModal
       :show="showEmergency"
-      :contacts="event?.emergencyContacts || []"
+      :contacts="emergencyContacts"
       @close="showEmergency = false"
     />
 
@@ -483,6 +508,9 @@ const savingChecklist = ref(false);
 // Notes state
 const notes = ref([]);
 
+// Area Lead ref
+const areaLeadRef = ref(null);
+
 // UI state
 const showEmergency = ref(false);
 const showConfirmModal = ref(false);
@@ -564,9 +592,28 @@ const assignedLocation = computed(() => {
   return allLocations.value.find(loc => loc.id === primaryAssignment.value.locationId);
 });
 
-// Checklist completion count
+// Filter out completed shared tasks that the marshal doesn't need to see
+// Keep: incomplete tasks, personal tasks (completed or not), tasks completed by this marshal
+const visibleChecklistItems = computed(() => {
+  return checklistItems.value.filter(item => {
+    // Always show incomplete tasks
+    if (!item.isCompleted) return true;
+
+    // Hide completed shared tasks (OnePerCheckpoint, OnePerArea, OneLeadPerArea)
+    // These are tasks where "anyone" could complete them, so once done, no need to show
+    const sharedScopes = ['OnePerCheckpoint', 'OnePerArea', 'OneLeadPerArea'];
+    if (sharedScopes.includes(item.matchedScope)) {
+      return false;
+    }
+
+    // Show all other completed tasks (personal tasks, everyone tasks, etc.)
+    return true;
+  });
+});
+
+// Checklist completion count (from visible items only)
 const completedChecklistCount = computed(() => {
-  return checklistItems.value.filter(item => item.isCompleted).length;
+  return visibleChecklistItems.value.filter(item => item.isCompleted).length;
 });
 
 // Event contacts - loaded from new contacts API
@@ -578,6 +625,12 @@ const eventContacts = computed(() => {
   // Use new contacts API data, filtering to show only event-wide contacts
   // (those not specifically tied to areas/checkpoints in their scope)
   return myContacts.value;
+});
+
+// Emergency contacts - filter for specific roles that should be shown in emergency modal
+const emergencyContacts = computed(() => {
+  const emergencyRoles = ['EmergencyContact', 'EventDirector', 'MedicalLead', 'SafetyOfficer'];
+  return myContacts.value.filter(contact => emergencyRoles.includes(contact.role));
 });
 
 // Area contacts - loaded from API, grouped by area
@@ -1542,6 +1595,11 @@ onUnmounted(() => {
   color: #333;
 }
 
+.item-text.text-completed {
+  text-decoration: line-through;
+  color: #888;
+}
+
 .item-context {
   font-size: 0.85rem;
   color: #667eea;
@@ -1845,6 +1903,28 @@ onUnmounted(() => {
   font-size: 0.75rem;
   font-weight: 500;
   border-radius: 12px;
+}
+
+/* Area Lead badges in accordion header */
+.area-lead-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-left: 0.5rem;
+}
+
+.area-lead-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: white;
+  border-radius: 10px;
+}
+
+/* Area lead accordion content */
+.area-lead-accordion-content {
+  padding: 0.5rem;
 }
 
 /* Checkpoint marshals list */

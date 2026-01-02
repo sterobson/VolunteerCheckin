@@ -436,23 +436,16 @@ public class LocationFunctions
                         assignmentsCreated += newAssignments;
                         locationsCreated++;
                     }
+
+                    // Validate coordinates during import (no extra DB fetch needed)
+                    if ((row.Latitude == 0 && row.Longitude == 0) || double.IsNaN(row.Latitude) || double.IsNaN(row.Longitude))
+                    {
+                        parseResult.Errors.Add($"Warning: Location '{row.Name}' has no valid coordinates (lat: {row.Latitude}, long: {row.Longitude})");
+                    }
                 }
                 catch (Exception ex)
                 {
                     parseResult.Errors.Add($"Failed to process location '{row.Name}': {ex.Message}");
-                }
-            }
-
-            // Warn about new locations with missing or zero lat/long
-            if (deleteExisting || locationsCreated > 0)
-            {
-                IEnumerable<LocationEntity> allLocations = await _locationRepository.GetByEventAsync(eventId);
-                foreach (LocationEntity location in allLocations)
-                {
-                    if ((location.Latitude == 0 && location.Longitude == 0) || double.IsNaN(location.Latitude) || double.IsNaN(location.Longitude))
-                    {
-                        parseResult.Errors.Add($"Warning: Location '{location.Name}' has no valid coordinates (lat: {location.Latitude}, long: {location.Longitude})");
-                    }
                 }
             }
 
@@ -621,6 +614,9 @@ public class LocationFunctions
             }
 
             IEnumerable<LocationEntity> locationEntities = await _locationRepository.GetByEventAsync(eventId);
+
+            // Prepare updates and execute in parallel
+            List<Task> updateTasks = [];
             int updatedCount = 0;
 
             foreach (LocationEntity location in locationEntities)
@@ -641,10 +637,13 @@ public class LocationFunctions
 
                 if (updated)
                 {
-                    await _locationRepository.UpdateAsync(location);
+                    updateTasks.Add(_locationRepository.UpdateAsync(location));
                     updatedCount++;
                 }
             }
+
+            // Execute all updates in parallel
+            await Task.WhenAll(updateTasks);
 
             _logger.LogInformation($"Bulk updated {updatedCount} location times for event {eventId}");
 

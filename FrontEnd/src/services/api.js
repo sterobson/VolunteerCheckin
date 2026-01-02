@@ -123,6 +123,7 @@ export const areasApi = {
   recalculate: (eventId) => api.post(`/areas/recalculate/${eventId}`),
   getCheckpoints: (eventId, areaId) => api.get(`/areas/${eventId}/${areaId}/locations`),
   getAreaLeads: (eventId, areaId) => api.get(`/areas/${eventId}/${areaId}/leads`),
+  getAreaLeadDashboard: (eventId) => api.get(`/events/${eventId}/area-lead-dashboard`),
 };
 
 // Checklist API

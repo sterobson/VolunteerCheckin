@@ -8,27 +8,37 @@
     <!-- Emergency contacts list -->
     <div v-if="contacts && contacts.length > 0" class="emergency-contacts-list">
       <div
-        v-for="(contact, index) in contacts"
-        :key="index"
+        v-for="contact in contacts"
+        :key="contact.contactId || contact.name"
         class="emergency-contact-item"
       >
-        <h3>{{ contact.name }}</h3>
+        <div class="contact-header">
+          <h3>{{ contact.name }}</h3>
+          <span v-if="contact.role" class="role-badge">{{ formatRoleName(contact.role) }}</span>
+        </div>
 
         <div class="contact-details">
-          <div class="info-section">
+          <div v-if="contact.phone" class="info-section">
             <label>Phone Number</label>
             <a :href="`tel:${contact.phone}`" class="phone-link">
               {{ contact.phone }}
             </a>
           </div>
 
-          <div v-if="contact.details" class="info-section">
+          <div v-if="contact.email" class="info-section">
+            <label>Email</label>
+            <a :href="`mailto:${contact.email}`" class="email-link">
+              {{ contact.email }}
+            </a>
+          </div>
+
+          <div v-if="contact.notes || contact.details" class="info-section">
             <label>Details</label>
-            <p>{{ contact.details }}</p>
+            <p>{{ contact.notes || contact.details }}</p>
           </div>
         </div>
 
-        <a :href="`tel:${contact.phone}`" class="btn btn-danger btn-full">
+        <a v-if="contact.phone" :href="`tel:${contact.phone}`" class="btn btn-danger btn-full">
           Call {{ contact.name }}
         </a>
       </div>
@@ -66,6 +76,18 @@ const emit = defineEmits(['close']);
 const handleClose = () => {
   emit('close');
 };
+
+const formatRoleName = (role) => {
+  if (!role) return '';
+  const roleMap = {
+    'EmergencyContact': 'Emergency Contact',
+    'EventDirector': 'Event Director',
+    'MedicalLead': 'Medical Lead',
+    'SafetyOfficer': 'Safety Officer',
+    'Logistics': 'Logistics',
+  };
+  return roleMap[role] || role.replace(/([A-Z])/g, ' $1').trim();
+};
 </script>
 
 <style scoped>
@@ -82,10 +104,29 @@ const handleClose = () => {
   border: 1px solid #dee2e6;
 }
 
+.contact-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .emergency-contact-item h3 {
-  margin: 0 0 1rem 0;
+  margin: 0;
   color: #333;
   font-size: 1.1rem;
+}
+
+.role-badge {
+  padding: 0.25rem 0.6rem;
+  background: #dc3545;
+  color: white;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .contact-details {
@@ -116,6 +157,16 @@ const handleClose = () => {
 }
 
 .phone-link:hover {
+  text-decoration: underline;
+}
+
+.email-link {
+  color: #007bff;
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+.email-link:hover {
   text-decoration: underline;
 }
 

@@ -3,7 +3,7 @@
     <!-- Header with add button -->
     <div class="preview-actions">
       <p class="preview-header">
-        Notes that will be visible at this {{ termsLower.checkpoint }}:
+        {{ isEditing ? `Add new note for this ${termsLower.checkpoint}:` : `Notes that will be visible at this ${termsLower.checkpoint}:` }}
       </p>
       <button
         type="button"
@@ -67,16 +67,16 @@
       </div>
     </div>
 
-    <!-- Empty state -->
-    <div v-if="filteredNotes.length === 0 && pendingNewNotes.length === 0" class="empty-state">
+    <!-- Empty state (only shown when creating, not editing) -->
+    <div v-if="!isEditing && filteredNotes.length === 0 && pendingNewNotes.length === 0" class="empty-state">
       <p>No notes will apply based on the current {{ termsLower.area }} assignments.</p>
       <p v-if="pendingAreaIds.length === 0" class="help-text">
         Assign {{ termsLower.areas }} to see relevant notes.
       </p>
     </div>
 
-    <!-- Existing notes that match -->
-    <div v-if="filteredNotes.length > 0" class="notes-list">
+    <!-- Existing notes that match (only shown when creating, not editing) -->
+    <div v-if="!isEditing && filteredNotes.length > 0" class="notes-list">
       <div
         v-for="note in filteredNotes"
         :key="note.id"
@@ -119,6 +119,10 @@ const props = defineProps({
   modelValue: {
     type: Array,
     default: () => [],
+  },
+  isEditing: {
+    type: Boolean,
+    default: false,
   },
 });
 

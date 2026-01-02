@@ -216,13 +216,10 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetByEventAsync(eventId))
                 .ReturnsAsync(marshals);
 
+            // Now uses GetByEventAsync for batch loading (N+1 fix)
             _mockAssignmentRepository
-                .Setup(r => r.GetByMarshalAsync(eventId, "marshal-1"))
-                .ReturnsAsync(new[] { assignments[0] });
-
-            _mockAssignmentRepository
-                .Setup(r => r.GetByMarshalAsync(eventId, "marshal-2"))
-                .ReturnsAsync(new[] { assignments[1] });
+                .Setup(r => r.GetByEventAsync(eventId))
+                .ReturnsAsync(assignments);
 
             HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth(TestSessionToken);
 
@@ -239,6 +236,49 @@ namespace VolunteerCheckin.Functions.Tests
             marshalList.Count.ShouldBe(2);
             marshalList[0].IsCheckedIn.ShouldBeTrue();
             marshalList[1].IsCheckedIn.ShouldBeFalse();
+        }
+
+        [TestMethod]
+        public async Task GetMarshalsByEvent_UsesPreloadedAssignments_NoNPlusOneQueries()
+        {
+            // Arrange
+            string eventId = "event-123";
+
+            List<MarshalEntity> marshals = new()
+            {
+                new MarshalEntity { MarshalId = "marshal-1", EventId = eventId, Name = "Marshal 1" },
+                new MarshalEntity { MarshalId = "marshal-2", EventId = eventId, Name = "Marshal 2" },
+                new MarshalEntity { MarshalId = "marshal-3", EventId = eventId, Name = "Marshal 3" }
+            };
+
+            List<AssignmentEntity> assignments = new()
+            {
+                new AssignmentEntity { EventId = eventId, MarshalId = "marshal-1", LocationId = "loc-1" },
+                new AssignmentEntity { EventId = eventId, MarshalId = "marshal-2", LocationId = "loc-2" },
+                new AssignmentEntity { EventId = eventId, MarshalId = "marshal-3", LocationId = "loc-3" }
+            };
+
+            _mockMarshalRepository
+                .Setup(r => r.GetByEventAsync(eventId))
+                .ReturnsAsync(marshals);
+
+            _mockAssignmentRepository
+                .Setup(r => r.GetByEventAsync(eventId))
+                .ReturnsAsync(assignments);
+
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth(TestSessionToken);
+
+            // Act
+            IActionResult result = await _marshalFunctions.GetMarshalsByEvent(httpRequest, eventId);
+
+            // Assert
+            result.ShouldBeOfType<OkObjectResult>();
+
+            // Verify GetByEventAsync was called exactly once (batch load)
+            _mockAssignmentRepository.Verify(r => r.GetByEventAsync(eventId), Times.Once);
+
+            // Verify GetByMarshalAsync was never called (no N+1 queries)
+            _mockAssignmentRepository.Verify(r => r.GetByMarshalAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         }
 
         #endregion

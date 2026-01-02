@@ -188,6 +188,10 @@ const sortedContacts = computed(() => {
 
 const formatRoleName = (role) => {
   if (!role) return '';
+  // Special handling for AreaLead - use terminology
+  if (role === 'AreaLead') {
+    return `${termsLower.value.area.charAt(0).toUpperCase() + termsLower.value.area.slice(1)} Lead`;
+  }
   // Convert PascalCase/camelCase to words
   return role
     .replace(/([A-Z])/g, ' $1')

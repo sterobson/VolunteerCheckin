@@ -84,6 +84,9 @@
 <script setup>
 import { ref, computed, watch, defineProps, defineEmits } from 'vue';
 import { checklistApi } from '../services/api';
+import { useTerminology } from '../composables/useTerminology';
+
+const { terms, termsLower } = useTerminology();
 
 const props = defineProps({
   eventId: {
@@ -242,12 +245,12 @@ const getScopeLabel = (item) => {
   const scopeMap = {
     'Everyone': 'Everyone',
     'SpecificPeople': 'Assigned to you',
-    'EveryoneInAreas': 'Your areas',
-    'EveryoneAtCheckpoints': 'Your checkpoints',
-    'OnePerCheckpoint': 'One per checkpoint',
-    'OnePerArea': 'One per area',
-    'EveryAreaLead': 'Area lead',
-    'OneLeadPerArea': 'One lead per area',
+    'EveryoneInAreas': `Your ${termsLower.value.areas}`,
+    'EveryoneAtCheckpoints': `Your ${termsLower.value.checkpoints}`,
+    'OnePerCheckpoint': `One per ${termsLower.value.checkpoint}`,
+    'OnePerArea': `One per ${termsLower.value.area}`,
+    'EveryAreaLead': `${terms.value.area} lead`,
+    'OneLeadPerArea': `One lead per ${termsLower.value.area}`,
   };
 
   return scopeMap[item.matchedScope] || item.matchedScope;
@@ -257,12 +260,12 @@ const getScopeTooltip = (item) => {
   const tooltips = {
     'Everyone': 'This item is for everyone at the event',
     'SpecificPeople': 'This item is specifically assigned to certain people',
-    'EveryoneInAreas': 'This item is for everyone in certain areas',
-    'EveryoneAtCheckpoints': 'This item is for everyone at certain checkpoints',
-    'OnePerCheckpoint': 'One person at the checkpoint needs to complete this',
-    'OnePerArea': 'One person in the area needs to complete this',
-    'EveryAreaLead': 'This item is for area leads only',
-    'OneLeadPerArea': 'One area lead needs to complete this',
+    'EveryoneInAreas': `This item is for everyone in certain ${termsLower.value.areas}`,
+    'EveryoneAtCheckpoints': `This item is for everyone at certain ${termsLower.value.checkpoints}`,
+    'OnePerCheckpoint': `One person at the ${termsLower.value.checkpoint} needs to complete this`,
+    'OnePerArea': `One person in the ${termsLower.value.area} needs to complete this`,
+    'EveryAreaLead': `This item is for ${termsLower.value.area} leads only`,
+    'OneLeadPerArea': `One ${termsLower.value.area} lead needs to complete this`,
   };
 
   return tooltips[item.matchedScope] || '';
@@ -280,12 +283,12 @@ const getContextName = (item) => {
     const checkpointLabel = location.description
       ? `${location.name} - ${location.description}`
       : location.name;
-    return `at checkpoint ${checkpointLabel}`;
+    return `at ${termsLower.value.checkpoint} ${checkpointLabel}`;
   }
 
   if (item.completionContextType === 'Area') {
     const area = props.areas.find(a => a.id === item.completionContextId);
-    return area ? `in area ${area.name}` : null;
+    return area ? `in ${termsLower.value.area} ${area.name}` : null;
   }
 
   if (item.completionContextType === 'Personal') {

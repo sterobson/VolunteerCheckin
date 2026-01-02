@@ -1,0 +1,431 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Moq;
+using Shouldly;
+using System;
+using System.Collections.Generic;
+using System.Text.Json;
+using System.Threading.Tasks;
+using VolunteerCheckin.Functions;
+using VolunteerCheckin.Functions.Functions;
+using VolunteerCheckin.Functions.Models;
+using VolunteerCheckin.Functions.Repositories;
+
+namespace VolunteerCheckin.Functions.Tests;
+
+[TestClass]
+public class ChecklistCompletionFunctionsTests
+{
+    private Mock<ILogger<ChecklistCompletionFunctions>> _mockLogger = null!;
+    private Mock<IChecklistItemRepository> _mockChecklistItemRepository = null!;
+    private Mock<IChecklistCompletionRepository> _mockChecklistCompletionRepository = null!;
+    private Mock<IMarshalRepository> _mockMarshalRepository = null!;
+    private Mock<IAssignmentRepository> _mockAssignmentRepository = null!;
+    private Mock<IAreaRepository> _mockAreaRepository = null!;
+    private Mock<ILocationRepository> _mockLocationRepository = null!;
+    private Mock<IAdminUserRepository> _mockAdminUserRepository = null!;
+    private ChecklistCompletionFunctions _functions = null!;
+
+    private const string EventId = "event123";
+    private const string ItemId = "item456";
+    private const string MarshalId = "marshal789";
+    private const string AdminEmail = "admin@test.com";
+    private const string AreaId = "area1";
+    private const string LocationId = "location1";
+
+    [TestInitialize]
+    public void Setup()
+    {
+        _mockLogger = new Mock<ILogger<ChecklistCompletionFunctions>>();
+        _mockChecklistItemRepository = new Mock<IChecklistItemRepository>();
+        _mockChecklistCompletionRepository = new Mock<IChecklistCompletionRepository>();
+        _mockMarshalRepository = new Mock<IMarshalRepository>();
+        _mockAssignmentRepository = new Mock<IAssignmentRepository>();
+        _mockAreaRepository = new Mock<IAreaRepository>();
+        _mockLocationRepository = new Mock<ILocationRepository>();
+        _mockAdminUserRepository = new Mock<IAdminUserRepository>();
+
+        _functions = new ChecklistCompletionFunctions(
+            _mockLogger.Object,
+            _mockChecklistItemRepository.Object,
+            _mockChecklistCompletionRepository.Object,
+            _mockMarshalRepository.Object,
+            _mockLocationRepository.Object,
+            _mockAdminUserRepository.Object,
+            _mockAssignmentRepository.Object,
+            _mockAreaRepository.Object
+        );
+    }
+
+    private void SetupMarshalContext()
+    {
+        _mockAssignmentRepository
+            .Setup(r => r.GetByMarshalAsync(EventId, MarshalId))
+            .ReturnsAsync([new AssignmentEntity { LocationId = LocationId }]);
+
+        LocationEntity location = new()
+        {
+            PartitionKey = EventId,
+            RowKey = LocationId,
+            AreaIdsJson = $"[\"{AreaId}\"]"
+        };
+        _mockLocationRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([location]);
+
+        _mockAreaRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([new AreaEntity { RowKey = AreaId, AreaLeadMarshalIdsJson = "[]" }]);
+    }
+
+    #region CompleteChecklistItem Tests
+
+    [TestMethod]
+    public async Task CompleteChecklistItem_ValidRequest_ReturnsOk()
+    {
+        // Arrange
+        CompleteChecklistItemRequest request = new(MarshalId, null, null);
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
+
+        ChecklistItemEntity item = new()
+        {
+            PartitionKey = EventId,
+            RowKey = ItemId,
+            ItemId = ItemId,
+            EventId = EventId,
+            Text = "Test Item",
+            ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
+            {
+                new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [MarshalId] }
+            })
+        };
+        _mockChecklistItemRepository
+            .Setup(r => r.GetAsync(EventId, ItemId))
+            .ReturnsAsync(item);
+
+        SetupMarshalContext();
+
+        _mockChecklistCompletionRepository
+            .Setup(r => r.GetByItemAsync(EventId, ItemId))
+            .ReturnsAsync([]);
+
+        MarshalEntity marshal = new()
+        {
+            PartitionKey = EventId,
+            RowKey = MarshalId,
+            MarshalId = MarshalId,
+            Name = "Test Marshal"
+        };
+        _mockMarshalRepository
+            .Setup(r => r.GetAsync(EventId, MarshalId))
+            .ReturnsAsync(marshal);
+
+        ChecklistCompletionEntity? capturedCompletion = null;
+        _mockChecklistCompletionRepository
+            .Setup(r => r.AddAsync(It.IsAny<ChecklistCompletionEntity>()))
+            .Callback<ChecklistCompletionEntity>(c => capturedCompletion = c)
+            .ReturnsAsync((ChecklistCompletionEntity c) => c);
+
+        // Act
+        IActionResult result = await _functions.CompleteChecklistItem(httpRequest, EventId, ItemId);
+
+        // Assert
+        result.ShouldBeOfType<OkObjectResult>();
+        capturedCompletion.ShouldNotBeNull();
+        capturedCompletion.ChecklistItemId.ShouldBe(ItemId);
+        capturedCompletion.ContextOwnerMarshalId.ShouldBe(MarshalId);
+    }
+
+    [TestMethod]
+    public async Task CompleteChecklistItem_ItemNotFound_ReturnsNotFound()
+    {
+        // Arrange
+        CompleteChecklistItemRequest request = new(MarshalId, null, null);
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
+
+        _mockChecklistItemRepository
+            .Setup(r => r.GetAsync(EventId, ItemId))
+            .ReturnsAsync((ChecklistItemEntity?)null);
+
+        // Act
+        IActionResult result = await _functions.CompleteChecklistItem(httpRequest, EventId, ItemId);
+
+        // Assert
+        result.ShouldBeOfType<NotFoundObjectResult>();
+    }
+
+    [TestMethod]
+    public async Task CompleteChecklistItem_MarshalNotFound_ReturnsNotFound()
+    {
+        // Arrange
+        CompleteChecklistItemRequest request = new(MarshalId, null, null);
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
+
+        ChecklistItemEntity item = new()
+        {
+            PartitionKey = EventId,
+            RowKey = ItemId,
+            ItemId = ItemId,
+            EventId = EventId,
+            Text = "Test Item",
+            ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
+            {
+                new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [MarshalId] }
+            })
+        };
+        _mockChecklistItemRepository
+            .Setup(r => r.GetAsync(EventId, ItemId))
+            .ReturnsAsync(item);
+
+        SetupMarshalContext();
+
+        _mockChecklistCompletionRepository
+            .Setup(r => r.GetByItemAsync(EventId, ItemId))
+            .ReturnsAsync([]);
+
+        _mockMarshalRepository
+            .Setup(r => r.GetAsync(EventId, MarshalId))
+            .ReturnsAsync((MarshalEntity?)null);
+
+        // Act
+        IActionResult result = await _functions.CompleteChecklistItem(httpRequest, EventId, ItemId);
+
+        // Assert
+        result.ShouldBeOfType<NotFoundObjectResult>();
+    }
+
+    [TestMethod]
+    public async Task CompleteChecklistItem_AlreadyCompleted_ReturnsBadRequest()
+    {
+        // Arrange
+        CompleteChecklistItemRequest request = new(MarshalId, null, null);
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
+
+        ChecklistItemEntity item = new()
+        {
+            PartitionKey = EventId,
+            RowKey = ItemId,
+            ItemId = ItemId,
+            EventId = EventId,
+            Text = "Test Item",
+            ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
+            {
+                new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [MarshalId] }
+            })
+        };
+        _mockChecklistItemRepository
+            .Setup(r => r.GetAsync(EventId, ItemId))
+            .ReturnsAsync(item);
+
+        SetupMarshalContext();
+
+        // Already has a completion
+        _mockChecklistCompletionRepository
+            .Setup(r => r.GetByItemAsync(EventId, ItemId))
+            .ReturnsAsync([new ChecklistCompletionEntity
+            {
+                ChecklistItemId = ItemId,
+                ContextOwnerMarshalId = MarshalId,
+                IsDeleted = false
+            }]);
+
+        // Act
+        IActionResult result = await _functions.CompleteChecklistItem(httpRequest, EventId, ItemId);
+
+        // Assert
+        result.ShouldBeOfType<BadRequestObjectResult>();
+    }
+
+    [TestMethod]
+    public async Task CompleteChecklistItem_MarshalLacksPermission_ReturnsForbidden()
+    {
+        // Arrange
+        CompleteChecklistItemRequest request = new(MarshalId, null, null);
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
+
+        // Item scoped to different marshal
+        ChecklistItemEntity item = new()
+        {
+            PartitionKey = EventId,
+            RowKey = ItemId,
+            ItemId = ItemId,
+            EventId = EventId,
+            Text = "Test Item",
+            ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
+            {
+                new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = ["other-marshal"] }
+            })
+        };
+        _mockChecklistItemRepository
+            .Setup(r => r.GetAsync(EventId, ItemId))
+            .ReturnsAsync(item);
+
+        SetupMarshalContext();
+
+        // Act
+        IActionResult result = await _functions.CompleteChecklistItem(httpRequest, EventId, ItemId);
+
+        // Assert
+        result.ShouldBeOfType<ForbidResult>();
+    }
+
+    #endregion
+
+    #region UncompleteChecklistItem Tests
+
+    [TestMethod]
+    public async Task UncompleteChecklistItem_ValidRequest_ReturnsNoContent()
+    {
+        // Arrange
+        CompleteChecklistItemRequest request = new(MarshalId, null, null);
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAdminHeader(request, AdminEmail);
+
+        ChecklistItemEntity item = new()
+        {
+            PartitionKey = EventId,
+            RowKey = ItemId,
+            ItemId = ItemId,
+            EventId = EventId,
+            Text = "Test Item",
+            ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
+            {
+                new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [MarshalId] }
+            })
+        };
+        _mockChecklistItemRepository
+            .Setup(r => r.GetAsync(EventId, ItemId))
+            .ReturnsAsync(item);
+
+        SetupMarshalContext();
+
+        ChecklistCompletionEntity completion = new()
+        {
+            PartitionKey = ChecklistCompletionEntity.CreatePartitionKey(EventId),
+            RowKey = ChecklistCompletionEntity.CreateRowKey(ItemId, "completion1"),
+            ChecklistItemId = ItemId,
+            ContextOwnerMarshalId = MarshalId,
+            IsDeleted = false
+        };
+        _mockChecklistCompletionRepository
+            .Setup(r => r.GetByItemAsync(EventId, ItemId))
+            .ReturnsAsync([completion]);
+
+        _mockChecklistCompletionRepository
+            .Setup(r => r.UpdateAsync(It.IsAny<ChecklistCompletionEntity>()))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        IActionResult result = await _functions.UncompleteChecklistItem(httpRequest, EventId, ItemId);
+
+        // Assert
+        result.ShouldBeOfType<NoContentResult>();
+    }
+
+    [TestMethod]
+    public async Task UncompleteChecklistItem_ItemNotFound_ReturnsNotFound()
+    {
+        // Arrange
+        CompleteChecklistItemRequest request = new(MarshalId, null, null);
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAdminHeader(request, AdminEmail);
+
+        _mockChecklistItemRepository
+            .Setup(r => r.GetAsync(EventId, ItemId))
+            .ReturnsAsync((ChecklistItemEntity?)null);
+
+        // Act
+        IActionResult result = await _functions.UncompleteChecklistItem(httpRequest, EventId, ItemId);
+
+        // Assert
+        result.ShouldBeOfType<NotFoundObjectResult>();
+    }
+
+    [TestMethod]
+    public async Task UncompleteChecklistItem_CompletionNotFound_ReturnsNotFound()
+    {
+        // Arrange
+        CompleteChecklistItemRequest request = new(MarshalId, null, null);
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAdminHeader(request, AdminEmail);
+
+        ChecklistItemEntity item = new()
+        {
+            PartitionKey = EventId,
+            RowKey = ItemId,
+            ItemId = ItemId,
+            EventId = EventId,
+            Text = "Test Item",
+            ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
+            {
+                new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [MarshalId] }
+            })
+        };
+        _mockChecklistItemRepository
+            .Setup(r => r.GetAsync(EventId, ItemId))
+            .ReturnsAsync(item);
+
+        SetupMarshalContext();
+
+        // No completions exist
+        _mockChecklistCompletionRepository
+            .Setup(r => r.GetByItemAsync(EventId, ItemId))
+            .ReturnsAsync([]);
+
+        // Act
+        IActionResult result = await _functions.UncompleteChecklistItem(httpRequest, EventId, ItemId);
+
+        // Assert
+        result.ShouldBeOfType<NotFoundObjectResult>();
+    }
+
+    #endregion
+
+    #region GetChecklistCompletionReport Tests
+
+    [TestMethod]
+    public async Task GetChecklistCompletionReport_ReturnsReport()
+    {
+        // Arrange
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(new { });
+
+        ChecklistItemEntity item = new()
+        {
+            PartitionKey = EventId,
+            RowKey = ItemId,
+            ItemId = ItemId,
+            EventId = EventId,
+            Text = "Test Item",
+            ScopeConfigurationsJson = "[]",
+            IsRequired = true
+        };
+        _mockChecklistItemRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([item]);
+
+        ChecklistCompletionEntity completion = new()
+        {
+            ChecklistItemId = ItemId,
+            ContextOwnerMarshalId = MarshalId
+        };
+        _mockChecklistCompletionRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([completion]);
+
+        MarshalEntity marshal = new()
+        {
+            MarshalId = MarshalId,
+            Name = "Test Marshal"
+        };
+        _mockMarshalRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([marshal]);
+
+        // Act
+        IActionResult result = await _functions.GetChecklistCompletionReport(httpRequest, EventId);
+
+        // Assert
+        result.ShouldBeOfType<OkObjectResult>();
+    }
+
+    #endregion
+}

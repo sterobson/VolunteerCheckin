@@ -1,7 +1,15 @@
 <template>
   <div class="marshal-view">
+    <!-- Offline Indicator -->
+    <OfflineIndicator />
+
     <header class="header">
-      <h1 v-if="event">{{ event.name }}</h1>
+      <div class="header-title">
+        <h1 v-if="event">{{ event.name }}</h1>
+        <div v-if="event?.eventDate" class="header-event-date">
+          {{ formatEventDate(event.eventDate) }}
+        </div>
+      </div>
       <div class="header-actions">
         <button v-if="isAuthenticated" @click="showEmergency = true" class="btn-emergency">
           Emergency Info
@@ -53,7 +61,7 @@
         <!-- Accordion Sections -->
         <div class="accordion">
           <!-- Event Details Section -->
-          <div v-if="event?.startDate || event?.description" class="accordion-section">
+          <div v-if="event?.eventDate || event?.description" class="accordion-section">
             <button
               class="accordion-header"
               :class="{ active: expandedSection === 'eventDetails' }"
@@ -67,9 +75,9 @@
             </button>
             <div v-if="expandedSection === 'eventDetails'" class="accordion-content">
               <div class="event-details">
-                <div v-if="event.startDate" class="event-detail-row">
-                  <span class="detail-label">Start time</span>
-                  <span class="detail-value">{{ formatEventDateTime(event.startDate) }}</span>
+                <div v-if="event.eventDate" class="event-detail-row">
+                  <span class="detail-label">Date and time</span>
+                  <span class="detail-value">{{ formatEventDateTime(event.eventDate) }}</span>
                 </div>
                 <div v-if="event.description" class="event-description">
                   <span class="detail-label">Description</span>
@@ -432,16 +440,26 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { authApi, checkInApi, checklistApi, eventsApi, assignmentsApi, locationsApi, areasApi, notesApi, contactsApi } from '../services/api';
+import { authApi, checkInApi, checklistApi, eventsApi, assignmentsApi, locationsApi, areasApi, notesApi, contactsApi, queueOfflineAction, getOfflineMode } from '../services/api';
 import MapView from '../components/MapView.vue';
 import ConfirmModal from '../components/ConfirmModal.vue';
 import EmergencyContactModal from '../components/event-manage/modals/EmergencyContactModal.vue';
 import AreaLeadSection from '../components/AreaLeadSection.vue';
 import NotesView from '../components/NotesView.vue';
+import OfflineIndicator from '../components/OfflineIndicator.vue';
 import { setTerminology, useTerminology } from '../composables/useTerminology';
 import { getIcon } from '../utils/icons';
+import { useOffline } from '../composables/useOffline';
+import { cacheEventData, getCachedEventData, updateCachedField } from '../services/offlineDb';
 
 const { terms, termsLower } = useTerminology();
+
+// Offline support
+const {
+  isFullyOnline,
+  pendingActionsCount,
+  updatePendingCount
+} = useOffline();
 
 const route = useRoute();
 const router = useRouter();
@@ -760,6 +778,42 @@ const loadEventData = async () => {
   const eventId = route.params.eventId;
   console.log('Loading event data for:', { eventId, marshalId: currentMarshalId.value });
 
+  // Check if we're offline and have cached data
+  if (getOfflineMode()) {
+    console.log('Offline mode detected, attempting to load from cache...');
+    const cachedData = await getCachedEventData(eventId);
+    if (cachedData) {
+      console.log('Loaded cached data from:', cachedData.cachedAt);
+      event.value = cachedData.event;
+      areas.value = cachedData.areas || [];
+      allLocations.value = cachedData.locations || [];
+      checklistItems.value = cachedData.checklist || [];
+      myContacts.value = cachedData.contacts || [];
+      notes.value = cachedData.notes || [];
+
+      // Apply terminology settings
+      if (event.value) {
+        setTerminology(event.value);
+      }
+
+      // Extract assignments for current marshal
+      if (currentMarshalId.value) {
+        const myAssignments = [];
+        for (const location of allLocations.value) {
+          const myAssignment = location.assignments?.find(a => a.marshalId === currentMarshalId.value);
+          if (myAssignment) {
+            myAssignments.push(myAssignment);
+          }
+        }
+        assignments.value = myAssignments;
+      }
+
+      return;
+    } else {
+      console.warn('No cached data available while offline');
+    }
+  }
+
   // Load event details
   try {
     console.log('Fetching event...');
@@ -817,6 +871,69 @@ const loadEventData = async () => {
 
   // Load notes
   await loadNotes();
+
+  // Cache all data for offline access
+  // Use JSON.parse(JSON.stringify()) to convert Vue reactive proxies to plain objects
+  try {
+    const plainData = JSON.parse(JSON.stringify({
+      event: event.value,
+      areas: areas.value,
+      locations: allLocations.value,
+      checklist: checklistItems.value,
+      contacts: myContacts.value,
+      notes: notes.value,
+      marshalId: currentMarshalId.value
+    }));
+    await cacheEventData(eventId, plainData);
+    console.log('Event data cached for offline access');
+  } catch (error) {
+    console.warn('Failed to cache event data:', error);
+  }
+};
+
+/**
+ * Background preloader - fetches additional data when the page is idle
+ * This ensures all data needed for offline access is cached
+ */
+const preloadOfflineData = async () => {
+  const eventId = route.params.eventId;
+
+  // Don't preload if offline
+  if (getOfflineMode()) {
+    console.log('Skipping background preload: offline');
+    return;
+  }
+
+  console.log('Starting background preload for offline data...');
+
+  // Preload area lead dashboard (even if not currently an area lead, in case roles change)
+  // This data is useful for area leads to see their checkpoints offline
+  try {
+    const dashboardResponse = await areasApi.getAreaLeadDashboard(eventId);
+    if (dashboardResponse.data) {
+      // Convert to plain object to avoid IndexedDB serialization issues
+      const areaLeadDashboard = JSON.parse(JSON.stringify({
+        areas: dashboardResponse.data.areas || [],
+        checkpoints: dashboardResponse.data.checkpoints || []
+      }));
+
+      // Try to update existing cache, or create new entry
+      const existingCache = await getCachedEventData(eventId);
+      if (existingCache) {
+        await updateCachedField(eventId, 'areaLeadDashboard', areaLeadDashboard);
+      } else {
+        await cacheEventData(eventId, { areaLeadDashboard });
+      }
+      console.log('Area lead dashboard cached for offline access');
+    }
+  } catch (error) {
+    // This might fail if user isn't an area lead - that's fine
+    if (error.response?.status !== 403) {
+      console.warn('Failed to preload area lead dashboard:', error);
+    }
+  }
+
+  console.log('Background preload complete');
 };
 
 const loadNotes = async () => {
@@ -881,33 +998,76 @@ const handleToggleChecklist = async (item) => {
   if (savingChecklist.value) return;
 
   savingChecklist.value = true;
+  const eventId = route.params.eventId;
+
+  const actionData = {
+    marshalId: currentMarshalId.value,
+    contextType: item.completionContextType,
+    contextId: item.completionContextId,
+  };
 
   try {
     if (item.isCompleted) {
       // Uncomplete
-      await checklistApi.uncomplete(route.params.eventId, item.itemId, {
-        marshalId: currentMarshalId.value,
-        contextType: item.completionContextType,
-        contextId: item.completionContextId,
-      });
+      if (getOfflineMode()) {
+        // Queue for offline sync
+        await queueOfflineAction('checklist_uncomplete', {
+          eventId,
+          itemId: item.itemId,
+          data: actionData
+        });
+        // Optimistic update
+        item.isCompleted = false;
+        item.completedAt = null;
+        item.completedByActorName = null;
+        await updatePendingCount();
+      } else {
+        await checklistApi.uncomplete(eventId, item.itemId, actionData);
+        await loadChecklist();
+      }
     } else {
       // Complete
-      await checklistApi.complete(route.params.eventId, item.itemId, {
-        marshalId: currentMarshalId.value,
-        contextType: item.completionContextType,
-        contextId: item.completionContextId,
-      });
+      if (getOfflineMode()) {
+        // Queue for offline sync
+        await queueOfflineAction('checklist_complete', {
+          eventId,
+          itemId: item.itemId,
+          data: actionData
+        });
+        // Optimistic update
+        item.isCompleted = true;
+        item.completedAt = new Date().toISOString();
+        item.completedByActorName = currentPerson.value?.name || 'You';
+        await updatePendingCount();
+      } else {
+        await checklistApi.complete(eventId, item.itemId, actionData);
+        await loadChecklist();
+      }
     }
 
-    // Reload checklist to get updated state
-    await loadChecklist();
+    // Update cached checklist
+    await updateCachedField(eventId, 'checklist', checklistItems.value);
   } catch (error) {
     console.error('Failed to toggle checklist item:', error);
-    // Show error temporarily
-    checklistError.value = error.response?.data?.message || 'Failed to update checklist';
-    setTimeout(() => {
-      checklistError.value = null;
-    }, 3000);
+
+    // If offline, queue the action
+    if (getOfflineMode() || !error.response) {
+      const actionType = item.isCompleted ? 'checklist_uncomplete' : 'checklist_complete';
+      await queueOfflineAction(actionType, {
+        eventId,
+        itemId: item.itemId,
+        data: actionData
+      });
+      // Optimistic update
+      item.isCompleted = !item.isCompleted;
+      await updatePendingCount();
+    } else {
+      // Show error temporarily
+      checklistError.value = error.response?.data?.message || 'Failed to update checklist';
+      setTimeout(() => {
+        checklistError.value = null;
+      }, 3000);
+    }
   } finally {
     savingChecklist.value = false;
   }
@@ -983,6 +1143,8 @@ const handleCheckIn = async (assign) => {
   checkingInAssignment.value = assign.id;
   checkInError.value = null;
 
+  const eventId = route.params.eventId;
+
   try {
     if (!('geolocation' in navigator)) {
       throw new Error('Geolocation is not supported by your browser');
@@ -995,21 +1157,65 @@ const handleCheckIn = async (assign) => {
       });
     });
 
-    const response = await checkInApi.checkIn({
-      eventId: route.params.eventId,
+    const checkInData = {
+      eventId,
       assignmentId: assign.id,
       latitude: position.coords.latitude,
       longitude: position.coords.longitude,
       manualCheckIn: false,
-    });
+    };
 
-    // Update the assignment in the list
-    const index = assignments.value.findIndex(a => a.id === assign.id);
-    if (index !== -1) {
-      assignments.value[index] = response.data;
+    if (getOfflineMode()) {
+      // Queue for offline sync
+      await queueOfflineAction('checkin', checkInData);
+
+      // Optimistic update
+      const index = assignments.value.findIndex(a => a.id === assign.id);
+      if (index !== -1) {
+        assignments.value[index] = {
+          ...assignments.value[index],
+          isCheckedIn: true,
+          checkInTime: new Date().toISOString(),
+          checkInMethod: 'GPS (pending)',
+          checkInLatitude: position.coords.latitude,
+          checkInLongitude: position.coords.longitude,
+        };
+      }
+      await updatePendingCount();
+      await updateCachedField(eventId, 'locations', allLocations.value);
+    } else {
+      const response = await checkInApi.checkIn(checkInData);
+
+      // Update the assignment in the list
+      const index = assignments.value.findIndex(a => a.id === assign.id);
+      if (index !== -1) {
+        assignments.value[index] = response.data;
+      }
     }
   } catch (error) {
-    if (error.response?.data?.message) {
+    // Check if it's a network error - queue for offline
+    if (getOfflineMode() || !error.response) {
+      const checkInData = {
+        eventId,
+        assignmentId: assign.id,
+        latitude: userLocation.value?.lat || null,
+        longitude: userLocation.value?.lng || null,
+        manualCheckIn: true,
+      };
+      await queueOfflineAction('checkin', checkInData);
+
+      // Optimistic update
+      const index = assignments.value.findIndex(a => a.id === assign.id);
+      if (index !== -1) {
+        assignments.value[index] = {
+          ...assignments.value[index],
+          isCheckedIn: true,
+          checkInTime: new Date().toISOString(),
+          checkInMethod: 'Manual (pending)',
+        };
+      }
+      await updatePendingCount();
+    } else if (error.response?.data?.message) {
       checkInError.value = error.response.data.message;
     } else if (error.message) {
       checkInError.value = error.message;
@@ -1030,22 +1236,60 @@ const handleManualCheckIn = (assign) => {
     checkingInAssignment.value = assign.id;
     checkInError.value = null;
 
-    try {
-      const response = await checkInApi.checkIn({
-        eventId: route.params.eventId,
-        assignmentId: assign.id,
-        latitude: null,
-        longitude: null,
-        manualCheckIn: true,
-      });
+    const eventId = route.params.eventId;
+    const checkInData = {
+      eventId,
+      assignmentId: assign.id,
+      latitude: null,
+      longitude: null,
+      manualCheckIn: true,
+    };
 
-      // Update the assignment in the list
-      const index = assignments.value.findIndex(a => a.id === assign.id);
-      if (index !== -1) {
-        assignments.value[index] = response.data;
+    try {
+      if (getOfflineMode()) {
+        // Queue for offline sync
+        await queueOfflineAction('checkin', checkInData);
+
+        // Optimistic update
+        const index = assignments.value.findIndex(a => a.id === assign.id);
+        if (index !== -1) {
+          assignments.value[index] = {
+            ...assignments.value[index],
+            isCheckedIn: true,
+            checkInTime: new Date().toISOString(),
+            checkInMethod: 'Manual (pending)',
+          };
+        }
+        await updatePendingCount();
+        await updateCachedField(eventId, 'locations', allLocations.value);
+      } else {
+        const response = await checkInApi.checkIn(checkInData);
+
+        // Update the assignment in the list
+        const index = assignments.value.findIndex(a => a.id === assign.id);
+        if (index !== -1) {
+          assignments.value[index] = response.data;
+        }
       }
     } catch (error) {
-      checkInError.value = 'Failed to check in manually. Please contact the admin.';
+      // If network error, queue for offline
+      if (getOfflineMode() || !error.response) {
+        await queueOfflineAction('checkin', checkInData);
+
+        // Optimistic update
+        const index = assignments.value.findIndex(a => a.id === assign.id);
+        if (index !== -1) {
+          assignments.value[index] = {
+            ...assignments.value[index],
+            isCheckedIn: true,
+            checkInTime: new Date().toISOString(),
+            checkInMethod: 'Manual (pending)',
+          };
+        }
+        await updatePendingCount();
+      } else {
+        checkInError.value = 'Failed to check in manually. Please contact the admin.';
+      }
     } finally {
       checkingIn.value = null;
       checkingInAssignment.value = null;
@@ -1120,6 +1364,17 @@ const formatEventDateTime = (dateString) => {
   });
 };
 
+const formatEventDate = (dateString) => {
+  if (!dateString) return '';
+  return new Date(dateString).toLocaleString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
 const formatRoleName = (role) => {
   if (!role) return '';
   // Convert PascalCase/camelCase to words
@@ -1154,6 +1409,19 @@ onMounted(async () => {
   // Start location tracking if authenticated
   if (isAuthenticated.value) {
     startLocationTracking();
+
+    // Schedule background preload when the page is idle
+    // This fetches additional data for offline use without blocking the UI
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(() => {
+        preloadOfflineData();
+      }, { timeout: 5000 }); // Ensure it runs within 5 seconds
+    } else {
+      // Fallback for browsers without requestIdleCallback
+      setTimeout(() => {
+        preloadOfflineData();
+      }, 2000);
+    }
   }
 });
 
@@ -1203,6 +1471,18 @@ onUnmounted(() => {
 
 .header h1 {
   margin: 0;
+}
+
+.header-title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.header-event-date {
+  font-size: 0.9rem;
+  opacity: 0.9;
+  font-weight: 400;
 }
 
 .header-actions {
@@ -2066,6 +2346,10 @@ onUnmounted(() => {
 
   .header h1 {
     font-size: 1.25rem;
+  }
+
+  .header-event-date {
+    font-size: 0.85rem;
   }
 
   .container {

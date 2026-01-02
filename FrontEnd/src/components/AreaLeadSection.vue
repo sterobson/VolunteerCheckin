@@ -219,13 +219,16 @@
 
 <script setup>
 import { ref, computed, defineProps, defineEmits, watch } from 'vue';
-import { areasApi, checklistApi } from '../services/api';
+import { areasApi, checklistApi, getOfflineMode, queueOfflineAction } from '../services/api';
 import { useTerminology } from '../composables/useTerminology';
 import { alphanumericCompare } from '../utils/sortUtils';
+import { getCachedEventData, updateCachedField, cacheEventData } from '../services/offlineDb';
+import { useOffline } from '../composables/useOffline';
 import MapView from './MapView.vue';
 import BaseModal from './BaseModal.vue';
 
 const { terms, termsLower } = useTerminology();
+const { updatePendingCount } = useOffline();
 
 const props = defineProps({
   eventId: {
@@ -285,12 +288,74 @@ const loadDashboard = async () => {
   loading.value = true;
   error.value = null;
 
+  // Try to load from cache first if offline
+  if (getOfflineMode()) {
+    try {
+      const cachedData = await getCachedEventData(props.eventId);
+      if (cachedData?.areaLeadDashboard) {
+        areas.value = cachedData.areaLeadDashboard.areas || [];
+        checkpoints.value = cachedData.areaLeadDashboard.checkpoints || [];
+        loading.value = false;
+        return;
+      }
+    } catch (cacheErr) {
+      console.warn('Failed to load cached dashboard:', cacheErr);
+    }
+    error.value = 'Offline - no cached data available';
+    loading.value = false;
+    return;
+  }
+
   try {
     const response = await areasApi.getAreaLeadDashboard(props.eventId);
     areas.value = response.data.areas || [];
     checkpoints.value = response.data.checkpoints || [];
+
+    // Cache the dashboard data
+    try {
+      // Convert to plain object to avoid IndexedDB serialization issues with Vue proxies
+      const areaLeadDashboard = JSON.parse(JSON.stringify({
+        areas: areas.value,
+        checkpoints: checkpoints.value
+      }));
+      console.log('AreaLeadSection: caching dashboard data', { areas: areaLeadDashboard.areas.length, checkpoints: areaLeadDashboard.checkpoints.length });
+
+      // Try to update existing cache, or create new cache entry
+      const cachedData = await getCachedEventData(props.eventId);
+      console.log('AreaLeadSection: existing cache?', !!cachedData);
+
+      if (cachedData) {
+        await updateCachedField(props.eventId, 'areaLeadDashboard', areaLeadDashboard);
+        console.log('Area lead dashboard cached (updated existing)');
+      } else {
+        // Create a minimal cache entry with just the dashboard data
+        await cacheEventData(props.eventId, { areaLeadDashboard });
+        console.log('Area lead dashboard cached (created new)');
+      }
+
+      // Verify it was saved
+      const verifyCache = await getCachedEventData(props.eventId);
+      console.log('AreaLeadSection: verify cache after save:', !!verifyCache?.areaLeadDashboard);
+    } catch (cacheErr) {
+      console.warn('Failed to cache dashboard:', cacheErr);
+    }
   } catch (err) {
     console.error('Failed to load area lead dashboard:', err);
+
+    // Try to load from cache on error
+    try {
+      const cachedData = await getCachedEventData(props.eventId);
+      if (cachedData?.areaLeadDashboard) {
+        console.log('Loading area lead dashboard from cache after error');
+        areas.value = cachedData.areaLeadDashboard.areas || [];
+        checkpoints.value = cachedData.areaLeadDashboard.checkpoints || [];
+        loading.value = false;
+        return;
+      }
+    } catch (cacheErr) {
+      console.warn('Failed to load cached dashboard:', cacheErr);
+    }
+
     error.value = err.response?.data?.message || 'Failed to load dashboard';
   } finally {
     loading.value = false;
@@ -326,21 +391,55 @@ const completeTask = async (task, checkpoint) => {
   if (savingTask.value) return;
   savingTask.value = true;
 
+  // Use the first marshal at this checkpoint for completing the task
+  const marshalId = checkpoint.marshals.length > 0 ? checkpoint.marshals[0].marshalId : props.marshalId;
+
+  const actionData = {
+    marshalId: marshalId,
+    contextType: task.contextType,
+    contextId: task.contextId,
+  };
+
   try {
-    // Use the first marshal at this checkpoint for completing the task
-    const marshalId = checkpoint.marshals.length > 0 ? checkpoint.marshals[0].marshalId : props.marshalId;
+    if (getOfflineMode()) {
+      // Queue for offline sync
+      await queueOfflineAction('checklist_complete', {
+        eventId: props.eventId,
+        itemId: task.itemId,
+        data: actionData
+      });
 
-    await checklistApi.complete(props.eventId, task.itemId, {
-      marshalId: marshalId,
-      contextType: task.contextType,
-      contextId: task.contextId,
-    });
+      // Optimistic update - remove the task from the list
+      checkpoint.outstandingTasks = checkpoint.outstandingTasks.filter(t => t.itemId !== task.itemId);
+      checkpoint.outstandingTaskCount = Math.max(0, checkpoint.outstandingTaskCount - 1);
 
-    // Reload the dashboard
-    await loadDashboard();
-    emit('checklist-updated');
+      await updatePendingCount();
+      emit('checklist-updated');
+    } else {
+      await checklistApi.complete(props.eventId, task.itemId, actionData);
+
+      // Reload the dashboard
+      await loadDashboard();
+      emit('checklist-updated');
+    }
   } catch (err) {
     console.error('Failed to complete task:', err);
+
+    // If network error, queue for offline
+    if (getOfflineMode() || !err.response) {
+      await queueOfflineAction('checklist_complete', {
+        eventId: props.eventId,
+        itemId: task.itemId,
+        data: actionData
+      });
+
+      // Optimistic update
+      checkpoint.outstandingTasks = checkpoint.outstandingTasks.filter(t => t.itemId !== task.itemId);
+      checkpoint.outstandingTaskCount = Math.max(0, checkpoint.outstandingTaskCount - 1);
+
+      await updatePendingCount();
+      emit('checklist-updated');
+    }
   } finally {
     savingTask.value = false;
   }
@@ -350,30 +449,64 @@ const completeTaskForMarshal = async (task) => {
   if (savingTask.value || !selectedMarshal.value) return;
   savingTask.value = true;
 
+  const actionData = {
+    marshalId: selectedMarshal.value.marshalId,
+    contextType: task.contextType,
+    contextId: task.contextId,
+  };
+
   try {
-    await checklistApi.complete(props.eventId, task.itemId, {
-      marshalId: selectedMarshal.value.marshalId,
-      contextType: task.contextType,
-      contextId: task.contextId,
-    });
+    if (getOfflineMode()) {
+      // Queue for offline sync
+      await queueOfflineAction('checklist_complete', {
+        eventId: props.eventId,
+        itemId: task.itemId,
+        data: actionData
+      });
 
-    // Reload the dashboard
-    await loadDashboard();
+      // Optimistic update - remove the task from the marshal
+      selectedMarshal.value.outstandingTasks = selectedMarshal.value.outstandingTasks.filter(t => t.itemId !== task.itemId);
+      selectedMarshal.value.outstandingTaskCount = Math.max(0, selectedMarshal.value.outstandingTaskCount - 1);
 
-    // Update the selected marshal's tasks in the modal
-    if (selectedMarshal.value && selectedCheckpoint.value) {
-      const checkpoint = checkpoints.value.find(c => c.checkpointId === selectedCheckpoint.value.checkpointId);
-      if (checkpoint) {
-        const marshal = checkpoint.marshals.find(m => m.marshalId === selectedMarshal.value.marshalId);
-        if (marshal) {
-          selectedMarshal.value = marshal;
+      await updatePendingCount();
+      emit('checklist-updated');
+    } else {
+      await checklistApi.complete(props.eventId, task.itemId, actionData);
+
+      // Reload the dashboard
+      await loadDashboard();
+
+      // Update the selected marshal's tasks in the modal
+      if (selectedMarshal.value && selectedCheckpoint.value) {
+        const checkpoint = checkpoints.value.find(c => c.checkpointId === selectedCheckpoint.value.checkpointId);
+        if (checkpoint) {
+          const marshal = checkpoint.marshals.find(m => m.marshalId === selectedMarshal.value.marshalId);
+          if (marshal) {
+            selectedMarshal.value = marshal;
+          }
         }
       }
-    }
 
-    emit('checklist-updated');
+      emit('checklist-updated');
+    }
   } catch (err) {
     console.error('Failed to complete task:', err);
+
+    // If network error, queue for offline
+    if (getOfflineMode() || !err.response) {
+      await queueOfflineAction('checklist_complete', {
+        eventId: props.eventId,
+        itemId: task.itemId,
+        data: actionData
+      });
+
+      // Optimistic update
+      selectedMarshal.value.outstandingTasks = selectedMarshal.value.outstandingTasks.filter(t => t.itemId !== task.itemId);
+      selectedMarshal.value.outstandingTaskCount = Math.max(0, selectedMarshal.value.outstandingTaskCount - 1);
+
+      await updatePendingCount();
+      emit('checklist-updated');
+    }
   } finally {
     savingTask.value = false;
   }

@@ -1,12 +1,85 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
+import {
+  getCachedEventData,
+  cacheEventData,
+  queueAction,
+  getPendingActionsCount
+} from './offlineDb';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 15000, // 15 second timeout
 });
+
+// Offline state tracking
+let isOfflineMode = false;
+let pendingActionsCallback = null;
+
+/**
+ * Set callback for when pending actions count changes
+ */
+export function onPendingActionsChange(callback) {
+  pendingActionsCallback = callback;
+}
+
+/**
+ * Notify pending actions changed
+ */
+async function notifyPendingActionsChange() {
+  if (pendingActionsCallback) {
+    const count = await getPendingActionsCount();
+    pendingActionsCallback(count);
+  }
+}
+
+/**
+ * Extract event ID from URL path
+ */
+function extractEventIdFromUrl(url) {
+  // Match patterns like /events/{eventId}, /events/{eventId}/*, etc.
+  const patterns = [
+    /\/events\/([^\/]+)/,
+    /\/assignments\/([^\/]+)/,
+    /\/locations\/([^\/]+)/,
+    /\/checklist-items\/([^\/]+)/,
+    /\/areas\/([^\/]+)/,
+    /\/marshals\/([^\/]+)/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) {
+      return match[1];
+    }
+  }
+  return null;
+}
+
+/**
+ * Check if the error is a server error or network issue
+ */
+function isServerOrNetworkError(error) {
+  // Network error (no response)
+  if (!error.response && error.request) {
+    return true;
+  }
+
+  // Server errors (5xx)
+  if (error.response && error.response.status >= 500) {
+    return true;
+  }
+
+  // Timeout
+  if (error.code === 'ECONNABORTED') {
+    return true;
+  }
+
+  return false;
+}
 
 // Add interceptor to include auth headers
 api.interceptors.request.use((config) => {
@@ -20,6 +93,84 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// Response interceptor to cache successful responses
+api.interceptors.response.use(
+  (response) => {
+    // Mark as online when we get successful responses
+    isOfflineMode = false;
+
+    // Cache GET responses for specific endpoints
+    const url = response.config.url;
+    const eventId = extractEventIdFromUrl(url);
+
+    if (response.config.method === 'get' && eventId) {
+      // We cache at a higher level in MarshalView, but we could add caching here too
+      // For now, just ensure we're tracking online status
+    }
+
+    return response;
+  },
+  async (error) => {
+    const config = error.config;
+
+    // Check if it's a server or network error
+    if (isServerOrNetworkError(error)) {
+      isOfflineMode = true;
+
+      // For GET requests, try to return cached data
+      if (config.method === 'get') {
+        const eventId = extractEventIdFromUrl(config.url);
+        if (eventId) {
+          const cachedData = await getCachedEventData(eventId);
+          if (cachedData) {
+            console.log('Returning cached data for:', config.url);
+            // Return a mock response with cached data
+            // The caller will need to extract the right data based on the endpoint
+            return Promise.resolve({
+              data: cachedData,
+              status: 200,
+              statusText: 'OK (cached)',
+              headers: {},
+              config: config,
+              cached: true
+            });
+          }
+        }
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+/**
+ * Queue an action for offline sync and return an optimistic response
+ */
+export async function queueOfflineAction(actionType, payload, optimisticResponse) {
+  await queueAction({
+    type: actionType,
+    payload: payload,
+    eventId: payload.eventId
+  });
+
+  await notifyPendingActionsChange();
+
+  // Return optimistic response
+  return {
+    data: optimisticResponse,
+    status: 200,
+    statusText: 'OK (queued)',
+    queued: true
+  };
+}
+
+/**
+ * Check if we're in offline mode
+ */
+export function getOfflineMode() {
+  return isOfflineMode || !navigator.onLine;
+}
 
 // Auth API
 export const authApi = {

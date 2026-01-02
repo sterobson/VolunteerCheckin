@@ -4,8 +4,10 @@ namespace VolunteerCheckin.Functions.Helpers;
 
 public static partial class Validators
 {
-    // Email validation regex
-    [GeneratedRegex(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.IgnoreCase)]
+    // Email validation regex - supports plus addressing (user+tag@domain.com) and various valid formats
+    // Local part: letters, digits, dots, plus, hyphens, underscores, and common special chars
+    // Domain: letters, digits, hyphens with dots separating labels, TLD at least 2 chars
+    [GeneratedRegex(@"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$", RegexOptions.IgnoreCase)]
     private static partial Regex EmailRegex();
 
     // What3Words validation regex

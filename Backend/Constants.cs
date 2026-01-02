@@ -23,6 +23,7 @@ public static class Constants
     public const string CheckInMethodGps = "GPS";
     public const string CheckInMethodManual = "Manual";
     public const string CheckInMethodAdmin = "Admin";
+    public const string CheckInMethodAreaLead = "AreaLead";
 
     // Error Messages
     public const string ErrorInvalidRequest = "Invalid request";

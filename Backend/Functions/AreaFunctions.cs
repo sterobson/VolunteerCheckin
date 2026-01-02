@@ -44,11 +44,6 @@ public class AreaFunctions
         _contactPermissionService = contactPermissionService;
     }
 
-    private static string? GetSessionToken(HttpRequest req)
-    {
-        return req.Cookies["session"] ?? req.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "");
-    }
-
     [Function("CreateArea")]
     public async Task<IActionResult> CreateArea(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "areas")] HttpRequest req)
@@ -465,7 +460,7 @@ public class AreaFunctions
         try
         {
             // Require authentication
-            string? sessionToken = GetSessionToken(req);
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
             if (string.IsNullOrWhiteSpace(sessionToken))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
@@ -546,7 +541,7 @@ public class AreaFunctions
         try
         {
             // Require authentication
-            string? sessionToken = GetSessionToken(req);
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
             if (string.IsNullOrWhiteSpace(sessionToken))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
@@ -605,7 +600,7 @@ public class AreaFunctions
         try
         {
             // Require authentication
-            string? sessionToken = GetSessionToken(req);
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
             if (string.IsNullOrWhiteSpace(sessionToken))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
@@ -667,7 +662,7 @@ public class AreaFunctions
         try
         {
             // Require authentication
-            string? sessionToken = GetSessionToken(req);
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
             if (string.IsNullOrWhiteSpace(sessionToken))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });

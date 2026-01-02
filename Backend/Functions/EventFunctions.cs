@@ -233,14 +233,10 @@ public class EventFunctions
     {
         try
         {
-            // Check authorization
-            string? adminEmail = req.Headers["X-Admin-Email"].FirstOrDefault();
-            if (string.IsNullOrWhiteSpace(adminEmail))
-            {
-                return new BadRequestObjectResult(new { message = "Admin email header is required" });
-            }
+            (string? adminEmail, IActionResult? headerError) = FunctionHelpers.GetAdminEmailFromHeader(req);
+            if (headerError != null) return headerError;
 
-            if (!await IsUserAuthorizedForEvent(eventId, adminEmail))
+            if (!await IsUserAuthorizedForEvent(eventId, adminEmail!))
             {
                 return new UnauthorizedObjectResult(new { message = "You are not authorized to delete this event" });
             }
@@ -266,7 +262,7 @@ public class EventFunctions
         try
         {
             // Require authentication and admin permissions
-            string? sessionToken = req.Cookies["session"] ?? req.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "");
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
             if (string.IsNullOrWhiteSpace(sessionToken))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
@@ -415,14 +411,10 @@ public class EventFunctions
     {
         try
         {
-            // Check authorization
-            string? adminEmail = req.Headers["X-Admin-Email"].FirstOrDefault();
-            if (string.IsNullOrWhiteSpace(adminEmail))
-            {
-                return new BadRequestObjectResult(new { message = "Admin email header is required" });
-            }
+            (string? adminEmail, IActionResult? headerError) = FunctionHelpers.GetAdminEmailFromHeader(req);
+            if (headerError != null) return headerError;
 
-            if (!await IsUserAuthorizedForEvent(eventId, adminEmail))
+            if (!await IsUserAuthorizedForEvent(eventId, adminEmail!))
             {
                 return new UnauthorizedObjectResult(new { message = "You are not authorized to manage admins for this event" });
             }
@@ -475,14 +467,10 @@ public class EventFunctions
     {
         try
         {
-            // Check authorization
-            string? adminEmail = req.Headers["X-Admin-Email"].FirstOrDefault();
-            if (string.IsNullOrWhiteSpace(adminEmail))
-            {
-                return new BadRequestObjectResult(new { message = "Admin email header is required" });
-            }
+            (string? adminEmail, IActionResult? headerError) = FunctionHelpers.GetAdminEmailFromHeader(req);
+            if (headerError != null) return headerError;
 
-            if (!await IsUserAuthorizedForEvent(eventId, adminEmail))
+            if (!await IsUserAuthorizedForEvent(eventId, adminEmail!))
             {
                 return new UnauthorizedObjectResult(new { message = "You are not authorized to upload routes for this event" });
             }

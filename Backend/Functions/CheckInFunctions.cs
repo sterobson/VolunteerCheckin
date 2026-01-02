@@ -8,6 +8,7 @@ using System.Text.Json;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Services;
 using VolunteerCheckin.Functions.Repositories;
+using VolunteerCheckin.Functions.Helpers;
 
 namespace VolunteerCheckin.Functions.Functions;
 
@@ -112,30 +113,36 @@ public class CheckInFunctions
             // Update assignment first
             await _assignmentRepository.UpdateAsync(assignment);
 
-            // Update location checked-in count with rollback on failure
-            try
+            // Update location checked-in count with retry logic
+            location.CheckedInCount++;
+            bool locationUpdated = await FunctionHelpers.ExecuteWithRetryAsync(
+                () => _locationRepository.UpdateAsync(location),
+                maxRetries: 3,
+                baseDelayMs: 100
+            );
+
+            if (!locationUpdated)
             {
-                location.CheckedInCount++;
-                await _locationRepository.UpdateAsync(location);
-            }
-            catch (Exception locationEx)
-            {
-                // Attempt to rollback assignment change
-                _logger.LogError(locationEx, "Failed to update location count, attempting rollback");
-                try
+                // Rollback assignment with retry logic
+                _logger.LogError("Failed to update location count after retries, attempting rollback");
+                assignment.IsCheckedIn = false;
+                assignment.CheckInTime = null;
+                assignment.CheckInLatitude = null;
+                assignment.CheckInLongitude = null;
+                assignment.CheckInMethod = string.Empty;
+
+                bool rollbackSucceeded = await FunctionHelpers.ExecuteWithRetryAsync(
+                    () => _assignmentRepository.UpdateAsync(assignment),
+                    maxRetries: 3,
+                    baseDelayMs: 100
+                );
+
+                if (!rollbackSucceeded)
                 {
-                    assignment.IsCheckedIn = false;
-                    assignment.CheckInTime = null;
-                    assignment.CheckInLatitude = null;
-                    assignment.CheckInLongitude = null;
-                    assignment.CheckInMethod = string.Empty;
-                    await _assignmentRepository.UpdateAsync(assignment);
+                    _logger.LogCritical("CRITICAL: Failed to rollback assignment after location update failure. Data inconsistency for assignment {AssignmentId}", assignment.RowKey);
                 }
-                catch (Exception rollbackEx)
-                {
-                    _logger.LogError(rollbackEx, "Failed to rollback assignment, data may be inconsistent");
-                }
-                throw; // Re-throw original exception
+
+                return new StatusCodeResult(500);
             }
 
             AssignmentResponse response = assignment.ToResponse();
@@ -160,7 +167,7 @@ public class CheckInFunctions
         try
         {
             // Require authentication and admin permissions
-            string? sessionToken = req.Cookies["session"] ?? req.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "");
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
             if (string.IsNullOrWhiteSpace(sessionToken))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
@@ -170,18 +177,6 @@ public class CheckInFunctions
             if (claims == null)
             {
                 return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
-            }
-
-            // Must have elevated permissions (logged in via email, not magic code)
-            if (!claims.CanUseElevatedPermissions)
-            {
-                return new ForbidResult();
-            }
-
-            // Must be event admin or system admin
-            if (!claims.IsEventAdmin && !claims.IsSystemAdmin)
-            {
-                return new ForbidResult();
             }
 
             // Find the assignment using partition key query
@@ -198,6 +193,43 @@ public class CheckInFunctions
             if (location == null)
             {
                 return new NotFoundObjectResult(new { message = Constants.ErrorLocationNotFound });
+            }
+
+            // Check authorization: must be admin OR area lead for this checkpoint's area
+            bool isAuthorized = false;
+            string checkInMethod = Constants.CheckInMethodAdmin;
+
+            if (claims.IsEventAdmin || claims.IsSystemAdmin)
+            {
+                // Admins can check in anyone, but need elevated permissions
+                if (!claims.CanUseElevatedPermissions)
+                {
+                    return new ForbidResult();
+                }
+                isAuthorized = true;
+            }
+            else
+            {
+                // Check if user is an area lead for this checkpoint's area
+                List<string> areaLeadAreaIds = claims.EventRoles
+                    .Where(r => r.Role == Constants.RoleEventAreaLead)
+                    .SelectMany(r => r.AreaIds)
+                    .ToList();
+
+                if (areaLeadAreaIds.Count > 0 && !string.IsNullOrEmpty(location.AreaIdsJson))
+                {
+                    List<string> checkpointAreaIds = System.Text.Json.JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson) ?? [];
+                    isAuthorized = checkpointAreaIds.Any(areaId => areaLeadAreaIds.Contains(areaId));
+                    if (isAuthorized)
+                    {
+                        checkInMethod = Constants.CheckInMethodAreaLead;
+                    }
+                }
+            }
+
+            if (!isAuthorized)
+            {
+                return new ForbidResult();
             }
 
             // Store original state for rollback
@@ -220,39 +252,45 @@ public class CheckInFunctions
             }
             else
             {
-                // Check in via admin
+                // Check in via admin or area lead
                 assignment.IsCheckedIn = true;
                 assignment.CheckInTime = DateTime.UtcNow;
-                assignment.CheckInMethod = Constants.CheckInMethodAdmin;
+                assignment.CheckInMethod = checkInMethod;
                 location.CheckedInCount++;
             }
 
             // Update assignment first
             await _assignmentRepository.UpdateAsync(assignment);
 
-            // Update location with rollback on failure
-            try
+            // Update location with retry logic
+            bool locationUpdated = await FunctionHelpers.ExecuteWithRetryAsync(
+                () => _locationRepository.UpdateAsync(location),
+                maxRetries: 3,
+                baseDelayMs: 100
+            );
+
+            if (!locationUpdated)
             {
-                await _locationRepository.UpdateAsync(location);
-            }
-            catch (Exception locationEx)
-            {
-                // Attempt to rollback assignment change
-                _logger.LogError(locationEx, "Failed to update location count in admin check-in, attempting rollback");
-                try
+                // Rollback assignment with retry logic
+                _logger.LogError("Failed to update location count in admin check-in after retries, attempting rollback");
+                assignment.IsCheckedIn = wasCheckedIn;
+                assignment.CheckInTime = originalCheckInTime;
+                assignment.CheckInLatitude = originalLat;
+                assignment.CheckInLongitude = originalLon;
+                assignment.CheckInMethod = originalMethod;
+
+                bool rollbackSucceeded = await FunctionHelpers.ExecuteWithRetryAsync(
+                    () => _assignmentRepository.UpdateAsync(assignment),
+                    maxRetries: 3,
+                    baseDelayMs: 100
+                );
+
+                if (!rollbackSucceeded)
                 {
-                    assignment.IsCheckedIn = wasCheckedIn;
-                    assignment.CheckInTime = originalCheckInTime;
-                    assignment.CheckInLatitude = originalLat;
-                    assignment.CheckInLongitude = originalLon;
-                    assignment.CheckInMethod = originalMethod;
-                    await _assignmentRepository.UpdateAsync(assignment);
+                    _logger.LogCritical("CRITICAL: Failed to rollback assignment in admin check-in. Data inconsistency for assignment {AssignmentId}", assignment.RowKey);
                 }
-                catch (Exception rollbackEx)
-                {
-                    _logger.LogError(rollbackEx, "Failed to rollback assignment in admin check-in, data may be inconsistent");
-                }
-                throw;
+
+                return new StatusCodeResult(500);
             }
 
             AssignmentResponse response = assignment.ToResponse();

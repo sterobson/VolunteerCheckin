@@ -17,6 +17,10 @@ public class ClaimsService
     private readonly IMarshalRepository _marshalRepository;
     private readonly IUserEventMappingRepository _userEventMappingRepository;
 
+    // Cache for legacy migration checks to avoid repeated database queries
+    // Key: "{personId}:{eventId}", Value: true if migration was attempted
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> _migrationCheckCache = new();
+
     public ClaimsService(
         IAuthSessionRepository sessionRepository,
         IPersonRepository personRepository,
@@ -77,8 +81,14 @@ public class ClaimsService
             )).ToList();
 
             // Migrate legacy UserEventMappings to new EventRoles table if needed
-            if (!eventRoles.Any(r => r.Role == Constants.RoleEventAdmin))
+            // Use cache to avoid repeated database queries for the same person/event
+            string migrationCacheKey = $"{person.PersonId}:{effectiveEventId}";
+            if (!eventRoles.Any(r => r.Role == Constants.RoleEventAdmin) &&
+                !_migrationCheckCache.ContainsKey(migrationCacheKey))
             {
+                // Mark as checked first (even before the query) to prevent concurrent migration attempts
+                _migrationCheckCache.TryAdd(migrationCacheKey, true);
+
                 try
                 {
                     UserEventMappingEntity? legacyMapping = await _userEventMappingRepository.GetAsync(effectiveEventId, person.Email);

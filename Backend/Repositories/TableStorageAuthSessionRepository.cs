@@ -42,28 +42,33 @@ public class TableStorageAuthSessionRepository : IAuthSessionRepository
         }
     }
 
+    /// <summary>
+    /// Get all sessions for a person. Uses OData filter for server-side filtering.
+    /// Note: For high-volume scenarios, consider adding a secondary index table.
+    /// </summary>
     public async Task<IEnumerable<AuthSessionEntity>> GetByPersonAsync(string personId)
     {
+        // Use OData filter syntax for server-side filtering (more efficient than client-side)
+        string filter = $"PartitionKey eq 'SESSION' and PersonId eq '{personId}'";
         List<AuthSessionEntity> sessions = [];
-        await foreach (AuthSessionEntity session in _table.QueryAsync<AuthSessionEntity>(s => s.PartitionKey == "SESSION"))
+        await foreach (AuthSessionEntity session in _table.QueryAsync<AuthSessionEntity>(filter))
         {
-            if (session.PersonId == personId)
-            {
-                sessions.Add(session);
-            }
+            sessions.Add(session);
         }
         return sessions;
     }
 
+    /// <summary>
+    /// Get all sessions for a person in a specific event. Uses OData filter for server-side filtering.
+    /// </summary>
     public async Task<IEnumerable<AuthSessionEntity>> GetByPersonAndEventAsync(string personId, string eventId)
     {
+        // Use OData filter syntax for server-side filtering
+        string filter = $"PartitionKey eq 'SESSION' and PersonId eq '{personId}' and EventId eq '{eventId}'";
         List<AuthSessionEntity> sessions = [];
-        await foreach (AuthSessionEntity session in _table.QueryAsync<AuthSessionEntity>(s => s.PartitionKey == "SESSION"))
+        await foreach (AuthSessionEntity session in _table.QueryAsync<AuthSessionEntity>(filter))
         {
-            if (session.PersonId == personId && session.EventId == eventId)
-            {
-                sessions.Add(session);
-            }
+            sessions.Add(session);
         }
         return sessions;
     }
@@ -99,23 +104,30 @@ public class TableStorageAuthSessionRepository : IAuthSessionRepository
     public async Task RevokeAllForPersonAsync(string personId)
     {
         IEnumerable<AuthSessionEntity> sessions = await GetByPersonAsync(personId);
+        DateTime revokedAt = DateTime.UtcNow;
+
+        // Revoke all sessions in parallel
+        List<Task> revokeTasks = [];
         foreach (AuthSessionEntity session in sessions)
         {
             if (!session.IsRevoked)
             {
                 session.IsRevoked = true;
-                session.RevokedAt = DateTime.UtcNow;
-                await UpdateAsync(session);
+                session.RevokedAt = revokedAt;
+                revokeTasks.Add(UpdateUnconditionalAsync(session));
             }
         }
+        await Task.WhenAll(revokeTasks);
     }
 
     public async Task DeleteExpiredSessionsAsync()
     {
         DateTime now = DateTime.UtcNow;
-        List<AuthSessionEntity> sessionsToDelete = [];
+        List<string> rowKeysToDelete = [];
 
-        await foreach (AuthSessionEntity session in _table.QueryAsync<AuthSessionEntity>(s => s.PartitionKey == "SESSION"))
+        // Use OData filter to find revoked or expired sessions
+        // This is a background cleanup task so a full scan is acceptable
+        await foreach (AuthSessionEntity session in _table.QueryAsync<AuthSessionEntity>("PartitionKey eq 'SESSION'"))
         {
             // Delete sessions that are revoked and older than 24 hours
             // or sessions with expiry that have expired more than 7 days ago
@@ -127,20 +139,25 @@ public class TableStorageAuthSessionRepository : IAuthSessionRepository
 
             if (isOldRevokedSession || isExpiredSession)
             {
-                sessionsToDelete.Add(session);
+                rowKeysToDelete.Add(session.RowKey);
             }
         }
 
-        foreach (AuthSessionEntity session in sessionsToDelete)
-        {
-            try
+        // Delete sessions in parallel for better performance
+        List<Task> deleteTasks = rowKeysToDelete.Select(rowKey =>
+            Task.Run(async () =>
             {
-                await _table.DeleteEntityAsync("SESSION", session.RowKey);
-            }
-            catch (RequestFailedException)
-            {
-                // Ignore delete failures (entity may have been deleted by another process)
-            }
-        }
+                try
+                {
+                    await _table.DeleteEntityAsync("SESSION", rowKey);
+                }
+                catch (RequestFailedException)
+                {
+                    // Ignore delete failures (entity may have been deleted by another process)
+                }
+            })
+        ).ToList();
+
+        await Task.WhenAll(deleteTasks);
     }
 }

@@ -415,6 +415,31 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), It.IsAny<string>()))
                 .ReturnsAsync(marshalClaims);
 
+            // Need to set up assignment and location mocks since auth check happens after retrieval
+            AssignmentEntity assignment = new()
+            {
+                PartitionKey = "event-123",
+                RowKey = "assignment-456",
+                EventId = "event-123",
+                LocationId = "location-789",
+                MarshalId = "marshal-123",
+                IsCheckedIn = false
+            };
+            LocationEntity location = new()
+            {
+                PartitionKey = "event-123",
+                RowKey = "location-789",
+                EventId = "event-123",
+                Name = "Test Location",
+                AreaIdsJson = "[]"
+            };
+            _mockAssignmentRepository
+                .Setup(r => r.GetAsync("event-123", "assignment-456"))
+                .ReturnsAsync(assignment);
+            _mockLocationRepository
+                .Setup(r => r.GetAsync("event-123", "location-789"))
+                .ReturnsAsync(location);
+
             HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth("some-token");
 
             // Act
@@ -442,6 +467,31 @@ namespace VolunteerCheckin.Functions.Tests
             _mockClaimsService
                 .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), It.IsAny<string>()))
                 .ReturnsAsync(nonAdminClaims);
+
+            // Need to set up assignment and location mocks since auth check happens after retrieval
+            AssignmentEntity assignment = new()
+            {
+                PartitionKey = "event-123",
+                RowKey = "assignment-456",
+                EventId = "event-123",
+                LocationId = "location-789",
+                MarshalId = "marshal-123",
+                IsCheckedIn = false
+            };
+            LocationEntity location = new()
+            {
+                PartitionKey = "event-123",
+                RowKey = "location-789",
+                EventId = "event-123",
+                Name = "Test Location",
+                AreaIdsJson = "[]"
+            };
+            _mockAssignmentRepository
+                .Setup(r => r.GetAsync("event-123", "assignment-456"))
+                .ReturnsAsync(assignment);
+            _mockLocationRepository
+                .Setup(r => r.GetAsync("event-123", "location-789"))
+                .ReturnsAsync(location);
 
             HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth("some-token");
 

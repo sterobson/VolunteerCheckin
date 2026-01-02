@@ -397,6 +397,7 @@ const formatCheckInMethod = (method) => {
     'GPS': 'GPS',
     'Manual': 'Manual',
     'Admin': 'Admin',
+    'AreaLead': `${terms.value.area} Lead`,
   };
   return methods[method] || method;
 };

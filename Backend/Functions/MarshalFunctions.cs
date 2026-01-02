@@ -52,14 +52,6 @@ public class MarshalFunctions
         _emailService = emailService;
     }
 
-    /// <summary>
-    /// Get session token from request cookie or Authorization header.
-    /// </summary>
-    private static string? GetSessionToken(HttpRequest req)
-    {
-        return req.Cookies["session"] ?? req.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "");
-    }
-
     [Function("CreateMarshal")]
     public async Task<IActionResult> CreateMarshal(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "marshals")] HttpRequest req)
@@ -75,7 +67,7 @@ public class MarshalFunctions
             }
 
             // Require authentication
-            string? sessionToken = GetSessionToken(req);
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
             if (string.IsNullOrWhiteSpace(sessionToken))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
@@ -229,7 +221,7 @@ public class MarshalFunctions
             _logger.LogInformation($"GetMarshalsByEvent called for event {eventId}");
 
             // Require authentication
-            string? sessionToken = GetSessionToken(req);
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
             _logger.LogInformation($"Session token present: {!string.IsNullOrWhiteSpace(sessionToken)}");
             if (string.IsNullOrWhiteSpace(sessionToken))
             {
@@ -304,7 +296,7 @@ public class MarshalFunctions
         try
         {
             // Require authentication
-            string? sessionToken = GetSessionToken(req);
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
             if (string.IsNullOrWhiteSpace(sessionToken))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
@@ -375,7 +367,7 @@ public class MarshalFunctions
         try
         {
             // Require authentication
-            string? sessionToken = GetSessionToken(req);
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
             if (string.IsNullOrWhiteSpace(sessionToken))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
@@ -492,7 +484,7 @@ public class MarshalFunctions
         try
         {
             // Require authentication
-            string? sessionToken = GetSessionToken(req);
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
             if (string.IsNullOrWhiteSpace(sessionToken))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
@@ -540,7 +532,7 @@ public class MarshalFunctions
         try
         {
             // Require authentication
-            string? sessionToken = GetSessionToken(req);
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
             if (string.IsNullOrWhiteSpace(sessionToken))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
@@ -598,7 +590,7 @@ public class MarshalFunctions
         try
         {
             // Require authentication
-            string? sessionToken = GetSessionToken(req);
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
             if (string.IsNullOrWhiteSpace(sessionToken))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
@@ -675,7 +667,7 @@ public class MarshalFunctions
         try
         {
             // Require authentication
-            string? sessionToken = GetSessionToken(req);
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
             if (string.IsNullOrWhiteSpace(sessionToken))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });

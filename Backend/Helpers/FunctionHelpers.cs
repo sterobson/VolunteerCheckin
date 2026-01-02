@@ -10,6 +10,28 @@ public static class FunctionHelpers
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     /// <summary>
+    /// Extracts the session token from either the session cookie or Authorization header.
+    /// Supports both cookie-based auth (browser) and Bearer token auth (API clients).
+    /// </summary>
+    public static string? GetSessionToken(HttpRequest req)
+    {
+        // Try cookie first (browser sessions)
+        string? sessionToken = req.Cookies["session"];
+
+        // Fall back to Authorization header (API clients)
+        if (string.IsNullOrEmpty(sessionToken))
+        {
+            string? authHeader = req.Headers["Authorization"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                sessionToken = authHeader.Substring(7); // Length of "Bearer "
+            }
+        }
+
+        return string.IsNullOrWhiteSpace(sessionToken) ? null : sessionToken;
+    }
+
+    /// <summary>
     /// Deserializes the request body to the specified type.
     /// Returns the deserialized object if successful, otherwise returns a BadRequest result.
     /// </summary>
@@ -121,5 +143,58 @@ public static class FunctionHelpers
         {
             StatusCode = 500
         };
+    }
+
+    /// <summary>
+    /// Executes an async operation with retry logic using exponential backoff.
+    /// Useful for operations that may transiently fail (database updates, network calls).
+    /// </summary>
+    /// <param name="operation">The async operation to execute</param>
+    /// <param name="maxRetries">Maximum number of retry attempts (default: 3)</param>
+    /// <param name="baseDelayMs">Base delay in milliseconds between retries (default: 100)</param>
+    /// <returns>True if operation succeeded, false if all retries failed</returns>
+    public static async Task<bool> ExecuteWithRetryAsync(Func<Task> operation, int maxRetries = 3, int baseDelayMs = 100)
+    {
+        for (int attempt = 0; attempt <= maxRetries; attempt++)
+        {
+            try
+            {
+                await operation();
+                return true;
+            }
+            catch (Exception) when (attempt < maxRetries)
+            {
+                // Exponential backoff: 100ms, 200ms, 400ms...
+                int delay = baseDelayMs * (1 << attempt);
+                await Task.Delay(delay);
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Executes an async operation with retry logic, returning the result or throwing on failure.
+    /// </summary>
+    public static async Task<T> ExecuteWithRetryAsync<T>(Func<Task<T>> operation, int maxRetries = 3, int baseDelayMs = 100)
+    {
+        Exception? lastException = null;
+        for (int attempt = 0; attempt <= maxRetries; attempt++)
+        {
+            try
+            {
+                return await operation();
+            }
+            catch (Exception ex) when (attempt < maxRetries)
+            {
+                lastException = ex;
+                int delay = baseDelayMs * (1 << attempt);
+                await Task.Delay(delay);
+            }
+            catch (Exception ex)
+            {
+                lastException = ex;
+            }
+        }
+        throw lastException ?? new InvalidOperationException("Operation failed after retries");
     }
 }

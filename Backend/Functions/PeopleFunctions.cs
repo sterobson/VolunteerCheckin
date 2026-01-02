@@ -40,8 +40,7 @@ public class PeopleFunctions
     {
         try
         {
-            // Get session token
-            string? sessionToken = req.Cookies["session"] ?? req.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "");
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
 
             if (string.IsNullOrWhiteSpace(sessionToken))
             {
@@ -117,8 +116,7 @@ public class PeopleFunctions
     {
         try
         {
-            // Get session token
-            string? sessionToken = req.Cookies["session"] ?? req.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "");
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
 
             if (string.IsNullOrWhiteSpace(sessionToken))
             {

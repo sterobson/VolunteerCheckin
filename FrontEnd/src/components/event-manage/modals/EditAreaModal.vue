@@ -1,7 +1,7 @@
 <template>
   <BaseModal
     :show="show"
-    :title="area && area.id ? `Edit area: ${area.name}` : 'Create new area'"
+    :title="area && area.id ? `Edit ${termsLower.area}: ${area.name}` : `Create new ${termsLower.area}`"
     size="large"
     :confirm-on-close="true"
     :is-dirty="isDirty"
@@ -88,52 +88,41 @@
 
     <!-- Contacts Tab -->
     <div v-if="activeTab === 'contacts'" class="tab-content">
-      <h3 class="section-title">Area contacts ({{ form.contacts.length }})</h3>
-      <button @click="showMarshalSelector = true" class="btn btn-secondary btn-full">
-        Add contact
-      </button>
+      <h3 class="section-title">{{ terms.area }} contacts</h3>
 
-      <div class="contacts-list">
+      <div class="contacts-actions">
+        <button @click="handleAddAreaContact" class="btn btn-primary btn-full">
+          Add contact for this {{ termsLower.area }}
+        </button>
+      </div>
+
+      <!-- Show existing contacts scoped to this area -->
+      <div v-if="areaContacts.length > 0" class="area-contacts-list">
+        <h4>Contacts visible in this {{ termsLower.area }} ({{ areaContacts.length }})</h4>
         <div
-          v-for="(contact, index) in form.contacts"
-          :key="index"
+          v-for="contact in areaContacts"
+          :key="contact.contactId"
           class="contact-item"
+          @click="$emit('edit-contact', contact)"
         >
           <div class="contact-info">
-            <strong>{{ contact.marshalName }}</strong>
-            <div class="contact-role">
-              <label>Role:</label>
-              <select
-                v-model="contact.role"
-                class="role-select"
-                @change="handleInput"
-              >
-                <option value="Lead">Lead</option>
-                <option value="Deputy">Deputy</option>
-                <option value="Support">Support</option>
-              </select>
+            <strong>{{ contact.name }}</strong>
+            <span v-if="contact.role" class="contact-role-badge">{{ formatRoleName(contact.role) }}</span>
+            <div v-if="contact.phone || contact.email" class="contact-details">
+              <span v-if="contact.phone">{{ contact.phone }}</span>
+              <span v-if="contact.email">{{ contact.email }}</span>
             </div>
           </div>
-          <button
-            @click="removeContact(index)"
-            class="btn btn-small btn-danger"
-          >
-            Remove
-          </button>
-        </div>
-
-        <div v-if="form.contacts.length === 0" class="empty-state">
-          <p>No contacts assigned. Click "Add contact" to assign a marshal.</p>
         </div>
       </div>
     </div>
 
-    <!-- Checkpoints Tab -->
-    <div v-if="activeTab === 'checkpoints'" class="tab-content">
-      <h3 class="section-title">Checkpoints in {{ area?.name }} ({{ areaCheckpoints.length }})</h3>
+    <!-- Checkpoints Tab (only when editing) -->
+    <div v-if="activeTab === 'checkpoints' && isExistingArea" class="tab-content">
+      <h3 class="section-title">{{ terms.checkpoints }} in {{ area?.name }} ({{ areaCheckpoints.length }})</h3>
 
       <div v-if="areaCheckpoints.length === 0" class="empty-state">
-        <p>No checkpoints in this area yet.</p>
+        <p>No {{ termsLower.checkpoints }} in this {{ termsLower.area }} yet.</p>
       </div>
 
       <div v-else class="checkpoints-list">
@@ -159,7 +148,7 @@
 
           <div class="checkpoint-details">
             <div class="detail-row">
-              <span class="detail-label">Marshals:</span>
+              <span class="detail-label">{{ terms.people }}:</span>
               <span class="detail-value">
                 {{ getCheckpointAssignments(checkpoint.id).length }} / {{ checkpoint.requiredMarshals }}
                 <span v-if="getCheckpointAssignments(checkpoint.id).length < checkpoint.requiredMarshals" class="warning-text">
@@ -190,9 +179,14 @@
       </div>
     </div>
 
-    <!-- Checklist Tab -->
+    <!-- Checkpoints placeholder when creating -->
+    <div v-if="activeTab === 'checkpoints' && !isExistingArea" class="placeholder-message">
+      <p>{{ terms.checkpoints }} will be automatically assigned based on boundaries after the {{ termsLower.area }} is created.</p>
+    </div>
+
+    <!-- Checklists Tab (only when editing) -->
     <CheckpointChecklistView
-      v-if="activeTab === 'checklist'"
+      v-if="activeTab === 'checklists' && isExistingArea"
       ref="checklistTabRef"
       v-model="checklistChanges"
       :event-id="eventId"
@@ -203,9 +197,14 @@
       @change="handleChecklistChange"
     />
 
-    <!-- Notes Tab -->
+    <!-- Checklists placeholder when creating -->
+    <div v-if="activeTab === 'checklists' && !isExistingArea" class="placeholder-message">
+      <p>{{ terms.checklists }} can be assigned after the {{ termsLower.area }} is created.</p>
+    </div>
+
+    <!-- Notes Tab (only when editing) -->
     <NotesView
-      v-if="activeTab === 'notes'"
+      v-if="activeTab === 'notes' && isExistingArea"
       :event-id="eventId"
       :area-id="area?.id"
       :all-notes="notes"
@@ -214,45 +213,42 @@
       :assignments="assignments"
     />
 
+    <!-- Notes placeholder when creating -->
+    <div v-if="activeTab === 'notes' && !isExistingArea" class="placeholder-message">
+      <p>Notes can be viewed after the {{ termsLower.area }} is created.</p>
+    </div>
+
     <!-- Custom footer with left and right aligned buttons -->
     <template #footer>
       <div class="custom-footer">
         <button
-          v-if="area && area.id && !form.isDefault"
+          v-if="isExistingArea && !form.isDefault"
           type="button"
           @click="handleDelete"
           class="btn btn-danger"
         >
-          Delete area
+          Delete {{ termsLower.area }}
         </button>
         <div v-else></div>
-        <button type="button" @click="handleSave" class="btn btn-primary">
-          {{ area && area.id ? 'Save changes' : 'Create area' }}
+        <button type="button" @click="handlePrimaryAction" class="btn btn-primary">
+          {{ isExistingArea ? 'Save changes' : createButtonText }}
         </button>
       </div>
     </template>
   </BaseModal>
-
-  <!-- Child Modals -->
-  <MarshalSelectorModal
-    :show="showMarshalSelector"
-    :areaName="form.name"
-    :marshals="marshals"
-    :existingContacts="form.contacts"
-    @close="showMarshalSelector = false"
-    @assign="handleAddContact"
-  />
 </template>
 
 <script setup>
 import { ref, computed, defineProps, defineEmits, watch } from 'vue';
 import BaseModal from '../../BaseModal.vue';
 import TabHeader from '../../TabHeader.vue';
-import MarshalSelectorModal from './MarshalSelectorModal.vue';
 import CheckpointChecklistView from '../../CheckpointChecklistView.vue';
 import NotesView from '../../NotesView.vue';
 import { AREA_COLORS, DEFAULT_AREA_COLOR, getNextAvailableColor } from '../../../constants/areaColors';
 import { checklistApi } from '../../../services/api';
+import { useTerminology } from '../../../composables/useTerminology';
+
+const { terms, termsLower } = useTerminology();
 
 const props = defineProps({
   show: {
@@ -295,6 +291,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  contacts: {
+    type: Array,
+    default: () => [],
+  },
 });
 
 const emit = defineEmits([
@@ -304,10 +304,11 @@ const emit = defineEmits([
   'draw-boundary',
   'update:isDirty',
   'select-checkpoint',
+  'add-area-contact',
+  'edit-contact',
 ]);
 
 const activeTab = ref('details');
-const showMarshalSelector = ref(false);
 const checklistTabRef = ref(null);
 const checklistChanges = ref([]);
 const checkpointChecklistStatus = ref({});
@@ -320,27 +321,43 @@ const form = ref({
   displayOrder: 0,
   isDefault: false,
   polygon: [],
-  contacts: [],
 });
 
-// Compute available tabs based on whether we're editing or creating
-const availableTabs = computed(() => {
-  const baseTabs = [
-    { value: 'details', label: 'Details', icon: 'details' },
-    { value: 'boundary', label: 'Boundary', icon: 'area' },
-    { value: 'contacts', label: 'Contacts', icon: 'marshal' },
-  ];
+// Computed property for whether this is an existing area
+const isExistingArea = computed(() => {
+  return props.area && props.area.id;
+});
 
-  if (props.area && props.area.id) {
-    return [
-      ...baseTabs,
-      { value: 'checkpoints', label: 'Checkpoints', icon: 'checkpoint' },
-      { value: 'checklist', label: 'Checklist', icon: 'checklist' },
-      { value: 'notes', label: 'Notes', icon: 'notes' },
-    ];
+// All tabs always available
+const availableTabs = computed(() => [
+  { value: 'details', label: 'Details', icon: 'details' },
+  { value: 'boundary', label: 'Boundary', icon: 'area' },
+  { value: 'contacts', label: 'Contacts', icon: 'marshal' },
+  { value: 'checkpoints', label: terms.value.checkpoints, icon: 'checkpoint' },
+  { value: 'checklists', label: terms.value.checklists, icon: 'checklist' },
+  { value: 'notes', label: 'Notes', icon: 'notes' },
+]);
+
+// Get current tab index and check if on last tab
+const currentTabIndex = computed(() => {
+  return availableTabs.value.findIndex(tab => tab.value === activeTab.value);
+});
+
+const isLastTab = computed(() => {
+  return currentTabIndex.value === availableTabs.value.length - 1;
+});
+
+const nextTab = computed(() => {
+  if (isLastTab.value) return null;
+  return availableTabs.value[currentTabIndex.value + 1];
+});
+
+// Button text for create mode - shows "Add [next tab]..." or "Create [area]"
+const createButtonText = computed(() => {
+  if (isLastTab.value) {
+    return `Create ${termsLower.value.area}`;
   }
-
-  return baseTabs;
+  return `Add ${nextTab.value.label.toLowerCase()}...`;
 });
 
 // Compute assignments for checkpoints in this area
@@ -381,6 +398,26 @@ const sortedAreaCheckpoints = computed(() => {
   return sorted;
 });
 
+// Get contacts scoped to this area
+const areaContacts = computed(() => {
+  if (!props.area || !props.area.id) return [];
+
+  return props.contacts.filter(contact => {
+    if (!contact.scopeConfigurations) return false;
+
+    return contact.scopeConfigurations.some(config => {
+      // Check if this contact is visible to everyone in specific areas and this area is included
+      if (config.scope === 'EveryoneInAreas' && config.itemType === 'Area') {
+        // ALL_AREAS means all areas
+        if (config.ids?.includes('ALL_AREAS')) return true;
+        // Check if this specific area is in the list
+        return config.ids?.includes(props.area.id);
+      }
+      return false;
+    });
+  });
+});
+
 // Get assignments for a specific checkpoint
 const getCheckpointAssignments = (checkpointId) => {
   return props.assignments.filter(a => a.locationId === checkpointId);
@@ -406,7 +443,7 @@ const getCheckInStatusClass = (checkpoint) => {
 // Get check-in status text
 const getCheckInStatusText = (checkpoint) => {
   const assignments = getCheckpointAssignments(checkpoint.id);
-  if (assignments.length === 0) return 'No marshals';
+  if (assignments.length === 0) return `No ${termsLower.value.people}`;
 
   const checkedInCount = assignments.filter(a => a.isCheckedIn).length;
   if (checkedInCount === 0) return 'Not checked in';
@@ -461,10 +498,7 @@ const loadChecklistStatus = async (checkpointId) => {
 
 watch(() => props.area, (newVal) => {
   if (newVal) {
-    // Parse ContactsJson and PolygonJson from backend
-    const contacts = newVal.contacts
-      ? (typeof newVal.contacts === 'string' ? JSON.parse(newVal.contacts) : newVal.contacts)
-      : [];
+    // Parse PolygonJson from backend
     const polygon = newVal.polygon
       ? (typeof newVal.polygon === 'string' ? JSON.parse(newVal.polygon) : newVal.polygon)
       : [];
@@ -476,7 +510,6 @@ watch(() => props.area, (newVal) => {
       displayOrder: newVal.displayOrder || 0,
       isDefault: newVal.isDefault || false,
       polygon: polygon,
-      contacts: contacts,
     };
   } else {
     // Creating new area
@@ -487,7 +520,6 @@ watch(() => props.area, (newVal) => {
       displayOrder: props.areas.length,
       isDefault: false,
       polygon: [],
-      contacts: [],
     };
   }
 }, { immediate: true, deep: true });
@@ -495,10 +527,20 @@ watch(() => props.area, (newVal) => {
 watch(() => props.show, (newVal) => {
   if (newVal) {
     activeTab.value = 'details';
-    showMarshalSelector.value = false;
     checklistChanges.value = [];
     checkpointChecklistStatus.value = {};
     loadingChecklistStatus.value = {};
+    // Reset form when opening for a new area
+    if (!isExistingArea.value) {
+      form.value = {
+        name: '',
+        description: '',
+        color: getNextAvailableColor(props.areas),
+        displayOrder: props.areas.length,
+        isDefault: false,
+        polygon: [],
+      };
+    }
     // Clear pending changes in checklist tab if it exists
     if (checklistTabRef.value?.resetLocalState) {
       checklistTabRef.value.resetLocalState();
@@ -535,15 +577,17 @@ const clearBoundary = () => {
   handleInput();
 };
 
-const handleAddContact = (contact) => {
-  form.value.contacts.push(contact);
-  showMarshalSelector.value = false;
-  handleInput();
+const handleAddAreaContact = () => {
+  // Emit to parent to open contact modal with pre-configured area scope
+  emit('add-area-contact', props.area);
 };
 
-const removeContact = (index) => {
-  form.value.contacts.splice(index, 1);
-  handleInput();
+const formatRoleName = (role) => {
+  if (!role) return '';
+  return role
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, str => str.toUpperCase())
+    .trim();
 };
 
 const handleChecklistChange = (changes) => {
@@ -551,15 +595,27 @@ const handleChecklistChange = (changes) => {
   handleInput();
 };
 
+const handlePrimaryAction = () => {
+  if (isExistingArea.value) {
+    // When editing, always save
+    handleSave();
+  } else if (isLastTab.value) {
+    // When creating and on the last tab, save
+    handleSave();
+  } else {
+    // When creating and not on the last tab, advance to next tab
+    activeTab.value = nextTab.value.value;
+  }
+};
+
 const handleSave = () => {
-  // For create: EventId, Name, Description, Color, Contacts (array), Polygon (array or null)
-  // For update: Name, Description, Color, Contacts (array), Polygon (array or null), DisplayOrder
+  // For create: EventId, Name, Description, Color, Polygon (array or null)
+  // For update: Name, Description, Color, Polygon (array or null), DisplayOrder
   const formData = props.area ? {
     // Update request
     name: form.value.name,
     description: form.value.description,
     color: form.value.color,
-    contacts: form.value.contacts,
     polygon: form.value.polygon.length > 0 ? form.value.polygon : null,
     displayOrder: form.value.displayOrder,
     // Include pending checklist changes
@@ -569,7 +625,6 @@ const handleSave = () => {
     name: form.value.name,
     description: form.value.description,
     color: form.value.color,
-    contacts: form.value.contacts,
     polygon: form.value.polygon.length > 0 ? form.value.polygon : null,
   };
 
@@ -950,5 +1005,83 @@ const handleClose = () => {
 .warning-text {
   color: #dc3545;
   font-weight: 500;
+}
+
+/* Contacts section */
+.contacts-actions {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.area-contacts-list {
+  margin-top: 1rem;
+}
+
+.area-contacts-list h4 {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.9rem;
+  color: #333;
+}
+
+.contact-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #dee2e6;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.contact-item:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.contact-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.contact-info strong {
+  display: inline;
+}
+
+.contact-role-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  background: #e9ecef;
+  color: #495057;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-left: 0.5rem;
+}
+
+.contact-details {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.placeholder-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 150px;
+  color: #666;
+  font-style: italic;
+  text-align: center;
+  padding: 2rem;
+}
+
+.placeholder-message p {
+  margin: 0;
 }
 </style>

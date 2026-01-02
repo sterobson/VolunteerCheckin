@@ -1,15 +1,15 @@
 <template>
   <BaseModal
     :show="show"
-    :title="showCreateMode ? 'Create new marshal' : `Assign marshal to ${locationName}`"
+    :title="showCreateMode ? `Create new ${termsLower.person}` : `Assign ${termsLower.person} to ${locationName}`"
     size="medium"
     @close="handleClose"
   >
     <!-- Select existing marshal - only show if not creating new -->
     <div v-if="!showCreateMode" class="assign-marshal-section">
-      <h3>Select existing marshal</h3>
+      <h3>Select existing {{ termsLower.person }}</h3>
       <select v-model="selectedMarshalId" class="form-input">
-        <option value="">Choose a marshal...</option>
+        <option value="">Choose a {{ termsLower.person }}...</option>
         <option
           v-for="marshal in marshals"
           :key="marshal.id"
@@ -17,7 +17,7 @@
         >
           {{ marshal.name }}
           <template v-if="marshal.assignedLocationIds && marshal.assignedLocationIds.length > 0">
-            (assigned to {{ marshal.assignedLocationIds.length }} checkpoint{{ marshal.assignedLocationIds.length > 1 ? 's' : '' }})
+            (assigned to {{ marshal.assignedLocationIds.length }} {{ marshal.assignedLocationIds.length > 1 ? termsLower.checkpoints : termsLower.checkpoint }})
           </template>
         </option>
       </select>
@@ -27,19 +27,19 @@
         style="margin-top: 1rem;"
         :disabled="!selectedMarshalId"
       >
-        Assign selected marshal
+        Assign selected {{ termsLower.person }}
       </button>
 
       <div class="divider">OR</div>
 
       <button @click="toggleCreateMode" class="btn btn-secondary btn-full">
-        Create new marshal
+        Create new {{ termsLower.person }}
       </button>
     </div>
 
     <!-- Create new marshal form - only show when creating -->
     <div v-else class="assign-marshal-section create-mode">
-      <h3>Create new marshal</h3>
+      <h3>Create new {{ termsLower.person }}</h3>
       <div class="form-group">
         <label>Name *</label>
         <input
@@ -84,6 +84,9 @@
 <script setup>
 import { ref, defineProps, defineEmits, watch } from 'vue';
 import BaseModal from '../../BaseModal.vue';
+import { useTerminology } from '../../../composables/useTerminology';
+
+const { terms, termsLower } = useTerminology();
 
 const props = defineProps({
   show: {

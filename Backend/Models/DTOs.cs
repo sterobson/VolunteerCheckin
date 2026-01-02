@@ -17,7 +17,8 @@ public record CreateEventRequest(
     string? PeopleTerm = null,
     string? CheckpointTerm = null,
     string? AreaTerm = null,
-    string? ChecklistTerm = null
+    string? ChecklistTerm = null,
+    string? CourseTerm = null
 );
 
 public record UpdateEventRequest(
@@ -29,7 +30,8 @@ public record UpdateEventRequest(
     string? PeopleTerm = null,
     string? CheckpointTerm = null,
     string? AreaTerm = null,
-    string? ChecklistTerm = null
+    string? ChecklistTerm = null,
+    string? CourseTerm = null
 );
 
 public record RoutePoint(
@@ -52,7 +54,8 @@ public record EventResponse(
     string PeopleTerm,
     string CheckpointTerm,
     string AreaTerm,
-    string ChecklistTerm
+    string ChecklistTerm,
+    string CourseTerm
 );
 
 public record CreateLocationRequest(
@@ -64,7 +67,9 @@ public record CreateLocationRequest(
     int RequiredMarshals,
     string? What3Words,
     DateTime? StartTime,
-    DateTime? EndTime
+    DateTime? EndTime,
+    List<PendingChecklistItem>? PendingNewChecklistItems = null,
+    List<PendingNote>? PendingNewNotes = null
 );
 
 public record LocationResponse(
@@ -217,7 +222,24 @@ public record CreateMarshalRequest(
     string Name,
     string Email,
     string PhoneNumber,
-    string Notes
+    string Notes,
+    List<PendingChecklistItem>? PendingNewChecklistItems = null,
+    List<PendingNote>? PendingNewNotes = null
+);
+
+/// <summary>
+/// A pending checklist item to create, scoped to the entity being created.
+/// </summary>
+public record PendingChecklistItem(
+    string Text
+);
+
+/// <summary>
+/// A pending note to create, scoped to the entity being created.
+/// </summary>
+public record PendingNote(
+    string Title,
+    string Content
 );
 
 public record UpdateMarshalRequest(
@@ -594,4 +616,78 @@ public record NoteForMarshalResponse(
     DateTime CreatedAt,
     string CreatedByName,
     string MatchedScope  // Which scope configuration matched for this marshal
+);
+
+// Event Contact DTOs
+
+/// <summary>
+/// Request to create a new event contact
+/// </summary>
+public record CreateEventContactRequest(
+    string Role,
+    string Name,
+    string Phone,
+    string? Email = null,
+    string? Notes = null,
+    string? MarshalId = null,
+    List<ScopeConfiguration>? ScopeConfigurations = null,
+    int DisplayOrder = 0,
+    bool IsPrimary = false
+);
+
+/// <summary>
+/// Request to update an existing event contact
+/// </summary>
+public record UpdateEventContactRequest(
+    string Role,
+    string Name,
+    string Phone,
+    string? Email = null,
+    string? Notes = null,
+    string? MarshalId = null,
+    List<ScopeConfiguration>? ScopeConfigurations = null,
+    int DisplayOrder = 0,
+    bool IsPrimary = false
+);
+
+/// <summary>
+/// Event contact response for admin views (includes all details)
+/// </summary>
+public record EventContactResponse(
+    string ContactId,
+    string EventId,
+    string Role,
+    string Name,
+    string Phone,
+    string? Email,
+    string? Notes,
+    string? MarshalId,
+    string? MarshalName,
+    List<ScopeConfiguration> ScopeConfigurations,
+    int DisplayOrder,
+    bool IsPrimary,
+    DateTime CreatedAt,
+    DateTime? UpdatedAt
+);
+
+/// <summary>
+/// Event contact response for marshal views (simplified, with visibility info)
+/// </summary>
+public record EventContactForMarshalResponse(
+    string ContactId,
+    string Role,
+    string Name,
+    string Phone,
+    string? Email,
+    string? Notes,
+    bool IsPrimary,
+    string MatchedScope  // Which scope configuration matched for this marshal
+);
+
+/// <summary>
+/// Response containing available contact roles
+/// </summary>
+public record ContactRolesResponse(
+    List<string> BuiltInRoles,
+    List<string> CustomRoles
 );

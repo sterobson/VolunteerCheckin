@@ -91,7 +91,7 @@ public class AuthService
         await _tokenRepository.AddAsync(authToken);
 
         // Send email with magic link (pointing to frontend)
-        string magicLink = $"{baseUrl}/admin/verify?token={token}";
+        string magicLink = $"{baseUrl}/#/admin/verify?token={token}";
         await _emailService.SendMagicLinkEmailAsync(email, magicLink);
 
         return true;

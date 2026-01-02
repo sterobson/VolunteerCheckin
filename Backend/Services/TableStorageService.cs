@@ -23,6 +23,7 @@ public class TableStorageService
     private const string AuthTokensTable = "AuthTokens";
     private const string AuthSessionsTable = "AuthSessions";
     private const string NotesTable = "Notes";
+    private const string EventContactsTable = "EventContacts";
     private const string PersonEmailIndexTable = "PersonEmailIndex";
 
     public TableStorageService(string connectionString)
@@ -62,5 +63,6 @@ public class TableStorageService
     public TableClient GetAuthTokensTable() => GetOrCreateTable(AuthTokensTable);
     public TableClient GetAuthSessionsTable() => GetOrCreateTable(AuthSessionsTable);
     public TableClient GetNotesTable() => GetOrCreateTable(NotesTable);
+    public TableClient GetEventContactsTable() => GetOrCreateTable(EventContactsTable);
     public TableClient GetPersonEmailIndexTable() => GetOrCreateTable(PersonEmailIndexTable);
 }

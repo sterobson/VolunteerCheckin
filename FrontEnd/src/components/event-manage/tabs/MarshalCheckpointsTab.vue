@@ -1,29 +1,39 @@
 <template>
   <div class="tab-content">
-    <h3 class="section-title">Assigned checkpoints ({{ totalAssignments }})</h3>
+    <h3 class="section-title">Assigned {{ termsLower.checkpoints }} ({{ totalAssignments }})</h3>
     <div class="assignments-list">
       <!-- Existing assignments -->
       <div
         v-for="assignment in assignments"
         :key="assignment.id"
         class="assignment-item"
-        :class="{ 'checked-in': getEffectiveCheckInStatus(assignment) }"
+        :class="{
+          'checked-in': !assignment.isPending && getEffectiveCheckInStatus(assignment),
+          'is-pending': assignment.isPending
+        }"
       >
         <div class="assignment-info">
           <div class="assignment-header">
             <span
+              v-if="!assignment.isPending"
               class="status-indicator"
               :style="{ color: getStatusColor(assignment) }"
               :title="getStatusText(assignment)"
             >
               {{ getStatusIcon(assignment) }}
             </span>
+            <span v-else class="status-indicator pending-indicator" title="Will be assigned on save">
+              ⏳
+            </span>
             <strong>{{ assignment.locationName }}</strong>
-            <span v-if="pendingCheckInChanges.has(assignment.id)" class="pending-badge">
+            <span v-if="assignment.isPending" class="pending-badge">
+              (will be assigned on save)
+            </span>
+            <span v-else-if="pendingCheckInChanges.has(assignment.id)" class="pending-badge">
               (unsaved)
             </span>
           </div>
-          <span v-if="getEffectiveCheckInStatus(assignment)" class="check-in-info">
+          <span v-if="!assignment.isPending && getEffectiveCheckInStatus(assignment)" class="check-in-info">
             <template v-if="assignment.isCheckedIn && !pendingCheckInChanges.has(assignment.id)">
               {{ formatTime(assignment.checkInTime) }}
               <span class="check-in-method">({{ assignment.checkInMethod }})</span>
@@ -35,6 +45,7 @@
         </div>
         <div class="assignment-actions">
           <button
+            v-if="!assignment.isPending"
             @click="handleToggleCheckIn(assignment)"
             class="btn btn-small"
             :class="getEffectiveCheckInStatus(assignment) ? 'btn-danger' : 'btn-secondary'"
@@ -51,26 +62,18 @@
       </div>
 
       <!-- Assign to checkpoint -->
-      <div class="form-group" style="margin-top: 1.5rem;">
-        <label>Assign to checkpoint</label>
-        <select v-model="selectedLocationId" class="form-input">
-          <option value="">Select a checkpoint...</option>
+      <div v-if="sortedAvailableLocations.length > 0" class="form-group" style="margin-top: 1.5rem;">
+        <label>Assign to {{ termsLower.checkpoint }}</label>
+        <select v-model="selectedLocationId" class="form-input" @change="handleSelectionChange">
+          <option value="">Select a {{ termsLower.checkpoint }}...</option>
           <option
-            v-for="location in availableLocations"
+            v-for="location in sortedAvailableLocations"
             :key="location.id"
             :value="location.id"
           >
             {{ location.name }}
           </option>
         </select>
-        <button
-          @click="handleAssignToLocation"
-          class="btn btn-secondary btn-full"
-          style="margin-top: 0.5rem;"
-          :disabled="!selectedLocationId"
-        >
-          Assign to checkpoint
-        </button>
       </div>
     </div>
   </div>
@@ -79,6 +82,9 @@
 <script setup>
 import { ref, computed, defineProps, defineEmits } from 'vue';
 import { useCheckInManagement } from '../../../composables/useCheckInManagement';
+import { useTerminology } from '../../../composables/useTerminology';
+
+const { termsLower } = useTerminology();
 
 const props = defineProps({
   assignments: {
@@ -88,6 +94,10 @@ const props = defineProps({
   availableLocations: {
     type: Array,
     default: () => [],
+  },
+  isNewMarshal: {
+    type: Boolean,
+    default: false,
   },
 });
 
@@ -110,7 +120,17 @@ const totalAssignments = computed(() => {
   return props.assignments?.length || 0;
 });
 
-const handleAssignToLocation = () => {
+// Sort locations alphabetically with natural number sorting
+const sortedAvailableLocations = computed(() => {
+  const sorted = [...props.availableLocations];
+  sorted.sort((a, b) => {
+    return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+  });
+  return sorted;
+});
+
+// Auto-assign when selection changes
+const handleSelectionChange = () => {
   if (selectedLocationId.value) {
     emit('assign-to-location', selectedLocationId.value);
     selectedLocationId.value = '';
@@ -192,6 +212,16 @@ defineExpose({
 .assignment-item.checked-in {
   background: #d4edda;
   border-color: #c3e6cb;
+}
+
+.assignment-item.is-pending {
+  background: #fff8e6;
+  border-color: #ffc107;
+  border-style: dashed;
+}
+
+.pending-indicator {
+  color: #ffc107;
 }
 
 .assignment-info {

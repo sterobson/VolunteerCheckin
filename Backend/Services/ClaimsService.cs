@@ -49,9 +49,9 @@ public class ClaimsService
             return null;
         }
 
-        // Update last accessed time
+        // Update last accessed time (use unconditional update to avoid race conditions)
         session.LastAccessedAt = DateTime.UtcNow;
-        await _sessionRepository.UpdateAsync(session);
+        await _sessionRepository.UpdateUnconditionalAsync(session);
 
         // Get the person
         PersonEntity? person = await _personRepository.GetAsync(session.PersonId);

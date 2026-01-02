@@ -1,14 +1,14 @@
 <template>
   <BaseModal
     :show="show"
-    title="Import locations from CSV"
+    :title="`Import ${termsLower.checkpoints} from CSV`"
     size="medium"
     :confirm-on-close="true"
     :is-dirty="isDirty"
     @close="handleClose"
   >
     <!-- Instruction text -->
-    <p class="instruction">Upload a CSV file with columns: Label, Lat/Latitude, Long/Longitude, What3Words (optional), Marshals (optional)</p>
+    <p class="instruction">Upload a CSV file with columns: Label, Lat/Latitude, Long/Longitude, What3Words (optional), {{ terms.people }} (optional)</p>
 
     <!-- CSV Example -->
     <div class="csv-example">
@@ -34,13 +34,13 @@ Checkpoint 2,51.510,-0.10,index.home.raft,Bob Wilson</pre>
       <div class="form-group">
         <label class="checkbox-label">
           <input type="checkbox" v-model="deleteExisting" @change="handleInput" />
-          Delete existing locations before import
+          Delete existing {{ termsLower.checkpoints }} before import
         </label>
       </div>
 
       <div v-if="error" class="error">{{ error }}</div>
       <div v-if="result" class="import-result">
-        <p>Created {{ result.locationsCreated }} locations and {{ result.assignmentsCreated }} assignments</p>
+        <p>Created {{ result.locationsCreated }} {{ termsLower.checkpoints }} and {{ result.assignmentsCreated }} assignments</p>
         <div v-if="result.errors && result.errors.length > 0" class="import-errors">
           <strong>Errors:</strong>
           <ul>
@@ -56,7 +56,7 @@ Checkpoint 2,51.510,-0.10,index.home.raft,Bob Wilson</pre>
         Cancel
       </button>
       <button type="button" @click="handleSubmit" class="btn btn-primary" :disabled="importing">
-        {{ importing ? 'Importing...' : 'Import locations' }}
+        {{ importing ? 'Importing...' : `Import ${termsLower.checkpoints}` }}
       </button>
     </template>
   </BaseModal>
@@ -65,6 +65,9 @@ Checkpoint 2,51.510,-0.10,index.home.raft,Bob Wilson</pre>
 <script setup>
 import { ref, defineProps, defineEmits, watch } from 'vue';
 import BaseModal from '../../BaseModal.vue';
+import { useTerminology } from '../../../composables/useTerminology';
+
+const { terms, termsLower } = useTerminology();
 
 const props = defineProps({
   show: {

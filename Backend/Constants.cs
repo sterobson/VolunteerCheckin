@@ -95,4 +95,15 @@ public static class Constants
     // Note Error Messages
     public const string ErrorNoteNotFound = "Note not found";
     public const string ErrorNotAuthorizedToManageNotes = "Not authorized to manage notes";
+
+    // Event Contact Roles (built-in roles, users can add custom ones)
+    public const string ContactRoleEmergency = "EmergencyContact";
+    public const string ContactRoleEventDirector = "EventDirector";
+    public const string ContactRoleMedicalLead = "MedicalLead";
+    public const string ContactRoleSafetyOfficer = "SafetyOfficer";
+    public const string ContactRoleLogistics = "Logistics";
+
+    // Event Contact Error Messages
+    public const string ErrorContactNotFound = "Contact not found";
+    public const string ErrorNotAuthorizedToManageContacts = "Not authorized to manage contacts";
 }

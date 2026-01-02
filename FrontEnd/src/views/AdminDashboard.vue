@@ -373,4 +373,41 @@ onMounted(() => {
 .btn-danger:hover {
   background: #cc0000;
 }
+
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1rem;
+  }
+
+  .header h1 {
+    font-size: 1.25rem;
+  }
+
+  .header-actions {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  .user-email {
+    width: 100%;
+    text-align: center;
+  }
+
+  .container {
+    padding: 1rem;
+  }
+
+  .section {
+    padding: 1rem;
+  }
+
+  .section-header {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+  }
+}
 </style>

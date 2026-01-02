@@ -27,6 +27,8 @@ namespace VolunteerCheckin.Functions.Tests
         private Mock<ILocationRepository> _mockLocationRepository = null!;
         private Mock<IAssignmentRepository> _mockAssignmentRepository = null!;
         private Mock<IEventRepository> _mockEventRepository = null!;
+        private Mock<IChecklistItemRepository> _mockChecklistItemRepository = null!;
+        private Mock<INoteRepository> _mockNoteRepository = null!;
         private Mock<CsvParserService> _mockCsvParser = null!;
         private Mock<ClaimsService> _mockClaimsService = null!;
         private Mock<ContactPermissionService> _mockContactPermissionService = null!;
@@ -41,6 +43,8 @@ namespace VolunteerCheckin.Functions.Tests
             _mockLocationRepository = new Mock<ILocationRepository>();
             _mockAssignmentRepository = new Mock<IAssignmentRepository>();
             _mockEventRepository = new Mock<IEventRepository>();
+            _mockChecklistItemRepository = new Mock<IChecklistItemRepository>();
+            _mockNoteRepository = new Mock<INoteRepository>();
             _mockCsvParser = new Mock<CsvParserService>();
             _mockClaimsService = new Mock<ClaimsService>(
                 MockBehavior.Loose,
@@ -101,6 +105,8 @@ namespace VolunteerCheckin.Functions.Tests
                 _mockLocationRepository.Object,
                 _mockAssignmentRepository.Object,
                 _mockEventRepository.Object,
+                _mockChecklistItemRepository.Object,
+                _mockNoteRepository.Object,
                 _mockCsvParser.Object,
                 _mockClaimsService.Object,
                 _mockContactPermissionService.Object

@@ -26,4 +26,5 @@ public class EventEntity : ITableEntity
     public string CheckpointTerm { get; set; } = "Checkpoints"; // Checkpoints, Stations, Locations
     public string AreaTerm { get; set; } = "Areas";           // Areas, Zones
     public string ChecklistTerm { get; set; } = "Checklists"; // Checklists, Tasks
+    public string CourseTerm { get; set; } = "Course";        // Course, Route, Trail
 }

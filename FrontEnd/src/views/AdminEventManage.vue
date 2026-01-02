@@ -2,7 +2,7 @@
   <div class="admin-event-manage">
     <header class="header">
       <div class="header-left">
-        <button @click="goBack" class="btn-back">← Back</button>
+        <button @click="goBack" class="btn-back" title="Back to Dashboard">← Dashboard</button>
         <div v-if="event">
           <h1>{{ event.name }}</h1>
           <p class="event-date">{{ formatEventDate(event.eventDate) }}</p>
@@ -13,8 +13,6 @@
           Switch to Marshal
         </button>
         <button @click="goToProfile" class="btn btn-secondary">Profile</button>
-        <button @click="showUploadRoute = true" class="btn btn-secondary">Upload route</button>
-        <button @click="shareEvent" class="btn btn-primary">Share marshal link</button>
       </div>
     </header>
 
@@ -41,9 +39,8 @@
           @map-click="handleMapClick"
           @location-click="handleLocationClick"
           @area-click="handleSelectArea"
-          @add-checkpoint="handleAddLocationClick"
-          @add-multiple-checkpoints="handleAddMultipleCheckpointsClick"
           @import-checkpoints="showImportLocations = true"
+          @upload-route="showUploadRoute = true"
           @select-location="selectLocation"
           @add-area="handleAddArea"
           @select-area="handleSelectArea"
@@ -58,7 +55,8 @@
           <CheckpointsList
             :locations="locationStatuses"
             :areas="areas"
-            @open-add-menu="handleOpenAddMenuFromList"
+            @add-checkpoint-manually="handleAddCheckpointManually"
+            @import-checkpoints="showImportLocations = true"
             @select-location="selectLocation"
           />
         </div>
@@ -105,6 +103,17 @@
           @select-note="handleSelectNote"
         />
 
+        <ContactsTab
+          v-if="activeTab === 'contacts'"
+          :contacts="contacts"
+          :areas="areas"
+          :locations="locationStatuses"
+          :marshals="marshals"
+          :available-roles="contactRoles"
+          @add-contact="handleAddContact"
+          @select-contact="handleSelectContact"
+        />
+
         <EventDetailsTab
           v-if="activeTab === 'details'"
           :event-data="eventDetailsForm"
@@ -139,13 +148,15 @@
       :event-id="route.params.eventId"
       :all-locations="locationStatuses"
       :notes="notes"
+      :available-marshals="availableMarshalsForAssignment"
+      :all-checklist-items="checklistItems"
       :isDirty="formDirty"
       @close="closeEditLocationModal"
       @save="handleUpdateLocation"
       @delete="handleDeleteLocation"
       @move-location="startMoveLocation"
       @remove-assignment="handleRemoveLocationAssignment"
-      @assign-marshal="showAssignMarshalModal = true"
+      @assign-marshal="handleAssignMarshalFromDropdown"
       @update:isDirty="markFormDirty"
     />
 
@@ -154,6 +165,14 @@
       :link="marshalLink"
       :isDirty="false"
       @close="showShareLink = false"
+    />
+
+    <MarshalCreatedModal
+      :show="showMarshalCreated"
+      :event-id="route.params.eventId"
+      :marshal-id="newlyCreatedMarshalId"
+      :marshal-name="newlyCreatedMarshalName"
+      @close="showMarshalCreated = false"
     />
 
     <AddAdminModal
@@ -195,6 +214,7 @@
       :areas="areas"
       :isEditing="!!selectedMarshal"
       :eventNotes="notes"
+      :allChecklistItems="checklistItems"
       :isDirty="formDirty"
       @close="closeEditMarshalModal"
       @save="handleSaveMarshal"
@@ -251,12 +271,15 @@
       :all-locations="locationStatuses"
       :assignments="allAssignments"
       :notes="notes"
+      :contacts="contacts"
       @close="closeEditAreaModal"
       @save="handleSaveArea"
       @delete="handleDeleteArea"
       @draw-boundary="handleDrawBoundary"
       @update:isDirty="markFormDirty"
       @select-checkpoint="selectLocation"
+      @add-area-contact="handleAddAreaContact"
+      @edit-contact="handleEditContactFromArea"
     />
 
     <EditChecklistItemModal
@@ -284,6 +307,22 @@
       @close="closeEditNoteModal"
       @save="handleSaveNote"
       @delete="handleDeleteNote"
+      @update:isDirty="markFormDirty"
+    />
+
+    <EditContactModal
+      :show="showEditContact"
+      :contact="selectedContact"
+      :initial-tab="contactInitialTab"
+      :areas="areas"
+      :locations="locationStatuses"
+      :marshals="marshals"
+      :available-roles="contactRoles"
+      :isDirty="formDirty"
+      :preselected-area="pendingAreaForContact"
+      @close="closeEditContactModal"
+      @save="handleSaveContact"
+      @delete="handleDeleteContact"
       @update:isDirty="markFormDirty"
     />
 
@@ -334,7 +373,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useEventsStore } from '../stores/events';
-import { authApi, checkInApi, eventAdminsApi, eventsApi, locationsApi, marshalsApi, areasApi, checklistApi, notesApi } from '../services/api';
+import { authApi, checkInApi, eventAdminsApi, eventsApi, locationsApi, marshalsApi, areasApi, checklistApi, notesApi, contactsApi } from '../services/api';
 
 // New composables and utilities
 import { useTabs } from '../composables/useTabs';
@@ -351,6 +390,7 @@ import CourseAreasTab from './AdminEventManage/CourseAreasTab.vue';
 import MarshalsTab from './AdminEventManage/MarshalsTab.vue';
 import ChecklistsTab from './AdminEventManage/ChecklistsTab.vue';
 import NotesTab from './AdminEventManage/NotesTab.vue';
+import ContactsTab from './AdminEventManage/ContactsTab.vue';
 import EventDetailsTab from './AdminEventManage/EventDetailsTab.vue';
 import CheckpointsList from '../components/event-manage/lists/CheckpointsList.vue';
 import AreasList from '../components/event-manage/lists/AreasList.vue';
@@ -358,6 +398,7 @@ import ResponsiveTabHeader from '../components/ResponsiveTabHeader.vue';
 
 // Modal Components
 import ShareLinkModal from '../components/event-manage/modals/ShareLinkModal.vue';
+import MarshalCreatedModal from '../components/event-manage/modals/MarshalCreatedModal.vue';
 import AddAdminModal from '../components/event-manage/modals/AddAdminModal.vue';
 import UploadRouteModal from '../components/event-manage/modals/UploadRouteModal.vue';
 import ImportLocationsModal from '../components/event-manage/modals/ImportLocationsModal.vue';
@@ -370,6 +411,7 @@ import ShiftCheckpointTimesModal from '../components/event-manage/modals/ShiftCh
 import EditAreaModal from '../components/event-manage/modals/EditAreaModal.vue';
 import EditChecklistItemModal from '../components/event-manage/modals/EditChecklistItemModal.vue';
 import EditNoteModal from '../components/event-manage/modals/EditNoteModal.vue';
+import EditContactModal from '../components/event-manage/modals/EditContactModal.vue';
 import InfoModal from '../components/InfoModal.vue';
 import ConfirmModal from '../components/ConfirmModal.vue';
 import FullscreenMapOverlay from '../components/FullscreenMapOverlay.vue';
@@ -380,7 +422,7 @@ const router = useRouter();
 const eventsStore = useEventsStore();
 
 // Use composables
-const { activeTab, switchTab } = useTabs('course', ['course', 'checkpoints', 'areas', 'marshals', 'checklists', 'notes', 'details']);
+const { activeTab, switchTab } = useTabs('details', ['details', 'course', 'areas', 'checkpoints', 'marshals', 'notes', 'checklists', 'contacts']);
 const {
   showConfirmModal,
   confirmModalTitle,
@@ -391,17 +433,19 @@ const {
 } = useConfirmDialog();
 
 // Terminology
-const { tabLabels } = useTerminology();
+const { tabLabels, termsLower } = useTerminology();
 
 // Computed tabs with dynamic labels from terminology
+// Order: Details, Course, Zones, Locations, Volunteers, Notes, Tasks, Contacts
 const mainTabs = computed(() => [
-  { value: 'course', label: 'Course', icon: 'course' },
-  { value: 'checkpoints', label: tabLabels.value.checkpoints, icon: 'checkpoint' },
-  { value: 'areas', label: tabLabels.value.areas, icon: 'area' },
-  { value: 'marshals', label: tabLabels.value.marshals, icon: 'marshal' },
-  { value: 'checklists', label: tabLabels.value.checklists, icon: 'checklist' },
-  { value: 'notes', label: 'Notes', icon: 'notes' },
   { value: 'details', label: 'Event details', icon: 'details' },
+  { value: 'course', label: tabLabels.value.course, icon: 'course' },
+  { value: 'areas', label: tabLabels.value.areas, icon: 'area' },
+  { value: 'checkpoints', label: tabLabels.value.checkpoints, icon: 'checkpoint' },
+  { value: 'marshals', label: tabLabels.value.marshals, icon: 'marshal' },
+  { value: 'notes', label: 'Notes', icon: 'notes' },
+  { value: 'checklists', label: tabLabels.value.checklists, icon: 'checklist' },
+  { value: 'contacts', label: 'Contacts', icon: 'contacts' },
 ]);
 
 // State
@@ -412,6 +456,9 @@ const selectedLocation = ref(null);
 const showAddLocation = ref(false);
 const courseAreasTab = ref(null);
 const showShareLink = ref(false);
+const showMarshalCreated = ref(false);
+const newlyCreatedMarshalId = ref(null);
+const newlyCreatedMarshalName = ref('');
 const eventAdmins = ref([]);
 const showAddAdmin = ref(false);
 const showUploadRoute = ref(false);
@@ -493,6 +540,7 @@ const isFullscreenMapActive = ref(false);
 const fullscreenMode = ref(null);
 const fullscreenContext = ref({});
 const tempLocationCoords = ref(null); // For previewing checkpoint placement
+const preservedLocationFormData = ref(null); // For preserving form data when moving a location
 const currentDrawingPolygon = ref(null); // For area drawing with Done button
 const tempCheckpoints = ref([]); // For storing multiple checkpoints before saving
 const savedMapCenter = ref(null); // Store map center when entering fullscreen
@@ -506,6 +554,12 @@ const notes = ref([]);
 const selectedNote = ref(null);
 const showEditNote = ref(false);
 const noteInitialTab = ref('details');
+const contacts = ref([]);
+const contactRoles = ref({ builtInRoles: [], customRoles: [] });
+const selectedContact = ref(null);
+const showEditContact = ref(false);
+const contactInitialTab = ref('details');
+const pendingAreaForContact = ref(null);
 const userClaims = ref(null);
 
 // Mode switching
@@ -519,7 +573,7 @@ const switchToMarshalMode = () => {
 
 // Computed
 const marshalLink = computed(() => {
-  return `${window.location.origin}/event/${route.params.eventId}`;
+  return `${window.location.origin}/#/event/${route.params.eventId}`;
 });
 
 const allAssignments = computed(() => {
@@ -774,6 +828,7 @@ const loadEventData = async () => {
     await loadAreas();
     await loadChecklists();
     await loadNotes();
+    await loadContacts();
   } catch (error) {
     console.error('Failed to load event data:', error);
   }
@@ -816,6 +871,19 @@ const loadNotes = async () => {
     notes.value = response.data;
   } catch (error) {
     console.error('Failed to load notes:', error);
+  }
+};
+
+const loadContacts = async () => {
+  try {
+    const [contactsResponse, rolesResponse] = await Promise.all([
+      contactsApi.getByEvent(route.params.eventId),
+      contactsApi.getRoles(route.params.eventId),
+    ]);
+    contacts.value = contactsResponse.data;
+    contactRoles.value = rolesResponse.data;
+  } catch (error) {
+    console.error('Failed to load contacts:', error);
   }
 };
 
@@ -906,6 +974,26 @@ const closeEditAreaModal = () => {
   formDirty.value = false;
   isDrawingAreaBoundary.value = false;
   pendingAreaFormData.value = null;
+};
+
+const handleAddAreaContact = (area) => {
+  // Close the area modal and open contact modal with pre-configured area scope
+  closeEditAreaModal();
+  selectedContact.value = null;
+  contactInitialTab.value = 'details';
+  formDirty.value = false;
+  // Store the area to pre-populate scope configuration
+  pendingAreaForContact.value = area;
+  showEditContact.value = true;
+};
+
+const handleEditContactFromArea = (contact) => {
+  // Close the area modal and open the contact for editing
+  closeEditAreaModal();
+  selectedContact.value = contact;
+  contactInitialTab.value = 'details';
+  formDirty.value = false;
+  showEditContact.value = true;
 };
 
 const handleAddChecklistItem = () => {
@@ -1013,6 +1101,59 @@ const handleDeleteNote = async (noteId) => {
 const closeEditNoteModal = () => {
   showEditNote.value = false;
   selectedNote.value = null;
+  formDirty.value = false;
+};
+
+// Contacts handlers
+const handleAddContact = () => {
+  selectedContact.value = null;
+  contactInitialTab.value = 'details';
+  pendingAreaForContact.value = null;
+  formDirty.value = false;
+  showEditContact.value = true;
+};
+
+const handleSelectContact = (contact) => {
+  selectedContact.value = contact;
+  contactInitialTab.value = 'details';
+  formDirty.value = false;
+  showEditContact.value = true;
+};
+
+const handleSaveContact = async (formData) => {
+  try {
+    if (selectedContact.value && selectedContact.value.contactId) {
+      await contactsApi.update(route.params.eventId, selectedContact.value.contactId, formData);
+    } else {
+      await contactsApi.create(route.params.eventId, formData);
+    }
+
+    await loadContacts();
+    closeEditContactModal();
+  } catch (error) {
+    console.error('Failed to save contact:', error);
+    const errorMessage = error.response?.data?.message || 'Failed to save contact. Please try again.';
+    alert(errorMessage);
+  }
+};
+
+const handleDeleteContact = async (contactId) => {
+  showConfirm('Delete Contact', 'Are you sure you want to delete this contact?', async () => {
+    try {
+      await contactsApi.delete(route.params.eventId, contactId);
+      await loadContacts();
+      closeEditContactModal();
+    } catch (error) {
+      console.error('Failed to delete contact:', error);
+      alert(error.response?.data?.message || 'Failed to delete contact. Please try again.');
+    }
+  });
+};
+
+const closeEditContactModal = () => {
+  showEditContact.value = false;
+  selectedContact.value = null;
+  pendingAreaForContact.value = null;
   formDirty.value = false;
 };
 
@@ -1360,10 +1501,32 @@ const handleAddAreaFromMap = () => {
   };
 };
 
-const handleOpenAddMenuFromList = () => {
-  // When the "Add..." button is clicked from the checkpoints list tab, show options
-  // For now, just open the import modal - could expand to show a menu
-  showImportLocations.value = true;
+const handleAddCheckpointManually = () => {
+  // Create a new location object with default values
+  selectedLocation.value = {
+    id: null, // null ID indicates this is a new location
+    name: '',
+    description: '',
+    latitude: 0,
+    longitude: 0,
+    requiredMarshals: 1,
+    what3Words: '',
+    areaIds: [],
+    assignments: [],
+  };
+  editLocationForm.value = {
+    id: null,
+    name: '',
+    description: '',
+    latitude: 0,
+    longitude: 0,
+    requiredMarshals: 1,
+    what3Words: '',
+  };
+  pendingAssignments.value = [];
+  pendingDeleteAssignments.value = [];
+  formDirty.value = false;
+  showEditLocation.value = true;
 };
 
 const handleAddMultipleCheckpointsClick = () => {
@@ -1427,31 +1590,55 @@ const createMultipleCheckpoint = (coords) => {
 
 const handleFullscreenDone = () => {
   if (fullscreenMode.value === 'place-checkpoint') {
-    // Confirm placement
-    if (tempLocationCoords.value) {
-      locationForm.value.latitude = tempLocationCoords.value.lat;
-      locationForm.value.longitude = tempLocationCoords.value.lng;
-      markFormDirty();
-    }
-    // Exit fullscreen and reopen modal
+    // Confirm placement - use EditLocationModal for new location
+    const coords = tempLocationCoords.value || { lat: 0, lng: 0 };
+    selectedLocation.value = {
+      id: null, // null ID indicates this is a new location
+      name: '',
+      description: '',
+      latitude: coords.lat,
+      longitude: coords.lng,
+      requiredMarshals: 1,
+      what3Words: '',
+      areaIds: [],
+      assignments: [],
+    };
+    editLocationForm.value = {
+      id: null,
+      name: '',
+      description: '',
+      latitude: coords.lat,
+      longitude: coords.lng,
+      requiredMarshals: 1,
+      what3Words: '',
+    };
+    pendingAssignments.value = [];
+    pendingDeleteAssignments.value = [];
+    formDirty.value = false;
+    // Exit fullscreen and open EditLocationModal
     exitFullscreen();
-    showAddLocation.value = true;
+    showEditLocation.value = true;
 
   } else if (fullscreenMode.value === 'move-checkpoint') {
     // Confirm move
     if (tempLocationCoords.value) {
       editLocationForm.value.latitude = tempLocationCoords.value.lat;
       editLocationForm.value.longitude = tempLocationCoords.value.lng;
-      // Also update selectedLocation so the modal sees the change
+      // Also update selectedLocation so the modal sees the change, preserving form data
       if (selectedLocation.value) {
         selectedLocation.value = {
           ...selectedLocation.value,
+          // Restore preserved form data (name, description, etc.) if available
+          ...(preservedLocationFormData.value || {}),
+          // Apply new coordinates on top
           latitude: tempLocationCoords.value.lat,
           longitude: tempLocationCoords.value.lng,
         };
       }
       markFormDirty();
     }
+    // Clear preserved form data
+    preservedLocationFormData.value = null;
     // Exit fullscreen and reopen modal
     exitFullscreen();
     showEditLocation.value = true;
@@ -1617,6 +1804,7 @@ const closeEditLocationModal = () => {
   selectedLocation.value = null;
   isMovingLocation.value = false;
   showAssignMarshalModal.value = false;
+  preservedLocationFormData.value = null;
   editLocationForm.value = {
     id: '',
     name: '',
@@ -1635,7 +1823,12 @@ const closeAssignMarshalModal = () => {
   showAssignMarshalModal.value = false;
 };
 
-const startMoveLocation = () => {
+const startMoveLocation = (payload) => {
+  // Preserve the form data from the modal so we can restore it after the move
+  if (payload?.formData) {
+    preservedLocationFormData.value = payload.formData;
+  }
+
   // Close edit modal
   showEditLocation.value = false;
   // Reset temp coordinates
@@ -1651,11 +1844,14 @@ const startMoveLocation = () => {
     }
   }
 
+  // Use preserved name if available, otherwise fall back to selectedLocation name
+  const locationName = preservedLocationFormData.value?.name || selectedLocation.value?.name;
+
   // Enter fullscreen
   isFullscreenMapActive.value = true;
   fullscreenMode.value = 'move-checkpoint';
   fullscreenContext.value = {
-    title: `Move checkpoint: ${selectedLocation.value?.name}`,
+    title: `Move ${termsLower.value.checkpoint}: ${locationName}`,
     description: 'Click on the map to set the new location',
   };
 };
@@ -1672,10 +1868,11 @@ const handleUpdateLocation = async (formData) => {
   }
 
   try {
-    await locationsApi.update(
-      route.params.eventId,
-      selectedLocation.value.id,
-      {
+    const isNewLocation = !selectedLocation.value.id;
+
+    if (isNewLocation) {
+      // Create new location
+      const newLocation = await eventsStore.createLocation({
         eventId: route.params.eventId,
         name: formData.name,
         description: formData.description,
@@ -1685,38 +1882,101 @@ const handleUpdateLocation = async (formData) => {
         what3Words: formData.what3Words || null,
         startTime: formData.startTime,
         endTime: formData.endTime,
-        // areaId removed - areas are auto-assigned by backend based on polygon boundaries
-      }
-    );
-
-    for (const assignmentId of pendingDeleteAssignments.value) {
-      await eventsStore.deleteAssignment(route.params.eventId, assignmentId);
-    }
-
-    for (const pending of pendingAssignments.value) {
-      await eventsStore.createAssignment({
-        eventId: route.params.eventId,
-        locationId: selectedLocation.value.id,
-        marshalId: pending.marshalId,
+        pendingNewChecklistItems: formData.pendingNewChecklistItems || [],
+        pendingNewNotes: formData.pendingNewNotes || [],
       });
-    }
 
-    // Process check-in status changes
-    if (formData.checkInChanges && formData.checkInChanges.length > 0) {
-      for (const change of formData.checkInChanges) {
-        // Find the current assignment to check its status
-        const assignment = selectedLocation.value.assignments.find(a => a.id === change.assignmentId);
-        if (assignment) {
-          // Only call API if the status needs to change
-          if (assignment.isCheckedIn !== change.shouldBeCheckedIn) {
-            await checkInApi.adminCheckIn(route.params.eventId, change.assignmentId);
+      // Process pending assignments for new locations (from the modal)
+      if (formData.pendingAssignments && formData.pendingAssignments.length > 0) {
+        for (const pending of formData.pendingAssignments) {
+          await eventsStore.createAssignment({
+            eventId: route.params.eventId,
+            locationId: newLocation.id,
+            marshalId: pending.marshalId,
+          });
+        }
+      }
+    } else {
+      // Update existing location
+      const locationId = selectedLocation.value.id;
+      await locationsApi.update(
+        route.params.eventId,
+        locationId,
+        {
+          eventId: route.params.eventId,
+          name: formData.name,
+          description: formData.description,
+          latitude: formData.latitude,
+          longitude: formData.longitude,
+          requiredMarshals: formData.requiredMarshals,
+          what3Words: formData.what3Words || null,
+          startTime: formData.startTime,
+          endTime: formData.endTime,
+          // areaId removed - areas are auto-assigned by backend based on polygon boundaries
+        }
+      );
+
+      // Create pending new checklist items for this location (when editing)
+      if (formData.pendingNewChecklistItems && formData.pendingNewChecklistItems.length > 0) {
+        for (const item of formData.pendingNewChecklistItems) {
+          if (!item.text?.trim()) continue;
+          await checklistApi.create(route.params.eventId, {
+            text: item.text,
+            scopeConfigurations: [
+              { scope: 'EveryoneAtCheckpoints', itemType: 'Checkpoint', ids: [locationId] }
+            ],
+            displayOrder: 0,
+            isRequired: false,
+          });
+        }
+      }
+
+      // Create pending new notes for this location (when editing)
+      if (formData.pendingNewNotes && formData.pendingNewNotes.length > 0) {
+        for (const note of formData.pendingNewNotes) {
+          if (!note.title?.trim() && !note.content?.trim()) continue;
+          await notesApi.create(route.params.eventId, {
+            title: note.title || 'Untitled',
+            content: note.content || '',
+            scopeConfigurations: [
+              { scope: 'EveryoneAtCheckpoints', itemType: 'Checkpoint', ids: [locationId] }
+            ],
+            displayOrder: 0,
+            priority: 'Normal',
+            isPinned: false,
+          });
+        }
+      }
+
+      for (const assignmentId of pendingDeleteAssignments.value) {
+        await eventsStore.deleteAssignment(route.params.eventId, assignmentId);
+      }
+
+      for (const pending of pendingAssignments.value) {
+        await eventsStore.createAssignment({
+          eventId: route.params.eventId,
+          locationId: selectedLocation.value.id,
+          marshalId: pending.marshalId,
+        });
+      }
+
+      // Process check-in status changes
+      if (formData.checkInChanges && formData.checkInChanges.length > 0) {
+        for (const change of formData.checkInChanges) {
+          // Find the current assignment to check its status
+          const assignment = selectedLocation.value.assignments.find(a => a.id === change.assignmentId);
+          if (assignment) {
+            // Only call API if the status needs to change
+            if (assignment.isCheckedIn !== change.shouldBeCheckedIn) {
+              await checkInApi.adminCheckIn(route.params.eventId, change.assignmentId);
+            }
           }
         }
       }
     }
 
-    // Process checklist changes
-    if (formData.checklistChanges && formData.checklistChanges.length > 0) {
+    // Process checklist changes (only for existing locations)
+    if (!isNewLocation && formData.checklistChanges && formData.checklistChanges.length > 0) {
       for (const change of formData.checklistChanges) {
         try {
           if (change.complete) {
@@ -1806,6 +2066,12 @@ const handleRemoveLocationAssignment = (assignmentId) => {
       markFormDirty();
     }
   }
+};
+
+// Handler for assigning marshal directly from dropdown in EditLocationModal
+const handleAssignMarshalFromDropdown = async (marshalId) => {
+  // Directly call the existing handler which already handles conflicts
+  await handleAssignExistingMarshal(marshalId);
 };
 
 const handleAssignExistingMarshal = async (marshalId) => {
@@ -1952,6 +2218,9 @@ const getMarshalAssignmentsForEdit = () => {
 
 const handleSaveMarshal = async (formData) => {
   try {
+    let marshalId = selectedMarshal.value?.id;
+    let isNewMarshal = false;
+
     if (selectedMarshal.value) {
       await marshalsApi.update(
         route.params.eventId,
@@ -1963,14 +2232,50 @@ const handleSaveMarshal = async (formData) => {
           notes: formData.notes,
         }
       );
+
+      // Create pending new checklist items for this marshal (when editing)
+      if (formData.pendingNewChecklistItems && formData.pendingNewChecklistItems.length > 0) {
+        for (const item of formData.pendingNewChecklistItems) {
+          if (!item.text?.trim()) continue;
+          await checklistApi.create(route.params.eventId, {
+            text: item.text,
+            scopeConfigurations: [
+              { scope: 'SpecificPeople', itemType: 'Marshal', ids: [marshalId] }
+            ],
+            displayOrder: 0,
+            isRequired: false,
+          });
+        }
+      }
+
+      // Create pending new notes for this marshal (when editing)
+      if (formData.pendingNewNotes && formData.pendingNewNotes.length > 0) {
+        for (const note of formData.pendingNewNotes) {
+          if (!note.title?.trim() && !note.content?.trim()) continue;
+          await notesApi.create(route.params.eventId, {
+            title: note.title || 'Untitled',
+            content: note.content || '',
+            scopeConfigurations: [
+              { scope: 'SpecificPeople', itemType: 'Marshal', ids: [marshalId] }
+            ],
+            displayOrder: 0,
+            priority: 'Normal',
+            isPinned: false,
+          });
+        }
+      }
     } else {
-      await marshalsApi.create({
+      const response = await marshalsApi.create({
         eventId: route.params.eventId,
         name: formData.name,
         email: formData.email,
         phoneNumber: formData.phoneNumber,
         notes: formData.notes,
+        pendingNewChecklistItems: formData.pendingNewChecklistItems || [],
+        pendingNewNotes: formData.pendingNewNotes || [],
       });
+      marshalId = response.data.id;
+      isNewMarshal = true;
     }
 
     for (const assignmentId of pendingMarshalDeleteAssignments.value) {
@@ -1981,8 +2286,19 @@ const handleSaveMarshal = async (formData) => {
       await eventsStore.createAssignment({
         eventId: route.params.eventId,
         locationId: pending.locationId,
-        marshalId: selectedMarshal.value.id,
+        marshalId: marshalId,
       });
+    }
+
+    // Process pending assignments for new marshals (from the modal)
+    if (formData.pendingAssignments && formData.pendingAssignments.length > 0) {
+      for (const pending of formData.pendingAssignments) {
+        await eventsStore.createAssignment({
+          eventId: route.params.eventId,
+          locationId: pending.locationId,
+          marshalId: marshalId,
+        });
+      }
     }
 
     // Process check-in status changes
@@ -2005,7 +2321,7 @@ const handleSaveMarshal = async (formData) => {
       for (const change of formData.checklistChanges) {
         try {
           const requestBody = {
-            marshalId: selectedMarshal.value.id,
+            marshalId: marshalId,
           };
 
           // Only include context if it's defined and not empty
@@ -2032,6 +2348,13 @@ const handleSaveMarshal = async (formData) => {
 
     await loadEventData();
     closeEditMarshalModal();
+
+    // Show confirmation modal with login link for newly created marshals
+    if (isNewMarshal) {
+      newlyCreatedMarshalId.value = marshalId;
+      newlyCreatedMarshalName.value = formData.name;
+      showMarshalCreated.value = true;
+    }
   } catch (error) {
     console.error('Failed to save marshal:', error);
     alert('Failed to save marshal. Please try again.');

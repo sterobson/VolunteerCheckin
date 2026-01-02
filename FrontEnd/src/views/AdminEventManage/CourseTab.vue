@@ -16,7 +16,7 @@
           <CheckpointsList
             :locations="locationStatuses"
             :areas="areas"
-            @add-checkpoint="$emit('add-checkpoint')"
+            @add-checkpoint-manually="$emit('add-checkpoint-manually')"
             @import-checkpoints="$emit('import-checkpoints')"
             @select-location="$emit('select-location', $event)"
           />
@@ -49,7 +49,7 @@ const props = defineProps({
 const emit = defineEmits([
   'map-click',
   'location-click',
-  'add-checkpoint',
+  'add-checkpoint-manually',
   'import-checkpoints',
   'select-location',
 ]);

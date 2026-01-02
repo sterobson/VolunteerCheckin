@@ -13,6 +13,11 @@ public interface IAuthSessionRepository
     Task<IEnumerable<AuthSessionEntity>> GetByPersonAsync(string personId);
     Task<IEnumerable<AuthSessionEntity>> GetByPersonAndEventAsync(string personId, string eventId);
     Task UpdateAsync(AuthSessionEntity session);
+    /// <summary>
+    /// Update session without optimistic concurrency check.
+    /// Use for non-critical updates like LastAccessedAt where race conditions are acceptable.
+    /// </summary>
+    Task UpdateUnconditionalAsync(AuthSessionEntity session);
     Task DeleteAsync(string sessionTokenHash);
     Task RevokeAsync(string sessionTokenHash);
     Task RevokeAllForPersonAsync(string personId);

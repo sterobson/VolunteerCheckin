@@ -77,7 +77,8 @@ public class EventFunctions
                 PeopleTerm = request.PeopleTerm ?? "Marshals",
                 CheckpointTerm = request.CheckpointTerm ?? "Checkpoints",
                 AreaTerm = request.AreaTerm ?? "Areas",
-                ChecklistTerm = request.ChecklistTerm ?? "Checklists"
+                ChecklistTerm = request.ChecklistTerm ?? "Checklists",
+                CourseTerm = request.CourseTerm ?? "Course"
             };
 
             await _eventRepository.AddAsync(eventEntity);
@@ -208,6 +209,7 @@ public class EventFunctions
             if (request.CheckpointTerm != null) eventEntity.CheckpointTerm = request.CheckpointTerm;
             if (request.AreaTerm != null) eventEntity.AreaTerm = request.AreaTerm;
             if (request.ChecklistTerm != null) eventEntity.ChecklistTerm = request.ChecklistTerm;
+            if (request.CourseTerm != null) eventEntity.CourseTerm = request.CourseTerm;
 
             await _eventRepository.UpdateAsync(eventEntity);
 

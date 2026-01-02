@@ -1,10 +1,10 @@
 <template>
   <div class="checklists-tab">
     <div class="checklists-tab-header">
-      <h2>Checklists</h2>
+      <h2>{{ terms.checklists }}</h2>
       <div class="button-group">
         <button @click="$emit('add-checklist-item')" class="btn btn-primary">
-          Add checklist item
+          Add {{ termsLower.checklist }}
         </button>
       </div>
     </div>
@@ -12,14 +12,14 @@
     <!-- Filters -->
     <div class="filters-section">
       <div class="filter-group">
-        <h4>Filter by area:</h4>
+        <h4>Filter by {{ termsLower.area }}:</h4>
         <label class="filter-checkbox">
           <input
             type="checkbox"
             :checked="showAllAreas"
             @change="toggleAllAreas"
           />
-          All areas
+          All {{ termsLower.areas }}
         </label>
         <div v-if="!showAllAreas" class="checkbox-dropdown">
           <div class="checkbox-dropdown-header">
@@ -46,14 +46,14 @@
       </div>
 
       <div class="filter-group">
-        <h4>Filter by checkpoint:</h4>
+        <h4>Filter by {{ termsLower.checkpoint }}:</h4>
         <label class="filter-checkbox">
           <input
             type="checkbox"
             :checked="showAllCheckpoints"
             @change="toggleAllCheckpoints"
           />
-          All checkpoints
+          All {{ termsLower.checkpoints }}
         </label>
         <div v-if="!showAllCheckpoints" class="checkbox-dropdown">
           <div class="checkbox-dropdown-header">
@@ -79,14 +79,14 @@
       </div>
 
       <div class="filter-group">
-        <h4>Filter by person:</h4>
+        <h4>Filter by {{ termsLower.person }}:</h4>
         <label class="filter-checkbox">
           <input
             type="checkbox"
             :checked="showAllPeople"
             @change="toggleAllPeople"
           />
-          All people
+          All {{ termsLower.people }}
         </label>
         <div v-if="!showAllPeople" class="checkbox-dropdown">
           <div class="checkbox-dropdown-header">
@@ -150,6 +150,9 @@
 <script setup>
 import { ref, computed, defineProps, defineEmits } from 'vue';
 import { alphanumericCompare } from '../../utils/sortUtils';
+import { useTerminology } from '../../composables/useTerminology';
+
+const { terms, termsLower } = useTerminology();
 
 const props = defineProps({
   checklistItems: {
@@ -414,14 +417,14 @@ const sortedItems = computed(() => {
 const formatScope = (scope) => {
   const scopeMap = {
     'Everyone': 'Everyone',
-    'EveryoneInAreas': 'Everyone in areas',
-    'EveryoneAtCheckpoints': 'Everyone at checkpoints',
-    'SpecificPeople': 'Specific people',
-    'OnePerArea': 'One per area',
-    'OnePerCheckpoint': 'One per checkpoint',
-    'EveryAreaLead': 'Every area lead',
-    'OneLeadPerArea': 'One lead per area',
-    'AreaLead': 'Area lead', // Legacy support
+    'EveryoneInAreas': `Everyone in ${termsLower.value.areas}`,
+    'EveryoneAtCheckpoints': `Everyone at ${termsLower.value.checkpoints}`,
+    'SpecificPeople': `Specific ${termsLower.value.people}`,
+    'OnePerArea': `One per ${termsLower.value.area}`,
+    'OnePerCheckpoint': `One per ${termsLower.value.checkpoint}`,
+    'EveryAreaLead': `Every ${termsLower.value.area} lead`,
+    'OneLeadPerArea': `One lead per ${termsLower.value.area}`,
+    'AreaLead': `${terms.value.area} lead`, // Legacy support
   };
   return scopeMap[scope] || scope;
 };
@@ -442,10 +445,10 @@ const formatScopeConfig = (config) => {
     return `${scopeName} (Everyone)`;
   }
   if (ids.includes('ALL_AREAS')) {
-    return `${scopeName} (All areas)`;
+    return `${scopeName} (All ${termsLower.value.areas})`;
   }
   if (ids.includes('ALL_CHECKPOINTS')) {
-    return `${scopeName} (All checkpoints)`;
+    return `${scopeName} (All ${termsLower.value.checkpoints})`;
   }
 
   const count = ids.length;

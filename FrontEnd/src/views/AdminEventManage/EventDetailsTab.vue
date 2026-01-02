@@ -103,7 +103,7 @@
         </button>
         <div v-if="expandedSection === 'terminology'" class="accordion-content">
           <p class="section-description">
-            Customize how things are named throughout the application.
+            Customise how things are named throughout the application.
           </p>
 
           <div class="terminology-grid">
@@ -154,6 +154,19 @@
                 @change="emitFormChange"
               >
                 <option v-for="option in terminologyOptions.checklist" :key="option" :value="option">
+                  {{ option }}
+                </option>
+              </select>
+            </div>
+
+            <div class="term-group">
+              <label>{{ terms.course }} is called</label>
+              <select
+                v-model="localForm.courseTerm"
+                class="form-input"
+                @change="emitFormChange"
+              >
+                <option v-for="option in terminologyOptions.course" :key="option" :value="option">
                   {{ option }}
                 </option>
               </select>

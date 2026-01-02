@@ -2,13 +2,23 @@
   <div>
     <h3>{{ terms.checkpoints }} ({{ locations.length }})</h3>
     <div class="button-group">
-      <button
-        ref="addButtonRef"
-        @click="handleAddClick"
-        class="btn btn-small btn-primary"
-      >
-        Add...
-      </button>
+      <div class="add-menu-wrapper" ref="menuWrapperRef">
+        <button
+          ref="addButtonRef"
+          @click="toggleAddMenu"
+          class="btn btn-small btn-primary"
+        >
+          Add...
+        </button>
+        <div v-if="showAddMenu" class="add-dropdown">
+          <button @click="handleAddManually" class="dropdown-item">
+            Add {{ termsLower.checkpoint }} manually
+          </button>
+          <button @click="handleImport" class="dropdown-item">
+            Import from CSV...
+          </button>
+        </div>
+      </div>
     </div>
 
     <div v-if="areas.length > 0" class="filter-group">
@@ -75,12 +85,12 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits, computed, ref } from 'vue';
+import { defineProps, defineEmits, computed, ref, onMounted, onUnmounted } from 'vue';
 import { alphanumericCompare } from '../../../utils/sortUtils';
 import AreasSelection from '../AreasSelection.vue';
 import { useTerminology } from '../../../composables/useTerminology';
 
-const { terms } = useTerminology();
+const { terms, termsLower } = useTerminology();
 
 const props = defineProps({
   locations: {
@@ -93,15 +103,42 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['open-add-menu', 'select-location']);
+const emit = defineEmits(['add-checkpoint-manually', 'import-checkpoints', 'select-location']);
 
 const showAllAreas = ref(true);
 const selectedAreaIds = ref([]);
 const addButtonRef = ref(null);
+const menuWrapperRef = ref(null);
+const showAddMenu = ref(false);
 
-const handleAddClick = () => {
-  emit('open-add-menu', { buttonElement: addButtonRef.value });
+const toggleAddMenu = () => {
+  showAddMenu.value = !showAddMenu.value;
 };
+
+const handleAddManually = () => {
+  showAddMenu.value = false;
+  emit('add-checkpoint-manually');
+};
+
+const handleImport = () => {
+  showAddMenu.value = false;
+  emit('import-checkpoints');
+};
+
+// Close dropdown when clicking outside
+const handleClickOutside = (event) => {
+  if (menuWrapperRef.value && !menuWrapperRef.value.contains(event.target)) {
+    showAddMenu.value = false;
+  }
+};
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside);
+});
 
 const handleAllAreasToggle = () => {
   showAllAreas.value = !showAllAreas.value;
@@ -178,6 +215,48 @@ h3 {
 
 .btn-secondary:hover {
   background: #545b62;
+}
+
+.add-menu-wrapper {
+  position: relative;
+}
+
+.add-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  min-width: 180px;
+  margin-top: 0.25rem;
+  overflow: hidden;
+}
+
+.dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: white;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #333;
+  transition: background-color 0.15s;
+}
+
+.dropdown-item:hover {
+  background: #f5f5f5;
+}
+
+.dropdown-item:first-child {
+  border-radius: 6px 6px 0 0;
+}
+
+.dropdown-item:last-child {
+  border-radius: 0 0 6px 6px;
 }
 
 .locations-list {

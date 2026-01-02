@@ -1,23 +1,55 @@
 <template>
-  <div class="tabs">
-    <button
-      v-for="tab in tabs"
-      :key="tab.value"
-      class="tab-button"
-      :class="{ active: modelValue === tab.value }"
-      @click="$emit('update:modelValue', tab.value)"
-      type="button"
-    >
-      <span v-if="tab.icon" class="tab-icon" v-html="getIcon(tab.icon)"></span>
-      {{ tab.label }}
-    </button>
+  <div class="tabs-container" ref="containerRef">
+    <!-- Regular tabs when there's enough space -->
+    <div v-if="!showHamburger" class="tabs">
+      <button
+        v-for="tab in tabs"
+        :key="tab.value"
+        class="tab-button"
+        :class="{ active: modelValue === tab.value }"
+        @click="$emit('update:modelValue', tab.value)"
+        type="button"
+      >
+        <span v-if="tab.icon" class="tab-icon" v-html="getIcon(tab.icon)"></span>
+        {{ tab.label }}
+      </button>
+    </div>
+
+    <!-- Hamburger menu when space is limited -->
+    <div v-else class="hamburger-container" ref="hamburgerRef">
+      <button
+        class="hamburger-button"
+        @click="toggleMenu"
+        type="button"
+        aria-label="Tab menu"
+      >
+        <span v-if="currentTabIcon" class="current-tab-icon" v-html="getIcon(currentTabIcon)"></span>
+        <span class="current-tab-label">{{ currentTabLabel }}</span>
+        <span class="hamburger-chevron">▼</span>
+      </button>
+
+      <div v-if="menuOpen" class="hamburger-menu">
+        <button
+          v-for="tab in tabs"
+          :key="tab.value"
+          class="menu-item"
+          :class="{ active: modelValue === tab.value }"
+          @click="selectTab(tab.value)"
+          type="button"
+        >
+          <span v-if="tab.icon" class="tab-icon" v-html="getIcon(tab.icon)"></span>
+          {{ tab.label }}
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { defineProps, defineEmits } from 'vue';
+import { defineProps, defineEmits, ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
+import { getIcon } from '../utils/icons';
 
-defineProps({
+const props = defineProps({
   tabs: {
     type: Array,
     required: true,
@@ -29,45 +61,101 @@ defineProps({
   },
 });
 
-defineEmits(['update:modelValue']);
+const emit = defineEmits(['update:modelValue']);
 
-// SVG icons for tabs
-const icons = {
-  // Course/Route - path with waypoints (looks like a route/track)
-  course: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg>`,
+const containerRef = ref(null);
+const hamburgerRef = ref(null);
+const showHamburger = ref(false);
+const menuOpen = ref(false);
 
-  // Checkpoint - map pin
-  checkpoint: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`,
+// Threshold in pixels - if tabs would need more than this, use hamburger
+const HAMBURGER_THRESHOLD = 400;
 
-  // Area - polygon shape
-  area: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>`,
+const currentTabLabel = computed(() => {
+  const currentTab = props.tabs.find(t => t.value === props.modelValue);
+  return currentTab ? currentTab.label : '';
+});
 
-  // Marshal/Person - simple person/user icon
-  marshal: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+const currentTabIcon = computed(() => {
+  const currentTab = props.tabs.find(t => t.value === props.modelValue);
+  return currentTab?.icon || null;
+});
 
-  // Checklist - list with checkboxes
-  checklist: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
+const checkOverflow = () => {
+  if (!containerRef.value) return;
 
-  // Notes - paper with lines
-  notes: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>`,
+  // Get the container width
+  const containerWidth = containerRef.value.clientWidth;
 
-  // Event details - calendar/settings
-  details: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 16h6"/></svg>`,
+  // Estimate the tabs width (rough calculation based on tab count and average width)
+  const estimatedTabWidth = props.tabs.length * 100; // ~100px per tab on average
 
-  // Location/coordinates - crosshairs
-  location: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>`,
+  // If tabs would overflow, use hamburger menu
+  showHamburger.value = estimatedTabWidth > containerWidth || containerWidth < HAMBURGER_THRESHOLD;
 };
 
-const getIcon = (iconName) => {
-  return icons[iconName] || '';
+const toggleMenu = () => {
+  menuOpen.value = !menuOpen.value;
 };
+
+const selectTab = (tabValue) => {
+  emit('update:modelValue', tabValue);
+  menuOpen.value = false;
+};
+
+// Close menu when clicking outside
+const handleClickOutside = (event) => {
+  if (hamburgerRef.value && !hamburgerRef.value.contains(event.target)) {
+    menuOpen.value = false;
+  }
+};
+
+let resizeObserver = null;
+
+onMounted(() => {
+  nextTick(() => {
+    checkOverflow();
+
+    // Watch for size changes
+    if (containerRef.value && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        checkOverflow();
+      });
+      resizeObserver.observe(containerRef.value);
+    }
+
+    document.addEventListener('click', handleClickOutside);
+  });
+});
+
+onUnmounted(() => {
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+  }
+  document.removeEventListener('click', handleClickOutside);
+});
+
+// Re-check overflow when tabs change
+watch(() => props.tabs, () => {
+  nextTick(() => {
+    checkOverflow();
+  });
+}, { deep: true });
 </script>
 
 <style scoped>
+.tabs-container {
+  display: flex;
+  align-items: center;
+  position: relative;
+  min-width: 0;
+}
+
 .tabs {
   display: flex;
   gap: 0.5rem;
   padding: 0.5rem 0;
+  flex-wrap: wrap;
 }
 
 .tab-button {
@@ -82,6 +170,8 @@ const getIcon = (iconName) => {
   font-size: 0.9rem;
   border-bottom: 2px solid transparent;
   transition: all 0.2s;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .tab-button:hover {
@@ -103,5 +193,100 @@ const getIcon = (iconName) => {
 .tab-icon :deep(svg) {
   width: 16px;
   height: 16px;
+}
+
+/* Hamburger menu styles */
+.hamburger-container {
+  position: relative;
+  width: 100%;
+}
+
+.hamburger-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid #ddd;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: #333;
+  transition: all 0.2s;
+}
+
+.hamburger-button:hover {
+  background: #f8f9fa;
+  border-color: #007bff;
+}
+
+.current-tab-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #667eea;
+}
+
+.current-tab-icon :deep(svg) {
+  width: 18px;
+  height: 18px;
+}
+
+.current-tab-label {
+  font-weight: 500;
+  flex: 1;
+  text-align: left;
+}
+
+.hamburger-chevron {
+  font-size: 0.7rem;
+  color: #666;
+  margin-left: auto;
+}
+
+.hamburger-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  margin-top: 0.25rem;
+  overflow: hidden;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: white;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #333;
+  transition: background-color 0.15s;
+}
+
+.menu-item:hover {
+  background: #f5f5f5;
+}
+
+.menu-item.active {
+  background: #e3f2fd;
+  color: #007bff;
+  font-weight: 500;
+}
+
+.menu-item .tab-icon {
+  flex-shrink: 0;
 }
 </style>

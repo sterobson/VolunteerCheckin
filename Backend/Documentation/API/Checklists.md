@@ -1407,6 +1407,142 @@ const missingMarshalIds = allMarshalIds.filter(id => !completedMarshalIds.includ
 
 ---
 
+## Inline Creation with Marshals and Locations
+
+When creating a new marshal or location, you can optionally include pending checklist items that will be automatically created and scoped to that specific entity. This is a convenience feature that allows admins to set up entity-specific tasks during entity creation.
+
+### Creating Checklist Items with a Marshal
+
+When creating a new marshal, include the `pendingNewChecklistItems` field:
+
+```http
+POST /api/events/{eventId}/marshals
+Content-Type: application/json
+Authorization: Bearer {sessionToken}
+```
+
+**Request Body**:
+```json
+{
+  "eventId": "event-123",
+  "name": "John Smith",
+  "email": "john@example.com",
+  "phoneNumber": "555-1234",
+  "notes": "Experienced marshal",
+  "pendingNewChecklistItems": [
+    { "text": "Return borrowed radio" },
+    { "text": "Submit expense report" }
+  ]
+}
+```
+
+**What happens**:
+1. Marshal "John Smith" is created
+2. Two checklist items are created with `SpecificPeople` scope targeting this marshal's ID
+3. Only John Smith will see these items in their checklist
+4. Items are created with default settings (not required, no visibility restrictions)
+
+**Created checklist items**:
+```json
+[
+  {
+    "text": "Return borrowed radio",
+    "scopeConfigurations": [
+      {
+        "scope": "SpecificPeople",
+        "itemType": "Marshal",
+        "ids": ["<new-marshal-id>"]
+      }
+    ],
+    "displayOrder": 0,
+    "isRequired": false
+  },
+  {
+    "text": "Submit expense report",
+    "scopeConfigurations": [
+      {
+        "scope": "SpecificPeople",
+        "itemType": "Marshal",
+        "ids": ["<new-marshal-id>"]
+      }
+    ],
+    "displayOrder": 1,
+    "isRequired": false
+  }
+]
+```
+
+### Creating Checklist Items with a Location
+
+When creating a new location/checkpoint, include the `pendingNewChecklistItems` field:
+
+```http
+POST /api/events/{eventId}/locations
+Content-Type: application/json
+Authorization: Bearer {sessionToken}
+```
+
+**Request Body**:
+```json
+{
+  "eventId": "event-123",
+  "name": "Checkpoint 5",
+  "description": "Main intersection",
+  "latitude": 51.5074,
+  "longitude": -0.1278,
+  "requiredMarshals": 2,
+  "pendingNewChecklistItems": [
+    { "text": "Set up traffic cones" },
+    { "text": "Check first aid kit" }
+  ]
+}
+```
+
+**What happens**:
+1. Location "Checkpoint 5" is created
+2. Two checklist items are created with `EveryoneAtCheckpoints` scope targeting this location's ID
+3. All marshals assigned to Checkpoint 5 will see these items
+4. Each marshal completes these items individually (personal completion)
+
+**Created checklist items**:
+```json
+[
+  {
+    "text": "Set up traffic cones",
+    "scopeConfigurations": [
+      {
+        "scope": "EveryoneAtCheckpoints",
+        "itemType": "Checkpoint",
+        "ids": ["<new-location-id>"]
+      }
+    ],
+    "displayOrder": 0,
+    "isRequired": false
+  }
+]
+```
+
+### Use Cases
+
+**Marshal-specific tasks**:
+- Individual equipment to return
+- Personal reports to submit
+- Special responsibilities for this volunteer
+
+**Checkpoint-specific tasks**:
+- Equipment setup unique to this location
+- Location-specific safety checks
+- Special procedures for this checkpoint
+
+### Notes
+
+- Pending items with empty text are ignored
+- Items are sanitized for security (HTML/scripts removed)
+- Items are created with `displayOrder` based on their position in the array
+- To create more complex items (required, time-based visibility), use the standard Create Checklist Item endpoint after entity creation
+
+---
+
 ## Common Workflows
 
 ### Workflow 1: Admin Creates "All Marshals" Checklist

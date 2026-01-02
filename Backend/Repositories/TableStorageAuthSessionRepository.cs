@@ -73,6 +73,13 @@ public class TableStorageAuthSessionRepository : IAuthSessionRepository
         await _table.UpdateEntityAsync(session, session.ETag);
     }
 
+    public async Task UpdateUnconditionalAsync(AuthSessionEntity session)
+    {
+        // Use ETag.All to skip optimistic concurrency check
+        // Useful for non-critical updates like LastAccessedAt
+        await _table.UpdateEntityAsync(session, ETag.All, TableUpdateMode.Replace);
+    }
+
     public async Task DeleteAsync(string sessionTokenHash)
     {
         await _table.DeleteEntityAsync("SESSION", sessionTokenHash);

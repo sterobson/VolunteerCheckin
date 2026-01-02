@@ -1,7 +1,7 @@
 <template>
   <BaseModal
     :show="show"
-    :title="`Edit checkpoint: ${location?.name || ''}`"
+    :title="modalTitle"
     size="large"
     :confirm-on-close="true"
     :is-dirty="isDirty"
@@ -11,13 +11,7 @@
     <template #tab-header>
       <TabHeader
         v-model="activeTab"
-        :tabs="[
-          { value: 'details', label: 'Details', icon: 'details' },
-          { value: 'location', label: 'Location', icon: 'location' },
-          { value: 'marshals', label: 'Marshals', icon: 'marshal' },
-          { value: 'checklist', label: 'Checklist', icon: 'checklist' },
-          { value: 'notes', label: 'Notes', icon: 'notes' }
-        ]"
+        :tabs="availableTabs"
       />
     </template>
 
@@ -49,15 +43,16 @@
       ref="assignmentsTabRef"
       :form="form"
       :assignments="assignments"
+      :available-marshals="availableMarshals"
       @update:form="form = $event"
       @input="handleInput"
       @remove-assignment="handleRemoveAssignment"
       @assign-marshal="handleAssignMarshal"
     />
 
-    <!-- Checklist Tab -->
+    <!-- Checklists Tab (only when editing - checklists require saved location) -->
     <CheckpointChecklistView
-      v-if="activeTab === 'checklist'"
+      v-if="activeTab === 'checklists' && isExistingLocation"
       ref="checklistTabRef"
       v-model="checklistChanges"
       :event-id="eventId"
@@ -68,9 +63,20 @@
       @change="handleChecklistChange"
     />
 
-    <!-- Notes Tab -->
+    <!-- Checklists preview - shown in both create and edit modes to add new scoped items -->
+    <ChecklistPreviewForLocation
+      v-if="activeTab === 'checklists'"
+      v-model="pendingNewChecklistItems"
+      :all-checklist-items="allChecklistItems"
+      :pending-area-ids="form.areaIds"
+      :areas="areas"
+      :is-editing="isExistingLocation"
+      @change="handleInput"
+    />
+
+    <!-- Notes Tab (only when editing - notes require saved location) -->
     <NotesView
-      v-if="activeTab === 'notes'"
+      v-if="activeTab === 'notes' && isExistingLocation"
       :event-id="eventId"
       :location-id="location?.id"
       :all-notes="notes"
@@ -79,18 +85,31 @@
       :assignments="assignments"
     />
 
+    <!-- Notes preview - shown in both create and edit modes to add new scoped items -->
+    <NotesPreviewForLocation
+      v-if="activeTab === 'notes'"
+      v-model="pendingNewNotes"
+      :all-notes="notes"
+      :pending-area-ids="form.areaIds"
+      :areas="areas"
+      :is-editing="isExistingLocation"
+      @change="handleInput"
+    />
+
     <!-- Custom footer with left and right aligned buttons -->
     <template #footer>
       <div class="custom-footer">
         <button
+          v-if="isExistingLocation"
           type="button"
           @click="handleDelete"
           class="btn btn-danger"
         >
-          Delete checkpoint
+          Delete {{ termsLower.checkpoint }}
         </button>
-        <button type="button" @click="handleSave" class="btn btn-primary">
-          Save changes
+        <div v-else></div>
+        <button type="button" @click="handlePrimaryAction" class="btn btn-primary">
+          {{ isExistingLocation ? 'Save changes' : createButtonText }}
         </button>
       </div>
     </template>
@@ -106,6 +125,8 @@ import LocationCoordinatesTab from '../tabs/LocationCoordinatesTab.vue';
 import LocationAssignmentsTab from '../tabs/LocationAssignmentsTab.vue';
 import CheckpointChecklistView from '../../CheckpointChecklistView.vue';
 import NotesView from '../../NotesView.vue';
+import ChecklistPreviewForLocation from '../../ChecklistPreviewForLocation.vue';
+import NotesPreviewForLocation from '../../NotesPreviewForLocation.vue';
 import { formatDateForInput } from '../../../utils/dateFormatters';
 import { useTerminology } from '../../../composables/useTerminology';
 
@@ -148,6 +169,14 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  availableMarshals: {
+    type: Array,
+    default: () => [],
+  },
+  allChecklistItems: {
+    type: Array,
+    default: () => [],
+  },
 });
 
 const emit = defineEmits([
@@ -166,6 +195,8 @@ const isMoving = ref(false);
 const assignmentsTabRef = ref(null);
 const checklistTabRef = ref(null);
 const checklistChanges = ref([]);
+const pendingNewChecklistItems = ref([]); // For creating new checklist items scoped to this location
+const pendingNewNotes = ref([]); // For creating new notes scoped to this location
 const form = ref({
   name: '',
   description: '',
@@ -177,6 +208,48 @@ const form = ref({
   startTime: '',
   endTime: '',
   areaIds: [],
+});
+
+// Computed properties for add vs edit mode
+const isExistingLocation = computed(() => {
+  return props.location && props.location.id;
+});
+
+const modalTitle = computed(() => {
+  if (isExistingLocation.value) {
+    return `Edit ${termsLower.value.checkpoint}: ${props.location?.name || ''}`;
+  }
+  return `Add ${termsLower.value.checkpoint}`;
+});
+
+const availableTabs = computed(() => [
+  { value: 'details', label: 'Details', icon: 'details' },
+  { value: 'location', label: 'Location', icon: 'location' },
+  { value: 'marshals', label: terms.value.people, icon: 'marshal' },
+  { value: 'checklists', label: terms.value.checklists, icon: 'checklist' },
+  { value: 'notes', label: 'Notes', icon: 'notes' },
+]);
+
+// Get current tab index and check if on last tab
+const currentTabIndex = computed(() => {
+  return availableTabs.value.findIndex(tab => tab.value === activeTab.value);
+});
+
+const isLastTab = computed(() => {
+  return currentTabIndex.value === availableTabs.value.length - 1;
+});
+
+const nextTab = computed(() => {
+  if (isLastTab.value) return null;
+  return availableTabs.value[currentTabIndex.value + 1];
+});
+
+// Button text for create mode - shows "Add [next tab]..." or "Create [checkpoint]"
+const createButtonText = computed(() => {
+  if (isLastTab.value) {
+    return `Create ${termsLower.value.checkpoint}`;
+  }
+  return `Add ${nextTab.value.label.toLowerCase()}...`;
 });
 
 watch(() => props.location, (newVal) => {
@@ -213,6 +286,23 @@ watch(() => props.show, (newVal) => {
     activeTab.value = 'details';
     isMoving.value = false;
     checklistChanges.value = [];
+    pendingNewChecklistItems.value = []; // Clear pending new checklist items
+    pendingNewNotes.value = []; // Clear pending new notes
+    // Reset form when opening for a new location (preserve coordinates from props.location)
+    if (!isExistingLocation.value) {
+      form.value = {
+        name: props.location?.name || '',
+        description: props.location?.description || '',
+        what3Words: props.location?.what3Words || '',
+        latitude: props.location?.latitude || 0,
+        longitude: props.location?.longitude || 0,
+        requiredMarshals: props.location?.requiredMarshals || 1,
+        useCustomTimes: false,
+        startTime: '',
+        endTime: '',
+        areaIds: props.location?.areaIds || [],
+      };
+    }
     // Clear pending changes in assignments tab if it exists
     if (assignmentsTabRef.value?.clearPendingChanges) {
       assignmentsTabRef.value.clearPendingChanges();
@@ -230,12 +320,26 @@ const handleInput = () => {
 
 const handleMoveLocation = () => {
   isMoving.value = !isMoving.value;
-  emit('move-location', isMoving.value);
+  // Emit the current form data so it can be preserved during the move
+  emit('move-location', { isMoving: isMoving.value, formData: { ...form.value } });
 };
 
 const handleChecklistChange = (changes) => {
   checklistChanges.value = changes;
   handleInput();
+};
+
+const handlePrimaryAction = () => {
+  if (isExistingLocation.value) {
+    // When editing, always save
+    handleSave();
+  } else if (isLastTab.value) {
+    // When creating and on the last tab, save
+    handleSave();
+  } else {
+    // When creating and not on the last tab, advance to next tab
+    activeTab.value = nextTab.value.value;
+  }
 };
 
 const handleSave = () => {
@@ -252,6 +356,13 @@ const handleSave = () => {
     checkInChanges: assignmentsTabRef.value?.getPendingChanges?.() || [],
     // Include pending checklist changes
     checklistChanges: checklistChanges.value || [],
+    // Include pending assignments for new locations (filter from props.assignments where isPending)
+    pendingAssignments: props.assignments
+      .filter(a => a.isPending)
+      .map(a => ({ marshalId: a.marshalId })),
+    // Include pending new checklist items and notes (for both create and edit modes)
+    pendingNewChecklistItems: pendingNewChecklistItems.value,
+    pendingNewNotes: pendingNewNotes.value,
   };
 
   emit('save', formData);
@@ -267,8 +378,8 @@ const handleRemoveAssignment = (assignment) => {
   emit('remove-assignment', assignment);
 };
 
-const handleAssignMarshal = () => {
-  emit('assign-marshal');
+const handleAssignMarshal = (marshalId) => {
+  emit('assign-marshal', marshalId);
 };
 
 const handleClose = () => {
@@ -309,5 +420,20 @@ const handleClose = () => {
 
 .btn-danger:hover {
   background: #c82333;
+}
+
+.placeholder-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 150px;
+  color: #666;
+  font-style: italic;
+  text-align: center;
+  padding: 2rem;
+}
+
+.placeholder-message p {
+  margin: 0;
 }
 </style>

@@ -6,6 +6,7 @@ const terminology = ref({
   checkpoint: 'Checkpoints',
   area: 'Areas',
   checklist: 'Checklists',
+  course: 'Course',
 });
 
 // Singular/plural mappings for each term
@@ -16,6 +17,7 @@ const termMappings = {
     'Volunteers': { singular: 'Volunteer', plural: 'Volunteers' },
     'Helpers': { singular: 'Helper', plural: 'Helpers' },
     'Staff': { singular: 'Staff member', plural: 'Staff' },
+    'Stewards': { singular: 'Steward', plural: 'Stewards' },
   },
   checkpoint: {
     'Checkpoints': { singular: 'Checkpoint', plural: 'Checkpoints' },
@@ -31,14 +33,22 @@ const termMappings = {
     'Checklists': { singular: 'Checklist', plural: 'Checklists' },
     'Tasks': { singular: 'Task', plural: 'Tasks' },
   },
+  course: {
+    'Course': { singular: 'Course', plural: 'Courses' },
+    'Route': { singular: 'Route', plural: 'Routes' },
+    'Track': { singular: 'Track', plural: 'Tracks' },
+    'Trail': { singular: 'Trail', plural: 'Trails' },
+    'Path': { singular: 'Path', plural: 'Paths' },
+  },
 };
 
 // Options for each term type (for dropdowns) - sorted alphabetically
 export const terminologyOptions = {
-  people: ['Helpers', 'Marshals', 'People', 'Staff', 'Volunteers'],
+  people: ['Helpers', 'Marshals', 'People', 'Staff', 'Stewards', 'Volunteers'],
   checkpoint: ['Checkpoints', 'Locations', 'Stations'],
   area: ['Areas', 'Regions', 'Zones'],
   checklist: ['Checklists', 'Tasks'],
+  course: ['Course', 'Path', 'Route', 'Track', 'Trail'],
 };
 
 /**
@@ -53,6 +63,7 @@ export function setTerminology(event) {
     checkpoint: event.checkpointTerm || 'Checkpoints',
     area: event.areaTerm || 'Areas',
     checklist: event.checklistTerm || 'Checklists',
+    course: event.courseTerm || 'Course',
   };
 }
 
@@ -65,6 +76,7 @@ export function getTerminologySettings() {
     checkpointTerm: terminology.value.checkpoint,
     areaTerm: terminology.value.area,
     checklistTerm: terminology.value.checklist,
+    courseTerm: terminology.value.course,
   };
 }
 
@@ -98,11 +110,13 @@ export function useTerminology() {
     checkpoint: singular('checkpoint'),
     area: singular('area'),
     checklist: singular('checklist'),
+    course: singular('course'),
     // Plural forms
     people: plural('people'),
     checkpoints: plural('checkpoint'),
     areas: plural('area'),
     checklists: plural('checklist'),
+    courses: plural('course'),
   }));
 
   // Lowercase versions
@@ -112,11 +126,13 @@ export function useTerminology() {
     checkpoint: toLowerCase(singular('checkpoint')),
     area: toLowerCase(singular('area')),
     checklist: toLowerCase(singular('checklist')),
+    course: toLowerCase(singular('course')),
     // Plural forms
     people: toLowerCase(plural('people')),
     checkpoints: toLowerCase(plural('checkpoint')),
     areas: toLowerCase(plural('area')),
     checklists: toLowerCase(plural('checklist')),
+    courses: toLowerCase(plural('course')),
   }));
 
   // Sentence case versions (first letter capitalized, rest lowercase)
@@ -126,16 +142,18 @@ export function useTerminology() {
     checkpoint: toSentenceCase(singular('checkpoint')),
     area: toSentenceCase(singular('area')),
     checklist: toSentenceCase(singular('checklist')),
+    course: toSentenceCase(singular('course')),
     // Plural forms
     people: toSentenceCase(plural('people')),
     checkpoints: toSentenceCase(plural('checkpoint')),
     areas: toSentenceCase(plural('area')),
     checklists: toSentenceCase(plural('checklist')),
+    courses: toSentenceCase(plural('course')),
   }));
 
   // Tab labels with correct terminology
   const tabLabels = computed(() => ({
-    course: 'Course',
+    course: terms.value.course,
     checkpoints: terms.value.checkpoints,
     areas: terms.value.areas,
     marshals: terms.value.people,

@@ -12,6 +12,7 @@ Detailed API documentation for each feature area:
 |----------|-------------|
 | [Checklists API](API/Checklists.md) | Complete guide to the checklist system including scope types, completion tracking, and area lead management |
 | [Notes API](API/Notes.md) | Documentation for the notes system including scope-based visibility, priorities, and categories |
+| [Contacts API](API/Contacts.md) | Event contacts system with role-based organization, marshal linking, and scope-based visibility |
 
 ### Architecture
 
@@ -42,6 +43,7 @@ Development guides and technical notes:
 - [Scope System](API/Checklists.md#available-scope-types) - How visibility and permissions work
 - [Most Specific Wins](API/Checklists.md#flexible-scope-system--most-specific-wins) - How multiple scope configurations are evaluated
 - [Sentinel Values](API/Checklists.md#scenario-5-sentinel-values---all_checkpoints-all_areas-and-all_marshals) - Using ALL_CHECKPOINTS, ALL_AREAS, ALL_MARSHALS
+- [Inline Item Creation](API/Checklists.md#inline-creation-with-marshals-and-locations) - Creating checklist items and notes when creating marshals or locations
 
 ---
 
@@ -67,7 +69,7 @@ Development guides and technical notes:
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/events/{eventId}/marshals` | List marshals |
-| POST | `/api/events/{eventId}/marshals` | Create marshal |
+| POST | `/api/events/{eventId}/marshals` | Create marshal (supports inline checklist items and notes) |
 | GET | `/api/events/{eventId}/marshals/{marshalId}` | Get marshal |
 | PUT | `/api/events/{eventId}/marshals/{marshalId}` | Update marshal |
 | DELETE | `/api/events/{eventId}/marshals/{marshalId}` | Delete marshal |
@@ -76,7 +78,7 @@ Development guides and technical notes:
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/events/{eventId}/locations` | List checkpoints |
-| POST | `/api/events/{eventId}/locations` | Create checkpoint |
+| POST | `/api/events/{eventId}/locations` | Create checkpoint (supports inline checklist items and notes) |
 | GET | `/api/events/{eventId}/locations/{locationId}` | Get checkpoint |
 | PUT | `/api/events/{eventId}/locations/{locationId}` | Update checkpoint |
 | DELETE | `/api/events/{eventId}/locations/{locationId}` | Delete checkpoint |
@@ -116,6 +118,18 @@ Development guides and technical notes:
 | GET | `/api/events/{eventId}/marshals/{marshalId}/notes` | Get marshal's notes |
 | GET | `/api/events/{eventId}/my-notes` | Get current user's notes |
 
+### Contacts
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/events/{eventId}/contacts` | List all contacts (admin) |
+| POST | `/api/events/{eventId}/contacts` | Create contact |
+| GET | `/api/events/{eventId}/contacts/{contactId}` | Get contact |
+| PUT | `/api/events/{eventId}/contacts/{contactId}` | Update contact |
+| DELETE | `/api/events/{eventId}/contacts/{contactId}` | Delete contact |
+| GET | `/api/events/{eventId}/marshals/{marshalId}/contacts` | Get marshal's contacts |
+| GET | `/api/events/{eventId}/my-contacts` | Get current user's contacts |
+| GET | `/api/events/{eventId}/contact-roles` | Get available contact roles |
+
 ### Assignments
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -130,19 +144,19 @@ Development guides and technical notes:
 
 ### Scope System
 
-Both Checklists and Notes use a shared scope evaluation system to determine visibility. The available scopes are:
+Checklists, Notes, and Contacts use a shared scope evaluation system to determine visibility. The available scopes are:
 
-| Scope | Description | Checklists | Notes |
-|-------|-------------|:----------:|:-----:|
-| EveryoneInAreas | Everyone in specified areas | ✓ | ✓ |
-| EveryoneAtCheckpoints | Everyone at specified checkpoints | ✓ | ✓ |
-| SpecificPeople | Specific marshals by ID | ✓ | ✓ |
-| EveryAreaLead | Each area lead individually | ✓ | ✓ |
-| OnePerCheckpoint | Shared completion per checkpoint | ✓ | ✗ |
-| OnePerArea | Shared completion per area | ✓ | ✗ |
-| OneLeadPerArea | One area lead per area | ✓ | ✗ |
+| Scope | Description | Checklists | Notes | Contacts |
+|-------|-------------|:----------:|:-----:|:--------:|
+| EveryoneInAreas | Everyone in specified areas | ✓ | ✓ | ✓ |
+| EveryoneAtCheckpoints | Everyone at specified checkpoints | ✓ | ✓ | ✓ |
+| SpecificPeople | Specific marshals by ID | ✓ | ✓ | ✓ |
+| EveryAreaLead | Each area lead individually | ✓ | ✓ | ✓ |
+| OnePerCheckpoint | Shared completion per checkpoint | ✓ | ✗ | ✗ |
+| OnePerArea | Shared completion per area | ✓ | ✗ | ✗ |
+| OneLeadPerArea | One area lead per area | ✓ | ✗ | ✗ |
 
-Notes don't support "One per" scopes because they don't have completion tracking.
+Notes and Contacts don't support "One per" scopes because they don't have completion tracking.
 
 ### Sentinel Values
 

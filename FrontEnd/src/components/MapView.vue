@@ -51,6 +51,14 @@ const props = defineProps({
     type: String,
     default: null,
   },
+  highlightLocationIds: {
+    type: Array,
+    default: () => [],
+  },
+  allLocationsForBounds: {
+    type: Array,
+    default: () => [],
+  },
   marshalMode: {
     type: Boolean,
     default: false,
@@ -81,8 +89,8 @@ defineExpose({
 });
 const markers = ref([]);
 let routePolyline = null;
-let isInitialLoad = true;
-let hasCenteredOnCheckpoints = false;
+const isInitialLoad = ref(true);
+const hasCenteredOnCheckpoints = ref(false);
 const showDescriptionsForIds = ref(new Set());
 const areaLayers = ref([]);
 let drawControl = null;
@@ -157,23 +165,34 @@ const updateUserLocationMarker = () => {
 const initMap = () => {
   if (!mapContainer.value) return;
 
-  // Calculate center from checkpoints if available and no explicit center provided
+  // Calculate initial center - use allLocationsForBounds for initial centering if available
   let centerLat = 51.505;
   let centerLng = -0.09;
   let zoomLevel = 13;
 
-  if (!props.center && props.locations.length > 0) {
-    // Calculate center from all checkpoints
-    const lats = props.locations.map(loc => loc.latitude);
-    const lngs = props.locations.map(loc => loc.longitude);
-    centerLat = lats.reduce((a, b) => a + b, 0) / lats.length;
-    centerLng = lngs.reduce((a, b) => a + b, 0) / lngs.length;
-    zoomLevel = 10; // Start a bit zoomed out to see all points
-    hasCenteredOnCheckpoints = true;
-  } else if (props.center) {
+  // Try to get a reasonable initial center from available data
+  // Use allLocationsForBounds (unfiltered) if available, otherwise fall back to locations
+  const locationsForCenter = props.allLocationsForBounds.length > 0
+    ? props.allLocationsForBounds
+    : props.locations;
+
+  const allPoints = [];
+  if (locationsForCenter.length > 0) {
+    allPoints.push(...locationsForCenter.map(loc => ({ lat: loc.latitude, lng: loc.longitude })));
+  }
+  if (props.route && props.route.length > 0) {
+    allPoints.push(...props.route.map(point => ({ lat: point.lat, lng: point.lng })));
+  }
+
+  if (props.center) {
     centerLat = props.center.lat;
     centerLng = props.center.lng;
     zoomLevel = props.zoom ?? 13;
+  } else if (allPoints.length > 0) {
+    // Calculate center from all available points
+    centerLat = allPoints.reduce((sum, p) => sum + p.lat, 0) / allPoints.length;
+    centerLng = allPoints.reduce((sum, p) => sum + p.lng, 0) / allPoints.length;
+    zoomLevel = 10;
   }
 
   map = L.map(mapContainer.value).setView(
@@ -431,7 +450,8 @@ const updateMarkers = () => {
     const requiredMarshals = location.requiredMarshals || 1;
     const isFull = checkedInCount >= requiredMarshals;
     const isMissing = checkedInCount === 0;
-    const isHighlighted = props.highlightLocationId === location.id;
+    const isHighlighted = props.highlightLocationId === location.id ||
+                          props.highlightLocationIds.includes(location.id);
     const isGrayed = props.marshalMode && !isHighlighted;
 
     // In marshal mode, gray out non-assigned checkpoints and hide counts
@@ -552,12 +572,17 @@ const updateMarkers = () => {
 
   // Only fit bounds on initial load if center/zoom are not explicitly provided
   // If center/zoom are provided, respect those instead of auto-fitting
-  if (map && isInitialLoad && !props.center && !hasCenteredOnCheckpoints) {
+  if (map && isInitialLoad.value && !props.center && !hasCenteredOnCheckpoints.value) {
     const allPoints = [];
 
+    // Use allLocationsForBounds (unfiltered) if available for better initial bounds
+    const locationsForBounds = props.allLocationsForBounds.length > 0
+      ? props.allLocationsForBounds
+      : props.locations;
+
     // Add location points
-    if (props.locations.length > 0) {
-      allPoints.push(...props.locations.map((loc) => [loc.latitude, loc.longitude]));
+    if (locationsForBounds.length > 0) {
+      allPoints.push(...locationsForBounds.map((loc) => [loc.latitude, loc.longitude]));
     }
 
     // Add route points
@@ -568,12 +593,12 @@ const updateMarkers = () => {
     if (allPoints.length > 0) {
       const bounds = L.latLngBounds(allPoints);
       map.fitBounds(bounds, { padding: [50, 50] });
-      isInitialLoad = false;
-      hasCenteredOnCheckpoints = true;
+      isInitialLoad.value = false;
+      hasCenteredOnCheckpoints.value = true;
     }
   } else if (props.center) {
     // Center is explicitly provided, so don't auto-fit
-    isInitialLoad = false;
+    isInitialLoad.value = false;
   }
 
   // Check if we should show descriptions after markers are updated
@@ -586,6 +611,10 @@ const updateMarkers = () => {
 };
 
 onMounted(() => {
+  // Reset centering state on mount
+  hasCenteredOnCheckpoints.value = false;
+  isInitialLoad.value = true;
+
   initMap();
 
   // Watch for container resize to invalidate map size (needed for fullscreen transitions)
@@ -626,15 +655,36 @@ watch(
   (newLocations) => {
     updateMarkers();
 
-    // If we haven't centered on checkpoints yet and we now have checkpoints, center on them
-    if (map && !hasCenteredOnCheckpoints && newLocations.length > 0 && !props.center) {
+    // If we haven't centered yet and we now have checkpoints, center on them
+    if (map && !hasCenteredOnCheckpoints.value && newLocations.length > 0 && !props.center) {
       const lats = newLocations.map(loc => loc.latitude);
       const lngs = newLocations.map(loc => loc.longitude);
       const centerLat = lats.reduce((a, b) => a + b, 0) / lats.length;
       const centerLng = lngs.reduce((a, b) => a + b, 0) / lngs.length;
       map.setView([centerLat, centerLng], 10);
-      hasCenteredOnCheckpoints = true;
-      isInitialLoad = false;
+      hasCenteredOnCheckpoints.value = true;
+      isInitialLoad.value = false;
+    }
+  },
+  { deep: true }
+);
+
+// Center on route if it arrives before checkpoints
+watch(
+  () => props.route,
+  (newRoute) => {
+    updateRoute();
+    updateMarkers();
+
+    // If we haven't centered yet and we now have route data, center on it
+    if (map && !hasCenteredOnCheckpoints.value && newRoute && newRoute.length > 0 && !props.center) {
+      const lats = newRoute.map(point => point.lat);
+      const lngs = newRoute.map(point => point.lng);
+      const centerLat = lats.reduce((a, b) => a + b, 0) / lats.length;
+      const centerLng = lngs.reduce((a, b) => a + b, 0) / lngs.length;
+      map.setView([centerLat, centerLng], 10);
+      hasCenteredOnCheckpoints.value = true;
+      isInitialLoad.value = false;
     }
   },
   { deep: true }
@@ -647,15 +697,6 @@ watch(
       map.setView([newCenter.lat, newCenter.lng], props.zoom);
     }
   }
-);
-
-watch(
-  () => props.route,
-  () => {
-    updateRoute();
-    updateMarkers(); // Re-fit bounds to include route
-  },
-  { deep: true }
 );
 
 watch(
@@ -693,6 +734,14 @@ watch(
   () => {
     updateMarkers();
   }
+);
+
+watch(
+  () => props.highlightLocationIds,
+  () => {
+    updateMarkers();
+  },
+  { deep: true }
 );
 
 watch(

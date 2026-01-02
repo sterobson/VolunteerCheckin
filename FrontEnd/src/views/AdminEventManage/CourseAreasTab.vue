@@ -7,6 +7,7 @@
           :locations="visibleCheckpoints"
           :route="visibleRoute"
           :areas="visibleAreas"
+          :allLocationsForBounds="checkpoints"
           :selectedAreaId="selectedAreaId"
           :clickable="true"
           :drawingMode="drawingMode"
@@ -79,6 +80,9 @@
           <button @click="handleImportCheckpoints" class="add-menu-item">
             Import checkpoints...
           </button>
+          <button @click="handleUploadRoute" class="add-menu-item">
+            Upload route...
+          </button>
         </div>
       </div>
     </div>
@@ -118,9 +122,8 @@ const emit = defineEmits([
   'map-click',
   'location-click',
   'area-click',
-  'add-checkpoint',
-  'add-multiple-checkpoints',
   'import-checkpoints',
+  'upload-route',
   'select-location',
   'add-area',
   'select-area',
@@ -162,7 +165,6 @@ const toggleAddMenu = () => {
 
 const handleAddOption = (option) => {
   addMenuExpanded.value = false;
-  listAddButtonPosition.value = null;
 
   if (option === 'checkpoint') {
     emit('add-checkpoint-from-map');
@@ -182,6 +184,10 @@ const handleImportCheckpoints = () => {
   emit('import-checkpoints');
 };
 
+const handleUploadRoute = () => {
+  addMenuExpanded.value = false;
+  emit('upload-route');
+};
 
 // Expose method to scroll map into view
 const scrollMapIntoView = () => {

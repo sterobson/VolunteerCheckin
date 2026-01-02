@@ -53,6 +53,33 @@
 
         <!-- Accordion Sections -->
         <div class="accordion">
+          <!-- Event Details Section -->
+          <div v-if="event?.startDate || event?.description" class="accordion-section">
+            <button
+              class="accordion-header"
+              :class="{ active: expandedSection === 'eventDetails' }"
+              @click="toggleSection('eventDetails')"
+            >
+              <span class="accordion-title">
+                <span class="section-icon" v-html="getIcon('event')"></span>
+                Event details
+              </span>
+              <span class="accordion-icon">{{ expandedSection === 'eventDetails' ? '−' : '+' }}</span>
+            </button>
+            <div v-if="expandedSection === 'eventDetails'" class="accordion-content">
+              <div class="event-details">
+                <div v-if="event.startDate" class="event-detail-row">
+                  <span class="detail-label">Start time</span>
+                  <span class="detail-value">{{ formatEventDateTime(event.startDate) }}</span>
+                </div>
+                <div v-if="event.description" class="event-description">
+                  <span class="detail-label">Description</span>
+                  <p class="detail-value">{{ event.description }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Assignments Section -->
           <div class="accordion-section">
             <button
@@ -60,65 +87,129 @@
               :class="{ active: expandedSection === 'assignments' }"
               @click="toggleSection('assignments')"
             >
-              <span class="accordion-title">Your Assignments ({{ assignments.length }})</span>
+              <span class="accordion-title">
+                <span class="section-icon" v-html="getIcon('checkpoint')"></span>
+                Your {{ termsLower.checkpoints }} ({{ assignments.length }})
+              </span>
               <span class="accordion-icon">{{ expandedSection === 'assignments' ? '−' : '+' }}</span>
             </button>
-            <div v-if="expandedSection === 'assignments'" class="accordion-content">
+            <div v-if="expandedSection === 'assignments'" class="accordion-content assignments-accordion-content">
               <div v-if="assignments.length === 0" class="empty-state">
-                <p>You don't have any checkpoint assignments yet.</p>
+                <p>You don't have any {{ termsLower.checkpoint }} assignments yet.</p>
               </div>
-              <div v-else class="assignments-list">
-                <div v-for="assign in assignmentsWithDetails" :key="assign.id" class="assignment-item">
-                  <div class="assignment-header">
-                    <strong>{{ assign.location?.name || assign.locationName }}</strong>
-                    <span v-if="assign.areaName" class="area-badge">{{ assign.areaName }}</span>
-                  </div>
-                  <p v-if="assign.location?.description" class="assignment-description">{{ assign.location.description }}</p>
-                  <p v-if="assign.location?.startTime || assign.location?.endTime" class="time-range">
-                    {{ formatTimeRange(assign.location.startTime, assign.location.endTime) }}
-                  </p>
+              <div v-else class="checkpoint-accordion">
+                <div v-for="assign in assignmentsWithDetails" :key="assign.id" class="checkpoint-accordion-section">
+                  <button
+                    class="checkpoint-accordion-header"
+                    :class="{ active: expandedCheckpoint === assign.id, 'checked-in': assign.isCheckedIn }"
+                    @click="toggleCheckpoint(assign.id)"
+                  >
+                    <div class="checkpoint-header-content">
+                      <div class="checkpoint-title-row">
+                        <span v-if="assign.isCheckedIn" class="checkpoint-check-icon">✓</span>
+                        <span class="checkpoint-name">{{ assign.location?.name || assign.locationName }}</span>
+                        <span v-if="assign.areaName" class="area-badge">{{ assign.areaName }}</span>
+                        <span v-if="assign.location?.startTime || assign.location?.endTime" class="checkpoint-time-badge">
+                          {{ formatTimeRange(assign.location.startTime, assign.location.endTime) }}
+                        </span>
+                      </div>
+                      <div v-if="assign.location?.description" class="checkpoint-description-preview">
+                        {{ assign.location.description }}
+                      </div>
+                    </div>
+                    <span class="accordion-icon">{{ expandedCheckpoint === assign.id ? '−' : '+' }}</span>
+                  </button>
+                  <div v-if="expandedCheckpoint === assign.id" class="checkpoint-accordion-content">
+                    <!-- Mini-map for this checkpoint -->
+                    <div v-if="assign.location" class="checkpoint-mini-map">
+                      <MapView
+                        :locations="allLocations"
+                        :route="eventRoute"
+                        :center="{ lat: assign.location.latitude, lng: assign.location.longitude }"
+                        :zoom="16"
+                        :user-location="userLocation"
+                        :highlight-location-id="assign.locationId"
+                        :marshal-mode="true"
+                      />
+                    </div>
 
-                  <!-- Marshals on this checkpoint -->
-                  <div class="checkpoint-marshals">
-                    <div class="marshals-label">Marshals:</div>
-                    <div class="marshals-list">
-                      <span
-                        v-for="m in assign.allMarshals"
-                        :key="m.marshalId"
-                        class="marshal-tag"
-                        :class="{ 'is-you': m.marshalId === currentMarshalId, 'checked-in': m.isCheckedIn }"
+                    <!-- Marshals on this checkpoint -->
+                    <div class="checkpoint-marshals">
+                      <div class="marshals-label">{{ terms.people }}:</div>
+                      <div class="marshals-list">
+                        <span
+                          v-for="m in assign.allMarshals"
+                          :key="m.marshalId"
+                          class="marshal-tag"
+                          :class="{ 'is-you': m.marshalId === currentMarshalId, 'checked-in': m.isCheckedIn }"
+                        >
+                          {{ m.marshalName }}{{ m.marshalId === currentMarshalId ? ' (you)' : '' }}
+                          <span v-if="m.isCheckedIn" class="check-badge">✓</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    <!-- Area Contacts for this checkpoint -->
+                    <div v-if="assign.areaContacts.length > 0" class="checkpoint-area-contacts">
+                      <div class="marshals-label">{{ terms.area }} contacts:</div>
+                      <div class="contact-list">
+                        <div v-for="contact in assign.areaContacts" :key="contact.marshalId" class="contact-item">
+                          <div class="contact-info">
+                            <div class="contact-name">{{ contact.marshalName }}</div>
+                            <div v-if="contact.role" class="contact-role">{{ contact.role }}</div>
+                            <div v-if="contact.phone" class="contact-detail">{{ contact.phone }}</div>
+                            <div v-if="contact.email" class="contact-detail">{{ contact.email }}</div>
+                          </div>
+                          <div class="contact-actions">
+                            <a v-if="contact.phone" :href="`tel:${contact.phone}`" class="contact-link">
+                              <svg class="contact-icon" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+                              </svg>
+                              Call
+                            </a>
+                            <a v-if="contact.phone" :href="`sms:${contact.phone}`" class="contact-link">
+                              <svg class="contact-icon" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+                              </svg>
+                              Text
+                            </a>
+                            <a v-if="contact.email" :href="`mailto:${contact.email}`" class="contact-link">
+                              <svg class="contact-icon" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                              </svg>
+                              Email
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Check-in status and actions -->
+                    <div v-if="assign.isCheckedIn" class="checked-in-status">
+                      <span class="check-icon">✓</span>
+                      <div>
+                        <strong>Checked In</strong>
+                        <p class="check-time">{{ formatTime(assign.checkInTime) }}</p>
+                      </div>
+                    </div>
+                    <div v-else class="check-in-actions">
+                      <button
+                        @click="handleCheckIn(assign)"
+                        class="btn btn-primary"
+                        :disabled="checkingIn === assign.id"
                       >
-                        {{ m.marshalName }}{{ m.marshalId === currentMarshalId ? ' (you)' : '' }}
-                        <span v-if="m.isCheckedIn" class="check-badge">✓</span>
-                      </span>
+                        {{ checkingIn === assign.id ? 'Checking in...' : 'GPS Check-In' }}
+                      </button>
+                      <button
+                        @click="handleManualCheckIn(assign)"
+                        class="btn btn-secondary"
+                        :disabled="checkingIn === assign.id"
+                      >
+                        Manual
+                      </button>
                     </div>
+                    <div v-if="checkInError && checkingInAssignment === assign.id" class="error">{{ checkInError }}</div>
                   </div>
-
-                  <!-- Check-in status and actions -->
-                  <div v-if="assign.isCheckedIn" class="checked-in-status">
-                    <span class="check-icon">✓</span>
-                    <div>
-                      <strong>Checked In</strong>
-                      <p class="check-time">{{ formatTime(assign.checkInTime) }}</p>
-                    </div>
-                  </div>
-                  <div v-else class="check-in-actions">
-                    <button
-                      @click="handleCheckIn(assign)"
-                      class="btn btn-primary"
-                      :disabled="checkingIn === assign.id"
-                    >
-                      {{ checkingIn === assign.id ? 'Checking in...' : 'GPS Check-In' }}
-                    </button>
-                    <button
-                      @click="handleManualCheckIn(assign)"
-                      class="btn btn-secondary"
-                      :disabled="checkingIn === assign.id"
-                    >
-                      Manual
-                    </button>
-                  </div>
-                  <div v-if="checkInError && checkingInAssignment === assign.id" class="error">{{ checkInError }}</div>
                 </div>
               </div>
             </div>
@@ -131,14 +222,17 @@
               :class="{ active: expandedSection === 'checklist' }"
               @click="toggleSection('checklist')"
             >
-              <span class="accordion-title">Your Checklist ({{ checklistItems.length }})</span>
+              <span class="accordion-title">
+                <span class="section-icon" v-html="getIcon('checklist')"></span>
+                Your {{ termsLower.checklists }} ({{ completedChecklistCount }} of {{ checklistItems.length }} complete)
+              </span>
               <span class="accordion-icon">{{ expandedSection === 'checklist' ? '−' : '+' }}</span>
             </button>
             <div v-if="expandedSection === 'checklist'" class="accordion-content">
               <div v-if="checklistLoading" class="loading">Loading checklist...</div>
               <div v-else-if="checklistError" class="error">{{ checklistError }}</div>
               <div v-else-if="checklistItems.length === 0" class="empty-state">
-                <p>No checklist items for you.</p>
+                <p>No {{ termsLower.checklists }} for you.</p>
               </div>
               <div v-else class="checklist-items">
                 <div
@@ -174,69 +268,32 @@
             </div>
           </div>
 
-          <!-- Area Contacts Section -->
-          <div v-if="areaContactsByArea.length > 0" class="accordion-section">
-            <button
-              class="accordion-header"
-              :class="{ active: expandedSection === 'areaContacts' }"
-              @click="toggleSection('areaContacts')"
-            >
-              <span class="accordion-title">Area Contacts ({{ totalAreaContacts }})</span>
-              <span class="accordion-icon">{{ expandedSection === 'areaContacts' ? '−' : '+' }}</span>
-            </button>
-            <div v-if="expandedSection === 'areaContacts'" class="accordion-content">
-              <div v-for="area in areaContactsByArea" :key="area.areaId" class="area-contacts-group">
-                <h4 class="area-group-title">{{ area.areaName }}</h4>
-                <div class="contact-list">
-                  <div v-for="contact in area.contacts" :key="contact.marshalId" class="contact-item">
-                    <div class="contact-info">
-                      <div class="contact-name">{{ contact.marshalName }}</div>
-                      <div v-if="contact.role" class="contact-role">{{ contact.role }}</div>
-                      <div v-if="contact.phone" class="contact-detail">{{ contact.phone }}</div>
-                      <div v-if="contact.email" class="contact-detail">{{ contact.email }}</div>
-                    </div>
-                    <div class="contact-actions">
-                      <a v-if="contact.phone" :href="`tel:${contact.phone}`" class="contact-link">
-                        <svg class="contact-icon" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
-                        </svg>
-                        Call
-                      </a>
-                      <a v-if="contact.phone" :href="`sms:${contact.phone}`" class="contact-link">
-                        <svg class="contact-icon" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
-                        </svg>
-                        Text
-                      </a>
-                      <a v-if="contact.email" :href="`mailto:${contact.email}`" class="contact-link">
-                        <svg class="contact-icon" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
-                        </svg>
-                        Email
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Event Contacts Section -->
-          <div v-if="eventContacts.length > 0" class="accordion-section">
+          <!-- Contacts Section -->
+          <div v-if="eventContacts.length > 0 || contactsLoading" class="accordion-section">
             <button
               class="accordion-header"
               :class="{ active: expandedSection === 'eventContacts' }"
               @click="toggleSection('eventContacts')"
             >
-              <span class="accordion-title">Event Contacts ({{ eventContacts.length }})</span>
+              <span class="accordion-title">
+                <span class="section-icon" v-html="getIcon('contacts')"></span>
+                Contacts ({{ eventContacts.length }})
+              </span>
               <span class="accordion-icon">{{ expandedSection === 'eventContacts' ? '−' : '+' }}</span>
             </button>
             <div v-if="expandedSection === 'eventContacts'" class="accordion-content">
-              <div class="contact-list">
-                <div v-for="(contact, index) in eventContacts" :key="index" class="contact-item">
+              <div v-if="contactsLoading" class="loading">Loading contacts...</div>
+              <div v-else class="contact-list">
+                <div v-for="contact in eventContacts" :key="contact.contactId" class="contact-item" :class="{ 'primary-contact': contact.isPrimary }">
                   <div class="contact-info">
-                    <div class="contact-name">{{ contact.name }}</div>
-                    <div v-if="contact.role" class="contact-role">{{ contact.role }}</div>
+                    <div class="contact-name-row">
+                      <span v-if="contact.isPrimary" class="primary-badge">★</span>
+                      <span class="contact-name">{{ contact.name }}</span>
+                      <span v-if="contact.role" class="contact-role-badge">{{ formatRoleName(contact.role) }}</span>
+                    </div>
+                    <div v-if="contact.notes" class="contact-notes-text">{{ contact.notes }}</div>
+                    <div v-if="contact.phone" class="contact-detail">{{ contact.phone }}</div>
+                    <div v-if="contact.email" class="contact-detail">{{ contact.email }}</div>
                   </div>
                   <div class="contact-actions">
                     <a v-if="contact.phone" :href="`tel:${contact.phone}`" class="contact-link">
@@ -251,9 +308,42 @@
                       </svg>
                       Text
                     </a>
+                    <a v-if="contact.email" :href="`mailto:${contact.email}`" class="contact-link">
+                      <svg class="contact-icon" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                      </svg>
+                      Email
+                    </a>
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <!-- Notes Section -->
+          <div class="accordion-section">
+            <button
+              class="accordion-header"
+              :class="{ active: expandedSection === 'notes' }"
+              @click="toggleSection('notes')"
+            >
+              <span class="accordion-title">
+                <span class="section-icon" v-html="getIcon('notes')"></span>
+                Notes ({{ notes.length }})
+              </span>
+              <span class="accordion-icon">{{ expandedSection === 'notes' ? '−' : '+' }}</span>
+            </button>
+            <div v-if="expandedSection === 'notes'" class="accordion-content">
+              <!-- Notes are pre-filtered by getMyNotes API, so don't pass marshal-id to avoid re-filtering -->
+              <NotesView
+                :event-id="route.params.eventId"
+                :all-notes="notes"
+                :locations="allLocations"
+                :areas="areas"
+                :assignments="assignments"
+                :show-scope="false"
+                @notes-changed="loadNotes"
+              />
             </div>
           </div>
 
@@ -265,6 +355,7 @@
               @click="toggleSection('map')"
             >
               <span class="accordion-title">
+                <span class="section-icon" v-html="getIcon('map')"></span>
                 Map
                 <span v-if="userLocation" class="location-status active">GPS Active</span>
                 <span v-else class="location-status">GPS Inactive</span>
@@ -274,10 +365,11 @@
             <div v-if="expandedSection === 'map'" class="accordion-content map-content">
               <MapView
                 :locations="allLocations"
+                :route="eventRoute"
                 :center="mapCenter"
                 :zoom="15"
                 :user-location="userLocation"
-                :highlight-location-id="primaryAssignment?.locationId"
+                :highlight-location-ids="assignmentLocationIds"
                 :marshal-mode="true"
               />
             </div>
@@ -315,14 +407,16 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { authApi, checkInApi, checklistApi, eventsApi, assignmentsApi, locationsApi, areasApi } from '../services/api';
+import { authApi, checkInApi, checklistApi, eventsApi, assignmentsApi, locationsApi, areasApi, notesApi, contactsApi } from '../services/api';
 import MapView from '../components/MapView.vue';
 import ConfirmModal from '../components/ConfirmModal.vue';
 import EmergencyContactModal from '../components/event-manage/modals/EmergencyContactModal.vue';
 import AreaLeadSection from '../components/AreaLeadSection.vue';
+import NotesView from '../components/NotesView.vue';
 import { setTerminology, useTerminology } from '../composables/useTerminology';
+import { getIcon } from '../utils/icons';
 
-const { terms } = useTerminology();
+const { terms, termsLower } = useTerminology();
 
 const route = useRoute();
 const router = useRouter();
@@ -386,6 +480,9 @@ const checklistLoading = ref(false);
 const checklistError = ref(null);
 const savingChecklist = ref(false);
 
+// Notes state
+const notes = ref([]);
+
 // UI state
 const showEmergency = ref(false);
 const showConfirmModal = ref(false);
@@ -402,12 +499,19 @@ const toggleSection = (section) => {
   expandedSection.value = expandedSection.value === section ? null : section;
 };
 
-// Assignments with details (location info, area name, all marshals on checkpoint)
+// Track which checkpoint accordion is expanded (by assignment ID)
+const expandedCheckpoint = ref(null);
+
+const toggleCheckpoint = (assignId) => {
+  expandedCheckpoint.value = expandedCheckpoint.value === assignId ? null : assignId;
+};
+
+// Assignments with details (location info, area name, all marshals on checkpoint, area contacts)
 const assignmentsWithDetails = computed(() => {
   return assignments.value.map(assign => {
     const location = allLocations.value.find(loc => loc.id === assign.locationId);
 
-    // Get area name from the location's area IDs
+    // Get area IDs from the location
     const areaIds = location?.areaIds || location?.AreaIds || [];
     let areaName = null;
     if (areaIds.length > 0 && areas.value.length > 0) {
@@ -418,11 +522,18 @@ const assignmentsWithDetails = computed(() => {
     // Get all marshals assigned to this checkpoint
     const allMarshals = location?.assignments || [];
 
+    // Get area contacts for this checkpoint's areas
+    const areaContacts = areaContactsRaw.value.filter(contact =>
+      areaIds.includes(contact.areaId)
+    );
+
     return {
       ...assign,
       location,
       areaName,
+      areaIds,
       allMarshals,
+      areaContacts,
       locationName: location?.name || 'Unknown Location',
     };
   });
@@ -433,14 +544,40 @@ const primaryAssignment = computed(() => {
   return assignments.value.length > 0 ? assignments.value[0] : null;
 });
 
+// All assignment location IDs for multi-checkpoint highlighting
+const assignmentLocationIds = computed(() => {
+  return assignments.value.map(a => a.locationId);
+});
+
+// Event route for map display
+const eventRoute = computed(() => {
+  if (!event.value?.route) return [];
+  // Route can be stored as JSON string or array
+  const route = typeof event.value.route === 'string'
+    ? JSON.parse(event.value.route)
+    : event.value.route;
+  return route || [];
+});
+
 const assignedLocation = computed(() => {
   if (!primaryAssignment.value || !allLocations.value.length) return null;
   return allLocations.value.find(loc => loc.id === primaryAssignment.value.locationId);
 });
 
-// Event contacts (emergency contacts from event)
+// Checklist completion count
+const completedChecklistCount = computed(() => {
+  return checklistItems.value.filter(item => item.isCompleted).length;
+});
+
+// Event contacts - loaded from new contacts API
+const myContacts = ref([]);
+const contactsLoading = ref(false);
+
+// Legacy event contacts computed for backwards compatibility
 const eventContacts = computed(() => {
-  return event.value?.emergencyContacts || [];
+  // Use new contacts API data, filtering to show only event-wide contacts
+  // (those not specifically tied to areas/checkpoints in their scope)
+  return myContacts.value;
 });
 
 // Area contacts - loaded from API, grouped by area
@@ -576,6 +713,11 @@ const loadEventData = async () => {
     const eventResponse = await eventsApi.getById(eventId);
     event.value = eventResponse.data;
     console.log('Event loaded:', event.value?.name);
+
+    // Apply terminology settings from the event
+    if (event.value) {
+      setTerminology(event.value);
+    }
   } catch (error) {
     console.error('Failed to load event:', error.response?.status, error.response?.data);
   }
@@ -617,55 +759,47 @@ const loadEventData = async () => {
   // Load checklist
   await loadChecklist();
 
-  // Load area contacts for the checkpoint's areas
-  await loadAreaContacts();
+  // Load contacts from the new contacts API
+  await loadContacts();
+
+  // Load notes
+  await loadNotes();
 };
 
-const loadAreaContacts = async () => {
-  // Get unique area IDs from all assignments
-  const uniqueAreaIds = new Set();
-  for (const assign of assignments.value) {
-    const location = allLocations.value.find(loc => loc.id === assign.locationId);
-    const areaIds = location?.areaIds || location?.AreaIds || [];
-    areaIds.forEach(id => uniqueAreaIds.add(id));
-  }
-
-  if (uniqueAreaIds.size === 0) {
-    console.log('No area IDs for any checkpoint');
-    return;
-  }
-  console.log('Loading area contacts for areas:', [...uniqueAreaIds]);
-
+const loadNotes = async () => {
   const eventId = route.params.eventId;
-  const allContacts = [];
-
-  for (const areaId of uniqueAreaIds) {
-    try {
-      // Fetch the full area details which includes contacts
-      const response = await areasApi.getById(eventId, areaId);
-      const area = response.data;
-      // Handle both camelCase and PascalCase
-      const contacts = area?.contacts || area?.Contacts || [];
-      console.log(`Area ${area?.name || areaId} has ${contacts.length} contacts`);
-
-      if (contacts.length > 0) {
-        allContacts.push(...contacts.map(contact => ({
-          marshalId: contact.marshalId || contact.MarshalId,
-          marshalName: contact.marshalName || contact.MarshalName,
-          role: contact.role || contact.Role,
-          phone: contact.phone || contact.Phone,
-          email: contact.email || contact.Email,
-          areaId: areaId,
-          areaName: area?.name || area?.Name,
-        })));
-      }
-    } catch (error) {
-      console.warn(`Failed to load area contacts for area ${areaId}:`, error);
-    }
+  try {
+    // Use getMyNotes to get notes relevant to the current marshal
+    const response = await notesApi.getMyNotes(eventId);
+    notes.value = response.data || [];
+    console.log('Notes loaded:', notes.value.length);
+  } catch (error) {
+    console.error('Failed to load notes:', error);
   }
+};
 
-  areaContactsRaw.value = allContacts;
-  console.log('Area contacts loaded:', areaContactsRaw.value.length);
+const loadContacts = async () => {
+  const eventId = route.params.eventId;
+  contactsLoading.value = true;
+
+  try {
+    // Load contacts using the new API that returns scoped contacts for this user
+    const response = await contactsApi.getMyContacts(eventId);
+    myContacts.value = response.data;
+    console.log('Contacts loaded:', myContacts.value.length);
+  } catch (error) {
+    console.warn('Failed to load contacts:', error);
+    myContacts.value = [];
+  } finally {
+    contactsLoading.value = false;
+  }
+};
+
+// Legacy function - kept for backwards compatibility but now just loads new contacts
+const loadAreaContacts = async () => {
+  // Area contacts from areas are now handled by the new contacts system
+  // This function is kept for any remaining code that calls it
+  areaContactsRaw.value = [];
 };
 
 const loadChecklist = async () => {
@@ -734,11 +868,18 @@ const getContextName = (item) => {
   if (item.completionContextType === 'Checkpoint') {
     const location = allLocations.value.find(l => l.id === item.completionContextId);
     if (!location) return null;
-    return `at ${location.name}`;
+    const desc = location.description ? ` - ${location.description}` : '';
+    return `At ${termsLower.value.checkpoint} ${location.name}${desc}`;
+  }
+
+  if (item.completionContextType === 'Area') {
+    const area = areas.value.find(a => a.id === item.completionContextId);
+    if (!area) return null;
+    return `At ${termsLower.value.area} ${area.name}`;
   }
 
   if (item.completionContextType === 'Personal') {
-    return 'personal item';
+    return 'Personal item';
   }
 
   return null;
@@ -914,6 +1055,27 @@ const formatTimeRange = (startTime, endTime) => {
   return `${start} - ${end}`;
 };
 
+const formatEventDateTime = (dateString) => {
+  if (!dateString) return '';
+  return new Date(dateString).toLocaleString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const formatRoleName = (role) => {
+  if (!role) return '';
+  // Convert PascalCase/camelCase to words
+  return role
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, str => str.toUpperCase())
+    .trim();
+};
+
 onMounted(async () => {
   const eventId = route.params.eventId;
   const magicCode = route.query.code;
@@ -948,6 +1110,20 @@ watch(isAuthenticated, (authenticated) => {
     startLocationTracking();
   } else {
     stopLocationTracking();
+  }
+});
+
+// Watch for URL query changes (handles pasting a new login link while already logged in)
+watch(() => route.query.code, async (newCode) => {
+  if (newCode && isAuthenticated.value) {
+    // A new magic code was added to the URL while already authenticated
+    // Re-authenticate with the new code (switching users)
+    loading.value = true;
+    try {
+      await authenticateWithMagicCode(route.params.eventId, newCode);
+    } finally {
+      loading.value = false;
+    }
   }
 });
 
@@ -1069,6 +1245,40 @@ onUnmounted(() => {
 .contact-role {
   font-weight: 400;
   color: #666;
+}
+
+.contact-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.primary-badge {
+  color: #ffc107;
+  font-size: 0.9rem;
+}
+
+.contact-role-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  background: #e9ecef;
+  color: #495057;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.contact-notes-text {
+  font-size: 0.85rem;
+  color: #555;
+  font-style: italic;
+  margin-top: 0.25rem;
+}
+
+.primary-contact {
+  border-left: 3px solid #ffc107;
+  background: #fffef8;
 }
 
 .contact-actions {
@@ -1336,6 +1546,9 @@ onUnmounted(() => {
   font-size: 0.85rem;
   color: #667eea;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .completion-info {
@@ -1437,6 +1650,18 @@ onUnmounted(() => {
   gap: 0.5rem;
 }
 
+.section-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #667eea;
+}
+
+.section-icon :deep(svg) {
+  width: 18px;
+  height: 18px;
+}
+
 .accordion-icon {
   font-size: 1.5rem;
   font-weight: 300;
@@ -1456,6 +1681,127 @@ onUnmounted(() => {
   height: 350px;
   border-radius: 0 0 12px 12px;
   margin: 0 -1.5rem -1.5rem;
+}
+
+/* Nested checkpoint accordion styles */
+.assignments-accordion-content {
+  padding: 0.5rem;
+}
+
+.checkpoint-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.checkpoint-accordion-section {
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.checkpoint-accordion-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 1rem 1.25rem;
+  background: #f8f9fa;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #333;
+  transition: background 0.2s;
+  gap: 0.5rem;
+}
+
+.checkpoint-accordion-header:hover {
+  background: #f0f2f5;
+}
+
+.checkpoint-accordion-header.active {
+  background: #e8ecf4;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.checkpoint-accordion-header.checked-in {
+  background: #f1f8f4;
+}
+
+.checkpoint-accordion-header.checked-in.active {
+  background: #e8f5e9;
+}
+
+.checkpoint-header-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.checkpoint-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.checkpoint-check-icon {
+  color: #4caf50;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.checkpoint-name {
+  color: #333;
+}
+
+.checkpoint-time-badge {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #667eea;
+  background: #e8ecf4;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.checkpoint-accordion-header.checked-in .checkpoint-time-badge {
+  background: #d4edda;
+  color: #28a745;
+}
+
+.checkpoint-description-preview {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.checkpoint-accordion-content {
+  padding: 1rem 1.25rem;
+  background: white;
+}
+
+.checkpoint-area-contacts {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  background: #f5f7fa;
+  border-radius: 8px;
+}
+
+.checkpoint-area-contacts .contact-list {
+  margin-top: 0.5rem;
+}
+
+.checkpoint-area-contacts .contact-item {
+  background: white;
 }
 
 /* Assignment list styles */
@@ -1580,6 +1926,57 @@ onUnmounted(() => {
   color: #555;
 }
 
+/* Event details styles */
+.event-details {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.event-detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.event-description {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.detail-label {
+  font-size: 0.85rem;
+  color: #666;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.detail-value {
+  font-size: 1rem;
+  color: #333;
+  margin: 0;
+}
+
+.event-description .detail-value {
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+/* Mini-map in checkpoint cards */
+.checkpoint-mini-map {
+  margin-top: 1rem;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e0e0e0;
+}
+
+.checkpoint-mini-map :deep(.map-container) {
+  height: 200px;
+  min-height: 200px;
+}
+
 @media (max-width: 768px) {
   .header {
     flex-direction: column;
@@ -1630,6 +2027,22 @@ onUnmounted(() => {
 
   .accordion-content {
     padding: 1rem;
+  }
+
+  .assignments-accordion-content {
+    padding: 0.25rem;
+  }
+
+  .checkpoint-accordion-header {
+    padding: 0.75rem 1rem;
+  }
+
+  .checkpoint-accordion-content {
+    padding: 0.75rem 1rem;
+  }
+
+  .checkpoint-area-contacts {
+    padding: 0.5rem;
   }
 
   .map-content :deep(.map-container) {

@@ -6,11 +6,11 @@
     @close="handleClose"
   >
     <div class="marshal-selector-section">
-      <h3>Select marshal</h3>
+      <h3>Select {{ termsLower.person }}</h3>
       <div class="form-group">
-        <label>Marshal *</label>
+        <label>{{ terms.person }} *</label>
         <select v-model="selectedMarshalId" class="form-input">
-          <option value="">Choose a marshal...</option>
+          <option value="">Choose a {{ termsLower.person }}...</option>
           <option
             v-for="marshal in marshals"
             :key="marshal.id"
@@ -56,6 +56,9 @@
 <script setup>
 import { ref, defineProps, defineEmits, watch } from 'vue';
 import BaseModal from '../../BaseModal.vue';
+import { useTerminology } from '../../../composables/useTerminology';
+
+const { terms, termsLower } = useTerminology();
 
 const props = defineProps({
   show: {

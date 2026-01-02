@@ -44,7 +44,7 @@
           <span class="created-info">
             Created by {{ note.createdByName || 'Unknown' }} · {{ formatRelativeTime(note.createdAt) }}
           </span>
-          <span v-if="note.matchedScope" class="scope-info">
+          <span v-if="note.matchedScope && showScope" class="scope-info">
             {{ note.matchedScope }}
           </span>
         </div>
@@ -92,6 +92,11 @@ const props = defineProps({
   assignments: {
     type: Array,
     default: () => [],
+  },
+  // Whether to show the scope info (admin mode shows it, marshal mode hides it)
+  showScope: {
+    type: Boolean,
+    default: true,
   },
 });
 

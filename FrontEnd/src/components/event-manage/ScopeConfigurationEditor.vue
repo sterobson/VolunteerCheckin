@@ -43,14 +43,14 @@
                 :checked="isAllMarshalsSelected()"
                 @change="toggleAllMarshals"
               />
-              <span><strong>Everyone at the event</strong> (all current and future people)</span>
+              <span><strong>Everyone at the event</strong> (all current and future {{ termsLower.people }})</span>
             </label>
 
             <div v-if="!isAllMarshalsSelected()" class="specific-selection">
               <input
                 v-model="marshalSearch"
                 type="text"
-                placeholder="Search people..."
+                :placeholder="`Search ${termsLower.people}...`"
                 class="search-input"
               />
               <div class="checkbox-group scrollable">
@@ -78,7 +78,7 @@
                 :checked="isAllAreasSelected()"
                 @change="toggleAllAreas"
               />
-              <span><strong>All areas</strong> (includes future areas)</span>
+              <span><strong>All {{ termsLower.areas }}</strong> (includes future {{ termsLower.areas }})</span>
             </label>
 
             <div v-if="!isAllAreasSelected()" class="specific-selection">
@@ -104,14 +104,14 @@
                 :checked="isAllCheckpointsSelected()"
                 @change="toggleAllCheckpoints"
               />
-              <span><strong>All checkpoints</strong> (includes future checkpoints)</span>
+              <span><strong>All {{ termsLower.checkpoints }}</strong> (includes future {{ termsLower.checkpoints }})</span>
             </label>
 
             <div v-if="!isAllCheckpointsSelected()" class="specific-selection">
               <input
                 v-model="checkpointSearch"
                 type="text"
-                placeholder="Search checkpoints..."
+                :placeholder="`Search ${termsLower.checkpoints}...`"
                 class="search-input"
               />
               <div class="checkbox-group scrollable">
@@ -148,6 +148,9 @@
 <script setup>
 import { ref, computed, watch, defineProps, defineEmits } from 'vue';
 import { alphanumericCompare } from '../../utils/sortUtils';
+import { useTerminology } from '../../composables/useTerminology';
+
+const { terms, termsLower } = useTerminology();
 
 const props = defineProps({
   modelValue: {
@@ -182,16 +185,16 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'user-changed']);
 
-// Scope types with labels (in display order)
-const scopeTypes = [
-  { scope: 'SpecificPeople', label: 'Specific people' },
-  { scope: 'EveryoneAtCheckpoints', label: 'Every person at specified checkpoints' },
-  { scope: 'OnePerCheckpoint', label: 'One person at each specified checkpoint' },
-  { scope: 'OnePerArea', label: 'One person in specified areas' },
-  { scope: 'EveryoneInAreas', label: 'Everyone in specified areas' },
-  { scope: 'EveryAreaLead', label: 'Every area lead at specified areas' },
-  { scope: 'OneLeadPerArea', label: 'One lead per specified area' },
-];
+// Scope types with labels (in display order) - computed to use terminology
+const scopeTypes = computed(() => [
+  { scope: 'SpecificPeople', label: `Specific ${termsLower.value.people}` },
+  { scope: 'EveryoneAtCheckpoints', label: `Every ${termsLower.value.person} at specified ${termsLower.value.checkpoints}` },
+  { scope: 'OnePerCheckpoint', label: `One ${termsLower.value.person} at each specified ${termsLower.value.checkpoint}` },
+  { scope: 'OnePerArea', label: `One ${termsLower.value.person} in specified ${termsLower.value.areas}` },
+  { scope: 'EveryoneInAreas', label: `Everyone in specified ${termsLower.value.areas}` },
+  { scope: 'EveryAreaLead', label: `Every ${termsLower.value.area} lead at specified ${termsLower.value.areas}` },
+  { scope: 'OneLeadPerArea', label: `One lead per specified ${termsLower.value.area}` },
+]);
 
 // Local state for each scope type
 const scopeStates = ref({
@@ -215,7 +218,7 @@ let isSyncingFromParent = false;
 
 // Filter out excluded scopes
 const availableScopeTypes = computed(() => {
-  return scopeTypes.filter(st => !props.excludeScopes.includes(st.scope));
+  return scopeTypes.value.filter(st => !props.excludeScopes.includes(st.scope));
 });
 
 // Computed properties for collapsible scope list
@@ -346,19 +349,19 @@ const needsMarshalSelection = (scope) => {
 };
 
 const getScopeTypeLabel = (scope) => {
-  const type = scopeTypes.find(t => t.scope === scope);
+  const type = scopeTypes.value.find(t => t.scope === scope);
   return type ? type.label : scope;
 };
 
 const getScopeHelp = (scope) => {
   const helpText = {
-    'SpecificPeople': 'Select "Everyone at the event" or choose specific people who must complete this (personal completion)',
-    'EveryoneAtCheckpoints': 'Every person at the selected checkpoints must complete this (personal completion)',
-    'OnePerCheckpoint': 'One completion needed at each selected checkpoint (shared completion)',
-    'OnePerArea': 'One completion needed in each selected area (shared completion)',
-    'EveryoneInAreas': 'Every person in the selected areas must complete this (personal completion)',
-    'EveryAreaLead': 'Every area lead at the selected areas must complete this individually (personal completion)',
-    'OneLeadPerArea': 'One completion per area, only area leads can complete (shared among leads)',
+    'SpecificPeople': `Select "Everyone at the event" or choose specific ${termsLower.value.people} who must complete this (personal completion)`,
+    'EveryoneAtCheckpoints': `Every ${termsLower.value.person} at the selected ${termsLower.value.checkpoints} must complete this (personal completion)`,
+    'OnePerCheckpoint': `One completion needed at each selected ${termsLower.value.checkpoint} (shared completion)`,
+    'OnePerArea': `One completion needed in each selected ${termsLower.value.area} (shared completion)`,
+    'EveryoneInAreas': `Every ${termsLower.value.person} in the selected ${termsLower.value.areas} must complete this (personal completion)`,
+    'EveryAreaLead': `Every ${termsLower.value.area} lead at the selected ${termsLower.value.areas} must complete this individually (personal completion)`,
+    'OneLeadPerArea': `One completion per ${termsLower.value.area}, only ${termsLower.value.area} leads can complete (shared among leads)`,
   };
   return helpText[scope] || '';
 };
@@ -378,18 +381,18 @@ const getScopePill = (scope) => {
 
   if (needsAreaSelection(scope)) {
     if (ids.includes('ALL_AREAS')) {
-      return 'All areas';
+      return `All ${termsLower.value.areas}`;
     }
     const count = ids.length;
-    return count > 0 ? `${count} area${count !== 1 ? 's' : ''}` : 'Select areas...';
+    return count > 0 ? `${count} ${count !== 1 ? termsLower.value.areas : termsLower.value.area}` : `Select ${termsLower.value.areas}...`;
   }
 
   if (needsCheckpointSelection(scope)) {
     if (ids.includes('ALL_CHECKPOINTS')) {
-      return 'All checkpoints';
+      return `All ${termsLower.value.checkpoints}`;
     }
     const count = ids.length;
-    return count > 0 ? `${count} checkpoint${count !== 1 ? 's' : ''}` : 'Select checkpoints...';
+    return count > 0 ? `${count} ${count !== 1 ? termsLower.value.checkpoints : termsLower.value.checkpoint}` : `Select ${termsLower.value.checkpoints}...`;
   }
 
   if (needsMarshalSelection(scope)) {
@@ -397,7 +400,7 @@ const getScopePill = (scope) => {
       return 'Everyone';
     }
     const count = ids.length;
-    return count > 0 ? `${count} ${count !== 1 ? 'people' : 'person'}` : 'Select people...';
+    return count > 0 ? `${count} ${count !== 1 ? termsLower.value.people : termsLower.value.person}` : `Select ${termsLower.value.people}...`;
   }
 
   return 'Configured';

@@ -151,4 +151,18 @@ export const notesApi = {
   getMyNotes: (eventId) => api.get(`/events/${eventId}/my-notes`),
 };
 
+// Contacts API
+export const contactsApi = {
+  // Admin endpoints
+  create: (eventId, data) => api.post(`/events/${eventId}/contacts`, data),
+  getByEvent: (eventId) => api.get(`/events/${eventId}/contacts`),
+  getById: (eventId, contactId) => api.get(`/events/${eventId}/contacts/${contactId}`),
+  update: (eventId, contactId, data) => api.put(`/events/${eventId}/contacts/${contactId}`, data),
+  delete: (eventId, contactId) => api.delete(`/events/${eventId}/contacts/${contactId}`),
+  getRoles: (eventId) => api.get(`/events/${eventId}/contact-roles`),
+  // Marshal endpoints
+  getMarshalContacts: (eventId, marshalId) => api.get(`/events/${eventId}/marshals/${marshalId}/contacts`),
+  getMyContacts: (eventId) => api.get(`/events/${eventId}/my-contacts`),
+};
+
 export default api;

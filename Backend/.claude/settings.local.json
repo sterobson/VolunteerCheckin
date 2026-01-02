@@ -21,7 +21,10 @@
       "Bash(dotnet tool list:*)",
       "Bash(findstr:*)",
       "Bash(del \"C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\Backend\\\\QueryAdmins.csx\")",
-      "Bash(del \"C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\Backend\\\\VolunteerCheckin.Functions.Tests\\\\AdminQueryTests.cs\")"
+      "Bash(del \"C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\Backend\\\\VolunteerCheckin.Functions.Tests\\\\AdminQueryTests.cs\")",
+      "Bash(where:*)",
+      "Bash(python -c:*)",
+      "Bash(dir \"C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\Backend\\\\Documentation\\\\schema.png\")"
     ]
   }
 }

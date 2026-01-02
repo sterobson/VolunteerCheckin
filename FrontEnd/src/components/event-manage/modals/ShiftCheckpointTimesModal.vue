@@ -1,13 +1,13 @@
 <template>
   <BaseModal
     :show="show"
-    title="Shift Checkpoint Times?"
+    :title="`Shift ${terms.checkpoint} Times?`"
     size="medium"
     @close="handleCancel"
   >
     <div class="shift-times-content">
       <p class="info-text">
-        You've changed the event date/time. Some checkpoints have custom times set.
+        You've changed the event date/time. Some {{ termsLower.checkpoints }} have custom times set.
       </p>
 
       <div class="time-delta-info">
@@ -24,7 +24,7 @@
       </div>
 
       <p class="affected-checkpoints">
-        <strong>{{ affectedCheckpointsCount }} checkpoint(s)</strong> with custom times will be shifted by the same amount.
+        <strong>{{ affectedCheckpointsCount }} {{ affectedCheckpointsCount === 1 ? termsLower.checkpoint : termsLower.checkpoints }}</strong> with custom times will be shifted by the same amount.
       </p>
 
       <div class="option-selection">
@@ -36,7 +36,7 @@
             name="shift-option"
           />
           <div>
-            <strong>Shift all checkpoint times</strong>
+            <strong>Shift all {{ termsLower.checkpoint }} times</strong>
             <small>Recommended: Maintains relative timing</small>
           </div>
         </label>
@@ -49,8 +49,8 @@
             name="shift-option"
           />
           <div>
-            <strong>Keep checkpoint times unchanged</strong>
-            <small>Checkpoint times will stay at their current values</small>
+            <strong>Keep {{ termsLower.checkpoint }} times unchanged</strong>
+            <small>{{ terms.checkpoint }} times will stay at their current values</small>
           </div>
         </label>
       </div>
@@ -70,6 +70,9 @@
 <script setup>
 import { ref, computed, defineProps, defineEmits } from 'vue';
 import BaseModal from '../../BaseModal.vue';
+import { useTerminology } from '../../../composables/useTerminology';
+
+const { terms, termsLower } = useTerminology();
 
 const props = defineProps({
   show: {

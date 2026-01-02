@@ -1,0 +1,115 @@
+erDiagram
+    Event ||--o{ Marshal : has
+    Event ||--o{ Location : has
+    Event ||--o{ Area : has
+    Event ||--o{ Assignment : has
+    Event ||--o{ ChecklistItem : has
+    Event ||--o{ ChecklistCompletion : has
+    Event ||--o{ Note : has
+    Event ||--o{ EventContact : has
+    Event ||--o{ EventRole : has
+
+    Person ||--o{ Marshal : "participates as"
+    Person ||--o{ EventRole : "has roles"
+    Person ||--o{ AuthToken : "authenticates"
+    Person ||--o{ AuthSession : "has sessions"
+    Person ||--o| PersonEmailIndex : "indexed by"
+
+    Marshal ||--o{ Assignment : "assigned to"
+    Marshal ||--o{ ChecklistCompletion : completes
+    Marshal ||--o| EventContact : "linked to"
+
+    Location ||--o{ Assignment : has
+    Location }o--o{ Area : "belongs to"
+    Area }o--o{ Marshal : "led by"
+
+    ChecklistItem ||--o{ ChecklistCompletion : "completed by"
+
+    AuthSession }o--o| Event : "locked to"
+    AuthSession }o--o| Marshal : "for marshal"
+
+    Event {
+        string EventId PK
+        string Name
+        datetime EventDate
+    }
+    Person {
+        string PersonId PK
+        string Email UK
+        string Name
+        bool IsSystemAdmin
+    }
+    Marshal {
+        string MarshalId PK
+        string EventId FK
+        string PersonId FK
+        string MagicCode UK
+        string Name
+    }
+    Location {
+        string LocationId PK
+        string EventId FK
+        string Name
+        double Latitude
+        double Longitude
+    }
+    Area {
+        string AreaId PK
+        string EventId FK
+        string Name
+        string AreaLeadMarshalIdsJson
+    }
+    Assignment {
+        string AssignmentId PK
+        string EventId FK
+        string LocationId FK
+        string MarshalId FK
+        bool IsCheckedIn
+    }
+    ChecklistItem {
+        string ItemId PK
+        string EventId FK
+        string Text
+        string ScopeConfigurationsJson
+    }
+    ChecklistCompletion {
+        string CompletionId PK
+        string EventId FK
+        string ChecklistItemId FK
+        string ContextOwnerMarshalId FK
+    }
+    Note {
+        string NoteId PK
+        string EventId FK
+        string Title
+        string ScopeConfigurationsJson
+    }
+    EventContact {
+        string ContactId PK
+        string EventId FK
+        string MarshalId FK
+        string Role
+        string Name
+        string Phone
+    }
+    EventRole {
+        string RoleId PK
+        string PersonId FK
+        string EventId FK
+        string Role
+    }
+    AuthToken {
+        string TokenHash PK
+        string PersonId FK
+        datetime ExpiresAt
+    }
+    AuthSession {
+        string SessionTokenHash PK
+        string PersonId FK
+        string EventId FK
+        string MarshalId FK
+    }
+    PersonEmailIndex {
+        string Email PK
+        string PersonId FK
+    }

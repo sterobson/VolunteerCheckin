@@ -1,0 +1,250 @@
+erDiagram
+    %% Core Entities
+    Event {
+        string PartitionKey PK "EVENT"
+        string RowKey PK "EventId"
+        string Name
+        string Description
+        datetime EventDate
+        string TimeZoneId
+        string AdminEmail
+        string EmergencyContactsJson
+        string GpxRouteJson
+        bool IsActive
+        string PeopleTerm
+        string CheckpointTerm
+        string AreaTerm
+        string ChecklistTerm
+    }
+
+    Person {
+        string PartitionKey PK "PERSON"
+        string RowKey PK "PersonId"
+        string PersonId
+        string Email UK
+        string Name
+        string Phone
+        bool IsSystemAdmin
+        datetime CreatedAt
+    }
+
+    PersonEmailIndex {
+        string PartitionKey PK "EMAIL_INDEX"
+        string RowKey PK "Email"
+        string PersonId FK
+    }
+
+    %% Event-Scoped Entities
+    Marshal {
+        string PartitionKey PK "EventId"
+        string RowKey PK "MarshalId"
+        string EventId FK
+        string MarshalId
+        string PersonId FK
+        string MagicCode UK
+        string Name
+        string Email
+        string PhoneNumber
+        string Notes
+    }
+
+    Location {
+        string PartitionKey PK "EventId"
+        string RowKey PK "LocationId"
+        string EventId FK
+        string Name
+        string Description
+        double Latitude
+        double Longitude
+        int RequiredMarshals
+        int CheckedInCount
+        string What3Words
+        datetime StartTime
+        datetime EndTime
+        string AreaIdsJson "FK[] to Area"
+    }
+
+    Area {
+        string PartitionKey PK "EventId"
+        string RowKey PK "AreaId"
+        string EventId FK
+        string Name
+        string Description
+        string Color
+        string ContactsJson
+        string PolygonJson
+        bool IsDefault
+        int DisplayOrder
+        string AreaLeadMarshalIdsJson "FK[] to Marshal"
+    }
+
+    Assignment {
+        string PartitionKey PK "EventId"
+        string RowKey PK "AssignmentId"
+        string EventId FK
+        string LocationId FK
+        string MarshalId FK
+        string MarshalName
+        bool IsCheckedIn
+        datetime CheckInTime
+        double CheckInLatitude
+        double CheckInLongitude
+        string CheckInMethod
+    }
+
+    %% Checklist Entities
+    ChecklistItem {
+        string PartitionKey PK "EventId"
+        string RowKey PK "ItemId"
+        string EventId FK
+        string ItemId
+        string Text
+        string ScopeConfigurationsJson
+        int DisplayOrder
+        bool IsRequired
+        datetime VisibleFrom
+        datetime VisibleUntil
+        datetime MustCompleteBy
+        string CreatedByAdminEmail
+    }
+
+    ChecklistCompletion {
+        string PartitionKey PK "EventId"
+        string RowKey PK "ItemId_CompletionId"
+        string EventId FK
+        string ChecklistItemId FK
+        string CompletionContextType
+        string CompletionContextId
+        string ContextOwnerMarshalId FK
+        string ContextOwnerMarshalName
+        string ActorType
+        string ActorId
+        string ActorName
+        datetime CompletedAt
+        bool IsDeleted
+    }
+
+    %% Notes and Contacts
+    Note {
+        string PartitionKey PK "EventId"
+        string RowKey PK "NoteId"
+        string EventId FK
+        string NoteId
+        string Title
+        string Content
+        string ScopeConfigurationsJson
+        int DisplayOrder
+        string Priority
+        string Category
+        bool IsPinned
+        string CreatedByPersonId FK
+        string CreatedByName
+        bool IsDeleted
+    }
+
+    EventContact {
+        string PartitionKey PK "EventId"
+        string RowKey PK "ContactId"
+        string EventId FK
+        string ContactId
+        string Role
+        string Name
+        string Phone
+        string Email
+        string Notes
+        string MarshalId FK "optional"
+        string ScopeConfigurationsJson
+        int DisplayOrder
+        bool IsPrimary
+        string CreatedByPersonId FK
+        bool IsDeleted
+    }
+
+    %% Auth and Roles
+    EventRole {
+        string PartitionKey PK "PersonId"
+        string RowKey PK "EventId_RoleId"
+        string PersonId FK
+        string EventId FK
+        string Role
+        string AreaIdsJson "FK[] to Area"
+        string GrantedByPersonId FK
+        datetime GrantedAt
+    }
+
+    AuthToken {
+        string PartitionKey PK "AUTHTOKEN"
+        string RowKey PK "TokenHash"
+        string TokenId
+        string TokenHash
+        string PersonId FK
+        datetime CreatedAt
+        datetime ExpiresAt
+        datetime UsedAt
+        string RequestIpAddress
+    }
+
+    AuthSession {
+        string PartitionKey PK "SESSION"
+        string RowKey PK "SessionTokenHash"
+        string SessionId
+        string SessionTokenHash
+        string PersonId FK
+        string EventId FK "optional"
+        string MarshalId FK "optional"
+        string AuthMethod
+        datetime CreatedAt
+        datetime ExpiresAt
+        datetime LastAccessedAt
+        bool IsRevoked
+    }
+
+    %% Legacy Tables
+    AdminUser {
+        string PartitionKey PK "ADMIN"
+        string RowKey PK "Email"
+        string Email
+        string Name
+    }
+
+    UserEventMapping {
+        string PartitionKey PK "EventId"
+        string RowKey PK "UserEmail"
+        string EventId FK
+        string UserEmail
+        string Role
+    }
+
+    %% Relationships
+    Person ||--o{ PersonEmailIndex : "indexed by"
+    Person ||--o{ Marshal : "participates as"
+    Person ||--o{ EventRole : "has roles"
+    Person ||--o{ AuthToken : "authenticates with"
+    Person ||--o{ AuthSession : "has sessions"
+    Person ||--o{ Note : "creates"
+    Person ||--o{ EventContact : "creates"
+
+    Event ||--o{ Marshal : "has"
+    Event ||--o{ Location : "has"
+    Event ||--o{ Area : "has"
+    Event ||--o{ Assignment : "has"
+    Event ||--o{ ChecklistItem : "has"
+    Event ||--o{ ChecklistCompletion : "has"
+    Event ||--o{ Note : "has"
+    Event ||--o{ EventContact : "has"
+    Event ||--o{ EventRole : "has"
+    Event ||--o{ UserEventMapping : "has"
+
+    Marshal ||--o{ Assignment : "assigned to"
+    Marshal ||--o{ ChecklistCompletion : "completes"
+    Marshal ||--o| EventContact : "linked to"
+
+    Location ||--o{ Assignment : "has"
+    Location }o--o{ Area : "belongs to"
+
+    Area }o--o{ Marshal : "led by"
+
+    ChecklistItem ||--o{ ChecklistCompletion : "completed by"
+
+    AuthSession }o--o| Event : "locked to"
+    AuthSession }o--o| Marshal : "for marshal"

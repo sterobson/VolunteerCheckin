@@ -1,14 +1,14 @@
 <template>
   <BaseModal
     :show="show"
-    title="Import marshals from CSV"
+    :title="`Import ${termsLower.people} from CSV`"
     size="medium"
     :confirm-on-close="true"
     :is-dirty="isDirty"
     @close="handleClose"
   >
     <!-- Instruction text -->
-    <p class="instruction">Upload a CSV file with columns: Name, Email (optional), Phone (optional), Checkpoint (optional)</p>
+    <p class="instruction">Upload a CSV file with columns: Name, Email (optional), Phone (optional), {{ terms.checkpoint }} (optional)</p>
 
     <!-- CSV Example -->
     <div class="csv-example">
@@ -33,7 +33,7 @@ Jane Smith,jane@example.com,555-5678,Checkpoint 2</pre>
 
       <div v-if="error" class="error">{{ error }}</div>
       <div v-if="result" class="import-result">
-        <p>Imported {{ result.marshalsCreated }} marshals and {{ result.assignmentsCreated }} assignments</p>
+        <p>Imported {{ result.marshalsCreated }} {{ termsLower.people }} and {{ result.assignmentsCreated }} assignments</p>
         <div v-if="result.errors && result.errors.length > 0" class="import-errors">
           <strong>Errors:</strong>
           <ul>
@@ -49,7 +49,7 @@ Jane Smith,jane@example.com,555-5678,Checkpoint 2</pre>
         Cancel
       </button>
       <button type="button" @click="handleSubmit" class="btn btn-primary" :disabled="importing">
-        {{ importing ? 'Importing...' : 'Import marshals' }}
+        {{ importing ? 'Importing...' : `Import ${termsLower.people}` }}
       </button>
     </template>
   </BaseModal>
@@ -58,6 +58,9 @@ Jane Smith,jane@example.com,555-5678,Checkpoint 2</pre>
 <script setup>
 import { ref, defineProps, defineEmits, watch } from 'vue';
 import BaseModal from '../../BaseModal.vue';
+import { useTerminology } from '../../../composables/useTerminology';
+
+const { terms, termsLower } = useTerminology();
 
 const props = defineProps({
   show: {

@@ -397,6 +397,144 @@ A marshal sees a note if ANY of the scope configurations match:
 
 ---
 
+## Inline Creation with Marshals and Locations
+
+When creating a new marshal or location, you can optionally include pending notes that will be automatically created and scoped to that specific entity. This is a convenience feature that allows admins to set up entity-specific information during entity creation.
+
+### Creating Notes with a Marshal
+
+When creating a new marshal, include the `pendingNewNotes` field:
+
+```http
+POST /api/events/{eventId}/marshals
+Content-Type: application/json
+Authorization: Bearer {sessionToken}
+```
+
+**Request Body**:
+```json
+{
+  "eventId": "event-123",
+  "name": "John Smith",
+  "email": "john@example.com",
+  "phoneNumber": "555-1234",
+  "notes": "Experienced marshal",
+  "pendingNewNotes": [
+    {
+      "title": "Your Equipment",
+      "content": "You have been assigned radio #42. Please return it at the end of the event."
+    },
+    {
+      "title": "Special Assignment",
+      "content": "You will be relieving checkpoint 3 marshals during their break at 2 PM."
+    }
+  ]
+}
+```
+
+**What happens**:
+1. Marshal "John Smith" is created
+2. Two notes are created with `SpecificPeople` scope targeting this marshal's ID
+3. Only John Smith will see these notes in their notes list
+4. Notes are created with default settings (Normal priority, not pinned)
+
+**Created notes**:
+```json
+[
+  {
+    "title": "Your Equipment",
+    "content": "You have been assigned radio #42. Please return it at the end of the event.",
+    "scopeConfigurations": [
+      {
+        "scope": "SpecificPeople",
+        "itemType": "Marshal",
+        "ids": ["<new-marshal-id>"]
+      }
+    ],
+    "priority": "Normal",
+    "isPinned": false
+  }
+]
+```
+
+### Creating Notes with a Location
+
+When creating a new location/checkpoint, include the `pendingNewNotes` field:
+
+```http
+POST /api/events/{eventId}/locations
+Content-Type: application/json
+Authorization: Bearer {sessionToken}
+```
+
+**Request Body**:
+```json
+{
+  "eventId": "event-123",
+  "name": "Checkpoint 5",
+  "description": "Main intersection",
+  "latitude": 51.5074,
+  "longitude": -0.1278,
+  "requiredMarshals": 2,
+  "pendingNewNotes": [
+    {
+      "title": "Local Hazards",
+      "content": "Watch for loose gravel near the bend. Warn cyclists to slow down."
+    },
+    {
+      "title": "Nearby Facilities",
+      "content": "Public toilets are located 100m south. Water fountain at the park entrance."
+    }
+  ]
+}
+```
+
+**What happens**:
+1. Location "Checkpoint 5" is created
+2. Two notes are created with `EveryoneAtCheckpoints` scope targeting this location's ID
+3. All marshals assigned to Checkpoint 5 will see these notes
+4. Notes are sorted by their position in the array (displayOrder)
+
+**Created notes**:
+```json
+[
+  {
+    "title": "Local Hazards",
+    "content": "Watch for loose gravel near the bend. Warn cyclists to slow down.",
+    "scopeConfigurations": [
+      {
+        "scope": "EveryoneAtCheckpoints",
+        "itemType": "Checkpoint",
+        "ids": ["<new-location-id>"]
+      }
+    ],
+    "priority": "Normal",
+    "isPinned": false
+  }
+]
+```
+
+### Use Cases
+
+**Marshal-specific notes**:
+- Equipment assignments for this person
+- Special responsibilities or schedule changes
+- Personal reminders or instructions
+
+**Checkpoint-specific notes**:
+- Location-specific hazards or conditions
+- Nearby facilities information
+- Special procedures for this checkpoint
+
+### Notes
+
+- Pending notes with empty title or content are ignored
+- Content is sanitized for security (HTML/scripts removed)
+- Notes are created with `displayOrder` based on their position in the array
+- To create notes with custom priority, pinning, or categories, use the standard Create Note endpoint after entity creation
+
+---
+
 ## Common Workflows
 
 ### Workflow 1: Admin Creates Event-Wide Announcement

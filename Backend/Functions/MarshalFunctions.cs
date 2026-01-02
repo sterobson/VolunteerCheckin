@@ -19,6 +19,8 @@ public class MarshalFunctions
     private readonly ILocationRepository _locationRepository;
     private readonly IAssignmentRepository _assignmentRepository;
     private readonly IEventRepository _eventRepository;
+    private readonly IChecklistItemRepository _checklistItemRepository;
+    private readonly INoteRepository _noteRepository;
     private readonly CsvParserService _csvParser;
     private readonly ClaimsService _claimsService;
     private readonly ContactPermissionService _contactPermissionService;
@@ -30,6 +32,8 @@ public class MarshalFunctions
         ILocationRepository locationRepository,
         IAssignmentRepository assignmentRepository,
         IEventRepository eventRepository,
+        IChecklistItemRepository checklistItemRepository,
+        INoteRepository noteRepository,
         CsvParserService csvParser,
         ClaimsService claimsService,
         ContactPermissionService contactPermissionService,
@@ -40,6 +44,8 @@ public class MarshalFunctions
         _locationRepository = locationRepository;
         _assignmentRepository = assignmentRepository;
         _eventRepository = eventRepository;
+        _checklistItemRepository = checklistItemRepository;
+        _noteRepository = noteRepository;
         _csvParser = csvParser;
         _claimsService = claimsService;
         _contactPermissionService = contactPermissionService;
@@ -115,6 +121,80 @@ public class MarshalFunctions
             };
 
             await _marshalRepository.AddAsync(marshalEntity);
+
+            // Create pending checklist items scoped to this marshal
+            if (request.PendingNewChecklistItems != null && request.PendingNewChecklistItems.Count > 0)
+            {
+                string adminEmail = req.Headers[Constants.AdminEmailHeader].ToString();
+                int displayOrder = 0;
+
+                foreach (PendingChecklistItem pendingItem in request.PendingNewChecklistItems)
+                {
+                    if (string.IsNullOrWhiteSpace(pendingItem.Text)) continue;
+
+                    string itemId = Guid.NewGuid().ToString();
+                    List<ScopeConfiguration> scopeConfig =
+                    [
+                        new ScopeConfiguration { Scope = "SpecificPeople", ItemType = "Marshal", Ids = [marshalId] }
+                    ];
+
+                    ChecklistItemEntity checklistEntity = new()
+                    {
+                        PartitionKey = request.EventId,
+                        RowKey = itemId,
+                        EventId = request.EventId,
+                        ItemId = itemId,
+                        Text = InputSanitizer.SanitizeDescription(pendingItem.Text),
+                        ScopeConfigurationsJson = JsonSerializer.Serialize(scopeConfig),
+                        DisplayOrder = displayOrder++,
+                        IsRequired = false,
+                        CreatedByAdminEmail = adminEmail,
+                        CreatedDate = DateTime.UtcNow
+                    };
+
+                    await _checklistItemRepository.AddAsync(checklistEntity);
+                    _logger.LogInformation($"Checklist item {itemId} created for new marshal {marshalId}");
+                }
+            }
+
+            // Create pending notes scoped to this marshal
+            if (request.PendingNewNotes != null && request.PendingNewNotes.Count > 0)
+            {
+                int displayOrder = 0;
+
+                foreach (PendingNote pendingNote in request.PendingNewNotes)
+                {
+                    if (string.IsNullOrWhiteSpace(pendingNote.Title) && string.IsNullOrWhiteSpace(pendingNote.Content)) continue;
+
+                    string noteId = Guid.NewGuid().ToString();
+                    List<ScopeConfiguration> scopeConfig =
+                    [
+                        new ScopeConfiguration { Scope = "SpecificPeople", ItemType = "Marshal", Ids = [marshalId] }
+                    ];
+
+                    NoteEntity noteEntity = new()
+                    {
+                        PartitionKey = request.EventId,
+                        RowKey = noteId,
+                        EventId = request.EventId,
+                        NoteId = noteId,
+                        Title = InputSanitizer.SanitizeName(pendingNote.Title ?? "Untitled"),
+                        Content = InputSanitizer.SanitizeDescription(pendingNote.Content ?? string.Empty),
+                        ScopeConfigurationsJson = JsonSerializer.Serialize(scopeConfig),
+                        DisplayOrder = displayOrder++,
+                        Priority = Constants.NotePriorityNormal,
+                        Category = string.Empty,
+                        IsPinned = false,
+                        CreatedByPersonId = claims.PersonId ?? string.Empty,
+                        CreatedByName = claims.PersonName ?? "Admin",
+                        CreatedAt = DateTime.UtcNow,
+                        IsDeleted = false
+                    };
+
+                    await _noteRepository.AddAsync(noteEntity);
+                    _logger.LogInformation($"Note {noteId} created for new marshal {marshalId}");
+                }
+            }
 
             MarshalResponse response = new(
                 marshalEntity.MarshalId,
@@ -509,7 +589,7 @@ public class MarshalFunctions
                 }
             }
 
-            string magicLink = $"{baseUrl}/event/{eventId}?code={marshalEntity.MagicCode}";
+            string magicLink = $"{baseUrl}/#/event/{eventId}?code={marshalEntity.MagicCode}";
 
             return new OkObjectResult(new MarshalMagicLinkResponse(
                 marshalEntity.MagicCode,
@@ -594,7 +674,7 @@ public class MarshalFunctions
                 }
             }
 
-            string magicLink = $"{baseUrl}/event/{eventId}?code={marshalEntity.MagicCode}";
+            string magicLink = $"{baseUrl}/#/event/{eventId}?code={marshalEntity.MagicCode}";
 
             // Send the email
             await _emailService.SendMarshalMagicLinkEmailAsync(
@@ -670,6 +750,11 @@ public class MarshalFunctions
             Dictionary<string, MarshalEntity> existingMarshals = existingMarshalsList
                 .ToDictionary(m => m.Name.ToLower(), m => m);
 
+            // Preload all locations for efficient lookup during import
+            IEnumerable<LocationEntity> existingLocationsList = await _locationRepository.GetByEventAsync(eventId);
+            Dictionary<string, LocationEntity> locationCache = existingLocationsList
+                .ToDictionary(l => l.Name.ToLower(), l => l);
+
             int marshalsCreated = 0;
             int assignmentsCreated = 0;
 
@@ -694,7 +779,7 @@ public class MarshalFunctions
                     if (!string.IsNullOrWhiteSpace(row.Checkpoint))
                     {
                         bool assignmentCreated = await CreateAssignmentForCheckpoint(
-                            marshalEntity, row.Checkpoint, eventId, parseResult.Errors);
+                            marshalEntity, row.Checkpoint, eventId, locationCache, parseResult.Errors);
 
                         if (assignmentCreated)
                         {
@@ -776,12 +861,11 @@ public class MarshalFunctions
         MarshalEntity marshalEntity,
         string checkpointName,
         string eventId,
+        Dictionary<string, LocationEntity> locationCache,
         List<string> errors)
     {
-        // Find the location by name
-        LocationEntity? location = await FindLocationByName(checkpointName, eventId);
-
-        if (location == null)
+        // Find the location by name using cached lookup (O(1))
+        if (!locationCache.TryGetValue(checkpointName.ToLower(), out LocationEntity? location))
         {
             errors.Add($"Checkpoint '{checkpointName}' not found for marshal '{marshalEntity.Name}'");
             return false;
@@ -807,18 +891,5 @@ public class MarshalFunctions
 
         await _assignmentRepository.AddAsync(assignmentEntity);
         return true;
-    }
-
-    private async Task<LocationEntity?> FindLocationByName(string locationName, string eventId)
-    {
-        IEnumerable<LocationEntity> locations = await _locationRepository.GetByEventAsync(eventId);
-        foreach (LocationEntity loc in locations)
-        {
-            if (loc.Name.Equals(locationName, StringComparison.OrdinalIgnoreCase))
-            {
-                return loc;
-            }
-        }
-        return null;
     }
 }

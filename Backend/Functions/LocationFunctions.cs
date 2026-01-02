@@ -19,6 +19,8 @@ public class LocationFunctions
     private readonly ILocationRepository _locationRepository;
     private readonly IMarshalRepository _marshalRepository;
     private readonly IAssignmentRepository _assignmentRepository;
+    private readonly IChecklistItemRepository _checklistItemRepository;
+    private readonly INoteRepository _noteRepository;
     private readonly CsvParserService _csvParser;
     private readonly IAreaRepository _areaRepository;
 
@@ -27,6 +29,8 @@ public class LocationFunctions
         ILocationRepository locationRepository,
         IMarshalRepository marshalRepository,
         IAssignmentRepository assignmentRepository,
+        IChecklistItemRepository checklistItemRepository,
+        INoteRepository noteRepository,
         CsvParserService csvParser,
         IAreaRepository areaRepository)
     {
@@ -34,6 +38,8 @@ public class LocationFunctions
         _locationRepository = locationRepository;
         _marshalRepository = marshalRepository;
         _assignmentRepository = assignmentRepository;
+        _checklistItemRepository = checklistItemRepository;
+        _noteRepository = noteRepository;
         _csvParser = csvParser;
         _areaRepository = areaRepository;
     }
@@ -94,6 +100,83 @@ public class LocationFunctions
             };
 
             await _locationRepository.AddAsync(locationEntity);
+
+            string locationId = locationEntity.RowKey;
+
+            // Create pending checklist items scoped to this checkpoint
+            if (request.PendingNewChecklistItems != null && request.PendingNewChecklistItems.Count > 0)
+            {
+                string adminEmail = req.Headers[Constants.AdminEmailHeader].ToString();
+                int displayOrder = 0;
+
+                foreach (PendingChecklistItem pendingItem in request.PendingNewChecklistItems)
+                {
+                    if (string.IsNullOrWhiteSpace(pendingItem.Text)) continue;
+
+                    string itemId = Guid.NewGuid().ToString();
+                    List<ScopeConfiguration> scopeConfig =
+                    [
+                        new ScopeConfiguration { Scope = "EveryoneAtCheckpoints", ItemType = "Checkpoint", Ids = [locationId] }
+                    ];
+
+                    ChecklistItemEntity checklistEntity = new()
+                    {
+                        PartitionKey = request.EventId,
+                        RowKey = itemId,
+                        EventId = request.EventId,
+                        ItemId = itemId,
+                        Text = InputSanitizer.SanitizeDescription(pendingItem.Text),
+                        ScopeConfigurationsJson = JsonSerializer.Serialize(scopeConfig),
+                        DisplayOrder = displayOrder++,
+                        IsRequired = false,
+                        CreatedByAdminEmail = adminEmail,
+                        CreatedDate = DateTime.UtcNow
+                    };
+
+                    await _checklistItemRepository.AddAsync(checklistEntity);
+                    _logger.LogInformation($"Checklist item {itemId} created for new location {locationId}");
+                }
+            }
+
+            // Create pending notes scoped to this checkpoint
+            if (request.PendingNewNotes != null && request.PendingNewNotes.Count > 0)
+            {
+                string adminEmail = req.Headers[Constants.AdminEmailHeader].ToString();
+                int displayOrder = 0;
+
+                foreach (PendingNote pendingNote in request.PendingNewNotes)
+                {
+                    if (string.IsNullOrWhiteSpace(pendingNote.Title) && string.IsNullOrWhiteSpace(pendingNote.Content)) continue;
+
+                    string noteId = Guid.NewGuid().ToString();
+                    List<ScopeConfiguration> scopeConfig =
+                    [
+                        new ScopeConfiguration { Scope = "EveryoneAtCheckpoints", ItemType = "Checkpoint", Ids = [locationId] }
+                    ];
+
+                    NoteEntity noteEntity = new()
+                    {
+                        PartitionKey = request.EventId,
+                        RowKey = noteId,
+                        EventId = request.EventId,
+                        NoteId = noteId,
+                        Title = InputSanitizer.SanitizeName(pendingNote.Title ?? "Untitled"),
+                        Content = InputSanitizer.SanitizeDescription(pendingNote.Content ?? string.Empty),
+                        ScopeConfigurationsJson = JsonSerializer.Serialize(scopeConfig),
+                        DisplayOrder = displayOrder++,
+                        Priority = Constants.NotePriorityNormal,
+                        Category = string.Empty,
+                        IsPinned = false,
+                        CreatedByPersonId = string.Empty,
+                        CreatedByName = !string.IsNullOrEmpty(adminEmail) ? adminEmail : "Admin",
+                        CreatedAt = DateTime.UtcNow,
+                        IsDeleted = false
+                    };
+
+                    await _noteRepository.AddAsync(noteEntity);
+                    _logger.LogInformation($"Note {noteId} created for new location {locationId}");
+                }
+            }
 
             LocationResponse response = locationEntity.ToResponse();
 
@@ -325,6 +408,11 @@ public class LocationFunctions
             Dictionary<string, LocationEntity> existingLocations = existingLocationsList
                 .ToDictionary(l => l.Name.ToLower(), l => l);
 
+            // Preload all marshals for efficient lookup during import
+            IEnumerable<MarshalEntity> existingMarshalsList = await _marshalRepository.GetByEventAsync(eventId);
+            Dictionary<string, MarshalEntity> marshalCache = existingMarshalsList
+                .ToDictionary(m => m.Name.ToLower(), m => m);
+
             // Create or update locations and assignments
             int locationsCreated = 0;
             int locationsUpdated = 0;
@@ -338,13 +426,13 @@ public class LocationFunctions
 
                     if (isUpdate && existing != null)
                     {
-                        int newAssignments = await UpdateExistingLocation(existing, row, eventId);
+                        int newAssignments = await UpdateExistingLocation(existing, row, eventId, marshalCache);
                         assignmentsCreated += newAssignments;
                         locationsUpdated++;
                     }
                     else
                     {
-                        int newAssignments = await CreateNewLocation(row, eventId);
+                        int newAssignments = await CreateNewLocation(row, eventId, marshalCache);
                         assignmentsCreated += newAssignments;
                         locationsCreated++;
                     }
@@ -379,11 +467,11 @@ public class LocationFunctions
         }
     }
 
-    private async Task<string> FindOrCreateMarshal(string eventId, string marshalName)
+    private async Task<string> FindOrCreateMarshal(string eventId, string marshalName, Dictionary<string, MarshalEntity> marshalCache)
     {
-        // Try to find existing marshal by name
-        MarshalEntity? existingMarshal = await _marshalRepository.FindByNameAsync(eventId, marshalName);
-        if (existingMarshal != null)
+        // Try to find existing marshal in cache (O(1) lookup)
+        string normalizedName = marshalName.ToLower();
+        if (marshalCache.TryGetValue(normalizedName, out MarshalEntity? existingMarshal))
         {
             return existingMarshal.MarshalId;
         }
@@ -399,6 +487,10 @@ public class LocationFunctions
             Name = marshalName
         };
         await _marshalRepository.AddAsync(newMarshal);
+
+        // Add to cache for subsequent lookups within this import
+        marshalCache[normalizedName] = newMarshal;
+
         _logger.LogInformation($"Created new marshal from CSV: {newMarshalId} - {marshalName}");
 
         return newMarshalId;
@@ -407,7 +499,8 @@ public class LocationFunctions
     private async Task<int> UpdateExistingLocation(
         LocationEntity locationEntity,
         CsvParserService.LocationCsvRow row,
-        string eventId)
+        string eventId,
+        Dictionary<string, MarshalEntity> marshalCache)
     {
         int assignmentsCreated = 0;
 
@@ -432,7 +525,7 @@ public class LocationFunctions
         // Update marshals only if CSV has marshal names
         if (row.MarshalNames.Count > 0)
         {
-            assignmentsCreated = await ReplaceLocationAssignments(locationEntity.RowKey, row.MarshalNames, eventId);
+            assignmentsCreated = await ReplaceLocationAssignments(locationEntity.RowKey, row.MarshalNames, eventId, marshalCache);
             locationEntity.RequiredMarshals = row.MarshalNames.Count;
         }
 
@@ -443,7 +536,8 @@ public class LocationFunctions
 
     private async Task<int> CreateNewLocation(
         CsvParserService.LocationCsvRow row,
-        string eventId)
+        string eventId,
+        Dictionary<string, MarshalEntity> marshalCache)
     {
         LocationEntity locationEntity = new()
         {
@@ -460,7 +554,7 @@ public class LocationFunctions
 
         await _locationRepository.AddAsync(locationEntity);
 
-        int assignmentsCreated = await CreateAssignmentsForLocation(locationEntity.RowKey, row.MarshalNames, eventId);
+        int assignmentsCreated = await CreateAssignmentsForLocation(locationEntity.RowKey, row.MarshalNames, eventId, marshalCache);
 
         return assignmentsCreated;
     }
@@ -468,26 +562,28 @@ public class LocationFunctions
     private async Task<int> ReplaceLocationAssignments(
         string locationId,
         List<string> marshalNames,
-        string eventId)
+        string eventId,
+        Dictionary<string, MarshalEntity> marshalCache)
     {
         // Delete existing assignments for this location
         await _assignmentRepository.DeleteAllByLocationAsync(eventId, locationId);
 
         // Create new assignments
-        return await CreateAssignmentsForLocation(locationId, marshalNames, eventId);
+        return await CreateAssignmentsForLocation(locationId, marshalNames, eventId, marshalCache);
     }
 
     private async Task<int> CreateAssignmentsForLocation(
         string locationId,
         List<string> marshalNames,
-        string eventId)
+        string eventId,
+        Dictionary<string, MarshalEntity> marshalCache)
     {
         int assignmentsCreated = 0;
 
         foreach (string marshalName in marshalNames)
         {
-            // Find or create marshal
-            string marshalId = await FindOrCreateMarshal(eventId, marshalName);
+            // Find or create marshal using cached lookup
+            string marshalId = await FindOrCreateMarshal(eventId, marshalName, marshalCache);
 
             AssignmentEntity assignmentEntity = new()
             {

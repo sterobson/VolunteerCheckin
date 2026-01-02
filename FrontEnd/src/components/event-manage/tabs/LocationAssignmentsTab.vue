@@ -1,7 +1,7 @@
 <template>
   <div class="tab-content">
     <div class="form-group">
-      <label>Required marshals</label>
+      <label>Required {{ termsLower.people }}</label>
       <input
         :value="form.requiredMarshals"
         @input="handleNumberInput('requiredMarshals', $event.target.value)"
@@ -12,14 +12,17 @@
       />
     </div>
 
-    <h3 class="section-title">Assigned marshals ({{ totalAssignments }})</h3>
+    <h3 class="section-title">Assigned {{ termsLower.people }} ({{ totalAssignments }})</h3>
     <div class="assignments-list">
       <!-- Existing assignments -->
       <div
         v-for="assignment in sortedAssignments"
         :key="assignment.id"
         class="assignment-item"
-        :class="{ 'checked-in': !assignment.isPending && getEffectiveCheckInStatus(assignment) }"
+        :class="{
+          'checked-in': !assignment.isPending && getEffectiveCheckInStatus(assignment),
+          'is-pending': assignment.isPending
+        }"
       >
         <div class="assignment-info">
           <div class="assignment-header">
@@ -31,9 +34,12 @@
             >
               {{ getStatusIcon(assignment) }}
             </span>
+            <span v-else class="status-indicator pending-indicator" title="Will be assigned on save">
+              ⏳
+            </span>
             <strong>{{ assignment.marshalName }}</strong>
             <span v-if="assignment.isPending" class="pending-badge">
-              (pending)
+              (will be assigned on save)
             </span>
             <span v-else-if="pendingCheckInChanges.has(assignment.id)" class="pending-badge">
               (unsaved)
@@ -67,24 +73,30 @@
         </div>
       </div>
 
-      <!-- Empty assignment slots -->
-      <div
-        v-for="index in emptySlots"
-        :key="`empty-${index}`"
-        class="assignment-item empty-assignment"
-        @click="$emit('assign-marshal')"
-      >
-        <div class="empty-assignment-content">
-          +
-        </div>
+      <!-- Assign marshal dropdown -->
+      <div v-if="sortedAvailableMarshals.length > 0" class="form-group" style="margin-top: 1.5rem;">
+        <label>Assign {{ termsLower.person }}</label>
+        <select v-model="selectedMarshalId" class="form-input" @change="handleSelectionChange">
+          <option value="">Select a {{ termsLower.person }}...</option>
+          <option
+            v-for="marshal in sortedAvailableMarshals"
+            :key="marshal.id"
+            :value="marshal.id"
+          >
+            {{ marshal.name }}
+          </option>
+        </select>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, defineProps, defineEmits } from 'vue';
+import { ref, computed, defineProps, defineEmits } from 'vue';
 import { useCheckInManagement } from '../../../composables/useCheckInManagement';
+import { useTerminology } from '../../../composables/useTerminology';
+
+const { termsLower } = useTerminology();
 
 const props = defineProps({
   form: {
@@ -92,6 +104,10 @@ const props = defineProps({
     required: true,
   },
   assignments: {
+    type: Array,
+    default: () => [],
+  },
+  availableMarshals: {
     type: Array,
     default: () => [],
   },
@@ -110,6 +126,8 @@ const {
   formatTime,
 } = useCheckInManagement(() => emit('input'));
 
+const selectedMarshalId = ref('');
+
 const totalAssignments = computed(() => {
   return props.assignments?.length || 0;
 });
@@ -123,12 +141,22 @@ const sortedAssignments = computed(() => {
   });
 });
 
-const emptySlots = computed(() => {
-  const assigned = totalAssignments.value;
-  const required = props.form.requiredMarshals || 1;
-  const slots = Math.max(required - assigned, 1);
-  return slots;
+// Sort available marshals alphabetically
+const sortedAvailableMarshals = computed(() => {
+  const sorted = [...props.availableMarshals];
+  sorted.sort((a, b) => {
+    return (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' });
+  });
+  return sorted;
 });
+
+// Auto-assign when selection changes
+const handleSelectionChange = () => {
+  if (selectedMarshalId.value) {
+    emit('assign-marshal', selectedMarshalId.value);
+    selectedMarshalId.value = '';
+  }
+};
 
 const handleNumberInput = (field, value) => {
   emit('update:form', { ...props.form, [field]: Number(value) });
@@ -138,7 +166,10 @@ const handleNumberInput = (field, value) => {
 // Expose check-in management functions for parent
 defineExpose({
   pendingCheckInChanges,
-  clearPendingChanges: () => pendingCheckInChanges.value.clear(),
+  clearPendingChanges: () => {
+    pendingCheckInChanges.value.clear();
+    selectedMarshalId.value = '';
+  },
   getPendingChanges: () => {
     return Array.from(pendingCheckInChanges.value.entries()).map(([assignmentId, shouldBeCheckedIn]) => ({
       assignmentId,
@@ -206,6 +237,16 @@ defineExpose({
 .assignment-item.checked-in {
   background: #d4edda;
   border-color: #c3e6cb;
+}
+
+.assignment-item.is-pending {
+  background: #fff8e6;
+  border-color: #ffc107;
+  border-style: dashed;
+}
+
+.pending-indicator {
+  color: #ffc107;
 }
 
 .assignment-item.empty-assignment {

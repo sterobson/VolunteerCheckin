@@ -23,7 +23,8 @@ public static class EntityExtensions
             entity.PeopleTerm,
             entity.CheckpointTerm,
             entity.AreaTerm,
-            entity.ChecklistTerm
+            entity.ChecklistTerm,
+            entity.CourseTerm
         );
     }
 

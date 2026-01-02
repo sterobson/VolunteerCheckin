@@ -108,6 +108,9 @@
 <script setup>
 import { ref, computed, defineProps, defineEmits } from 'vue';
 import { alphanumericCompare } from '../../utils/sortUtils';
+import { useTerminology } from '../../composables/useTerminology';
+
+const { terms, termsLower } = useTerminology();
 
 const props = defineProps({
   notes: {
@@ -235,10 +238,13 @@ const sortedNotes = computed(() => {
 const formatScope = (scope) => {
   const scopeMap = {
     'Everyone': 'Everyone',
-    'EveryoneInAreas': 'Everyone in areas',
-    'EveryoneAtCheckpoints': 'Everyone at checkpoints',
-    'SpecificPeople': 'Specific people',
-    'EveryAreaLead': 'Every area lead',
+    'EveryoneInAreas': `Everyone in ${termsLower.value.areas}`,
+    'EveryoneAtCheckpoints': `Everyone at ${termsLower.value.checkpoints}`,
+    'SpecificPeople': `Specific ${termsLower.value.people}`,
+    'EveryAreaLead': `Every ${termsLower.value.area} lead`,
+    'OnePerCheckpoint': `One per ${termsLower.value.checkpoint}`,
+    'OnePerArea': `One per ${termsLower.value.area}`,
+    'OneLeadPerArea': `One lead per ${termsLower.value.area}`,
   };
   return scopeMap[scope] || scope;
 };
@@ -258,10 +264,10 @@ const formatScopeConfig = (config) => {
     return `${scopeName} (Everyone)`;
   }
   if (ids.includes('ALL_AREAS')) {
-    return `${scopeName} (All areas)`;
+    return `${scopeName} (All ${termsLower.value.areas})`;
   }
   if (ids.includes('ALL_CHECKPOINTS')) {
-    return `${scopeName} (All checkpoints)`;
+    return `${scopeName} (All ${termsLower.value.checkpoints})`;
   }
 
   const count = ids.length;

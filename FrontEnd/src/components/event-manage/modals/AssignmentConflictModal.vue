@@ -1,8 +1,9 @@
 <template>
   <BaseModal
     :show="show"
-    title="Marshal already assigned"
+    :title="`${terms.person} already assigned`"
     size="medium"
+    :z-index="1100"
     @close="handleCancel"
   >
     <!-- Conflict message -->
@@ -18,7 +19,7 @@
     <template #actions>
       <div class="conflict-actions">
         <button @click="handleChoice('move')" class="btn btn-primary btn-full">
-          Move to this checkpoint (remove from others)
+          Move to this {{ termsLower.checkpoint }} (remove from others)
         </button>
         <button @click="handleChoice('both')" class="btn btn-secondary btn-full">
           Assign to both (keep existing assignments)
@@ -37,6 +38,9 @@
 <script setup>
 import { defineProps, defineEmits } from 'vue';
 import BaseModal from '../../BaseModal.vue';
+import { useTerminology } from '../../../composables/useTerminology';
+
+const { terms, termsLower } = useTerminology();
 
 const props = defineProps({
   show: {

@@ -82,5 +82,6 @@ builder.Services.AddSingleton<IEventRoleRepository, TableStorageEventRoleReposit
 builder.Services.AddSingleton<IAuthTokenRepository, TableStorageAuthTokenRepository>();
 builder.Services.AddSingleton<IAuthSessionRepository, TableStorageAuthSessionRepository>();
 builder.Services.AddSingleton<INoteRepository, TableStorageNoteRepository>();
+builder.Services.AddSingleton<IEventContactRepository, TableStorageEventContactRepository>();
 
 builder.Build().Run();

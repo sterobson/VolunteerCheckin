@@ -1,7 +1,7 @@
 <template>
   <BaseModal
     :show="show"
-    title="Add checkpoint"
+    :title="`Add ${termsLower.checkpoint}`"
     size="medium"
     :confirm-on-close="true"
     :is-dirty="isDirty"
@@ -83,7 +83,7 @@
       </div>
 
       <div class="form-group">
-        <label>Required marshals</label>
+        <label>Required {{ termsLower.people }}</label>
         <input
           v-model.number="formData.requiredMarshals"
           type="number"
@@ -101,7 +101,7 @@
         Cancel
       </button>
       <button type="button" @click="handleSubmit" class="btn btn-primary">
-        Add checkpoint
+        Add {{ termsLower.checkpoint }}
       </button>
     </template>
   </BaseModal>
@@ -111,6 +111,9 @@
 import { ref, defineProps, defineEmits, watch } from 'vue';
 import BaseModal from '../../BaseModal.vue';
 import { isValidWhat3Words } from '../../../utils/validators';
+import { useTerminology } from '../../../composables/useTerminology';
+
+const { terms, termsLower } = useTerminology();
 
 const props = defineProps({
   show: {

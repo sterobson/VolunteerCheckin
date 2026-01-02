@@ -1,7 +1,7 @@
 <template>
   <BaseModal
     :show="show"
-    :title="`Assign checkpoints to ${areaName}`"
+    :title="`Assign ${termsLower.checkpoints} to ${areaName}`"
     size="medium"
     @close="handleClose"
   >
@@ -10,7 +10,7 @@
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="Search checkpoints..."
+          :placeholder="`Search ${termsLower.checkpoints}...`"
           class="form-input"
         />
       </div>
@@ -39,7 +39,7 @@
                   {{ getAreaName(checkpoint.areaId) }}
                 </span>
                 <span class="marshals-badge">
-                  {{ checkpoint.checkedInCount || 0 }}/{{ checkpoint.requiredMarshals }} marshals
+                  {{ checkpoint.checkedInCount || 0 }}/{{ checkpoint.requiredMarshals }} {{ termsLower.people }}
                 </span>
               </div>
             </div>
@@ -50,8 +50,8 @@
         </div>
 
         <div v-if="filteredCheckpoints.length === 0" class="empty-state">
-          <p v-if="searchQuery">No checkpoints match your search</p>
-          <p v-else>No checkpoints available</p>
+          <p v-if="searchQuery">No {{ termsLower.checkpoints }} match your search</p>
+          <p v-else>No {{ termsLower.checkpoints }} available</p>
         </div>
       </div>
     </div>
@@ -76,6 +76,9 @@
 import { ref, computed, defineProps, defineEmits, watch } from 'vue';
 import BaseModal from '../../BaseModal.vue';
 import { alphanumericCompare } from '../../../utils/sortUtils';
+import { useTerminology } from '../../../composables/useTerminology';
+
+const { terms, termsLower } = useTerminology();
 
 const props = defineProps({
   show: {

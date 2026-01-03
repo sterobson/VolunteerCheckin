@@ -81,13 +81,26 @@
                       {{ marshal.outstandingTaskCount }} tasks
                     </span>
                   </div>
-                  <div class="check-status" :class="{ 'checked-in': marshal.isCheckedIn }">
-                    {{ marshal.isCheckedIn ? '✓ Checked In' : 'Not Checked In' }}
+                  <div class="check-status-row">
+                    <div class="check-status" :class="{ 'checked-in': marshal.isCheckedIn }">
+                      {{ marshal.isCheckedIn ? '✓ Checked In' : 'Not Checked In' }}
+                    </div>
+                    <button
+                      @click.stop="handleCheckIn(marshal, checkpoint)"
+                      class="quick-checkin-btn"
+                      :class="{ 'undo-btn': marshal.isCheckedIn }"
+                      :disabled="checkingIn === marshal.marshalId"
+                    >
+                      {{ checkingIn === marshal.marshalId ? '...' : (marshal.isCheckedIn ? 'Undo' : 'Check In') }}
+                    </button>
                   </div>
                 </div>
                 <div v-if="marshal.isCheckedIn && marshal.checkInTime" class="check-in-time">
                   {{ formatTime(marshal.checkInTime) }}
                   <span v-if="marshal.checkInMethod"> ({{ formatCheckInMethod(marshal.checkInMethod) }})</span>
+                </div>
+                <div v-if="marshal.lastAccessedAt" class="last-access-time">
+                  Last active: {{ formatRelativeTime(marshal.lastAccessedAt) }}
                 </div>
               </div>
             </div>
@@ -144,19 +157,40 @@
         <!-- Check-in Status -->
         <div class="details-section">
           <h4>Check-in Status</h4>
-          <div v-if="selectedMarshal.isCheckedIn" class="checked-in-details">
-            <span class="check-icon">✓</span>
-            <div>
-              <strong>Checked In</strong>
-              <p class="check-time-detail">{{ formatDateTime(selectedMarshal.checkInTime) }}</p>
-              <p v-if="selectedMarshal.checkInMethod" class="check-method">
-                Method: {{ formatCheckInMethod(selectedMarshal.checkInMethod) }}
-              </p>
+          <div v-if="selectedMarshal.isCheckedIn" class="checked-in-section">
+            <div class="checked-in-details">
+              <span class="check-icon">✓</span>
+              <div>
+                <strong>Checked In</strong>
+                <p class="check-time-detail">{{ formatDateTime(selectedMarshal.checkInTime) }}</p>
+                <p v-if="selectedMarshal.checkInMethod" class="check-method">
+                  Method: {{ formatCheckInMethod(selectedMarshal.checkInMethod) }}
+                </p>
+              </div>
             </div>
+            <button
+              @click="handleCheckIn(selectedMarshal, selectedCheckpoint)"
+              class="btn btn-secondary undo-checkin-btn"
+              :disabled="checkingIn === selectedMarshal.marshalId"
+            >
+              {{ checkingIn === selectedMarshal.marshalId ? 'Undoing...' : 'Undo Check-in' }}
+            </button>
           </div>
-          <div v-else class="not-checked-in">
-            <span class="not-checked-icon">✗</span>
-            <span>Not checked in</span>
+          <div v-else class="not-checked-in-section">
+            <div class="not-checked-in">
+              <span class="not-checked-icon">✗</span>
+              <span>Not checked in</span>
+            </div>
+            <button
+              @click="handleCheckIn(selectedMarshal, selectedCheckpoint)"
+              class="btn btn-primary check-in-btn"
+              :disabled="checkingIn === selectedMarshal.marshalId"
+            >
+              {{ checkingIn === selectedMarshal.marshalId ? 'Checking in...' : 'Check In' }}
+            </button>
+          </div>
+          <div v-if="selectedMarshal.lastAccessedAt" class="last-access-detail">
+            Last active: {{ formatRelativeTime(selectedMarshal.lastAccessedAt) }}
           </div>
         </div>
 
@@ -219,7 +253,7 @@
 
 <script setup>
 import { ref, computed, defineProps, defineEmits, watch } from 'vue';
-import { areasApi, checklistApi, getOfflineMode, queueOfflineAction } from '../services/api';
+import { areasApi, checklistApi, checkInApi, getOfflineMode, queueOfflineAction } from '../services/api';
 import { useTerminology } from '../composables/useTerminology';
 import { alphanumericCompare } from '../utils/sortUtils';
 import { getCachedEventData, updateCachedField, cacheEventData } from '../services/offlineDb';
@@ -249,7 +283,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['checklist-updated', 'loaded']);
+const emit = defineEmits(['checklist-updated', 'loaded', 'checkin-updated']);
 
 const loading = ref(false);
 const error = ref(null);
@@ -257,6 +291,7 @@ const areas = ref([]);
 const checkpoints = ref([]);
 const expandedCheckpoint = ref(null);
 const savingTask = ref(false);
+const checkingIn = ref(null); // Tracks which marshal is being checked in
 
 // Sort checkpoints alphanumerically (numbers first, then alphabetical)
 const sortedCheckpoints = computed(() => {
@@ -318,24 +353,14 @@ const loadDashboard = async () => {
         areas: areas.value,
         checkpoints: checkpoints.value
       }));
-      console.log('AreaLeadSection: caching dashboard data', { areas: areaLeadDashboard.areas.length, checkpoints: areaLeadDashboard.checkpoints.length });
 
       // Try to update existing cache, or create new cache entry
       const cachedData = await getCachedEventData(props.eventId);
-      console.log('AreaLeadSection: existing cache?', !!cachedData);
-
       if (cachedData) {
         await updateCachedField(props.eventId, 'areaLeadDashboard', areaLeadDashboard);
-        console.log('Area lead dashboard cached (updated existing)');
       } else {
-        // Create a minimal cache entry with just the dashboard data
         await cacheEventData(props.eventId, { areaLeadDashboard });
-        console.log('Area lead dashboard cached (created new)');
       }
-
-      // Verify it was saved
-      const verifyCache = await getCachedEventData(props.eventId);
-      console.log('AreaLeadSection: verify cache after save:', !!verifyCache?.areaLeadDashboard);
     } catch (cacheErr) {
       console.warn('Failed to cache dashboard:', cacheErr);
     }
@@ -385,6 +410,74 @@ const closeMarshalModal = () => {
   showMarshalModal.value = false;
   selectedMarshal.value = null;
   selectedCheckpoint.value = null;
+};
+
+const handleCheckIn = async (marshal, checkpoint) => {
+  if (checkingIn.value) return;
+
+  // The assignment ID is on the marshal object itself (as 'id' or 'assignmentId')
+  const assignmentId = marshal.assignmentId || marshal.id;
+  if (!assignmentId) {
+    console.error('No assignment ID found for marshal:', marshal);
+    return;
+  }
+
+  checkingIn.value = marshal.marshalId;
+
+  try {
+    if (getOfflineMode()) {
+      // Queue for offline sync
+      await queueOfflineAction('checkin_admin', {
+        eventId: props.eventId,
+        assignmentId: assignmentId
+      });
+
+      // Optimistic update
+      marshal.isCheckedIn = true;
+      marshal.checkInTime = new Date().toISOString();
+      marshal.checkInMethod = 'AreaLead (pending)';
+
+      await updatePendingCount();
+      emit('checkin-updated');
+    } else {
+      await checkInApi.adminCheckIn(props.eventId, assignmentId);
+
+      // Reload the dashboard to get updated data
+      await loadDashboard();
+      emit('checkin-updated');
+
+      // Update selected marshal in modal if it's open
+      if (selectedMarshal.value?.marshalId === marshal.marshalId && selectedCheckpoint.value) {
+        const updatedCheckpoint = checkpoints.value.find(c => c.checkpointId === selectedCheckpoint.value.checkpointId);
+        if (updatedCheckpoint) {
+          const updatedMarshal = updatedCheckpoint.marshals.find(m => m.marshalId === marshal.marshalId);
+          if (updatedMarshal) {
+            selectedMarshal.value = updatedMarshal;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Failed to check in marshal:', err);
+
+    // If network error, queue for offline
+    if (getOfflineMode() || !err.response) {
+      await queueOfflineAction('checkin_admin', {
+        eventId: props.eventId,
+        assignmentId: assignmentId
+      });
+
+      // Optimistic update
+      marshal.isCheckedIn = true;
+      marshal.checkInTime = new Date().toISOString();
+      marshal.checkInMethod = 'AreaLead (pending)';
+
+      await updatePendingCount();
+      emit('checkin-updated');
+    }
+  } finally {
+    checkingIn.value = null;
+  }
 };
 
 const completeTask = async (task, checkpoint) => {
@@ -523,6 +616,23 @@ const formatTime = (dateString) => {
 const formatDateTime = (dateString) => {
   if (!dateString) return '';
   return new Date(dateString).toLocaleString();
+};
+
+const formatRelativeTime = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays === 1) return 'yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
 };
 
 const formatCheckInMethod = (method) => {
@@ -756,6 +866,13 @@ watch(() => [props.eventId, props.areaIds], () => {
   border-radius: 6px;
 }
 
+.check-status-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .check-status {
   font-size: 0.75rem;
   padding: 0.2rem 0.5rem;
@@ -770,10 +887,63 @@ watch(() => [props.eventId, props.areaIds], () => {
   color: #2e7d32;
 }
 
+.quick-checkin-btn {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+.quick-checkin-btn:hover:not(:disabled) {
+  background: #5567d5;
+}
+
+.quick-checkin-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.quick-checkin-btn.undo-btn {
+  background: #ff9800;
+}
+
+.quick-checkin-btn.undo-btn:hover:not(:disabled) {
+  background: #f57c00;
+}
+
+.checked-in-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.undo-checkin-btn {
+  align-self: flex-start;
+}
+
 .check-in-time {
   font-size: 0.75rem;
   color: #666;
   margin-top: 0.25rem;
+}
+
+.last-access-time {
+  font-size: 0.7rem;
+  color: #888;
+  margin-top: 0.25rem;
+  font-style: italic;
+}
+
+.last-access-detail {
+  font-size: 0.85rem;
+  color: #666;
+  margin-top: 0.75rem;
+  font-style: italic;
 }
 
 /* Checkpoint Tasks section */
@@ -893,6 +1063,12 @@ watch(() => [props.eventId, props.areaIds], () => {
   color: #666;
 }
 
+.not-checked-in-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
 .not-checked-in {
   display: flex;
   align-items: center;
@@ -901,6 +1077,10 @@ watch(() => [props.eventId, props.areaIds], () => {
   background: #ffebee;
   border-radius: 8px;
   color: #c62828;
+}
+
+.check-in-btn {
+  align-self: flex-start;
 }
 
 .not-checked-icon {

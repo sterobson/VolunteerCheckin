@@ -14,9 +14,8 @@ namespace VolunteerCheckin.Functions.Tests
         public void ParseGpxFile_EmptyStream_ReturnsEmptyList()
         {
             using MemoryStream ms = new();
-            GpxParserService parser = new();
 
-            List<RoutePoint> routes = parser.ParseGpxFile(ms);
+            List<RoutePoint> routes = GpxParserService.ParseGpxFile(ms);
 
             routes.ShouldNotBeNull();
             routes.Count.ShouldBe(0);

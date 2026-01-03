@@ -98,7 +98,7 @@ public class ChecklistCompletionFunctions
             }
 
             // Determine context for completion
-            (string contextType, string contextId, string matchedScope) = request.ContextType != null && request.ContextId != null
+            (string contextType, string contextId, _) = request.ContextType != null && request.ContextId != null
                 ? (request.ContextType, request.ContextId, string.Empty)
                 : ChecklistScopeHelper.DetermineCompletionContext(item, context, checkpointLookup);
 

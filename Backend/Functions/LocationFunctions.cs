@@ -21,7 +21,6 @@ public class LocationFunctions
     private readonly IAssignmentRepository _assignmentRepository;
     private readonly IChecklistItemRepository _checklistItemRepository;
     private readonly INoteRepository _noteRepository;
-    private readonly CsvParserService _csvParser;
     private readonly IAreaRepository _areaRepository;
 
     public LocationFunctions(
@@ -31,7 +30,6 @@ public class LocationFunctions
         IAssignmentRepository assignmentRepository,
         IChecklistItemRepository checklistItemRepository,
         INoteRepository noteRepository,
-        CsvParserService csvParser,
         IAreaRepository areaRepository)
     {
         _logger = logger;
@@ -40,7 +38,6 @@ public class LocationFunctions
         _assignmentRepository = assignmentRepository;
         _checklistItemRepository = checklistItemRepository;
         _noteRepository = noteRepository;
-        _csvParser = csvParser;
         _areaRepository = areaRepository;
     }
 
@@ -438,7 +435,9 @@ public class LocationFunctions
                     }
 
                     // Validate coordinates during import (no extra DB fetch needed)
-                    if ((row.Latitude == 0 && row.Longitude == 0) || double.IsNaN(row.Latitude) || double.IsNaN(row.Longitude))
+                    // Use tolerance for floating point comparison (coordinates at exactly 0,0 are unlikely valid locations)
+                    const double tolerance = 0.0001;
+                    if ((Math.Abs(row.Latitude) < tolerance && Math.Abs(row.Longitude) < tolerance) || double.IsNaN(row.Latitude) || double.IsNaN(row.Longitude))
                     {
                         parseResult.Errors.Add($"Warning: Location '{row.Name}' has no valid coordinates (lat: {row.Latitude}, long: {row.Longitude})");
                     }

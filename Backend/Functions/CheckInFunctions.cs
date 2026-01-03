@@ -238,7 +238,6 @@ public class CheckInFunctions
             double? originalLat = assignment.CheckInLatitude;
             double? originalLon = assignment.CheckInLongitude;
             string originalMethod = assignment.CheckInMethod;
-            int originalCount = location.CheckedInCount;
 
             // If already checked in, undo the check-in
             if (assignment.IsCheckedIn)

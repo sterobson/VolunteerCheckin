@@ -258,7 +258,8 @@ public record MarshalResponse(
     string Notes,
     List<string> AssignedLocationIds,
     bool IsCheckedIn,
-    DateTime CreatedDate
+    DateTime CreatedDate,
+    DateTime? LastAccessedDate
 );
 
 /// <summary>
@@ -275,6 +276,7 @@ public record MarshalWithPermissionsResponse(
     List<string> AssignedLocationIds,
     bool IsCheckedIn,
     DateTime CreatedDate,
+    DateTime? LastAccessedDate,
     bool CanViewContactDetails,  // true if Email/Phone/Notes are visible
     bool CanModify               // true if user can edit this marshal
 );
@@ -732,12 +734,14 @@ public record AreaLeadCheckpointInfo(
 /// </summary>
 public record AreaLeadMarshalInfo(
     string MarshalId,
+    string AssignmentId,
     string Name,
     string? Email,
     string? PhoneNumber,
     bool IsCheckedIn,
     DateTime? CheckInTime,
     string? CheckInMethod,
+    DateTime? LastAccessedAt,
     int OutstandingTaskCount,
     List<AreaLeadTaskInfo> OutstandingTasks
 );

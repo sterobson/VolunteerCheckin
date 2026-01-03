@@ -19,7 +19,6 @@ public class EventFunctions
     private readonly IUserEventMappingRepository _userEventMappingRepository;
     private readonly IPersonRepository _personRepository;
     private readonly IEventRoleRepository _eventRoleRepository;
-    private readonly GpxParserService _gpxParser;
     private readonly ClaimsService _claimsService;
 
     public EventFunctions(
@@ -28,7 +27,6 @@ public class EventFunctions
         IUserEventMappingRepository userEventMappingRepository,
         IPersonRepository personRepository,
         IEventRoleRepository eventRoleRepository,
-        GpxParserService gpxParser,
         ClaimsService claimsService)
     {
         _logger = logger;
@@ -36,7 +34,6 @@ public class EventFunctions
         _userEventMappingRepository = userEventMappingRepository;
         _personRepository = personRepository;
         _eventRoleRepository = eventRoleRepository;
-        _gpxParser = gpxParser;
         _claimsService = claimsService;
     }
 
@@ -363,6 +360,10 @@ public class EventFunctions
 
             if (!hasAdminRole)
             {
+                // Get the PersonId of the admin granting this role
+                PersonEntity? grantingAdmin = await _personRepository.GetByEmailAsync(adminEmail!);
+                string grantedByPersonId = grantingAdmin?.PersonId ?? string.Empty;
+
                 // Create EventAdmin role (new system)
                 string roleId = Guid.NewGuid().ToString();
                 EventRoleEntity eventRole = new EventRoleEntity
@@ -373,7 +374,7 @@ public class EventFunctions
                     EventId = eventId,
                     Role = Constants.RoleEventAdmin,
                     AreaIdsJson = "[]", // Event-wide admin
-                    GrantedByPersonId = string.Empty, // TODO: Get from session
+                    GrantedByPersonId = grantedByPersonId,
                     GrantedAt = DateTime.UtcNow
                 };
                 await _eventRoleRepository.AddAsync(eventRole);
@@ -491,7 +492,7 @@ public class EventFunctions
             List<RoutePoint> route;
             using (Stream stream = gpxFile.OpenReadStream())
             {
-                route = _gpxParser.ParseGpxFile(stream);
+                route = GpxParserService.ParseGpxFile(stream);
             }
 
             if (route.Count == 0)

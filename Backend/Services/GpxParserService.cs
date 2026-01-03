@@ -3,9 +3,10 @@ using VolunteerCheckin.Functions.Models;
 
 namespace VolunteerCheckin.Functions.Services;
 
-public class GpxParserService
+public static class GpxParserService
 {
-    public List<RoutePoint> ParseGpxFile(Stream fileStream)
+#pragma warning disable MA0051 // Method is too long - GPX parsing with multiple element types
+    public static List<RoutePoint> ParseGpxFile(Stream fileStream)
     {
         List<RoutePoint> routePoints = [];
 

@@ -45,18 +45,6 @@ public static class ChecklistScopeHelper
     }
 
     /// <summary>
-    /// Specificity levels for "Most Specific Wins" algorithm.
-    /// Lower number = higher priority (more specific).
-    /// </summary>
-    private static class Specificity
-    {
-        public const int Marshal = ScopeEvaluator.SpecificityLevel.Marshal;
-        public const int Checkpoint = ScopeEvaluator.SpecificityLevel.Checkpoint;
-        public const int Area = ScopeEvaluator.SpecificityLevel.Area;
-        public const int NoMatch = ScopeEvaluator.SpecificityLevel.NoMatch;
-    }
-
-    /// <summary>
     /// Evaluates all scope configurations and returns the most specific match
     /// </summary>
     public static ScopeMatchResult EvaluateScopeConfigurations(
@@ -120,7 +108,7 @@ public static class ChecklistScopeHelper
 
         // For personal context types, the contextId should always be the marshal ID
         // For shared context types (OnePerCheckpoint, OnePerArea, AreaLead), use the matched item ID
-        string contextId = IsPersonalContextType(result.ContextType) ? context.MarshalId : result.ContextId;
+        string contextId = ScopeEvaluator.IsPersonalContextType(result.ContextType) ? context.MarshalId : result.ContextId;
 
         return (result.ContextType, contextId, result.WinningConfig.Scope);
     }
@@ -137,7 +125,7 @@ public static class ChecklistScopeHelper
         (string contextType, string contextId, _) = DetermineCompletionContext(item, marshalContext, checkpointLookup);
 
         // For personal items, check if THIS marshal has completed it
-        if (IsPersonalContextType(contextType))
+        if (ScopeEvaluator.IsPersonalContextType(contextType))
         {
             return allCompletions.Any(c =>
                 c.ChecklistItemId == item.ItemId &&
@@ -166,7 +154,7 @@ public static class ChecklistScopeHelper
 
         ChecklistCompletionEntity? completion;
 
-        if (IsPersonalContextType(contextType))
+        if (ScopeEvaluator.IsPersonalContextType(contextType))
         {
             completion = allCompletions.FirstOrDefault(c =>
                 c.ChecklistItemId == item.ItemId &&
@@ -183,22 +171,6 @@ public static class ChecklistScopeHelper
         }
 
         return (completion?.ActorName, completion?.ActorType, completion?.CompletedAt);
-    }
-
-    /// <summary>
-    /// Determines the context type based on scope
-    /// </summary>
-    private static string GetContextTypeForScope(string scope)
-    {
-        return ScopeEvaluator.GetContextTypeForScope(scope);
-    }
-
-    /// <summary>
-    /// Determines if a context type is personal (one per marshal) vs shared (one per area/checkpoint)
-    /// </summary>
-    private static bool IsPersonalContextType(string contextType)
-    {
-        return ScopeEvaluator.IsPersonalContextType(contextType);
     }
 
     /// <summary>

@@ -83,6 +83,7 @@ public static class ScopeEvaluator
     /// Evaluates a single scope configuration against marshal context
     /// Returns (config, specificity, contextId) if match, null otherwise
     /// </summary>
+#pragma warning disable MA0051 // Method is too long - complex scope evaluation logic
     private static (ScopeConfiguration config, int specificity, string contextId)? EvaluateSingleConfiguration(
         ScopeConfiguration config,
         MarshalContext marshalContext,
@@ -138,9 +139,9 @@ public static class ScopeEvaluator
                     if (config.Ids.Contains(Constants.AllAreas))
                     {
                         // Any checkpoint in any area
-                        if (marshalContext.AssignedLocationIds.Any())
+                        if (marshalContext.AssignedLocationIds.Count > 0)
                         {
-                            return (config, SpecificityLevel.Checkpoint, marshalContext.AssignedLocationIds.First());
+                            return (config, SpecificityLevel.Checkpoint, marshalContext.AssignedLocationIds[0]);
                         }
                     }
                     else
@@ -347,6 +348,7 @@ public static class ScopeEvaluator
     /// <summary>
     /// Gets all checkpoint contexts that match for a OnePerCheckpoint scope
     /// </summary>
+#pragma warning disable MA0051 // Method is too long - iterates through multiple scope types
     public static List<ScopeMatchResult> GetAllCheckpointContexts(
         ScopeConfiguration config,
         MarshalContext marshalContext,

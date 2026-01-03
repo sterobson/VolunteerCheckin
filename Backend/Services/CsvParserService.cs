@@ -1,6 +1,6 @@
 namespace VolunteerCheckin.Functions.Services;
 
-public class CsvParserService
+public static class CsvParserService
 {
     public class LocationCsvRow
     {
@@ -33,6 +33,7 @@ public class CsvParserService
         public List<string> Errors { get; set; } = [];
     }
 
+#pragma warning disable MA0051 // Method is too long - CSV parsing with validation
     public static CsvParseResult ParseLocationsCsv(Stream fileStream)
     {
         CsvParseResult result = new();
@@ -122,7 +123,7 @@ public class CsvParserService
                         {
                             if (double.TryParse(lonStr, out lon) && lon >= -180 && lon <= 180)
                             {
-                                hasLatLong = hasLatLong && true;
+                                // hasLatLong remains true only if latitude was also valid
                             }
                             else
                             {
@@ -293,6 +294,7 @@ public class CsvParserService
         return -1;
     }
 
+#pragma warning disable MA0051 // Method is too long - CSV parsing with validation
     public static MarshalCsvParseResult ParseMarshalsCsv(Stream fileStream)
     {
         MarshalCsvParseResult result = new();
@@ -388,7 +390,7 @@ public class CsvParserService
     {
         List<string> values = [];
         bool inQuotes = false;
-        string currentValue = "";
+        System.Text.StringBuilder currentValue = new();
 
         for (int i = 0; i < line.Length; i++)
         {
@@ -400,16 +402,16 @@ public class CsvParserService
             }
             else if (c == ',' && !inQuotes)
             {
-                values.Add(currentValue);
-                currentValue = "";
+                values.Add(currentValue.ToString());
+                currentValue.Clear();
             }
             else
             {
-                currentValue += c;
+                currentValue.Append(c);
             }
         }
 
-        values.Add(currentValue);
+        values.Add(currentValue.ToString());
         return [.. values];
     }
 }

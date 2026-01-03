@@ -390,8 +390,8 @@
               @click="toggleSection('areaLead')"
             >
               <span class="accordion-title">
-                <span class="section-icon" v-html="getIcon('checkpoint')"></span>
-                {{ terms.checkpoints }} in your {{ termsLower.areas }}
+                <span class="section-icon" v-html="getIcon('people')"></span>
+                Your {{ termsLower.people }}
                 <span v-if="areaLeadRef?.areas?.length > 0" class="area-lead-badges">
                   <span
                     v-for="area in areaLeadRef.areas"
@@ -551,6 +551,13 @@ const expandedCheckpoint = ref(null);
 const toggleCheckpoint = (assignId) => {
   expandedCheckpoint.value = expandedCheckpoint.value === assignId ? null : assignId;
 };
+
+// Auto-expand if there's only one assignment
+watch(() => assignments.value, (newAssignments) => {
+  if (newAssignments.length === 1 && expandedCheckpoint.value === null) {
+    expandedCheckpoint.value = newAssignments[0].id;
+  }
+}, { immediate: true });
 
 // Assignments with details (location info, area name, all marshals on checkpoint, area contacts)
 const assignmentsWithDetails = computed(() => {
@@ -730,6 +737,9 @@ const authenticateWithMagicCode = async (eventId, code) => {
       // Clear the code from URL to prevent re-authentication attempts
       router.replace({ path: route.path, query: {} });
 
+      // Start heartbeat to keep LastAccessedDate updated
+      startHeartbeat();
+
       // Load data after authentication
       await loadEventData();
     } else {
@@ -763,6 +773,10 @@ const checkExistingSession = async (eventId) => {
       };
       currentMarshalId.value = response.data.marshalId;
       isAuthenticated.value = true;
+
+      // Start heartbeat to keep LastAccessedDate updated
+      startHeartbeat();
+
       return true;
     }
   } catch (error) {
@@ -814,36 +828,38 @@ const loadEventData = async () => {
     }
   }
 
-  // Load event details
-  try {
-    console.log('Fetching event...');
-    const eventResponse = await eventsApi.getById(eventId);
-    event.value = eventResponse.data;
-    console.log('Event loaded:', event.value?.name);
+  // Load all data in parallel for better performance
+  console.log('Fetching event data in parallel...');
 
-    // Apply terminology settings from the event
+  // Phase 1: Core event data (3 calls in parallel)
+  const [eventResult, areasResult, statusResult] = await Promise.allSettled([
+    eventsApi.getById(eventId),
+    areasApi.getByEvent(eventId),
+    assignmentsApi.getEventStatus(eventId)
+  ]);
+
+  // Process event result
+  if (eventResult.status === 'fulfilled') {
+    event.value = eventResult.value.data;
+    console.log('Event loaded:', event.value?.name);
     if (event.value) {
       setTerminology(event.value);
     }
-  } catch (error) {
-    console.error('Failed to load event:', error.response?.status, error.response?.data);
+  } else {
+    console.error('Failed to load event:', eventResult.reason);
   }
 
-  // Load areas for the event
-  try {
-    console.log('Fetching areas...');
-    const areasResponse = await areasApi.getByEvent(eventId);
-    areas.value = areasResponse.data || [];
+  // Process areas result
+  if (areasResult.status === 'fulfilled') {
+    areas.value = areasResult.value.data || [];
     console.log('Areas loaded:', areas.value.length);
-  } catch (error) {
-    console.error('Failed to load areas:', error.response?.status, error.response?.data);
+  } else {
+    console.error('Failed to load areas:', areasResult.reason);
   }
 
-  // Load locations with assignments using event status endpoint
-  try {
-    console.log('Fetching event status (locations + assignments)...');
-    const statusResponse = await assignmentsApi.getEventStatus(eventId);
-    allLocations.value = statusResponse.data?.locations || [];
+  // Process event status result
+  if (statusResult.status === 'fulfilled') {
+    allLocations.value = statusResult.value.data?.locations || [];
     console.log('Locations loaded:', allLocations.value.length);
 
     // Find ALL of current marshal's assignments from all locations
@@ -853,24 +869,21 @@ const loadEventData = async () => {
         const myAssignment = location.assignments?.find(a => a.marshalId === currentMarshalId.value);
         if (myAssignment) {
           myAssignments.push(myAssignment);
-          console.log('Assignment found:', myAssignment.id, 'at location:', location.name);
         }
       }
       assignments.value = myAssignments;
       console.log('Total assignments found:', assignments.value.length);
     }
-  } catch (error) {
-    console.error('Failed to load event status:', error.response?.status, error.response?.data);
+  } else {
+    console.error('Failed to load event status:', statusResult.reason);
   }
 
-  // Load checklist
-  await loadChecklist();
-
-  // Load contacts from the new contacts API
-  await loadContacts();
-
-  // Load notes
-  await loadNotes();
+  // Phase 2: Supplementary data (3 calls in parallel)
+  await Promise.allSettled([
+    loadChecklist(),
+    loadContacts(),
+    loadNotes()
+  ]);
 
   // Cache all data for offline access
   // Use JSON.parse(JSON.stringify()) to convert Vue reactive proxies to plain objects
@@ -1448,8 +1461,34 @@ watch(() => route.query.code, async (newCode) => {
   }
 });
 
+// Heartbeat to update LastAccessedDate every 5 minutes
+let heartbeatInterval = null;
+
+const startHeartbeat = () => {
+  if (heartbeatInterval) return;
+
+  heartbeatInterval = setInterval(async () => {
+    if (userClaims.value?.marshalId) {
+      try {
+        await authApi.getMe(route.params.eventId);
+      } catch (err) {
+        // Silently ignore heartbeat errors
+        console.debug('Heartbeat failed:', err);
+      }
+    }
+  }, 5 * 60 * 1000); // 5 minutes
+};
+
+const stopHeartbeat = () => {
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+  }
+};
+
 onUnmounted(() => {
   stopLocationTracking();
+  stopHeartbeat();
 });
 </script>
 

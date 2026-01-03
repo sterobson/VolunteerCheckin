@@ -34,6 +34,12 @@
                 {{ sortOrder === 'asc' ? '▲' : '▼' }}
               </span>
             </th>
+            <th @click="changeSortColumn('lastActive')" class="sortable hide-on-mobile">
+              Last active
+              <span class="sort-indicator" v-if="sortBy === 'lastActive'">
+                {{ sortOrder === 'asc' ? '▲' : '▼' }}
+              </span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -65,6 +71,12 @@
                     {{ getStatusIcon(assignment) }}
                   </span>
                 </td>
+                <td v-if="index === 0" :rowspan="getMarshalAssignments(marshal.id).length" class="hide-on-mobile last-active-cell">
+                  <span v-if="marshal.lastAccessedDate" class="last-active-text">
+                    {{ formatRelativeTime(marshal.lastAccessedDate) }}
+                  </span>
+                  <span v-else class="last-active-never">Never</span>
+                </td>
               </tr>
             </template>
             <tr v-else class="marshal-row" @click="$emit('select-marshal', marshal)">
@@ -73,6 +85,12 @@
               <td>
                 <span class="hide-on-mobile">-</span>
                 <span class="status-icon show-on-mobile" style="color: #999;">-</span>
+              </td>
+              <td class="hide-on-mobile last-active-cell">
+                <span v-if="marshal.lastAccessedDate" class="last-active-text">
+                  {{ formatRelativeTime(marshal.lastAccessedDate) }}
+                </span>
+                <span v-else class="last-active-never">Never</span>
               </td>
             </tr>
           </template>
@@ -134,6 +152,23 @@ const getLocationName = (locationId) => {
   return location ? location.name : 'Unknown';
 };
 
+const formatRelativeTime = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays === 1) return 'yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+};
+
 const sortedMarshals = computed(() => {
   const sorted = [...props.marshals];
 
@@ -154,6 +189,10 @@ const sortedMarshals = computed(() => {
       const aCheckedIn = aAssignments.length > 0 && aAssignments[0].isCheckedIn ? 1 : 0;
       const bCheckedIn = bAssignments.length > 0 && bAssignments[0].isCheckedIn ? 1 : 0;
       compareValue = bCheckedIn - aCheckedIn;
+    } else if (sortBy.value === 'lastActive') {
+      const aTime = a.lastAccessedDate ? new Date(a.lastAccessedDate).getTime() : 0;
+      const bTime = b.lastAccessedDate ? new Date(b.lastAccessedDate).getTime() : 0;
+      compareValue = bTime - aTime; // Most recent first by default
     }
 
     return sortOrder.value === 'asc' ? compareValue : -compareValue;
@@ -272,6 +311,19 @@ const getStatusClass = (assignment) => {
 
 .status-icon {
   font-size: 1.25rem;
+}
+
+.last-active-cell {
+  font-size: 0.85rem;
+}
+
+.last-active-text {
+  color: #495057;
+}
+
+.last-active-never {
+  color: #999;
+  font-style: italic;
 }
 
 .action-buttons {

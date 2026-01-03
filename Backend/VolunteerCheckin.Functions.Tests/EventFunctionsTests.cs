@@ -27,7 +27,6 @@ namespace VolunteerCheckin.Functions.Tests
         private Mock<IUserEventMappingRepository> _mockUserEventMappingRepository = null!;
         private Mock<IPersonRepository> _mockPersonRepository = null!;
         private Mock<IEventRoleRepository> _mockEventRoleRepository = null!;
-        private Mock<GpxParserService> _mockGpxParser = null!;
         private Mock<ClaimsService> _mockClaimsService = null!;
         private EventFunctions _eventFunctions = null!;
 
@@ -39,7 +38,6 @@ namespace VolunteerCheckin.Functions.Tests
             _mockUserEventMappingRepository = new Mock<IUserEventMappingRepository>();
             _mockPersonRepository = new Mock<IPersonRepository>();
             _mockEventRoleRepository = new Mock<IEventRoleRepository>();
-            _mockGpxParser = new Mock<GpxParserService>();
             _mockClaimsService = new Mock<ClaimsService>(
                 Mock.Of<IAuthSessionRepository>(),
                 Mock.Of<IPersonRepository>(),
@@ -54,7 +52,6 @@ namespace VolunteerCheckin.Functions.Tests
                 _mockUserEventMappingRepository.Object,
                 _mockPersonRepository.Object,
                 _mockEventRoleRepository.Object,
-                _mockGpxParser.Object,
                 _mockClaimsService.Object
             );
         }

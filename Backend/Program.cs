@@ -59,8 +59,6 @@ builder.Services.AddSingleton(sp =>
     return new EmailService(smtpHost, smtpPort, smtpUsername, smtpPassword, fromEmail, senderName);
 });
 
-builder.Services.AddSingleton<GpxParserService>();
-builder.Services.AddSingleton<CsvParserService>();
 builder.Services.AddSingleton<GpsService>();
 builder.Services.AddSingleton<AuthService>();
 builder.Services.AddSingleton<ClaimsService>();
@@ -84,4 +82,4 @@ builder.Services.AddSingleton<IAuthSessionRepository, TableStorageAuthSessionRep
 builder.Services.AddSingleton<INoteRepository, TableStorageNoteRepository>();
 builder.Services.AddSingleton<IEventContactRepository, TableStorageEventContactRepository>();
 
-builder.Build().Run();
+await builder.Build().RunAsync();

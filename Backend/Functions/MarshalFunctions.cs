@@ -21,7 +21,6 @@ public class MarshalFunctions
     private readonly IEventRepository _eventRepository;
     private readonly IChecklistItemRepository _checklistItemRepository;
     private readonly INoteRepository _noteRepository;
-    private readonly CsvParserService _csvParser;
     private readonly ClaimsService _claimsService;
     private readonly ContactPermissionService _contactPermissionService;
     private readonly EmailService? _emailService;
@@ -34,7 +33,6 @@ public class MarshalFunctions
         IEventRepository eventRepository,
         IChecklistItemRepository checklistItemRepository,
         INoteRepository noteRepository,
-        CsvParserService csvParser,
         ClaimsService claimsService,
         ContactPermissionService contactPermissionService,
         EmailService? emailService = null)
@@ -46,7 +44,6 @@ public class MarshalFunctions
         _eventRepository = eventRepository;
         _checklistItemRepository = checklistItemRepository;
         _noteRepository = noteRepository;
-        _csvParser = csvParser;
         _claimsService = claimsService;
         _contactPermissionService = contactPermissionService;
         _emailService = emailService;
@@ -197,7 +194,8 @@ public class MarshalFunctions
                 marshalEntity.Notes,
                 [],
                 false,
-                marshalEntity.CreatedDate
+                marshalEntity.CreatedDate,
+                marshalEntity.LastAccessedDate
             );
 
             _logger.LogInformation($"Marshal created: {marshalId}");
@@ -273,6 +271,7 @@ public class MarshalFunctions
                     assignedLocationIds,
                     isCheckedIn,
                     marshalEntity.CreatedDate,
+                    marshalEntity.LastAccessedDate,
                     canViewContact,
                     canModify
                 ));
@@ -345,6 +344,7 @@ public class MarshalFunctions
                 assignedLocationIds,
                 isCheckedIn,
                 marshalEntity.CreatedDate,
+                marshalEntity.LastAccessedDate,
                 canViewContact,
                 canModify
             );
@@ -460,6 +460,7 @@ public class MarshalFunctions
                 assignedLocationIds,
                 isCheckedIn,
                 marshalEntity.CreatedDate,
+                marshalEntity.LastAccessedDate,
                 canViewContact,
                 true // They can modify since we passed the permission check
             );

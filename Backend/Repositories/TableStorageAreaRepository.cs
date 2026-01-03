@@ -45,11 +45,14 @@ public class TableStorageAreaRepository : IAreaRepository
 
     public async Task<AreaEntity?> GetDefaultAreaAsync(string eventId)
     {
+        // Return first match - there should only be one default area per event
+#pragma warning disable S1751 // Loop intentionally returns on first iteration
         await foreach (AreaEntity area in _table.QueryAsync<AreaEntity>(
-            a => a.PartitionKey == eventId && a.IsDefault == true))
+            a => a.PartitionKey == eventId && a.IsDefault))
         {
             return area;
         }
+#pragma warning restore S1751
         return null;
     }
 

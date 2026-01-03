@@ -356,5 +356,268 @@ namespace VolunteerCheckin.Functions.Tests
                 .Replace('/', '_')
                 .Replace("=", "");
         }
+
+        // ==================== LastAccessedDate Tests ====================
+
+        /// <summary>
+        /// Verifies that AuthService sets LastAccessedDate when a marshal authenticates with magic code.
+        /// </summary>
+        [TestMethod]
+        public async Task AuthService_AuthenticateWithMagicCode_SetsLastAccessedDate()
+        {
+            // Arrange
+            string eventId = "event-123";
+            string marshalId = "marshal-456";
+            string magicCode = "ABC123";
+            string personId = "person-789";
+
+            MarshalEntity marshal = new()
+            {
+                PartitionKey = eventId,
+                RowKey = marshalId,
+                EventId = eventId,
+                MarshalId = marshalId,
+                PersonId = personId,
+                MagicCode = magicCode,
+                Name = "Test Marshal",
+                Email = "marshal@test.com",
+                LastAccessedDate = null // Not accessed yet
+            };
+
+            PersonEntity person = new()
+            {
+                PartitionKey = "PERSON",
+                RowKey = personId,
+                PersonId = personId,
+                Name = "Test Marshal",
+                Email = "marshal@test.com",
+                IsSystemAdmin = false
+            };
+
+            Mock<IAuthTokenRepository> mockTokenRepo = new();
+            Mock<IPersonRepository> mockPersonRepo = new();
+            Mock<IMarshalRepository> mockMarshalRepo = new();
+            Mock<IAuthSessionRepository> mockSessionRepo = new();
+            Mock<IEventRoleRepository> mockRoleRepo = new();
+            Mock<IUserEventMappingRepository> mockMappingRepo = new();
+            EmailService emailService = new("localhost", 25, "", "", "test@test.com", "Test");
+            Mock<ILogger<AuthService>> mockLogger = new();
+
+            mockMarshalRepo.Setup(r => r.GetByEventAsync(eventId))
+                .ReturnsAsync(new List<MarshalEntity> { marshal });
+
+            MarshalEntity? capturedMarshal = null;
+            mockMarshalRepo.Setup(r => r.UpdateAsync(It.IsAny<MarshalEntity>()))
+                .Callback<MarshalEntity>(m => capturedMarshal = m)
+                .Returns(Task.CompletedTask);
+
+            mockPersonRepo.Setup(r => r.GetAsync(personId))
+                .ReturnsAsync(person);
+
+            mockSessionRepo.Setup(r => r.AddAsync(It.IsAny<AuthSessionEntity>()))
+                .ReturnsAsync((AuthSessionEntity s) => s);
+
+            mockRoleRepo.Setup(r => r.GetByPersonAndEventAsync(personId, eventId))
+                .ReturnsAsync(new List<EventRoleEntity>());
+
+            // Create real ClaimsService with mocked repos
+            ClaimsService claimsService = new(
+                mockSessionRepo.Object,
+                mockPersonRepo.Object,
+                mockRoleRepo.Object,
+                mockMarshalRepo.Object,
+                mockMappingRepo.Object
+            );
+
+            AuthService authService = new(
+                mockTokenRepo.Object,
+                mockPersonRepo.Object,
+                mockMarshalRepo.Object,
+                claimsService,
+                emailService,
+                mockLogger.Object
+            );
+
+            // Act
+            (bool success, string? sessionToken, PersonInfo? personInfo, string? returnedMarshalId, string? message) =
+                await authService.AuthenticateWithMagicCodeAsync(eventId, magicCode, "127.0.0.1");
+
+            // Assert
+            success.ShouldBeTrue();
+            capturedMarshal.ShouldNotBeNull("Marshal should have been updated");
+            capturedMarshal.LastAccessedDate.ShouldNotBeNull("LastAccessedDate should be set");
+            capturedMarshal.LastAccessedDate.Value.ShouldBeInRange(
+                DateTime.UtcNow.AddSeconds(-5),
+                DateTime.UtcNow.AddSeconds(5),
+                "LastAccessedDate should be approximately now");
+        }
+
+        /// <summary>
+        /// Verifies that ClaimsService updates LastAccessedDate when validating a marshal session.
+        /// </summary>
+        [TestMethod]
+        public async Task ClaimsService_GetClaimsAsync_UpdatesLastAccessedDate()
+        {
+            // Arrange
+            string eventId = "event-123";
+            string marshalId = "marshal-456";
+            string personId = "person-789";
+            string sessionToken = "test-session-token";
+            string sessionTokenHash = HashToken(sessionToken);
+
+            AuthSessionEntity session = new()
+            {
+                PartitionKey = "SESSION",
+                RowKey = sessionTokenHash,
+                SessionId = Guid.NewGuid().ToString(),
+                SessionTokenHash = sessionTokenHash,
+                PersonId = personId,
+                EventId = eventId,
+                MarshalId = marshalId,
+                AuthMethod = Constants.AuthMethodMarshalMagicCode,
+                CreatedAt = DateTime.UtcNow.AddHours(-1),
+                LastAccessedAt = DateTime.UtcNow.AddHours(-1)
+            };
+
+            MarshalEntity marshal = new()
+            {
+                PartitionKey = eventId,
+                RowKey = marshalId,
+                EventId = eventId,
+                MarshalId = marshalId,
+                PersonId = personId,
+                Name = "Test Marshal",
+                LastAccessedDate = DateTime.UtcNow.AddDays(-1) // Last accessed yesterday
+            };
+
+            PersonEntity person = new()
+            {
+                PartitionKey = "PERSON",
+                RowKey = personId,
+                PersonId = personId,
+                Name = "Test Marshal",
+                Email = "marshal@test.com",
+                IsSystemAdmin = false
+            };
+
+            Mock<IAuthSessionRepository> mockSessionRepo = new();
+            Mock<IPersonRepository> mockPersonRepo = new();
+            Mock<IEventRoleRepository> mockRoleRepo = new();
+            Mock<IMarshalRepository> mockMarshalRepo = new();
+            Mock<IUserEventMappingRepository> mockMappingRepo = new();
+
+            mockSessionRepo.Setup(r => r.GetBySessionTokenHashAsync(sessionTokenHash))
+                .ReturnsAsync(session);
+            mockSessionRepo.Setup(r => r.UpdateUnconditionalAsync(It.IsAny<AuthSessionEntity>()))
+                .Returns(Task.CompletedTask);
+
+            mockPersonRepo.Setup(r => r.GetAsync(personId))
+                .ReturnsAsync(person);
+
+            mockMarshalRepo.Setup(r => r.GetAsync(eventId, marshalId))
+                .ReturnsAsync(marshal);
+
+            MarshalEntity? capturedMarshal = null;
+            mockMarshalRepo.Setup(r => r.UpdateAsync(It.IsAny<MarshalEntity>()))
+                .Callback<MarshalEntity>(m => capturedMarshal = m)
+                .Returns(Task.CompletedTask);
+
+            mockRoleRepo.Setup(r => r.GetByPersonAndEventAsync(personId, eventId))
+                .ReturnsAsync(new List<EventRoleEntity>());
+
+            ClaimsService claimsService = new(
+                mockSessionRepo.Object,
+                mockPersonRepo.Object,
+                mockRoleRepo.Object,
+                mockMarshalRepo.Object,
+                mockMappingRepo.Object
+            );
+
+            // Act
+            UserClaims? claims = await claimsService.GetClaimsAsync(sessionToken, eventId);
+
+            // Assert
+            claims.ShouldNotBeNull();
+            capturedMarshal.ShouldNotBeNull("Marshal should have been updated");
+            capturedMarshal.LastAccessedDate.ShouldNotBeNull("LastAccessedDate should be set");
+            capturedMarshal.LastAccessedDate.Value.ShouldBeInRange(
+                DateTime.UtcNow.AddSeconds(-5),
+                DateTime.UtcNow.AddSeconds(5),
+                "LastAccessedDate should be updated to approximately now");
+        }
+
+        /// <summary>
+        /// Verifies that ClaimsService does NOT update LastAccessedDate for non-marshal sessions.
+        /// </summary>
+        [TestMethod]
+        public async Task ClaimsService_GetClaimsAsync_AdminSession_DoesNotUpdateMarshalLastAccessedDate()
+        {
+            // Arrange
+            string eventId = "event-123";
+            string personId = "person-789";
+            string sessionToken = "test-session-token";
+            string sessionTokenHash = HashToken(sessionToken);
+
+            // Admin session - no MarshalId
+            AuthSessionEntity session = new()
+            {
+                PartitionKey = "SESSION",
+                RowKey = sessionTokenHash,
+                SessionId = Guid.NewGuid().ToString(),
+                SessionTokenHash = sessionTokenHash,
+                PersonId = personId,
+                EventId = null, // Admin sessions may not have EventId locked
+                MarshalId = null, // No marshal ID for admin session
+                AuthMethod = Constants.AuthMethodSecureEmailLink,
+                CreatedAt = DateTime.UtcNow.AddHours(-1),
+                LastAccessedAt = DateTime.UtcNow.AddHours(-1)
+            };
+
+            PersonEntity person = new()
+            {
+                PartitionKey = "PERSON",
+                RowKey = personId,
+                PersonId = personId,
+                Name = "Admin User",
+                Email = "admin@test.com",
+                IsSystemAdmin = true
+            };
+
+            Mock<IAuthSessionRepository> mockSessionRepo = new();
+            Mock<IPersonRepository> mockPersonRepo = new();
+            Mock<IEventRoleRepository> mockRoleRepo = new();
+            Mock<IMarshalRepository> mockMarshalRepo = new();
+            Mock<IUserEventMappingRepository> mockMappingRepo = new();
+
+            mockSessionRepo.Setup(r => r.GetBySessionTokenHashAsync(sessionTokenHash))
+                .ReturnsAsync(session);
+            mockSessionRepo.Setup(r => r.UpdateUnconditionalAsync(It.IsAny<AuthSessionEntity>()))
+                .Returns(Task.CompletedTask);
+
+            mockPersonRepo.Setup(r => r.GetAsync(personId))
+                .ReturnsAsync(person);
+
+            mockRoleRepo.Setup(r => r.GetByPersonAndEventAsync(personId, eventId))
+                .ReturnsAsync(new List<EventRoleEntity>());
+
+            ClaimsService claimsService = new(
+                mockSessionRepo.Object,
+                mockPersonRepo.Object,
+                mockRoleRepo.Object,
+                mockMarshalRepo.Object,
+                mockMappingRepo.Object
+            );
+
+            // Act
+            UserClaims? claims = await claimsService.GetClaimsAsync(sessionToken, eventId);
+
+            // Assert
+            claims.ShouldNotBeNull();
+            // Marshal repository should NOT be called for GetAsync or UpdateAsync
+            mockMarshalRepo.Verify(r => r.GetAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never,
+                "Marshal GetAsync should not be called for admin sessions");
+            mockMarshalRepo.Verify(r => r.UpdateAsync(It.IsAny<MarshalEntity>()), Times.Never,
+                "Marshal UpdateAsync should not be called for admin sessions");
+        }
     }
 }

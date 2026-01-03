@@ -1,0 +1,53 @@
+# EditorConfig for VolunteerCheckin.Functions
+# https://editorconfig.org
+
+root = true
+
+[*]
+indent_style = space
+indent_size = 4
+end_of_line = crlf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.cs]
+# Suppress MA0048: File name must match type name
+# DTOs.cs intentionally contains multiple record types for convenience
+dotnet_diagnostic.MA0048.severity = none
+
+# Suppress MA0016: Prefer using collection abstraction instead of implementation
+# Record types use concrete List<T> for JSON serialization compatibility and API contracts
+dotnet_diagnostic.MA0016.severity = none
+
+# Suppress MA0004: Use Task.ConfigureAwait(false)
+# Azure Functions handles synchronization context appropriately
+dotnet_diagnostic.MA0004.severity = none
+
+# Suppress MA0002: Use StringComparer overload
+# Many LINQ operations on IDs don't require explicit comparer
+dotnet_diagnostic.MA0002.severity = suggestion
+
+# Suppress S2629: Don't use string concatenation in logging
+# Performance impact is minimal in this context
+dotnet_diagnostic.S2629.severity = suggestion
+
+# Suppress S1075: Hardcoded URIs
+# Used for well-known URLs in configuration
+dotnet_diagnostic.S1075.severity = suggestion
+
+# Suppress MA0006: Use string.Equals instead of == operator
+# The == operator is readable and appropriate for simple string comparisons
+dotnet_diagnostic.MA0006.severity = suggestion
+
+# Suppress MA0011: Use CultureInfo with ToLower
+# ToLowerInvariant is used where appropriate, ToLower is fine for display purposes
+dotnet_diagnostic.MA0011.severity = suggestion
+
+# Suppress S3267: Loops should use LINQ Where
+# Sometimes explicit loops are clearer
+dotnet_diagnostic.S3267.severity = suggestion
+
+# HTTP handler functions are often long by nature
+[Functions/*Functions.cs]
+dotnet_diagnostic.MA0051.severity = suggestion

@@ -287,7 +287,7 @@ public class ChecklistQueryFunctions
                     {
                         if (scopeContext.IsRelevant && scopeContext.WinningConfig != null)
                         {
-                            bool shouldInclude = ShouldIncludeForArea(scopeContext, areaId, checkpointIds, marshalContext);
+                            bool shouldInclude = ShouldIncludeForArea(scopeContext, areaId, checkpointIds);
 
                             if (shouldInclude)
                             {
@@ -369,8 +369,7 @@ public class ChecklistQueryFunctions
     private static bool ShouldIncludeForArea(
         ChecklistScopeHelper.ScopeMatchResult scopeContext,
         string areaId,
-        List<string> checkpointIds,
-        ChecklistScopeHelper.MarshalContext marshalContext)
+        List<string> checkpointIds)
     {
         if (scopeContext.ContextType == "Personal")
         {

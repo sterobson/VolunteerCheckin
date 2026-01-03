@@ -101,16 +101,11 @@ export async function getCachedEventData(eventId) {
  * @param {any} value - The new value
  */
 export async function updateCachedField(eventId, field, value) {
-  console.log('updateCachedField called:', { eventId, field, hasValue: !!value });
   const data = await getCachedEventData(eventId);
-  console.log('updateCachedField existing data:', !!data);
   if (data) {
     data[field] = value;
     data.cachedAt = new Date().toISOString();
     await cacheEventData(eventId, data);
-    console.log('updateCachedField saved');
-  } else {
-    console.log('updateCachedField: no existing data to update');
   }
 }
 

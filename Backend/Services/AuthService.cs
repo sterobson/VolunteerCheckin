@@ -162,6 +162,7 @@ public class AuthService
     /// <summary>
     /// Authenticate a marshal using their magic code.
     /// </summary>
+#pragma warning disable MA0051 // Method is too long - authentication flow with multiple validation steps
     public async Task<(bool Success, string? SessionToken, PersonInfo? Person, string? MarshalId, string? Message)> AuthenticateWithMagicCodeAsync(
         string eventId,
         string magicCode,
@@ -190,9 +191,12 @@ public class AuthService
         {
             personId = Guid.NewGuid().ToString();
             marshal.PersonId = personId;
-            await _marshalRepository.UpdateAsync(marshal);
             _logger.LogInformation($"Generated new PersonId {personId} for legacy marshal {marshal.MarshalId}");
         }
+
+        // Update last accessed date
+        marshal.LastAccessedDate = DateTime.UtcNow;
+        await _marshalRepository.UpdateAsync(marshal);
 
         // Get or create person for this marshal
         PersonEntity? person = await _personRepository.GetAsync(personId);

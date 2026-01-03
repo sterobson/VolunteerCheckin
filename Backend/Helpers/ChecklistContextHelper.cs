@@ -168,6 +168,7 @@ public class ChecklistContextHelper
     /// <summary>
     /// Builds a ChecklistItemWithStatus from an item and its context.
     /// </summary>
+#pragma warning disable MA0051 // Method is too long - builds complex DTO with multiple fields
     public static ChecklistItemWithStatus BuildItemWithStatus(
         ChecklistItemEntity item,
         ChecklistScopeHelper.MarshalContext context,

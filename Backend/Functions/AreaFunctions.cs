@@ -389,34 +389,6 @@ public class AreaFunctions
         }
     }
 
-    // Helper method to ensure default area exists
-    private async Task<AreaEntity> EnsureDefaultAreaExists(string eventId)
-    {
-        AreaEntity? defaultArea = await _areaRepository.GetDefaultAreaAsync(eventId);
-
-        if (defaultArea == null)
-        {
-            defaultArea = new AreaEntity
-            {
-                PartitionKey = eventId,
-                RowKey = Guid.NewGuid().ToString(),
-                EventId = eventId,
-                Name = Constants.DefaultAreaName,
-                Description = Constants.DefaultAreaDescription,
-                Color = "#667eea",
-                ContactsJson = "[]",
-                PolygonJson = "[]",
-                IsDefault = true,
-                DisplayOrder = 0
-            };
-
-            await _areaRepository.AddAsync(defaultArea);
-            _logger.LogInformation($"Created default area for event {eventId}");
-        }
-
-        return defaultArea;
-    }
-
     // Helper method to recalculate checkpoint area assignments for an event
     private async Task RecalculateCheckpointAreas(string eventId)
     {
@@ -880,12 +852,14 @@ public class AreaFunctions
 
                         marshalInfos.Add(new AreaLeadMarshalInfo(
                             marshal.MarshalId,
+                            assignment.RowKey, // AssignmentId
                             marshal.Name,
                             marshal.Email,
                             marshal.PhoneNumber,
                             assignment.IsCheckedIn,
                             assignment.CheckInTime,
                             assignment.CheckInMethod,
+                            marshal.LastAccessedDate,
                             marshalTasks.Count,
                             marshalTasks
                         ));

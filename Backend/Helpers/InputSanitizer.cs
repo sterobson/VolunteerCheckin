@@ -126,12 +126,13 @@ public static partial class InputSanitizer
     }
 
     // Regex patterns using source generators for performance
-    [GeneratedRegex(@"<[^>]*>", RegexOptions.Compiled)]
+    // NonBacktracking prevents ReDoS attacks
+    [GeneratedRegex(@"<[^>]*>", RegexOptions.NonBacktracking)]
     private static partial Regex HtmlTagRegex();
 
-    [GeneratedRegex(@"<script[^>]*>.*?</script>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    [GeneratedRegex(@"<script[^>]*>.*?</script>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.NonBacktracking)]
     private static partial Regex ScriptTagRegex();
 
-    [GeneratedRegex(@"[^0-9\s\-\(\)\+]")]
+    [GeneratedRegex(@"[^0-9\s\-\(\)\+]", RegexOptions.NonBacktracking)]
     private static partial Regex PhoneCharactersRegex();
 }

@@ -36,6 +36,7 @@ public class ContactPermissionService
     /// Get the set of marshal IDs whose contact details the user can view.
     /// Returns null if user can see ALL marshals (event admin).
     /// </summary>
+#pragma warning disable MA0051 // Method is too long - complex permission resolution logic
     public virtual async Task<ContactPermissions> GetContactPermissionsAsync(UserClaims claims, string eventId)
     {
         // Must be authenticated

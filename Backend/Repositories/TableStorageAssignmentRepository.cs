@@ -76,11 +76,14 @@ public class TableStorageAssignmentRepository : IAssignmentRepository
 
     public async Task<bool> ExistsAsync(string eventId, string marshalId, string locationId)
     {
-        await foreach (AssignmentEntity assignment in _table.QueryAsync<AssignmentEntity>(
+        // Check if any matching assignment exists
+#pragma warning disable S1751 // Loop intentionally returns on first match
+        await foreach (AssignmentEntity _ in _table.QueryAsync<AssignmentEntity>(
             a => a.PartitionKey == eventId && a.MarshalId == marshalId && a.LocationId == locationId))
         {
             return true;
         }
+#pragma warning restore S1751
         return false;
     }
 

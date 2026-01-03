@@ -42,7 +42,7 @@ public class TableStorageChecklistCompletionRepository : IChecklistCompletionRep
 
         // EFFICIENT: Single partition scan to get all completions for event
         await foreach (ChecklistCompletionEntity completion in _table.QueryAsync<ChecklistCompletionEntity>(
-            c => c.PartitionKey == partitionKey && c.IsDeleted == false))
+            c => c.PartitionKey == partitionKey && !c.IsDeleted))
         {
             completions.Add(completion);
         }
@@ -57,7 +57,7 @@ public class TableStorageChecklistCompletionRepository : IChecklistCompletionRep
 
         // Filter by RowKey prefix within the partition (RowKey starts with itemId#)
         await foreach (ChecklistCompletionEntity completion in _table.QueryAsync<ChecklistCompletionEntity>(
-            c => c.PartitionKey == partitionKey && c.ChecklistItemId == itemId && c.IsDeleted == false))
+            c => c.PartitionKey == partitionKey && c.ChecklistItemId == itemId && !c.IsDeleted))
         {
             completions.Add(completion);
         }
@@ -72,7 +72,7 @@ public class TableStorageChecklistCompletionRepository : IChecklistCompletionRep
 
         // EFFICIENT: Single partition scan filtered by marshal
         await foreach (ChecklistCompletionEntity completion in _table.QueryAsync<ChecklistCompletionEntity>(
-            c => c.PartitionKey == partitionKey && c.ContextOwnerMarshalId == marshalId && c.IsDeleted == false))
+            c => c.PartitionKey == partitionKey && c.ContextOwnerMarshalId == marshalId && !c.IsDeleted))
         {
             completions.Add(completion);
         }

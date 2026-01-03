@@ -19,7 +19,7 @@ public class ClaimsService
 
     // Cache for legacy migration checks to avoid repeated database queries
     // Key: "{personId}:{eventId}", Value: true if migration was attempted
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> _migrationCheckCache = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> _migrationCheckCache = new(StringComparer.Ordinal);
 
     public ClaimsService(
         IAuthSessionRepository sessionRepository,
@@ -41,6 +41,7 @@ public class ClaimsService
     /// <param name="sessionToken">The session token from cookie/header</param>
     /// <param name="eventId">The event being accessed (optional for cross-event admin)</param>
     /// <returns>UserClaims if valid, null if invalid/expired</returns>
+#pragma warning disable MA0051 // Method is too long - resolves claims with role migration logic
     public virtual async Task<UserClaims?> GetClaimsAsync(string sessionToken, string? eventId = null)
     {
         // Hash the session token to look it up
@@ -56,6 +57,17 @@ public class ClaimsService
         // Update last accessed time (use unconditional update to avoid race conditions)
         session.LastAccessedAt = DateTime.UtcNow;
         await _sessionRepository.UpdateUnconditionalAsync(session);
+
+        // Update marshal's last accessed date if this is a marshal session
+        if (!string.IsNullOrEmpty(session.MarshalId) && !string.IsNullOrEmpty(session.EventId))
+        {
+            MarshalEntity? marshal = await _marshalRepository.GetAsync(session.EventId, session.MarshalId);
+            if (marshal != null)
+            {
+                marshal.LastAccessedDate = DateTime.UtcNow;
+                await _marshalRepository.UpdateAsync(marshal);
+            }
+        }
 
         // Get the person
         PersonEntity? person = await _personRepository.GetAsync(session.PersonId);

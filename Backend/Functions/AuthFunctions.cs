@@ -16,6 +16,7 @@ public class AuthFunctions
     private readonly AuthService _authService;
     private readonly ClaimsService _claimsService;
     private readonly IPersonRepository _personRepository;
+    private readonly IMarshalRepository _marshalRepository;
     private readonly RateLimitService _rateLimitService;
 
     public AuthFunctions(
@@ -23,12 +24,14 @@ public class AuthFunctions
         AuthService authService,
         ClaimsService claimsService,
         IPersonRepository personRepository,
+        IMarshalRepository marshalRepository,
         RateLimitService rateLimitService)
     {
         _logger = logger;
         _authService = authService;
         _claimsService = claimsService;
         _personRepository = personRepository;
+        _marshalRepository = marshalRepository;
         _rateLimitService = rateLimitService;
     }
 
@@ -356,6 +359,17 @@ public class AuthFunctions
                 return new UnauthorizedObjectResult(new { Message = "Invalid or expired session" });
             }
 
+            // Update LastAccessedDate for marshal sessions
+            if (!string.IsNullOrEmpty(claims.MarshalId) && !string.IsNullOrEmpty(claims.EventId))
+            {
+                MarshalEntity? marshal = await _marshalRepository.GetAsync(claims.EventId, claims.MarshalId);
+                if (marshal != null)
+                {
+                    marshal.LastAccessedDate = DateTime.UtcNow;
+                    await _marshalRepository.UpdateAsync(marshal);
+                }
+            }
+
             return new OkObjectResult(claims);
         }
         catch (Exception ex)
@@ -403,7 +417,7 @@ public class AuthFunctions
             string email = request.Email.Trim().ToLowerInvariant();
 
             // Create session directly (bypass email verification)
-            (bool success, string? sessionToken, PersonInfo? person) =
+            (bool success, string? sessionToken, PersonInfo? _) =
                 await _authService.InstantLoginAsync(email, ipAddress);
 
             if (success && sessionToken != null)

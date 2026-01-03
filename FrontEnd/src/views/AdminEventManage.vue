@@ -803,6 +803,7 @@ const tryCloseModal = (closeFunction) => {
 
 const loadEventData = async () => {
   try {
+    // Phase 1: Fetch event first (needed for form setup)
     await eventsStore.fetchEvent(route.params.eventId);
     event.value = eventsStore.currentEvent;
 
@@ -823,18 +824,29 @@ const loadEventData = async () => {
       setTerminology(event.value);
     }
 
-    await eventsStore.fetchLocations(route.params.eventId);
-    locations.value = eventsStore.locations;
+    // Phase 2: Load all other data in parallel (8 independent calls)
+    const results = await Promise.allSettled([
+      eventsStore.fetchLocations(route.params.eventId),
+      eventsStore.fetchEventStatus(route.params.eventId),
+      loadEventAdmins(),
+      loadMarshals(),
+      loadAreas(),
+      loadChecklists(),
+      loadNotes(),
+      loadContacts(),
+    ]);
 
-    await eventsStore.fetchEventStatus(route.params.eventId);
+    // Update state from store after parallel fetches
+    locations.value = eventsStore.locations;
     locationStatuses.value = eventsStore.eventStatus.locations;
 
-    await loadEventAdmins();
-    await loadMarshals();
-    await loadAreas();
-    await loadChecklists();
-    await loadNotes();
-    await loadContacts();
+    // Log any failures for debugging
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        const names = ['locations', 'eventStatus', 'admins', 'marshals', 'areas', 'checklists', 'notes', 'contacts'];
+        console.error(`Failed to load ${names[index]}:`, result.reason);
+      }
+    });
   } catch (error) {
     console.error('Failed to load event data:', error);
   }
@@ -891,6 +903,39 @@ const loadContacts = async () => {
   } catch (error) {
     console.error('Failed to load contacts:', error);
   }
+};
+
+// Targeted reload functions for efficiency - avoid full reloads when only specific data changes
+const reloadLocationsAndStatus = async () => {
+  await Promise.all([
+    eventsStore.fetchLocations(route.params.eventId),
+    eventsStore.fetchEventStatus(route.params.eventId),
+  ]);
+  locations.value = eventsStore.locations;
+  locationStatuses.value = eventsStore.eventStatus.locations;
+};
+
+const reloadMarshalsAndStatus = async () => {
+  await Promise.all([
+    loadMarshals(),
+    eventsStore.fetchEventStatus(route.params.eventId),
+  ]);
+  locationStatuses.value = eventsStore.eventStatus.locations;
+};
+
+const reloadLocationsAreasAndStatus = async () => {
+  await Promise.all([
+    eventsStore.fetchLocations(route.params.eventId),
+    eventsStore.fetchEventStatus(route.params.eventId),
+    loadAreas(),
+  ]);
+  locations.value = eventsStore.locations;
+  locationStatuses.value = eventsStore.eventStatus.locations;
+};
+
+const reloadStatusOnly = async () => {
+  await eventsStore.fetchEventStatus(route.params.eventId);
+  locationStatuses.value = eventsStore.eventStatus.locations;
 };
 
 const handleAddArea = () => {
@@ -1273,7 +1318,7 @@ const handleUploadRouteSubmit = async (file) => {
 
   try {
     await eventsApi.uploadGpx(route.params.eventId, file);
-    await loadEventData();
+    await reloadLocationsAndStatus();
     closeRouteModal();
   } catch (error) {
     console.error('Failed to upload route:', error);
@@ -1305,7 +1350,7 @@ const handleImportLocationsSubmit = async ({ file, deleteExisting }) => {
       deleteExisting
     );
     importResult.value = response.data;
-    await loadEventData();
+    await reloadLocationsAreasAndStatus();
 
     closeImportModal();
 
@@ -2019,7 +2064,7 @@ const handleDeleteLocation = async (locationId) => {
   showConfirm('Delete Location', 'Are you sure you want to delete this location?', async () => {
     try {
       await locationsApi.delete(route.params.eventId, locationId);
-      await loadEventData();
+      await reloadLocationsAreasAndStatus();
       closeEditLocationModal();
     } catch (error) {
       console.error('Failed to delete location:', error);
@@ -2031,7 +2076,7 @@ const handleDeleteLocation = async (locationId) => {
 const toggleCheckIn = async (assignment) => {
   try {
     await checkInApi.adminCheckIn(route.params.eventId, assignment.id);
-    await loadEventData();
+    await reloadStatusOnly();
 
     // Update selectedLocation if the modal is open
     if (selectedLocation.value) {
@@ -2371,7 +2416,7 @@ const handleDeleteMarshal = async (marshalId) => {
   showConfirm('Delete Marshal', 'Are you sure you want to delete this marshal?', async () => {
     try {
       await marshalsApi.delete(route.params.eventId, marshalId);
-      await loadEventData();
+      await reloadMarshalsAndStatus();
       closeEditMarshalModal();
     } catch (error) {
       console.error('Failed to delete marshal:', error);
@@ -2430,7 +2475,7 @@ const handleImportMarshalsSubmit = async ({ file }) => {
   try {
     const response = await marshalsApi.importCsv(route.params.eventId, file);
     importMarshalsResult.value = response.data;
-    await loadEventData();
+    await reloadMarshalsAndStatus();
 
     closeImportMarshalsModal();
 
@@ -2482,7 +2527,7 @@ const changeAssignmentStatus = async ({ assignment, status }) => {
       }
     }
 
-    await loadEventData();
+    await reloadStatusOnly();
 
     // Update selectedLocation if the modal is open
     if (selectedLocation.value) {

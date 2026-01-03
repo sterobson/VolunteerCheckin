@@ -11,8 +11,11 @@ namespace VolunteerCheckin.Functions.Services;
 /// </summary>
 public class RateLimitService
 {
-    private readonly ConcurrentDictionary<string, RateLimitEntry> _entries = new();
+    private readonly ConcurrentDictionary<string, RateLimitEntry> _entries = new(StringComparer.Ordinal);
+    // Stored to prevent garbage collection - the Timer must remain referenced
+#pragma warning disable S4487 // Unread private field
     private readonly Timer _cleanupTimer;
+#pragma warning restore S4487
 
     public RateLimitService()
     {
@@ -125,7 +128,7 @@ public class RateLimitService
         }
     }
 
-    private class RateLimitEntry
+    private sealed class RateLimitEntry
     {
         public Queue<DateTime> Requests { get; } = new();
     }

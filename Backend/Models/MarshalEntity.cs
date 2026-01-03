@@ -31,4 +31,10 @@ public class MarshalEntity : ITableEntity
     public string Email { get; set; } = string.Empty;
     public string PhoneNumber { get; set; } = string.Empty;
     public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// When the marshal last accessed Marshal Mode (logged in or resumed session).
+    /// Null if they have never accessed the site.
+    /// </summary>
+    public DateTime? LastAccessedDate { get; set; }
 }

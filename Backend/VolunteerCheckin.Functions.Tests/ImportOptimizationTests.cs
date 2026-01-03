@@ -41,7 +41,6 @@ public class ImportOptimizationTests
         Mock<IChecklistItemRepository> mockChecklistItemRepo = new();
         Mock<INoteRepository> mockNoteRepo = new();
         Mock<ILogger<LocationFunctions>> mockLogger = new();
-        CsvParserService csvParser = new();
 
         // Setup existing marshal that should be found via cache
         MarshalEntity existingMarshal = new()
@@ -80,7 +79,6 @@ public class ImportOptimizationTests
             mockAssignmentRepo.Object,
             mockChecklistItemRepo.Object,
             mockNoteRepo.Object,
-            csvParser,
             mockAreaRepo.Object);
 
         // Create CSV with two locations, both referencing the same marshal
@@ -117,7 +115,6 @@ public class ImportOptimizationTests
         Mock<IChecklistItemRepository> mockChecklistItemRepo = new();
         Mock<INoteRepository> mockNoteRepo = new();
         Mock<ILogger<LocationFunctions>> mockLogger = new();
-        CsvParserService csvParser = new();
 
         mockLocationRepo
             .Setup(r => r.GetByEventAsync(EventId))
@@ -147,7 +144,6 @@ public class ImportOptimizationTests
             mockAssignmentRepo.Object,
             mockChecklistItemRepo.Object,
             mockNoteRepo.Object,
-            csvParser,
             mockAreaRepo.Object);
 
         // Create CSV with three locations, two referencing "New Marshal"
@@ -186,7 +182,6 @@ public class ImportOptimizationTests
         Mock<IChecklistItemRepository> mockChecklistItemRepo = new();
         Mock<INoteRepository> mockNoteRepo = new();
         Mock<ILogger<MarshalFunctions>> mockLogger = new();
-        CsvParserService csvParser = new();
 
         Mock<ClaimsService> mockClaimsService = new(
             MockBehavior.Loose,
@@ -252,7 +247,6 @@ public class ImportOptimizationTests
             mockEventRepo.Object,
             mockChecklistItemRepo.Object,
             mockNoteRepo.Object,
-            csvParser,
             mockClaimsService.Object,
             mockContactPermission.Object);
 
@@ -287,7 +281,6 @@ public class ImportOptimizationTests
         Mock<IChecklistItemRepository> mockChecklistItemRepo = new();
         Mock<INoteRepository> mockNoteRepo = new();
         Mock<ILogger<MarshalFunctions>> mockLogger = new();
-        CsvParserService csvParser = new();
 
         Mock<ClaimsService> mockClaimsService = new(
             MockBehavior.Loose,
@@ -337,7 +330,6 @@ public class ImportOptimizationTests
             mockEventRepo.Object,
             mockChecklistItemRepo.Object,
             mockNoteRepo.Object,
-            csvParser,
             mockClaimsService.Object,
             mockContactPermission.Object);
 

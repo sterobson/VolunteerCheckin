@@ -7,7 +7,7 @@ namespace VolunteerCheckin.Functions.Services;
 public class TableStorageService
 {
     private readonly TableServiceClient _tableServiceClient;
-    private readonly ConcurrentDictionary<string, bool> _initializedTables = new();
+    private readonly ConcurrentDictionary<string, bool> _initializedTables = new(StringComparer.Ordinal);
 
     private const string EventsTable = "Events";
     private const string LocationsTable = "Locations";

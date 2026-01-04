@@ -210,6 +210,11 @@ public class EventFunctions
             // Only update default checkpoint style if provided
             if (request.DefaultCheckpointStyleType != null) eventEntity.DefaultCheckpointStyleType = request.DefaultCheckpointStyleType;
             if (request.DefaultCheckpointStyleColor != null) eventEntity.DefaultCheckpointStyleColor = request.DefaultCheckpointStyleColor;
+            if (request.DefaultCheckpointStyleBackgroundShape != null) eventEntity.DefaultCheckpointStyleBackgroundShape = request.DefaultCheckpointStyleBackgroundShape;
+            if (request.DefaultCheckpointStyleBackgroundColor != null) eventEntity.DefaultCheckpointStyleBackgroundColor = request.DefaultCheckpointStyleBackgroundColor;
+            if (request.DefaultCheckpointStyleBorderColor != null) eventEntity.DefaultCheckpointStyleBorderColor = request.DefaultCheckpointStyleBorderColor;
+            if (request.DefaultCheckpointStyleIconColor != null) eventEntity.DefaultCheckpointStyleIconColor = request.DefaultCheckpointStyleIconColor;
+            if (request.DefaultCheckpointStyleSize != null) eventEntity.DefaultCheckpointStyleSize = request.DefaultCheckpointStyleSize;
 
             await _eventRepository.UpdateAsync(eventEntity);
 

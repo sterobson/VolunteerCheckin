@@ -27,7 +27,16 @@ public class AreaEntity : ITableEntity
     public string AreaLeadMarshalIdsJson { get; set; } = "[]";
 
     // Default checkpoint style for checkpoints in this area (overrides event default)
-    // Type: default, circle, square, triangle, diamond, star, hexagon, pentagon, water, food, medical, photo, music, start, finish
+    // Type: default, circle, square, triangle, diamond, star, hexagon, pentagon, water, food, medical, photo, music, start, finish, arrows, etc.
     public string CheckpointStyleType { get; set; } = "default";
-    public string CheckpointStyleColor { get; set; } = string.Empty; // Hex color for colorizable shapes
+    public string CheckpointStyleColor { get; set; } = string.Empty; // Hex color for colorizable shapes (legacy, use CheckpointStyleBackgroundColor)
+    public string CheckpointStyleBackgroundShape { get; set; } = string.Empty; // circle, square, hexagon, pentagon, diamond, star, dot, none
+    public string CheckpointStyleBackgroundColor { get; set; } = string.Empty; // Hex color for background
+    public string CheckpointStyleBorderColor { get; set; } = string.Empty; // Hex color for border (empty = white, "none" = no border)
+    public string CheckpointStyleIconColor { get; set; } = string.Empty; // Hex color for icon content (empty = white)
+    public string CheckpointStyleSize { get; set; } = string.Empty; // 33, 66, 100, 150 (percentage)
+
+    // Terminology overrides for this area (empty = inherit from event)
+    public string PeopleTerm { get; set; } = string.Empty;
+    public string CheckpointTerm { get; set; } = string.Empty;
 }

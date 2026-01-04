@@ -314,6 +314,13 @@ public class LocationFunctions
             // Update checkpoint style if provided
             if (request.StyleType != null) locationEntity.StyleType = request.StyleType;
             if (request.StyleColor != null) locationEntity.StyleColor = request.StyleColor;
+            if (request.StyleBackgroundShape != null) locationEntity.StyleBackgroundShape = request.StyleBackgroundShape;
+            if (request.StyleBackgroundColor != null) locationEntity.StyleBackgroundColor = request.StyleBackgroundColor;
+            if (request.StyleBorderColor != null) locationEntity.StyleBorderColor = request.StyleBorderColor;
+            if (request.StyleIconColor != null) locationEntity.StyleIconColor = request.StyleIconColor;
+            if (request.StyleSize != null) locationEntity.StyleSize = request.StyleSize;
+            // Update terminology if provided
+            if (request.PeopleTerm != null) locationEntity.PeopleTerm = request.PeopleTerm;
 
             // Recalculate area assignments based on new location
             AreaEntity defaultArea = await EnsureDefaultAreaExists(eventId);

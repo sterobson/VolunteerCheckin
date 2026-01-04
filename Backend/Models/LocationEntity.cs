@@ -24,7 +24,15 @@ public class LocationEntity : ITableEntity
     public string AreaIdsJson { get; set; } = "[]"; // JSON array of area IDs this checkpoint belongs to
 
     // Checkpoint style (overrides area and event defaults)
-    // Type: default, circle, square, triangle, diamond, star, hexagon, pentagon, water, food, medical, photo, music, start, finish
+    // Type: default, circle, square, triangle, diamond, star, hexagon, pentagon, water, food, medical, photo, music, start, finish, arrows, etc.
     public string StyleType { get; set; } = "default";
-    public string StyleColor { get; set; } = string.Empty; // Hex color for colorizable shapes
+    public string StyleColor { get; set; } = string.Empty; // Hex color for colorizable shapes (legacy, use StyleBackgroundColor)
+    public string StyleBackgroundShape { get; set; } = string.Empty; // circle, square, hexagon, pentagon, diamond, star, dot, none
+    public string StyleBackgroundColor { get; set; } = string.Empty; // Hex color for background (empty = inherit or use StyleColor)
+    public string StyleBorderColor { get; set; } = string.Empty; // Hex color for border (empty = white, "none" = no border)
+    public string StyleIconColor { get; set; } = string.Empty; // Hex color for icon content (empty = white)
+    public string StyleSize { get; set; } = string.Empty; // 33, 66, 100, 150 (percentage, empty = 100)
+
+    // Terminology override for this checkpoint (empty = inherit from area -> event)
+    public string PeopleTerm { get; set; } = string.Empty;
 }

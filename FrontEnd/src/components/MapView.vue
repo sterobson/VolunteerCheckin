@@ -14,6 +14,7 @@ import {
   getStatusColor,
   getStatusBadgeHtml,
   getCheckpointStatus,
+  generateCheckpointSvg,
 } from '../constants/checkpointIcons';
 
 const props = defineProps({
@@ -648,20 +649,57 @@ const updateMarkers = () => {
     else if (hasCustomStyle && !isGrayed) {
       // Show count unless in marshal mode (where we hide counts)
       const showCount = !props.marshalMode;
-      const customMarker = getCheckpointMarkerHtml(
-        location.resolvedStyleType,
-        location.resolvedStyleColor,
-        checkedInCount,
-        requiredMarshals,
-        isHighlighted ? 40 : 32,
-        showCount
-      );
 
-      if (customMarker) {
-        markerHtml = customMarker;
+      // Use the new composable SVG generator with all resolved style fields
+      const baseSize = isHighlighted ? 40 : 32;
+      const sizePercent = location.resolvedStyleSize || location.ResolvedStyleSize || '100';
+      const actualSize = Math.round(baseSize * (parseInt(sizePercent, 10) / 100));
+
+      const customSvg = generateCheckpointSvg({
+        type: location.resolvedStyleType || location.ResolvedStyleType,
+        backgroundShape: location.resolvedStyleBackgroundShape || location.ResolvedStyleBackgroundShape || 'circle',
+        backgroundColor: location.resolvedStyleBackgroundColor || location.ResolvedStyleBackgroundColor || location.resolvedStyleColor || location.ResolvedStyleColor || '',
+        borderColor: location.resolvedStyleBorderColor || location.ResolvedStyleBorderColor || '',
+        iconColor: location.resolvedStyleIconColor || location.ResolvedStyleIconColor || '',
+        size: sizePercent,
+      });
+
+      if (customSvg) {
+        // Wrap the SVG with status badge overlay
+        const status = getCheckpointStatus(checkedInCount, requiredMarshals);
+        const statusBadge = getStatusBadgeHtml(checkedInCount, requiredMarshals);
+
+        markerHtml = `
+          <div style="position: relative; display: inline-block;">
+            ${customSvg}
+            <div style="position: absolute; top: -4px; right: -4px;">
+              ${statusBadge}
+            </div>
+            ${showCount ? `<div style="
+              position: absolute;
+              bottom: -2px;
+              right: -6px;
+              background-color: white;
+              border-radius: 8px;
+              padding: 1px 4px;
+              font-size: 9px;
+              font-weight: bold;
+              color: #333;
+              box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+            ">${checkedInCount}/${requiredMarshals}</div>` : ''}
+          </div>
+        `;
       } else {
-        // Fallback to default rendering if custom marker fails
-        markerHtml = buildDefaultMarker(checkedInCount, requiredMarshals, isHighlighted, props.marshalMode);
+        // Fallback to legacy marker if new generator fails
+        const legacyMarker = getCheckpointMarkerHtml(
+          location.resolvedStyleType,
+          location.resolvedStyleColor,
+          checkedInCount,
+          requiredMarshals,
+          baseSize,
+          showCount
+        );
+        markerHtml = legacyMarker || buildDefaultMarker(checkedInCount, requiredMarshals, isHighlighted, props.marshalMode);
       }
     }
     // Default status-based colored circle with status badge

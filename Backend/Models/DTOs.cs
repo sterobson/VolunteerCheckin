@@ -21,7 +21,12 @@ public record CreateEventRequest(
     string? CourseTerm = null,
     // Default checkpoint style (optional)
     string? DefaultCheckpointStyleType = null,
-    string? DefaultCheckpointStyleColor = null
+    string? DefaultCheckpointStyleColor = null,
+    string? DefaultCheckpointStyleBackgroundShape = null,
+    string? DefaultCheckpointStyleBackgroundColor = null,
+    string? DefaultCheckpointStyleBorderColor = null,
+    string? DefaultCheckpointStyleIconColor = null,
+    string? DefaultCheckpointStyleSize = null
 );
 
 public record UpdateEventRequest(
@@ -37,7 +42,12 @@ public record UpdateEventRequest(
     string? CourseTerm = null,
     // Default checkpoint style (optional)
     string? DefaultCheckpointStyleType = null,
-    string? DefaultCheckpointStyleColor = null
+    string? DefaultCheckpointStyleColor = null,
+    string? DefaultCheckpointStyleBackgroundShape = null,
+    string? DefaultCheckpointStyleBackgroundColor = null,
+    string? DefaultCheckpointStyleBorderColor = null,
+    string? DefaultCheckpointStyleIconColor = null,
+    string? DefaultCheckpointStyleSize = null
 );
 
 public record RoutePoint(
@@ -64,7 +74,12 @@ public record EventResponse(
     string CourseTerm,
     // Default checkpoint style
     string DefaultCheckpointStyleType,
-    string DefaultCheckpointStyleColor
+    string DefaultCheckpointStyleColor,
+    string DefaultCheckpointStyleBackgroundShape,
+    string DefaultCheckpointStyleBackgroundColor,
+    string DefaultCheckpointStyleBorderColor,
+    string DefaultCheckpointStyleIconColor,
+    string DefaultCheckpointStyleSize
 );
 
 public record CreateLocationRequest(
@@ -81,7 +96,14 @@ public record CreateLocationRequest(
     List<PendingNote>? PendingNewNotes = null,
     // Checkpoint style (optional)
     string? StyleType = null,
-    string? StyleColor = null
+    string? StyleColor = null,
+    string? StyleBackgroundShape = null,
+    string? StyleBackgroundColor = null,
+    string? StyleBorderColor = null,
+    string? StyleIconColor = null,
+    string? StyleSize = null,
+    // Terminology override (optional, null = don't change, empty = inherit from area -> event)
+    string? PeopleTerm = null
 );
 
 public record LocationResponse(
@@ -100,9 +122,23 @@ public record LocationResponse(
     // Checkpoint style
     string StyleType,
     string StyleColor,
+    string StyleBackgroundShape,
+    string StyleBackgroundColor,
+    string StyleBorderColor,
+    string StyleIconColor,
+    string StyleSize,
     // Resolved style (computed from checkpoint -> area -> event hierarchy)
     string ResolvedStyleType,
-    string ResolvedStyleColor
+    string ResolvedStyleColor,
+    string ResolvedStyleBackgroundShape,
+    string ResolvedStyleBackgroundColor,
+    string ResolvedStyleBorderColor,
+    string ResolvedStyleIconColor,
+    string ResolvedStyleSize,
+    // Terminology override (empty = inherit from area -> event)
+    string PeopleTerm,
+    // Resolved terminology (computed from checkpoint -> area -> event hierarchy)
+    string ResolvedPeopleTerm
 );
 
 public record AreaContact(
@@ -122,19 +158,32 @@ public record CreateAreaRequest(
     List<RoutePoint>? Polygon,
     // Default checkpoint style for checkpoints in this area (optional)
     string? CheckpointStyleType = null,
-    string? CheckpointStyleColor = null
+    string? CheckpointStyleColor = null,
+    string? CheckpointStyleBackgroundShape = null,
+    string? CheckpointStyleBackgroundColor = null,
+    string? CheckpointStyleBorderColor = null,
+    string? CheckpointStyleIconColor = null,
+    string? CheckpointStyleSize = null
 );
 
 public record UpdateAreaRequest(
     string Name,
     string Description,
     string Color,
-    List<AreaContact> Contacts,
+    List<AreaContact>? Contacts,
     List<RoutePoint>? Polygon,
     int DisplayOrder,
     // Default checkpoint style for checkpoints in this area (optional)
     string? CheckpointStyleType = null,
-    string? CheckpointStyleColor = null
+    string? CheckpointStyleColor = null,
+    string? CheckpointStyleBackgroundShape = null,
+    string? CheckpointStyleBackgroundColor = null,
+    string? CheckpointStyleBorderColor = null,
+    string? CheckpointStyleIconColor = null,
+    string? CheckpointStyleSize = null,
+    // Terminology overrides (optional, null = don't change, empty = inherit from event)
+    string? PeopleTerm = null,
+    string? CheckpointTerm = null
 );
 
 public record AreaResponse(
@@ -151,7 +200,15 @@ public record AreaResponse(
     DateTime CreatedDate,
     // Default checkpoint style for checkpoints in this area
     string CheckpointStyleType,
-    string CheckpointStyleColor
+    string CheckpointStyleColor,
+    string CheckpointStyleBackgroundShape,
+    string CheckpointStyleBackgroundColor,
+    string CheckpointStyleBorderColor,
+    string CheckpointStyleIconColor,
+    string CheckpointStyleSize,
+    // Terminology overrides (empty = inherit from event)
+    string PeopleTerm,
+    string CheckpointTerm
 );
 
 public record BulkAssignCheckpointsRequest(
@@ -218,9 +275,19 @@ public record LocationStatusResponse(
     // Checkpoint style
     string StyleType,
     string StyleColor,
+    string StyleBackgroundShape,
+    string StyleBackgroundColor,
+    string StyleBorderColor,
+    string StyleIconColor,
+    string StyleSize,
     // Resolved style (computed from checkpoint -> area -> event hierarchy)
     string ResolvedStyleType,
-    string ResolvedStyleColor
+    string ResolvedStyleColor,
+    string ResolvedStyleBackgroundShape,
+    string ResolvedStyleBackgroundColor,
+    string ResolvedStyleBorderColor,
+    string ResolvedStyleIconColor,
+    string ResolvedStyleSize
 );
 
 public record UserEventMappingResponse(

@@ -25,7 +25,7 @@
           </p>
           <div class="area-stats">
             <span class="stat-badge">
-              {{ formatCount('checkpoint', getCheckpointCount(area)) }}
+              {{ formatAreaCheckpointCount(area) }}
             </span>
             <span class="stat-badge">
               {{ getContactCount(area) }} contact{{ getContactCount(area) === 1 ? '' : 's' }}
@@ -44,9 +44,9 @@
 <script setup>
 import { defineProps, defineEmits, computed } from 'vue';
 import { alphanumericCompare } from '../../../utils/sortUtils';
-import { useTerminology } from '../../../composables/useTerminology';
+import { useTerminology, getSingularTerm, getPluralTerm } from '../../../composables/useTerminology';
 
-const { terms, formatCount } = useTerminology();
+const { terms } = useTerminology();
 
 const props = defineProps({
   areas: {
@@ -56,6 +56,14 @@ const props = defineProps({
   checkpoints: {
     type: Array,
     default: () => [],
+  },
+  eventPeopleTerm: {
+    type: String,
+    default: 'Marshals',
+  },
+  eventCheckpointTerm: {
+    type: String,
+    default: 'Checkpoints',
   },
 });
 
@@ -88,6 +96,29 @@ const getContactCount = (area) => {
     ? JSON.parse(area.contacts)
     : area.contacts;
   return Array.isArray(contacts) ? contacts.length : 0;
+};
+
+// Get the effective people term for an area
+const getAreaPeopleTerm = (area) => {
+  return area.peopleTerm || props.eventPeopleTerm || 'Marshals';
+};
+
+// Get the effective checkpoint term for an area (resolves "Person points" dynamically)
+const getAreaCheckpointTerm = (area, count) => {
+  const storedTerm = area.checkpointTerm || props.eventCheckpointTerm || 'Checkpoints';
+  const peopleTerm = getAreaPeopleTerm(area);
+
+  if (count === 1) {
+    return getSingularTerm('checkpoint', storedTerm, peopleTerm);
+  }
+  return getPluralTerm('checkpoint', storedTerm, peopleTerm);
+};
+
+// Format checkpoint count with area-specific terminology (sentence case)
+const formatAreaCheckpointCount = (area) => {
+  const count = getCheckpointCount(area);
+  const term = getAreaCheckpointTerm(area, count).toLowerCase();
+  return `${count} ${term}`;
 };
 </script>
 

@@ -27,7 +27,10 @@
       "Bash(dir \"C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\Backend\\\\Documentation\\\\schema.png\")",
       "Bash(dir /S \"C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\Backend\\\\Functions\")",
       "Bash(dotnet restore:*)",
-      "Bash(dotnet clean:*)"
+      "Bash(dotnet clean:*)",
+      "Bash(dotnet tool install:*)",
+      "Bash(reportgenerator:*)",
+      "Bash(start \"\" \"TestResults\\\\CoverageReport\\\\index.html\")"
     ]
   }
 }

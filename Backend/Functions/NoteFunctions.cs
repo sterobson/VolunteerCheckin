@@ -599,11 +599,12 @@ public class NoteFunctions
     {
         return priority switch
         {
-            Constants.NotePriorityUrgent => 0,
-            Constants.NotePriorityHigh => 1,
-            Constants.NotePriorityNormal => 2,
-            Constants.NotePriorityLow => 3,
-            _ => 2 // Default to Normal
+            Constants.NotePriorityEmergency => 0,
+            Constants.NotePriorityUrgent => 1,
+            Constants.NotePriorityHigh => 2,
+            Constants.NotePriorityNormal => 3,
+            Constants.NotePriorityLow => 4,
+            _ => 3 // Default to Normal
         };
     }
 

@@ -1,7 +1,7 @@
 <template>
   <div class="tab-content">
     <div class="form-group">
-      <label>Required {{ termsLower.people }}</label>
+      <label>Required {{ peopleTermLower }}</label>
       <input
         :value="form.requiredMarshals"
         @input="handleNumberInput('requiredMarshals', $event.target.value)"
@@ -12,7 +12,7 @@
       />
     </div>
 
-    <h3 class="section-title">Assigned {{ termsLower.people }} ({{ totalAssignments }})</h3>
+    <h3 class="section-title">Assigned {{ peopleTermLower }} ({{ totalAssignments }})</h3>
     <div class="assignments-list">
       <!-- Existing assignments -->
       <div
@@ -75,9 +75,9 @@
 
       <!-- Assign marshal dropdown -->
       <div v-if="sortedAvailableMarshals.length > 0" class="form-group" style="margin-top: 1.5rem;">
-        <label>Assign {{ termsLower.person }}</label>
+        <label>Assign {{ personTermLower }}</label>
         <select v-model="selectedMarshalId" class="form-input" @change="handleSelectionChange">
-          <option value="">Select a {{ termsLower.person }}...</option>
+          <option value="">Select {{ personTermLower }}...</option>
           <option
             v-for="marshal in sortedAvailableMarshals"
             :key="marshal.id"
@@ -94,9 +94,6 @@
 <script setup>
 import { ref, computed, defineProps, defineEmits } from 'vue';
 import { useCheckInManagement } from '../../../composables/useCheckInManagement';
-import { useTerminology } from '../../../composables/useTerminology';
-
-const { termsLower } = useTerminology();
 
 const props = defineProps({
   form: {
@@ -111,7 +108,19 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  peopleTerm: {
+    type: String,
+    default: 'Marshals',
+  },
+  personTerm: {
+    type: String,
+    default: 'Marshal',
+  },
 });
+
+// Computed lowercase versions
+const peopleTermLower = computed(() => props.peopleTerm.toLowerCase());
+const personTermLower = computed(() => props.personTerm.toLowerCase());
 
 const emit = defineEmits(['update:form', 'input', 'remove-assignment', 'assign-marshal']);
 

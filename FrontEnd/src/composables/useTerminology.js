@@ -60,6 +60,63 @@ export const terminologyOptions = {
 };
 
 /**
+ * Get singular form of a terminology value
+ * @param {string} type - The term type ('people', 'checkpoint', 'area', 'checklist', 'course')
+ * @param {string} value - The plural/stored value (e.g. 'Staff', 'Checkpoints')
+ * @param {string} [peopleTerm] - The current people term (for dynamic checkpoint terms like 'Person points')
+ * @returns {string} The singular form
+ */
+export function getSingularTerm(type, value, peopleTerm = 'Marshals') {
+  if (!value) return '';
+
+  const mapping = termMappings[type]?.[value];
+
+  // Handle dynamic 'Person points' term
+  if (type === 'checkpoint' && value === 'Person points') {
+    const peopleMapping = termMappings.people[peopleTerm];
+    const personSingular = peopleMapping?.singular || 'Person';
+    return `${personSingular} point`;
+  }
+
+  if (mapping?.singular) {
+    return mapping.singular;
+  }
+
+  // Fallback: try to derive singular from plural
+  if (value.endsWith('s') && !value.endsWith('ss')) {
+    return value.slice(0, -1);
+  }
+  return value;
+}
+
+/**
+ * Get plural form of a terminology value
+ * @param {string} type - The term type ('people', 'checkpoint', 'area', 'checklist', 'course')
+ * @param {string} value - The value (could be singular or plural stored form)
+ * @param {string} [peopleTerm] - The current people term (for dynamic checkpoint terms like 'Person points')
+ * @returns {string} The plural form
+ */
+export function getPluralTerm(type, value, peopleTerm = 'Marshals') {
+  if (!value) return '';
+
+  const mapping = termMappings[type]?.[value];
+
+  // Handle dynamic 'Person points' term
+  if (type === 'checkpoint' && value === 'Person points') {
+    const peopleMapping = termMappings.people[peopleTerm];
+    const personSingular = peopleMapping?.singular || 'Person';
+    return `${personSingular} points`;
+  }
+
+  if (mapping?.plural) {
+    return mapping.plural;
+  }
+
+  // Return as-is (assuming it's already plural)
+  return value;
+}
+
+/**
  * Get the display label for a checkpoint option, resolving dynamic terms
  * @param {string} option - The checkpoint option value
  * @param {string} peopleTerm - The current people terminology

@@ -92,6 +92,7 @@ public static class Constants
     public const string NotePriorityNormal = "Normal";
     public const string NotePriorityHigh = "High";
     public const string NotePriorityUrgent = "Urgent";
+    public const string NotePriorityEmergency = "Emergency";
 
     // Note Error Messages
     public const string ErrorNoteNotFound = "Note not found";

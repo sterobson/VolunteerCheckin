@@ -424,6 +424,7 @@
     <EmergencyContactModal
       :show="showEmergency"
       :contacts="emergencyContacts"
+      :notes="emergencyNotes"
       @close="showEmergency = false"
     />
 
@@ -656,6 +657,13 @@ const eventContacts = computed(() => {
 const emergencyContacts = computed(() => {
   const emergencyRoles = ['EmergencyContact', 'EventDirector', 'MedicalLead', 'SafetyOfficer'];
   return myContacts.value.filter(contact => emergencyRoles.includes(contact.role));
+});
+
+// Emergency notes - filter for Emergency or Urgent priority notes
+const emergencyNotes = computed(() => {
+  return notes.value.filter(note =>
+    note.priority === 'Emergency' || note.priority === 'Urgent'
+  );
 });
 
 // Area contacts - loaded from API, grouped by area

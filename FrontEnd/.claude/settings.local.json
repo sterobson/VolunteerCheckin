@@ -9,7 +9,9 @@
       "Bash(tasklist:*)",
       "Bash(netstat:*)",
       "Bash(dotnet test:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(npm run lint)",
+      "Bash(npm run lint:fix:*)"
     ]
   }
 }

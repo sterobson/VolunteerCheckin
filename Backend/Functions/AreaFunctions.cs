@@ -156,7 +156,14 @@ public class AreaFunctions
                     baseResponse.CheckpointCount,
                     baseResponse.CreatedDate,
                     baseResponse.CheckpointStyleType,
-                    baseResponse.CheckpointStyleColor
+                    baseResponse.CheckpointStyleColor,
+                    baseResponse.CheckpointStyleBackgroundShape,
+                    baseResponse.CheckpointStyleBackgroundColor,
+                    baseResponse.CheckpointStyleBorderColor,
+                    baseResponse.CheckpointStyleIconColor,
+                    baseResponse.CheckpointStyleSize,
+                    baseResponse.PeopleTerm,
+                    baseResponse.CheckpointTerm
                 );
 
                 return new OkObjectResult(response);
@@ -256,6 +263,14 @@ public class AreaFunctions
             // Update checkpoint style if provided
             if (request.CheckpointStyleType != null) areaEntity.CheckpointStyleType = request.CheckpointStyleType;
             if (request.CheckpointStyleColor != null) areaEntity.CheckpointStyleColor = request.CheckpointStyleColor;
+            if (request.CheckpointStyleBackgroundShape != null) areaEntity.CheckpointStyleBackgroundShape = request.CheckpointStyleBackgroundShape;
+            if (request.CheckpointStyleBackgroundColor != null) areaEntity.CheckpointStyleBackgroundColor = request.CheckpointStyleBackgroundColor;
+            if (request.CheckpointStyleBorderColor != null) areaEntity.CheckpointStyleBorderColor = request.CheckpointStyleBorderColor;
+            if (request.CheckpointStyleIconColor != null) areaEntity.CheckpointStyleIconColor = request.CheckpointStyleIconColor;
+            if (request.CheckpointStyleSize != null) areaEntity.CheckpointStyleSize = request.CheckpointStyleSize;
+            // Update terminology if provided
+            if (request.PeopleTerm != null) areaEntity.PeopleTerm = request.PeopleTerm;
+            if (request.CheckpointTerm != null) areaEntity.CheckpointTerm = request.CheckpointTerm;
 
             await _areaRepository.UpdateAsync(areaEntity);
 

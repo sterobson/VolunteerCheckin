@@ -55,8 +55,8 @@
 
     <EventFormModal
       :show="showCreateEvent || !!editingEvent"
-      :eventData="eventForm"
-      :isEditing="!!editingEvent"
+      :event-data="eventForm"
+      :is-editing="!!editingEvent"
       @close="closeModal"
       @submit="handleSaveEvent"
     />

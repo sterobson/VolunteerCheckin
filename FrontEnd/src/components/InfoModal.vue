@@ -20,7 +20,7 @@
 import { defineProps, defineEmits } from 'vue';
 import BaseModal from './BaseModal.vue';
 
-const props = defineProps({
+defineProps({
   show: {
     type: Boolean,
     default: false,

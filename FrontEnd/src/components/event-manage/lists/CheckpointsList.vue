@@ -52,7 +52,9 @@
       >
         <div class="location-info">
           <div class="location-header">
-            <strong>{{ location.name }}</strong>
+            <div class="location-name-desc">
+              <strong>{{ location.name }}</strong><span v-if="location.description" class="location-description"> - {{ location.description }}</span>
+            </div>
             <span
               v-for="areaId in (location.areaIds || location.AreaIds || [])"
               :key="areaId"
@@ -61,13 +63,10 @@
             >
               {{ getAreaName(areaId) }}
             </span>
+            <span class="location-status">
+              {{ location.checkedInCount }}/{{ location.requiredMarshals }}
+            </span>
           </div>
-          <span class="location-description">
-            {{ location.description }}
-          </span>
-          <span class="location-status">
-            {{ location.checkedInCount }}/{{ location.requiredMarshals }}
-          </span>
         </div>
         <div class="location-assignments">
           <span
@@ -289,25 +288,27 @@ h3 {
 }
 
 .location-info {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-bottom: 0.5rem;
-  min-width: 0; /* allow children to shrink instead of forcing width */
+}
+
+.location-name-desc {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .location-description {
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1 1 auto;  /* take remaining space, but shrink if needed */
-  min-width: 0;    /* critical in flex layouts for ellipsis */
-  margin: 0 0.5rem; /* optional: space between name and status */
+  font-weight: 400;
+  color: #888;
 }
 
 .location-status {
   font-weight: 600;
   color: #667eea;
+  white-space: nowrap;
+  margin-left: auto;
 }
 
 .location-assignments {

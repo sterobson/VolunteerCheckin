@@ -22,6 +22,10 @@
       :form="form"
       :areas="areas"
       :event-date="eventDate"
+      :area-term-singular="effectiveAreaTermSingular"
+      :area-term-plural="effectiveAreaTermPlural"
+      :checkpoint-term-singular="effectiveCheckpointTermSingular"
+      :people-term-plural="effectivePeopleTerm"
       @update:form="form = $event"
       @input="handleInput"
       @save="handleSave"
@@ -32,6 +36,7 @@
       v-if="activeTab === 'location'"
       :form="form"
       :is-moving="isMoving"
+      :checkpoint-term-singular="effectiveCheckpointTermSingular"
       @update:form="form = $event"
       @input="handleInput"
       @save="handleSave"
@@ -45,6 +50,8 @@
       :form="form"
       :assignments="assignments"
       :available-marshals="availableMarshals"
+      :people-term="effectivePeopleTerm"
+      :person-term="effectivePeopleTermSingular"
       @update:form="form = $event"
       @input="handleInput"
       @remove-assignment="handleRemoveAssignment"
@@ -72,6 +79,7 @@
       :pending-area-ids="form.areaIds"
       :areas="areas"
       :is-editing="isExistingLocation"
+      :checkpoint-term-singular="effectiveCheckpointTermSingular"
       @change="handleInput"
     />
 
@@ -94,26 +102,104 @@
       :pending-area-ids="form.areaIds"
       :areas="areas"
       :is-editing="isExistingLocation"
+      :checkpoint-term-singular="effectiveCheckpointTermSingular"
       @change="handleInput"
     />
 
     <!-- Appearance Tab -->
     <div v-if="activeTab === 'appearance'" class="tab-content appearance-tab">
-      <p class="section-description">
-        Choose a custom icon for this {{ termsLower.checkpoint }}, or leave as Default to inherit from {{ termsLower.area }} or event settings.
-      </p>
-      <CheckpointStylePicker
-        :style-type="form.styleType || 'default'"
-        :style-color="form.styleColor || ''"
-        :inherited-style-type="inheritedStyle.type"
-        :inherited-style-color="inheritedStyle.color"
-        :default-label="`${terms.area} default`"
-        icon-label="Icon style"
-        color-label="Icon colour"
-        :show-preview="true"
-        @update:style-type="handleStyleInput('styleType', $event)"
-        @update:style-color="handleStyleInput('styleColor', $event)"
-      />
+      <!-- Icon style accordion -->
+      <div class="accordion-item">
+        <button
+          type="button"
+          class="accordion-header"
+          :class="{ expanded: expandedSections.iconStyle }"
+          @click="toggleSection('iconStyle')"
+        >
+          <div class="accordion-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#10B981"/>
+              <circle cx="12" cy="9" r="2.5" fill="white"/>
+            </svg>
+          </div>
+          <span class="accordion-title">{{ effectiveCheckpointTermSingular }} icon style</span>
+          <span class="accordion-arrow">{{ expandedSections.iconStyle ? '▲' : '▼' }}</span>
+        </button>
+        <div v-if="expandedSections.iconStyle" class="accordion-content">
+          <p class="section-description">
+            Choose a custom icon for this {{ effectiveCheckpointTermSingularLower }}, or leave as Default to inherit from {{ effectiveAreaTermSingularLower }} or event settings.
+          </p>
+          <CheckpointStylePicker
+            :style-type="form.styleType || 'default'"
+            :style-color="form.styleColor || ''"
+            :style-background-shape="form.styleBackgroundShape || ''"
+            :style-background-color="form.styleBackgroundColor || ''"
+            :style-border-color="form.styleBorderColor || ''"
+            :style-icon-color="form.styleIconColor || ''"
+            :style-size="form.styleSize || ''"
+            :inherited-style-type="inheritedStyle.type"
+            :inherited-style-color="inheritedStyle.color"
+            :inherited-background-shape="inheritedStyle.backgroundShape || ''"
+            :inherited-background-color="inheritedStyle.backgroundColor || ''"
+            :inherited-border-color="inheritedStyle.borderColor || ''"
+            :inherited-icon-color="inheritedStyle.iconColor || ''"
+            :inherited-size="inheritedStyle.size || ''"
+            :default-label="defaultStyleLabel"
+            icon-label="Icon style"
+            level="checkpoint"
+            :show-preview="true"
+            @update:style-type="handleStyleInput('styleType', $event)"
+            @update:style-color="handleStyleInput('styleColor', $event)"
+            @update:style-background-shape="handleStyleInput('styleBackgroundShape', $event)"
+            @update:style-background-color="handleStyleInput('styleBackgroundColor', $event)"
+            @update:style-border-color="handleStyleInput('styleBorderColor', $event)"
+            @update:style-icon-color="handleStyleInput('styleIconColor', $event)"
+            @update:style-size="handleStyleInput('styleSize', $event)"
+          />
+        </div>
+      </div>
+
+      <!-- People terminology accordion -->
+      <div class="accordion-item">
+        <button
+          type="button"
+          class="accordion-header"
+          :class="{ expanded: expandedSections.peopleTerm }"
+          @click="toggleSection('peopleTerm')"
+        >
+          <div class="accordion-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="8" r="4" fill="#6366F1"/>
+              <path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8" fill="#6366F1" opacity="0.6"/>
+            </svg>
+          </div>
+          <span class="accordion-title">{{ effectivePeopleTerm }} terminology</span>
+          <span class="accordion-preview">{{ form.peopleTerm || `${inheritedPeopleTerm} (${effectiveAreaTermSingularLower} default)` }}</span>
+          <span class="accordion-arrow">{{ expandedSections.peopleTerm ? '▲' : '▼' }}</span>
+        </button>
+        <div v-if="expandedSections.peopleTerm" class="accordion-content">
+          <p class="section-description">
+            Choose what {{ effectivePeopleTerm.toLowerCase() }} are called at this {{ effectiveCheckpointTermSingularLower }}.
+          </p>
+          <div class="form-group">
+            <label>What are {{ effectivePeopleTerm.toLowerCase() }} called?</label>
+            <select
+              v-model="form.peopleTerm"
+              class="form-input"
+              @change="handleInput"
+            >
+              <option value="">Use {{ effectiveAreaTermSingularLower }} default ({{ inheritedPeopleTerm }})</option>
+              <option
+                v-for="option in terminologyOptions.people"
+                :key="option"
+                :value="option"
+              >
+                {{ option }}
+              </option>
+            </select>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Custom footer with left and right aligned buttons -->
@@ -125,7 +211,7 @@
           @click="handleDelete"
           class="btn btn-danger"
         >
-          Delete {{ termsLower.checkpoint }}
+          Delete {{ effectiveCheckpointTermSingularLower }}
         </button>
         <div v-else></div>
         <button type="button" @click="handlePrimaryAction" class="btn btn-primary">
@@ -149,7 +235,7 @@ import ChecklistPreviewForLocation from '../../ChecklistPreviewForLocation.vue';
 import NotesPreviewForLocation from '../../NotesPreviewForLocation.vue';
 import CheckpointStylePicker from '../../CheckpointStylePicker.vue';
 import { formatDateForInput } from '../../../utils/dateFormatters';
-import { useTerminology } from '../../../composables/useTerminology';
+import { useTerminology, terminologyOptions, getSingularTerm, getPluralTerm } from '../../../composables/useTerminology';
 
 const { terms, termsLower } = useTerminology();
 
@@ -206,6 +292,30 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  eventDefaultStyleBackgroundShape: {
+    type: String,
+    default: '',
+  },
+  eventDefaultStyleBackgroundColor: {
+    type: String,
+    default: '',
+  },
+  eventDefaultStyleBorderColor: {
+    type: String,
+    default: '',
+  },
+  eventDefaultStyleIconColor: {
+    type: String,
+    default: '',
+  },
+  eventDefaultStyleSize: {
+    type: String,
+    default: '',
+  },
+  eventPeopleTerm: {
+    type: String,
+    default: 'Marshals',
+  },
   zIndex: {
     type: Number,
     default: 1000,
@@ -243,7 +353,110 @@ const form = ref({
   areaIds: [],
   styleType: 'default',
   styleColor: '',
+  styleBackgroundShape: '',
+  styleBackgroundColor: '',
+  styleBorderColor: '',
+  styleIconColor: '',
+  styleSize: '',
+  peopleTerm: '',
 });
+
+// Accordion expanded state for appearance tab - with 2+ sections, all start collapsed
+const expandedSections = ref({
+  iconStyle: false,
+  peopleTerm: false,
+});
+
+const toggleSection = (section) => {
+  expandedSections.value[section] = !expandedSections.value[section];
+};
+
+// Get inherited people term from area hierarchy
+const inheritedPeopleTerm = computed(() => {
+  const areaIds = form.value.areaIds || [];
+  if (areaIds.length > 0) {
+    // Find areas with custom people term, prefer the one with fewest checkpoints
+    const termedAreas = props.areas
+      .filter(a => areaIds.includes(a.id) && a.peopleTerm)
+      .sort((a, b) => (a.checkpointCount || 0) - (b.checkpointCount || 0));
+
+    if (termedAreas.length > 0) {
+      return termedAreas[0].peopleTerm;
+    }
+  }
+  return props.eventPeopleTerm || 'Marshals';
+});
+
+// Get effective people term (checkpoint's own term or inherited)
+const effectivePeopleTerm = computed(() => {
+  // Use checkpoint's own term if set
+  if (form.value.peopleTerm) {
+    return form.value.peopleTerm;
+  }
+  // Otherwise use inherited term
+  return inheritedPeopleTerm.value;
+});
+
+// Get effective checkpoint term from area hierarchy
+const effectiveCheckpointTerm = computed(() => {
+  const areaIds = form.value.areaIds || [];
+  if (areaIds.length > 0) {
+    // Find areas with custom checkpoint term, prefer the one with fewest checkpoints
+    const termedAreas = props.areas
+      .filter(a => areaIds.includes(a.id) && a.checkpointTerm)
+      .sort((a, b) => (a.checkpointCount || 0) - (b.checkpointCount || 0));
+
+    if (termedAreas.length > 0) {
+      return termedAreas[0].checkpointTerm;
+    }
+  }
+  // Fall back to event's checkpoint term via global terminology
+  return terms.value.checkpoint;
+});
+
+// Lowercase versions of effective terms
+const effectiveCheckpointTermLower = computed(() => effectiveCheckpointTerm.value.toLowerCase());
+
+// Singular form of checkpoint term
+const effectiveCheckpointTermSingular = computed(() => {
+  // Get the stored checkpoint term value to look up in mappings
+  const areaIds = form.value.areaIds || [];
+  let storedTerm = null;
+  if (areaIds.length > 0) {
+    const termedAreas = props.areas
+      .filter(a => areaIds.includes(a.id) && a.checkpointTerm)
+      .sort((a, b) => (a.checkpointCount || 0) - (b.checkpointCount || 0));
+    if (termedAreas.length > 0) {
+      storedTerm = termedAreas[0].checkpointTerm;
+    }
+  }
+  // If no area term, the effectiveCheckpointTerm will be from global terms
+  if (!storedTerm) {
+    return terms.value.checkpoint; // This is already singular from useTerminology
+  }
+  return getSingularTerm('checkpoint', storedTerm, effectivePeopleTerm.value);
+});
+
+const effectiveCheckpointTermSingularLower = computed(() => effectiveCheckpointTermSingular.value.toLowerCase());
+
+// Singular form of people term
+const effectivePeopleTermSingular = computed(() => {
+  const term = effectivePeopleTerm.value;
+  return getSingularTerm('people', term);
+});
+
+const effectivePeopleTermSingularLower = computed(() => effectivePeopleTermSingular.value.toLowerCase());
+
+// Get effective area term from area hierarchy (for display purposes)
+const effectiveAreaTerm = computed(() => {
+  // For now, use global area term since areas don't have their own area terminology
+  return terms.value.area;
+});
+
+const effectiveAreaTermLower = computed(() => effectiveAreaTerm.value.toLowerCase());
+const effectiveAreaTermSingular = computed(() => terms.value.area); // singular from useTerminology
+const effectiveAreaTermSingularLower = computed(() => effectiveAreaTermSingular.value.toLowerCase());
+const effectiveAreaTermPlural = computed(() => terms.value.areas); // plural from useTerminology
 
 // Computed properties for add vs edit mode
 const isExistingLocation = computed(() => {
@@ -252,15 +465,15 @@ const isExistingLocation = computed(() => {
 
 const modalTitle = computed(() => {
   if (isExistingLocation.value) {
-    return `Edit ${termsLower.value.checkpoint}: ${props.location?.name || ''}`;
+    return `Edit ${effectiveCheckpointTermSingularLower.value}: ${props.location?.name || ''}`;
   }
-  return `Add ${termsLower.value.checkpoint}`;
+  return `Add ${effectiveCheckpointTermSingularLower.value}`;
 });
 
 const availableTabs = computed(() => [
   { value: 'details', label: 'Details', icon: 'details' },
   { value: 'location', label: 'Location', icon: 'location' },
-  { value: 'marshals', label: terms.value.people, icon: 'marshal' },
+  { value: 'marshals', label: effectivePeopleTerm.value, icon: 'marshal' },
   { value: 'checklists', label: terms.value.checklists, icon: 'checklist' },
   { value: 'notes', label: 'Notes', icon: 'notes' },
   { value: 'appearance', label: 'Appearance', icon: 'appearance' },
@@ -286,9 +499,16 @@ const inheritedStyle = computed(() => {
       .sort((a, b) => (a.checkpointCount || 0) - (b.checkpointCount || 0));
 
     if (styledAreas.length > 0) {
+      const area = styledAreas[0];
       return {
-        type: styledAreas[0].checkpointStyleType,
-        color: styledAreas[0].checkpointStyleColor || '',
+        type: area.checkpointStyleType || area.CheckpointStyleType,
+        color: area.checkpointStyleColor || area.CheckpointStyleColor || '',
+        backgroundShape: area.checkpointStyleBackgroundShape || area.CheckpointStyleBackgroundShape || '',
+        backgroundColor: area.checkpointStyleBackgroundColor || area.CheckpointStyleBackgroundColor || '',
+        borderColor: area.checkpointStyleBorderColor || area.CheckpointStyleBorderColor || '',
+        iconColor: area.checkpointStyleIconColor || area.CheckpointStyleIconColor || '',
+        size: area.checkpointStyleSize || area.CheckpointStyleSize || '',
+        source: 'area',
       };
     }
   }
@@ -297,7 +517,21 @@ const inheritedStyle = computed(() => {
   return {
     type: props.eventDefaultStyleType || 'default',
     color: props.eventDefaultStyleColor || '',
+    backgroundShape: props.eventDefaultStyleBackgroundShape || '',
+    backgroundColor: props.eventDefaultStyleBackgroundColor || '',
+    borderColor: props.eventDefaultStyleBorderColor || '',
+    iconColor: props.eventDefaultStyleIconColor || '',
+    size: props.eventDefaultStyleSize || '',
+    source: 'event',
   };
+});
+
+// Label for the default option - depends on whether area has a custom style
+const defaultStyleLabel = computed(() => {
+  if (inheritedStyle.value.source === 'area') {
+    return `${effectiveAreaTermSingular.value} default`;
+  }
+  return 'Event default';
 });
 
 const nextTab = computed(() => {
@@ -308,7 +542,7 @@ const nextTab = computed(() => {
 // Button text for create mode - shows "Add [next tab]..." or "Create [checkpoint]"
 const createButtonText = computed(() => {
   if (isLastTab.value) {
-    return `Create ${termsLower.value.checkpoint}`;
+    return `Create ${effectiveCheckpointTermSingularLower.value}`;
   }
   return `Add ${nextTab.value.label.toLowerCase()}...`;
 });
@@ -338,8 +572,14 @@ watch(() => props.location, (newVal) => {
       startTime: startTimeLocal,
       endTime: endTimeLocal,
       areaIds: newVal.areaIds || newVal.AreaIds || [],
-      styleType: newVal.styleType || 'default',
-      styleColor: newVal.styleColor || '',
+      styleType: newVal.styleType || newVal.StyleType || 'default',
+      styleColor: newVal.styleColor || newVal.StyleColor || '',
+      styleBackgroundShape: newVal.styleBackgroundShape || newVal.StyleBackgroundShape || '',
+      styleBackgroundColor: newVal.styleBackgroundColor || newVal.StyleBackgroundColor || '',
+      styleBorderColor: newVal.styleBorderColor || newVal.StyleBorderColor || '',
+      styleIconColor: newVal.styleIconColor || newVal.StyleIconColor || '',
+      styleSize: newVal.styleSize || newVal.StyleSize || '',
+      peopleTerm: newVal.peopleTerm || '',
     };
   }
 }, { immediate: true, deep: true });
@@ -366,6 +606,12 @@ watch(() => props.show, (newVal) => {
         areaIds: props.location?.areaIds || [],
         styleType: 'default',
         styleColor: '',
+        styleBackgroundShape: '',
+        styleBackgroundColor: '',
+        styleBorderColor: '',
+        styleIconColor: '',
+        styleSize: '',
+        peopleTerm: '',
       };
     }
     // Clear pending changes in assignments tab if it exists
@@ -509,11 +755,98 @@ const handleStyleInput = (field, value) => {
 
 .appearance-tab {
   padding-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 .section-description {
   color: #666;
   font-size: 0.9rem;
-  margin: 0 0 1.5rem 0;
+  margin: 0 0 1rem 0;
+}
+
+.form-group {
+  margin-bottom: 0;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #333;
+}
+
+.form-input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  box-sizing: border-box;
+}
+
+/* Accordion styles */
+.accordion-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.accordion-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.875rem 1rem;
+  background: #f8f9fa;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.2s;
+}
+
+.accordion-header:hover {
+  background: #e9ecef;
+}
+
+.accordion-header.expanded {
+  background: #e7f3ff;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.accordion-icon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.accordion-title {
+  font-weight: 500;
+  color: #333;
+  font-size: 0.95rem;
+}
+
+.accordion-preview {
+  flex: 1;
+  text-align: right;
+  color: #666;
+  font-size: 0.85rem;
+  font-weight: normal;
+  margin-right: 0.5rem;
+}
+
+.accordion-arrow {
+  color: #666;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.accordion-content {
+  padding: 1rem;
+  background: white;
 }
 </style>

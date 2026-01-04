@@ -253,7 +253,7 @@ const getNoteMatchInfo = (note, context) => {
 
 // Filter notes based on context
 const filteredNotes = computed(() => {
-  let notesToFilter = props.allNotes || notes.value;
+  const notesToFilter = props.allNotes || notes.value;
 
   if (!notesToFilter || notesToFilter.length === 0) {
     return [];
@@ -348,7 +348,7 @@ const filteredNotes = computed(() => {
 });
 
 const sortedNotes = computed(() => {
-  const priorityOrder = { Urgent: 0, High: 1, Normal: 2, Low: 3 };
+  const priorityOrder = { Emergency: 0, Urgent: 1, High: 2, Normal: 3, Low: 4 };
 
   return [...filteredNotes.value].sort((a, b) => {
     // Pinned first

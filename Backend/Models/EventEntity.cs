@@ -28,8 +28,13 @@ public class EventEntity : ITableEntity
     public string ChecklistTerm { get; set; } = "Checklists"; // Checklists, Tasks
     public string CourseTerm { get; set; } = "Course";        // Course, Route, Trail
 
-    // Default checkpoint style for this event
-    // Type: default, circle, square, triangle, diamond, star, hexagon, pentagon, water, food, medical, photo, music, start, finish
+    // Default checkpoint style for this event (shapes only - no content icons at event level)
+    // Type: default, circle, square, triangle, diamond, star, hexagon, pentagon, dot
     public string DefaultCheckpointStyleType { get; set; } = "default";
-    public string DefaultCheckpointStyleColor { get; set; } = string.Empty; // Hex color for colorizable shapes
+    public string DefaultCheckpointStyleColor { get; set; } = string.Empty; // Hex color for colorizable shapes (legacy, use DefaultCheckpointStyleBackgroundColor)
+    public string DefaultCheckpointStyleBackgroundShape { get; set; } = string.Empty; // circle, square, hexagon, pentagon, diamond, star, dot, none
+    public string DefaultCheckpointStyleBackgroundColor { get; set; } = string.Empty; // Hex color for background
+    public string DefaultCheckpointStyleBorderColor { get; set; } = string.Empty; // Hex color for border (empty = white, "none" = no border)
+    public string DefaultCheckpointStyleIconColor { get; set; } = string.Empty; // Hex color for icon content (empty = white)
+    public string DefaultCheckpointStyleSize { get; set; } = string.Empty; // 33, 66, 100, 150 (percentage)
 }

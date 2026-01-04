@@ -6,9 +6,9 @@
           :locations="checkpoints"
           :route="route"
           :areas="areas"
-          :selectedAreaId="selectedAreaId"
+          :selected-area-id="selectedAreaId"
           :clickable="true"
-          :drawingMode="drawingMode"
+          :drawing-mode="drawingMode"
           @map-click="$emit('map-click', $event)"
           @area-click="$emit('area-click', $event)"
           @polygon-complete="$emit('polygon-complete', $event)"
@@ -20,6 +20,8 @@
           <AreasList
             :areas="areas"
             :checkpoints="checkpoints"
+            :event-people-term="eventPeopleTerm"
+            :event-checkpoint-term="eventCheckpointTerm"
             @add-area="$emit('add-area')"
             @select-area="$emit('select-area', $event)"
           />
@@ -54,6 +56,14 @@ const props = defineProps({
   drawingMode: {
     type: Boolean,
     default: false,
+  },
+  eventPeopleTerm: {
+    type: String,
+    default: 'Marshals',
+  },
+  eventCheckpointTerm: {
+    type: String,
+    default: 'Checkpoints',
   },
 });
 

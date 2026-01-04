@@ -105,10 +105,10 @@
 
     <!-- Checkpoints Tab (only when editing) -->
     <div v-if="activeTab === 'checkpoints' && isExistingArea" class="tab-content">
-      <h3 class="section-title">{{ terms.checkpoints }} in {{ area?.name }} ({{ areaCheckpoints.length }})</h3>
+      <h3 class="section-title">{{ getAreaCheckpointTerm() }} in {{ area?.name }} ({{ areaCheckpoints.length }})</h3>
 
       <div v-if="areaCheckpoints.length === 0" class="empty-state">
-        <p>No {{ termsLower.checkpoints }} in this {{ termsLower.area }} yet.</p>
+        <p>No {{ getAreaCheckpointTermLower() }} in this {{ termsLower.area }} yet.</p>
       </div>
 
       <div v-else class="checkpoints-list">
@@ -133,14 +133,25 @@
           </div>
 
           <div class="checkpoint-details">
-            <div class="detail-row">
-              <span class="detail-label">{{ terms.people }}:</span>
+            <div class="detail-row with-pills">
+              <span class="detail-label">{{ getCheckpointPeopleTerm(checkpoint) }}:</span>
               <span class="detail-value">
                 {{ getCheckpointAssignments(checkpoint.id).length }} / {{ checkpoint.requiredMarshals }}
                 <span v-if="getCheckpointAssignments(checkpoint.id).length < checkpoint.requiredMarshals" class="warning-text">
                   ({{ checkpoint.requiredMarshals - getCheckpointAssignments(checkpoint.id).length }} needed)
                 </span>
               </span>
+              <!-- Marshal name pills on same line -->
+              <div v-if="getCheckpointAssignments(checkpoint.id).length > 0" class="marshal-pills">
+                <span
+                  v-for="assignment in getSortedAssignments(checkpoint.id)"
+                  :key="assignment.id"
+                  class="marshal-pill"
+                  :class="{ 'checked-in': assignment.isCheckedIn }"
+                >
+                  {{ assignment.marshalName }}
+                </span>
+              </div>
             </div>
 
             <div class="detail-row">
@@ -167,7 +178,7 @@
 
     <!-- Checkpoints placeholder when creating -->
     <div v-if="activeTab === 'checkpoints' && !isExistingArea" class="placeholder-message">
-      <p>{{ terms.checkpoints }} will be automatically assigned based on boundaries after the {{ termsLower.area }} is created.</p>
+      <p>{{ getAreaCheckpointTerm() }} will be automatically assigned based on boundaries after the {{ termsLower.area }} is created.</p>
     </div>
 
     <!-- Checklists Tab (only when editing) -->
@@ -215,7 +226,7 @@
           @click="toggleSection('polygonColor')"
         >
           <div class="accordion-icon" v-html="polygonPreviewSvg"></div>
-          <span class="accordion-title">Area polygon colour</span>
+          <span class="accordion-title">{{ terms.area }} polygon colour</span>
           <span class="accordion-arrow">{{ expandedSections.polygonColor ? '▲' : '▼' }}</span>
         </button>
         <div v-if="expandedSections.polygonColor" class="accordion-content">
@@ -256,15 +267,115 @@
           <CheckpointStylePicker
             :style-type="form.checkpointStyleType || 'default'"
             :style-color="form.checkpointStyleColor || ''"
+            :style-background-shape="form.checkpointStyleBackgroundShape || ''"
+            :style-background-color="form.checkpointStyleBackgroundColor || ''"
+            :style-border-color="form.checkpointStyleBorderColor || ''"
+            :style-icon-color="form.checkpointStyleIconColor || ''"
+            :style-size="form.checkpointStyleSize || ''"
             :inherited-style-type="eventDefaultStyleType"
             :inherited-style-color="eventDefaultStyleColor"
+            :inherited-background-shape="eventDefaultStyleBackgroundShape || ''"
+            :inherited-background-color="eventDefaultStyleBackgroundColor || ''"
+            :inherited-border-color="eventDefaultStyleBorderColor || ''"
+            :inherited-icon-color="eventDefaultStyleIconColor || ''"
+            :inherited-size="eventDefaultStyleSize || ''"
             default-label="Event default"
             icon-label="Icon style"
-            color-label="Icon colour"
+            level="area"
             :show-preview="true"
             @update:style-type="handleStyleInput('checkpointStyleType', $event)"
             @update:style-color="handleStyleInput('checkpointStyleColor', $event)"
+            @update:style-background-shape="handleStyleInput('checkpointStyleBackgroundShape', $event)"
+            @update:style-background-color="handleStyleInput('checkpointStyleBackgroundColor', $event)"
+            @update:style-border-color="handleStyleInput('checkpointStyleBorderColor', $event)"
+            @update:style-icon-color="handleStyleInput('checkpointStyleIconColor', $event)"
+            @update:style-size="handleStyleInput('checkpointStyleSize', $event)"
           />
+        </div>
+      </div>
+
+      <!-- People terminology accordion -->
+      <div class="accordion-item">
+        <button
+          type="button"
+          class="accordion-header"
+          :class="{ expanded: expandedSections.peopleTerm }"
+          @click="toggleSection('peopleTerm')"
+        >
+          <div class="accordion-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="8" r="4" fill="#6366F1"/>
+              <path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8" fill="#6366F1" opacity="0.6"/>
+            </svg>
+          </div>
+          <span class="accordion-title">{{ getEffectivePeopleTerm() }} terminology</span>
+          <span class="accordion-preview">{{ form.peopleTerm || `${eventPeopleTerm} (event default)` }}</span>
+          <span class="accordion-arrow">{{ expandedSections.peopleTerm ? '▲' : '▼' }}</span>
+        </button>
+        <div v-if="expandedSections.peopleTerm" class="accordion-content">
+          <p class="section-description">
+            Choose what {{ getEffectivePeopleTerm().toLowerCase() }} are called in this {{ termsLower.area }}.
+            This will be inherited by {{ getAreaCheckpointTermLower() }} unless they override it.
+          </p>
+          <div class="form-group">
+            <label>What are people called?</label>
+            <select
+              v-model="form.peopleTerm"
+              class="form-input"
+              @change="handleInput"
+            >
+              <option value="">Use event default ({{ eventPeopleTerm }})</option>
+              <option
+                v-for="option in terminologyOptions.people"
+                :key="option"
+                :value="option"
+              >
+                {{ option }}
+              </option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Checkpoint terminology accordion -->
+      <div class="accordion-item">
+        <button
+          type="button"
+          class="accordion-header"
+          :class="{ expanded: expandedSections.checkpointTerm }"
+          @click="toggleSection('checkpointTerm')"
+        >
+          <div class="accordion-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#10B981"/>
+              <circle cx="12" cy="9" r="2.5" fill="white"/>
+            </svg>
+          </div>
+          <span class="accordion-title">{{ getAreaCheckpointTerm(false) }} terminology</span>
+          <span class="accordion-preview">{{ form.checkpointTerm ? getCheckpointOptionLabel(form.checkpointTerm, getEffectivePeopleTerm()) : `${eventCheckpointTerm} (event default)` }}</span>
+          <span class="accordion-arrow">{{ expandedSections.checkpointTerm ? '▲' : '▼' }}</span>
+        </button>
+        <div v-if="expandedSections.checkpointTerm" class="accordion-content">
+          <p class="section-description">
+            Choose what {{ getAreaCheckpointTermLower() }} are called in this {{ termsLower.area }}.
+          </p>
+          <div class="form-group">
+            <label>What are {{ getAreaCheckpointTermLower() }} called?</label>
+            <select
+              v-model="form.checkpointTerm"
+              class="form-input"
+              @change="handleInput"
+            >
+              <option value="">Use event default ({{ eventCheckpointTerm }})</option>
+              <option
+                v-for="option in terminologyOptions.checkpoint"
+                :key="option"
+                :value="option"
+              >
+                {{ getCheckpointOptionLabel(option, getEffectivePeopleTerm()) }}
+              </option>
+            </select>
+          </div>
         </div>
       </div>
     </div>
@@ -298,14 +409,57 @@ import NotesView from '../../NotesView.vue';
 import CheckpointStylePicker from '../../CheckpointStylePicker.vue';
 import { AREA_COLORS, DEFAULT_AREA_COLOR, getNextAvailableColor } from '../../../constants/areaColors';
 import { checklistApi } from '../../../services/api';
-import { useTerminology } from '../../../composables/useTerminology';
+import { useTerminology, terminologyOptions, getCheckpointOptionLabel, getSingularTerm, getPluralTerm } from '../../../composables/useTerminology';
 import {
-  shapeSvgGenerators,
-  fixedIconSvgs,
-  getIconColor,
+  generateCheckpointSvg,
 } from '../../../constants/checkpointIcons';
 
 const { terms, termsLower } = useTerminology();
+
+// Get effective people term for this area (for checkpoint option display)
+const getEffectivePeopleTerm = () => {
+  if (form.value.peopleTerm) return form.value.peopleTerm;
+  return props.eventPeopleTerm || 'Marshals';
+};
+
+// Get effective people term singular
+const getEffectivePeopleTermSingular = () => {
+  return getSingularTerm('people', getEffectivePeopleTerm());
+};
+
+// Get effective checkpoint term for this area (resolves "Person points" dynamically)
+const getAreaCheckpointTerm = (plural = true) => {
+  const storedTerm = form.value.checkpointTerm || props.eventCheckpointTerm || 'Checkpoints';
+  const peopleTerm = getEffectivePeopleTerm();
+
+  if (plural) {
+    return getPluralTerm('checkpoint', storedTerm, peopleTerm);
+  } else {
+    return getSingularTerm('checkpoint', storedTerm, peopleTerm);
+  }
+};
+
+const getAreaCheckpointTermLower = (plural = true) => {
+  return getAreaCheckpointTerm(plural).toLowerCase();
+};
+
+// Get effective people term for a specific checkpoint (checkpoint → area → event)
+const getCheckpointPeopleTerm = (checkpoint) => {
+  // Use checkpoint's resolved term if available (from backend)
+  if (checkpoint.resolvedPeopleTerm) {
+    return checkpoint.resolvedPeopleTerm;
+  }
+  // Fall back to checkpoint's own term
+  if (checkpoint.peopleTerm) {
+    return checkpoint.peopleTerm;
+  }
+  // Fall back to area's term
+  if (form.value.peopleTerm) {
+    return form.value.peopleTerm;
+  }
+  // Fall back to event's term
+  return props.eventPeopleTerm || 'Marshals';
+};
 
 const props = defineProps({
   show: {
@@ -360,6 +514,34 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  eventDefaultStyleBackgroundShape: {
+    type: String,
+    default: '',
+  },
+  eventDefaultStyleBackgroundColor: {
+    type: String,
+    default: '',
+  },
+  eventDefaultStyleBorderColor: {
+    type: String,
+    default: '',
+  },
+  eventDefaultStyleIconColor: {
+    type: String,
+    default: '',
+  },
+  eventDefaultStyleSize: {
+    type: String,
+    default: '',
+  },
+  eventPeopleTerm: {
+    type: String,
+    default: 'Marshals',
+  },
+  eventCheckpointTerm: {
+    type: String,
+    default: 'Checkpoints',
+  },
 });
 
 const emit = defineEmits([
@@ -388,12 +570,21 @@ const form = ref({
   polygon: [],
   checkpointStyleType: 'default',
   checkpointStyleColor: '',
+  checkpointStyleBackgroundShape: '',
+  checkpointStyleBackgroundColor: '',
+  checkpointStyleBorderColor: '',
+  checkpointStyleIconColor: '',
+  checkpointStyleSize: '',
+  peopleTerm: '',
+  checkpointTerm: '',
 });
 
-// Accordion expanded state
+// Accordion expanded state - with 2+ sections, all start collapsed
 const expandedSections = ref({
-  polygonColor: true,
+  polygonColor: false,
   iconStyle: false,
+  peopleTerm: false,
+  checkpointTerm: false,
 });
 
 const toggleSection = (section) => {
@@ -413,21 +604,23 @@ const polygonPreviewSvg = computed(() => {
 
 // Generate icon style preview SVG
 const iconStylePreviewSvg = computed(() => {
-  const size = 24;
   const type = form.value.checkpointStyleType || 'default';
-  const color = form.value.checkpointStyleColor || '';
 
   if (type === 'default') {
-    // Show inherited style or default gradient
+    // Show inherited style from event or default gradient
     if (props.eventDefaultStyleType && props.eventDefaultStyleType !== 'default') {
-      if (fixedIconSvgs[props.eventDefaultStyleType]) {
-        return fixedIconSvgs[props.eventDefaultStyleType](size);
-      }
-      if (shapeSvgGenerators[props.eventDefaultStyleType]) {
-        return shapeSvgGenerators[props.eventDefaultStyleType](props.eventDefaultStyleColor || '#667eea', size);
-      }
+      return generateCheckpointSvg({
+        type: props.eventDefaultStyleType,
+        backgroundShape: props.eventDefaultStyleBackgroundShape || 'circle',
+        backgroundColor: props.eventDefaultStyleBackgroundColor || props.eventDefaultStyleColor || '',
+        borderColor: props.eventDefaultStyleBorderColor || '',
+        iconColor: props.eventDefaultStyleIconColor || '',
+        size: props.eventDefaultStyleSize || '100',
+        outputSize: 24,
+      });
     }
     // Default gradient circle
+    const size = 24;
     return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="areaDefaultGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -440,18 +633,16 @@ const iconStylePreviewSvg = computed(() => {
     </svg>`;
   }
 
-  // Fixed icons
-  if (fixedIconSvgs[type]) {
-    return fixedIconSvgs[type](size);
-  }
-
-  // Colorizable shapes
-  if (shapeSvgGenerators[type]) {
-    const effectiveColor = getIconColor(type, color);
-    return shapeSvgGenerators[type](effectiveColor, size);
-  }
-
-  return '';
+  // Custom icon with all style options
+  return generateCheckpointSvg({
+    type: type,
+    backgroundShape: form.value.checkpointStyleBackgroundShape || 'circle',
+    backgroundColor: form.value.checkpointStyleBackgroundColor || form.value.checkpointStyleColor || '',
+    borderColor: form.value.checkpointStyleBorderColor || '',
+    iconColor: form.value.checkpointStyleIconColor || '',
+    size: form.value.checkpointStyleSize || '100',
+    outputSize: 24,
+  });
 });
 
 // Computed property for whether this is an existing area
@@ -464,7 +655,7 @@ const availableTabs = computed(() => [
   { value: 'details', label: 'Details', icon: 'details' },
   { value: 'boundary', label: 'Boundary', icon: 'area' },
   { value: 'contacts', label: 'Contacts', icon: 'marshal' },
-  { value: 'checkpoints', label: terms.value.checkpoints, icon: 'checkpoint' },
+  { value: 'checkpoints', label: getAreaCheckpointTerm(), icon: 'checkpoint' },
   { value: 'checklists', label: terms.value.checklists, icon: 'checklist' },
   { value: 'notes', label: 'Notes', icon: 'notes' },
   { value: 'appearance', label: 'Appearance', icon: 'appearance' },
@@ -555,6 +746,14 @@ const getCheckpointAssignments = (checkpointId) => {
   return props.assignments.filter(a => a.locationId === checkpointId);
 };
 
+// Get assignments sorted alphabetically by name
+const getSortedAssignments = (checkpointId) => {
+  const assignments = getCheckpointAssignments(checkpointId);
+  return [...assignments].sort((a, b) =>
+    (a.marshalName || '').localeCompare(b.marshalName || '', undefined, { sensitivity: 'base' })
+  );
+};
+
 // Get number of checked in marshals for a checkpoint
 const getCheckedInCount = (checkpoint) => {
   const assignments = getCheckpointAssignments(checkpoint.id);
@@ -575,7 +774,8 @@ const getCheckInStatusClass = (checkpoint) => {
 // Get check-in status text
 const getCheckInStatusText = (checkpoint) => {
   const assignments = getCheckpointAssignments(checkpoint.id);
-  if (assignments.length === 0) return `No ${termsLower.value.people}`;
+  const peopleTerm = getCheckpointPeopleTerm(checkpoint).toLowerCase();
+  if (assignments.length === 0) return `No ${peopleTerm}`;
 
   const checkedInCount = assignments.filter(a => a.isCheckedIn).length;
   if (checkedInCount === 0) return 'Not checked in';
@@ -644,6 +844,13 @@ watch(() => props.area, (newVal) => {
       polygon: polygon,
       checkpointStyleType: newVal.checkpointStyleType || 'default',
       checkpointStyleColor: newVal.checkpointStyleColor || '',
+      checkpointStyleBackgroundShape: newVal.checkpointStyleBackgroundShape || '',
+      checkpointStyleBackgroundColor: newVal.checkpointStyleBackgroundColor || '',
+      checkpointStyleBorderColor: newVal.checkpointStyleBorderColor || '',
+      checkpointStyleIconColor: newVal.checkpointStyleIconColor || '',
+      checkpointStyleSize: newVal.checkpointStyleSize || '',
+      peopleTerm: newVal.peopleTerm || '',
+      checkpointTerm: newVal.checkpointTerm || '',
     };
   } else {
     // Creating new area
@@ -656,6 +863,13 @@ watch(() => props.area, (newVal) => {
       polygon: [],
       checkpointStyleType: 'default',
       checkpointStyleColor: '',
+      checkpointStyleBackgroundShape: '',
+      checkpointStyleBackgroundColor: '',
+      checkpointStyleBorderColor: '',
+      checkpointStyleIconColor: '',
+      checkpointStyleSize: '',
+      peopleTerm: '',
+      checkpointTerm: '',
     };
   }
 }, { immediate: true, deep: true });
@@ -677,6 +891,13 @@ watch(() => props.show, (newVal) => {
         polygon: [],
         checkpointStyleType: 'default',
         checkpointStyleColor: '',
+        checkpointStyleBackgroundShape: '',
+        checkpointStyleBackgroundColor: '',
+        checkpointStyleBorderColor: '',
+        checkpointStyleIconColor: '',
+        checkpointStyleSize: '',
+        peopleTerm: '',
+        checkpointTerm: '',
       };
     }
     // Clear pending changes in checklist tab if it exists
@@ -763,6 +984,13 @@ const handleSave = () => {
     displayOrder: form.value.displayOrder,
     checkpointStyleType: form.value.checkpointStyleType,
     checkpointStyleColor: form.value.checkpointStyleColor,
+    checkpointStyleBackgroundShape: form.value.checkpointStyleBackgroundShape,
+    checkpointStyleBackgroundColor: form.value.checkpointStyleBackgroundColor,
+    checkpointStyleBorderColor: form.value.checkpointStyleBorderColor,
+    checkpointStyleIconColor: form.value.checkpointStyleIconColor,
+    checkpointStyleSize: form.value.checkpointStyleSize,
+    peopleTerm: form.value.peopleTerm,
+    checkpointTerm: form.value.checkpointTerm,
     // Include pending checklist changes
     checklistChanges: checklistChanges.value || [],
   } : {
@@ -773,6 +1001,13 @@ const handleSave = () => {
     polygon: form.value.polygon.length > 0 ? form.value.polygon : null,
     checkpointStyleType: form.value.checkpointStyleType,
     checkpointStyleColor: form.value.checkpointStyleColor,
+    checkpointStyleBackgroundShape: form.value.checkpointStyleBackgroundShape,
+    checkpointStyleBackgroundColor: form.value.checkpointStyleBackgroundColor,
+    checkpointStyleBorderColor: form.value.checkpointStyleBorderColor,
+    checkpointStyleIconColor: form.value.checkpointStyleIconColor,
+    checkpointStyleSize: form.value.checkpointStyleSize,
+    peopleTerm: form.value.peopleTerm,
+    checkpointTerm: form.value.checkpointTerm,
   };
 
   emit('save', formData);
@@ -1113,6 +1348,34 @@ const handleClose = () => {
   gap: 0.5rem;
 }
 
+.detail-row.with-pills {
+  flex-wrap: wrap;
+}
+
+.marshal-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.marshal-pill {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  background: #e9ecef;
+  color: #495057;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.marshal-pill.checked-in {
+  background: #d4edda;
+  color: #155724;
+}
+
 .detail-row {
   display: flex;
   justify-content: space-between;
@@ -1284,10 +1547,18 @@ const handleClose = () => {
 }
 
 .accordion-title {
-  flex: 1;
   font-weight: 500;
   color: #333;
   font-size: 0.95rem;
+}
+
+.accordion-preview {
+  flex: 1;
+  text-align: right;
+  color: #666;
+  font-size: 0.85rem;
+  font-weight: normal;
+  margin-right: 0.5rem;
 }
 
 .accordion-arrow {

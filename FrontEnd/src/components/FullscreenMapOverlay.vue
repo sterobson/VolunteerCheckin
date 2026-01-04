@@ -25,7 +25,7 @@
       <div class="fullscreen-map-container">
         <MapView
           ref="mapViewRef"
-          :drawingMode="drawingMode"
+          :drawing-mode="drawingMode"
           v-bind="$attrs"
           @map-click="$emit('map-click', $event)"
           @polygon-complete="$emit('polygon-complete', $event)"

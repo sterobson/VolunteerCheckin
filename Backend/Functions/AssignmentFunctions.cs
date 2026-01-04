@@ -313,7 +313,7 @@ public class AssignmentFunctions
                 List<string> areaIds = JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson ?? "[]") ?? [];
 
                 // Resolve checkpoint style from hierarchy
-                (string resolvedStyleType, string resolvedStyleColor) = ResolveCheckpointStyle(
+                ResolvedCheckpointStyle resolvedStyle = ResolveCheckpointStyle(
                     location, areaIds, eventEntity, areasList, areaCheckpointCounts);
 
                 locationStatuses.Add(new LocationStatusResponse(
@@ -331,8 +331,18 @@ public class AssignmentFunctions
                     areaIds,
                     location.StyleType ?? "default",
                     location.StyleColor ?? string.Empty,
-                    resolvedStyleType,
-                    resolvedStyleColor
+                    location.StyleBackgroundShape ?? string.Empty,
+                    location.StyleBackgroundColor ?? string.Empty,
+                    location.StyleBorderColor ?? string.Empty,
+                    location.StyleIconColor ?? string.Empty,
+                    location.StyleSize ?? string.Empty,
+                    resolvedStyle.Type,
+                    resolvedStyle.Color,
+                    resolvedStyle.BackgroundShape,
+                    resolvedStyle.BackgroundColor,
+                    resolvedStyle.BorderColor,
+                    resolvedStyle.IconColor,
+                    resolvedStyle.Size
                 ));
             }
 
@@ -348,53 +358,128 @@ public class AssignmentFunctions
     }
 
     /// <summary>
+    /// Resolved checkpoint style containing all style properties
+    /// </summary>
+    private record ResolvedCheckpointStyle(
+        string Type,
+        string Color,
+        string BackgroundShape,
+        string BackgroundColor,
+        string BorderColor,
+        string IconColor,
+        string Size
+    );
+
+    /// <summary>
     /// Resolves the effective checkpoint style from the hierarchy:
     /// 1. Checkpoint's own style (if not "default")
     /// 2. Area's style (if not "default") - prefers area with fewest checkpoints if multiple
     /// 3. Event's default style (if not "default")
     /// 4. Returns "default" to use status-based colored circles
+    /// Each property is resolved independently through the hierarchy.
     /// </summary>
-    private static (string Type, string Color) ResolveCheckpointStyle(
+    private static ResolvedCheckpointStyle ResolveCheckpointStyle(
         LocationEntity location,
         List<string> areaIds,
         EventEntity? eventEntity,
         List<AreaEntity> areas,
         Dictionary<string, int> areaCheckpointCounts)
     {
-        // 1. If checkpoint has its own style (not "default"), use it
+        // Start with defaults
+        string type = "default";
+        string color = string.Empty;
+        string backgroundShape = string.Empty;
+        string backgroundColor = string.Empty;
+        string borderColor = string.Empty;
+        string iconColor = string.Empty;
+        string size = string.Empty;
+
+        // Get matched areas sorted by checkpoint count for consistent resolution
+        List<AreaEntity>? sortedMatchedAreas = null;
+        if (areas != null && areaIds.Count > 0)
+        {
+            IEnumerable<AreaEntity> matchedAreas = areas.Where(a => areaIds.Contains(a.RowKey));
+            if (areaCheckpointCounts != null)
+            {
+                matchedAreas = matchedAreas.OrderBy(a =>
+                    areaCheckpointCounts.TryGetValue(a.RowKey, out int count) ? count : int.MaxValue);
+            }
+            sortedMatchedAreas = matchedAreas.ToList();
+        }
+
+        // Resolve Type: checkpoint -> area -> event
         if (!string.IsNullOrEmpty(location.StyleType) && location.StyleType != "default")
         {
-            return (location.StyleType, location.StyleColor ?? string.Empty);
+            type = location.StyleType;
         }
-
-        // 2. Check areas - prefer area with fewest checkpoints that has a style
-        if (areaIds.Count > 0)
+        else if (sortedMatchedAreas != null)
         {
-            IEnumerable<AreaEntity> matchedAreas = areas
-                .Where(a => areaIds.Contains(a.RowKey) &&
-                           !string.IsNullOrEmpty(a.CheckpointStyleType) &&
-                           a.CheckpointStyleType != "default");
-
-            // Sort by checkpoint count (ascending) to prefer smaller areas
-            matchedAreas = matchedAreas.OrderBy(a =>
-                areaCheckpointCounts.TryGetValue(a.RowKey, out int count) ? count : int.MaxValue);
-
-            AreaEntity? styledArea = matchedAreas.FirstOrDefault();
+            AreaEntity? styledArea = sortedMatchedAreas.FirstOrDefault(a =>
+                !string.IsNullOrEmpty(a.CheckpointStyleType) && a.CheckpointStyleType != "default");
             if (styledArea != null)
             {
-                return (styledArea.CheckpointStyleType, styledArea.CheckpointStyleColor ?? string.Empty);
+                type = styledArea.CheckpointStyleType;
+            }
+            else if (eventEntity != null && !string.IsNullOrEmpty(eventEntity.DefaultCheckpointStyleType) &&
+                     eventEntity.DefaultCheckpointStyleType != "default")
+            {
+                type = eventEntity.DefaultCheckpointStyleType;
             }
         }
-
-        // 3. Use event default if set
-        if (eventEntity != null &&
-            !string.IsNullOrEmpty(eventEntity.DefaultCheckpointStyleType) &&
-            eventEntity.DefaultCheckpointStyleType != "default")
+        else if (eventEntity != null && !string.IsNullOrEmpty(eventEntity.DefaultCheckpointStyleType) &&
+                 eventEntity.DefaultCheckpointStyleType != "default")
         {
-            return (eventEntity.DefaultCheckpointStyleType, eventEntity.DefaultCheckpointStyleColor ?? string.Empty);
+            type = eventEntity.DefaultCheckpointStyleType;
         }
 
-        // 4. Return default (status-based rendering)
-        return ("default", string.Empty);
+        // Helper to resolve a string property through hierarchy
+        string ResolveProperty(
+            string? checkpointValue,
+            Func<AreaEntity, string?> areaGetter,
+            string? eventValue)
+        {
+            if (!string.IsNullOrEmpty(checkpointValue)) return checkpointValue;
+            if (sortedMatchedAreas != null)
+            {
+                AreaEntity? area = sortedMatchedAreas.FirstOrDefault(a => !string.IsNullOrEmpty(areaGetter(a)));
+                if (area != null) return areaGetter(area)!;
+            }
+            if (!string.IsNullOrEmpty(eventValue)) return eventValue;
+            return string.Empty;
+        }
+
+        // Resolve each property through the hierarchy
+        // Color - use StyleColor for backward compatibility, then StyleBackgroundColor
+        color = ResolveProperty(
+            !string.IsNullOrEmpty(location.StyleBackgroundColor) ? location.StyleBackgroundColor : location.StyleColor,
+            a => !string.IsNullOrEmpty(a.CheckpointStyleBackgroundColor) ? a.CheckpointStyleBackgroundColor : a.CheckpointStyleColor,
+            !string.IsNullOrEmpty(eventEntity?.DefaultCheckpointStyleBackgroundColor) ? eventEntity.DefaultCheckpointStyleBackgroundColor : eventEntity?.DefaultCheckpointStyleColor);
+
+        backgroundShape = ResolveProperty(
+            location.StyleBackgroundShape,
+            a => a.CheckpointStyleBackgroundShape,
+            eventEntity?.DefaultCheckpointStyleBackgroundShape);
+
+        backgroundColor = ResolveProperty(
+            location.StyleBackgroundColor,
+            a => a.CheckpointStyleBackgroundColor,
+            eventEntity?.DefaultCheckpointStyleBackgroundColor);
+
+        borderColor = ResolveProperty(
+            location.StyleBorderColor,
+            a => a.CheckpointStyleBorderColor,
+            eventEntity?.DefaultCheckpointStyleBorderColor);
+
+        iconColor = ResolveProperty(
+            location.StyleIconColor,
+            a => a.CheckpointStyleIconColor,
+            eventEntity?.DefaultCheckpointStyleIconColor);
+
+        size = ResolveProperty(
+            location.StyleSize,
+            a => a.CheckpointStyleSize,
+            eventEntity?.DefaultCheckpointStyleSize);
+
+        return new ResolvedCheckpointStyle(type, color, backgroundShape, backgroundColor, borderColor, iconColor, size);
     }
 }

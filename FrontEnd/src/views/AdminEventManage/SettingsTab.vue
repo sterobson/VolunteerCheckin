@@ -129,11 +129,21 @@
           <CheckpointStylePicker
             :style-type="localForm.defaultCheckpointStyleType || 'default'"
             :style-color="localForm.defaultCheckpointStyleColor || ''"
+            :style-background-shape="localForm.defaultCheckpointStyleBackgroundShape || ''"
+            :style-background-color="localForm.defaultCheckpointStyleBackgroundColor || ''"
+            :style-border-color="localForm.defaultCheckpointStyleBorderColor || ''"
+            :style-icon-color="localForm.defaultCheckpointStyleIconColor || ''"
+            :style-size="localForm.defaultCheckpointStyleSize || ''"
             icon-label="Default icon style"
-            color-label="Default icon color"
+            level="event"
             :show-preview="true"
             @update:style-type="handleStyleChange('defaultCheckpointStyleType', $event)"
             @update:style-color="handleStyleChange('defaultCheckpointStyleColor', $event)"
+            @update:style-background-shape="handleStyleChange('defaultCheckpointStyleBackgroundShape', $event)"
+            @update:style-background-color="handleStyleChange('defaultCheckpointStyleBackgroundColor', $event)"
+            @update:style-border-color="handleStyleChange('defaultCheckpointStyleBorderColor', $event)"
+            @update:style-icon-color="handleStyleChange('defaultCheckpointStyleIconColor', $event)"
+            @update:style-size="handleStyleChange('defaultCheckpointStyleSize', $event)"
           />
 
           <div class="form-actions">

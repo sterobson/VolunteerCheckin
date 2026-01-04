@@ -3,7 +3,7 @@
     <!-- Header with add button -->
     <div class="preview-actions">
       <p class="preview-header">
-        {{ isEditing ? `Add new ${termsLower.checklist} for this ${termsLower.checkpoint}:` : `${termsLower.checklists} that will apply at this ${termsLower.checkpoint}:` }}
+        {{ isEditing ? `Add new ${termsLower.checklist} for this ${checkpointTermLower}:` : `${termsLower.checklists} that will apply at this ${checkpointTermLower}:` }}
       </p>
       <button
         type="button"
@@ -136,6 +136,15 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  checkpointTermSingular: {
+    type: String,
+    default: '',
+  },
+});
+
+// Use prop if provided, otherwise fall back to global term
+const checkpointTermLower = computed(() => {
+  return props.checkpointTermSingular ? props.checkpointTermSingular.toLowerCase() : termsLower.value.checkpoint;
 });
 
 const emit = defineEmits(['update:modelValue', 'change']);

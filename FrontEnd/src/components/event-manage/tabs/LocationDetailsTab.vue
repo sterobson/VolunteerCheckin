@@ -23,10 +23,10 @@
       </div>
 
       <div class="form-group">
-        <label>Area (auto-assigned by location)</label>
+        <label>{{ areaTermSingular }} (auto-assigned by location)</label>
         <div class="area-display">
           <span v-if="checkpointAreas.length === 0" class="no-area">
-            Not in any area polygon
+            Not in any {{ areaTermSingular.toLowerCase() }} polygon
           </span>
           <span
             v-for="area in checkpointAreas"
@@ -38,7 +38,7 @@
           </span>
         </div>
         <small class="form-help">
-          Areas are automatically assigned based on checkpoint location within area boundaries
+          {{ areaTermPlural }} are automatically assigned based on {{ checkpointTermSingular.toLowerCase() }} location within {{ areaTermSingular.toLowerCase() }} boundaries
         </small>
       </div>
 
@@ -49,16 +49,16 @@
             @change="handleCustomTimesToggle($event.target.checked)"
             type="checkbox"
           />
-          Use custom date/time for this checkpoint
+          Use custom date/time for this {{ checkpointTermSingular.toLowerCase() }}
         </label>
         <small class="form-help">
-          By default, marshals are expected during the event date/time. Enable this to set a specific time range.
+          By default, {{ peopleTermPlural.toLowerCase() }} are expected during the event date/time. Enable this to set a specific time range.
         </small>
       </div>
 
       <div v-if="form.useCustomTimes" class="custom-times-section">
         <div class="form-group">
-          <label>Start Date & Time (optional)</label>
+          <label>Start date & time (optional)</label>
           <input
             :value="form.startTime"
             @input="handleInput('startTime', $event.target.value)"
@@ -66,12 +66,12 @@
             class="form-input"
           />
           <small class="form-help">
-            When marshal should arrive at this checkpoint
+            When {{ peopleTermPlural.toLowerCase() }} should arrive at this {{ checkpointTermSingular.toLowerCase() }}
           </small>
         </div>
 
         <div class="form-group">
-          <label>End Date & Time (optional)</label>
+          <label>End date & time (optional)</label>
           <input
             :value="form.endTime"
             @input="handleInput('endTime', $event.target.value)"
@@ -79,7 +79,7 @@
             class="form-input"
           />
           <small class="form-help">
-            When marshal can leave this checkpoint
+            When {{ peopleTermPlural.toLowerCase() }} can leave this {{ checkpointTermSingular.toLowerCase() }}
           </small>
         </div>
       </div>
@@ -103,6 +103,22 @@ const props = defineProps({
   eventDate: {
     type: String,
     default: '',
+  },
+  areaTermSingular: {
+    type: String,
+    default: 'Area',
+  },
+  areaTermPlural: {
+    type: String,
+    default: 'Areas',
+  },
+  checkpointTermSingular: {
+    type: String,
+    default: 'checkpoint',
+  },
+  peopleTermPlural: {
+    type: String,
+    default: 'marshals',
   },
 });
 

@@ -57,6 +57,7 @@
           <div class="form-group">
             <label for="priority">Priority:</label>
             <select id="priority" v-model="form.priority" @change="handleInput">
+              <option value="Emergency">Emergency</option>
               <option value="Urgent">Urgent</option>
               <option value="High">High</option>
               <option value="Normal">Normal</option>

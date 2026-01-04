@@ -42,12 +42,12 @@ async function notifyPendingActionsChange() {
 function extractEventIdFromUrl(url) {
   // Match patterns like /events/{eventId}, /events/{eventId}/*, etc.
   const patterns = [
-    /\/events\/([^\/]+)/,
-    /\/assignments\/([^\/]+)/,
-    /\/locations\/([^\/]+)/,
-    /\/checklist-items\/([^\/]+)/,
-    /\/areas\/([^\/]+)/,
-    /\/marshals\/([^\/]+)/,
+    /\/events\/([^/]+)/,
+    /\/assignments\/([^/]+)/,
+    /\/locations\/([^/]+)/,
+    /\/checklist-items\/([^/]+)/,
+    /\/areas\/([^/]+)/,
+    /\/marshals\/([^/]+)/,
   ];
 
   for (const pattern of patterns) {

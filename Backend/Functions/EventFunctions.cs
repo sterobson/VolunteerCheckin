@@ -207,6 +207,9 @@ public class EventFunctions
             if (request.AreaTerm != null) eventEntity.AreaTerm = request.AreaTerm;
             if (request.ChecklistTerm != null) eventEntity.ChecklistTerm = request.ChecklistTerm;
             if (request.CourseTerm != null) eventEntity.CourseTerm = request.CourseTerm;
+            // Only update default checkpoint style if provided
+            if (request.DefaultCheckpointStyleType != null) eventEntity.DefaultCheckpointStyleType = request.DefaultCheckpointStyleType;
+            if (request.DefaultCheckpointStyleColor != null) eventEntity.DefaultCheckpointStyleColor = request.DefaultCheckpointStyleColor;
 
             await _eventRepository.UpdateAsync(eventEntity);
 

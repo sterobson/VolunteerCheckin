@@ -117,6 +117,14 @@
         <EventDetailsTab
           v-if="activeTab === 'details'"
           :event-data="eventDetailsForm"
+          :form-dirty="eventDetailsFormDirty"
+          @submit="handleUpdateEvent"
+          @update:form-dirty="markEventDetailsFormDirty"
+        />
+
+        <SettingsTab
+          v-if="activeTab === 'settings'"
+          :event-data="eventDetailsForm"
           :admins="eventAdmins"
           :form-dirty="eventDetailsFormDirty"
           @submit="handleUpdateEvent"
@@ -151,6 +159,9 @@
       :available-marshals="availableMarshalsForAssignment"
       :all-checklist-items="checklistItems"
       :isDirty="formDirty"
+      :event-default-style-type="event?.defaultCheckpointStyleType || 'default'"
+      :event-default-style-color="event?.defaultCheckpointStyleColor || ''"
+      :z-index="showEditArea ? 1100 : 1000"
       @close="closeEditLocationModal"
       @save="handleUpdateLocation"
       @delete="handleDeleteLocation"
@@ -272,6 +283,8 @@
       :assignments="allAssignments"
       :notes="notes"
       :contacts="contacts"
+      :event-default-style-type="event?.defaultCheckpointStyleType || 'default'"
+      :event-default-style-color="event?.defaultCheckpointStyleColor || ''"
       @close="closeEditAreaModal"
       @save="handleSaveArea"
       @delete="handleDeleteArea"
@@ -392,6 +405,7 @@ import ChecklistsTab from './AdminEventManage/ChecklistsTab.vue';
 import NotesTab from './AdminEventManage/NotesTab.vue';
 import ContactsTab from './AdminEventManage/ContactsTab.vue';
 import EventDetailsTab from './AdminEventManage/EventDetailsTab.vue';
+import SettingsTab from './AdminEventManage/SettingsTab.vue';
 import CheckpointsList from '../components/event-manage/lists/CheckpointsList.vue';
 import AreasList from '../components/event-manage/lists/AreasList.vue';
 import ResponsiveTabHeader from '../components/ResponsiveTabHeader.vue';
@@ -422,7 +436,7 @@ const router = useRouter();
 const eventsStore = useEventsStore();
 
 // Use composables
-const { activeTab, switchTab } = useTabs('details', ['details', 'course', 'areas', 'checkpoints', 'marshals', 'notes', 'checklists', 'contacts']);
+const { activeTab, switchTab } = useTabs('details', ['details', 'course', 'areas', 'checkpoints', 'marshals', 'notes', 'checklists', 'contacts', 'settings']);
 const {
   showConfirmModal,
   confirmModalTitle,
@@ -446,6 +460,7 @@ const mainTabs = computed(() => [
   { value: 'notes', label: 'Notes', icon: 'notes' },
   { value: 'checklists', label: tabLabels.value.checklists, icon: 'checklist' },
   { value: 'contacts', label: 'Contacts', icon: 'contacts' },
+  { value: 'settings', label: 'Settings', icon: 'settings' },
 ]);
 
 // State
@@ -518,6 +533,8 @@ const eventDetailsForm = ref({
   areaTerm: 'Areas',
   checklistTerm: 'Checklists',
   courseTerm: 'Course',
+  defaultCheckpointStyleType: 'default',
+  defaultCheckpointStyleColor: '',
 });
 const eventDetailsFormDirty = ref(false);
 const showShiftCheckpointTimes = ref(false);
@@ -818,6 +835,8 @@ const loadEventData = async () => {
         areaTerm: event.value.areaTerm || 'Areas',
         checklistTerm: event.value.checklistTerm || 'Checklists',
         courseTerm: event.value.courseTerm || 'Course',
+        defaultCheckpointStyleType: event.value.defaultCheckpointStyleType || 'default',
+        defaultCheckpointStyleColor: event.value.defaultCheckpointStyleColor || '',
       };
       eventDetailsFormDirty.value = false;
       // Update global terminology settings
@@ -1933,6 +1952,8 @@ const handleUpdateLocation = async (formData) => {
         what3Words: formData.what3Words || null,
         startTime: formData.startTime,
         endTime: formData.endTime,
+        styleType: formData.styleType,
+        styleColor: formData.styleColor,
         pendingNewChecklistItems: formData.pendingNewChecklistItems || [],
         pendingNewNotes: formData.pendingNewNotes || [],
       });
@@ -1963,6 +1984,8 @@ const handleUpdateLocation = async (formData) => {
           what3Words: formData.what3Words || null,
           startTime: formData.startTime,
           endTime: formData.endTime,
+          styleType: formData.styleType,
+          styleColor: formData.styleColor,
           // areaId removed - areas are auto-assigned by backend based on polygon boundaries
         }
       );

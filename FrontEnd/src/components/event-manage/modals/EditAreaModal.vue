@@ -40,20 +40,6 @@
           ></textarea>
         </div>
 
-        <div class="form-group">
-          <label>Color *</label>
-          <div class="color-picker">
-            <div
-              v-for="colorOption in AREA_COLORS"
-              :key="colorOption.hex"
-              class="color-swatch"
-              :style="{ backgroundColor: colorOption.hex }"
-              :class="{ selected: form.color === colorOption.hex }"
-              :title="colorOption.name"
-              @click="selectColor(colorOption.hex)"
-            />
-          </div>
-        </div>
       </form>
     </div>
 
@@ -218,6 +204,71 @@
       <p>Notes can be viewed after the {{ termsLower.area }} is created.</p>
     </div>
 
+    <!-- Appearance Tab -->
+    <div v-if="activeTab === 'appearance'" class="tab-content appearance-tab">
+      <!-- Area polygon colour accordion -->
+      <div class="accordion-item">
+        <button
+          type="button"
+          class="accordion-header"
+          :class="{ expanded: expandedSections.polygonColor }"
+          @click="toggleSection('polygonColor')"
+        >
+          <div class="accordion-icon" v-html="polygonPreviewSvg"></div>
+          <span class="accordion-title">Area polygon colour</span>
+          <span class="accordion-arrow">{{ expandedSections.polygonColor ? '▲' : '▼' }}</span>
+        </button>
+        <div v-if="expandedSections.polygonColor" class="accordion-content">
+          <p class="section-description">
+            Choose a colour for this {{ termsLower.area }}'s boundary on the map.
+          </p>
+          <div class="color-picker">
+            <div
+              v-for="colorOption in AREA_COLORS"
+              :key="colorOption.hex"
+              class="color-swatch"
+              :style="{ backgroundColor: colorOption.hex }"
+              :class="{ selected: form.color === colorOption.hex }"
+              :title="colorOption.name"
+              @click="selectColor(colorOption.hex)"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Checkpoint icon style accordion -->
+      <div class="accordion-item">
+        <button
+          type="button"
+          class="accordion-header"
+          :class="{ expanded: expandedSections.iconStyle }"
+          @click="toggleSection('iconStyle')"
+        >
+          <div class="accordion-icon" v-html="iconStylePreviewSvg"></div>
+          <span class="accordion-title">{{ terms.checkpoint }} icon style</span>
+          <span class="accordion-arrow">{{ expandedSections.iconStyle ? '▲' : '▼' }}</span>
+        </button>
+        <div v-if="expandedSections.iconStyle" class="accordion-content">
+          <p class="section-description">
+            Set a default icon style for all {{ termsLower.checkpoints }} in this {{ termsLower.area }}.
+            Individual {{ termsLower.checkpoints }} can override this setting.
+          </p>
+          <CheckpointStylePicker
+            :style-type="form.checkpointStyleType || 'default'"
+            :style-color="form.checkpointStyleColor || ''"
+            :inherited-style-type="eventDefaultStyleType"
+            :inherited-style-color="eventDefaultStyleColor"
+            default-label="Event default"
+            icon-label="Icon style"
+            color-label="Icon colour"
+            :show-preview="true"
+            @update:style-type="handleStyleInput('checkpointStyleType', $event)"
+            @update:style-color="handleStyleInput('checkpointStyleColor', $event)"
+          />
+        </div>
+      </div>
+    </div>
+
     <!-- Custom footer with left and right aligned buttons -->
     <template #footer>
       <div class="custom-footer">
@@ -244,9 +295,15 @@ import BaseModal from '../../BaseModal.vue';
 import TabHeader from '../../TabHeader.vue';
 import CheckpointChecklistView from '../../CheckpointChecklistView.vue';
 import NotesView from '../../NotesView.vue';
+import CheckpointStylePicker from '../../CheckpointStylePicker.vue';
 import { AREA_COLORS, DEFAULT_AREA_COLOR, getNextAvailableColor } from '../../../constants/areaColors';
 import { checklistApi } from '../../../services/api';
 import { useTerminology } from '../../../composables/useTerminology';
+import {
+  shapeSvgGenerators,
+  fixedIconSvgs,
+  getIconColor,
+} from '../../../constants/checkpointIcons';
 
 const { terms, termsLower } = useTerminology();
 
@@ -295,6 +352,14 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  eventDefaultStyleType: {
+    type: String,
+    default: 'default',
+  },
+  eventDefaultStyleColor: {
+    type: String,
+    default: '',
+  },
 });
 
 const emit = defineEmits([
@@ -321,6 +386,72 @@ const form = ref({
   displayOrder: 0,
   isDefault: false,
   polygon: [],
+  checkpointStyleType: 'default',
+  checkpointStyleColor: '',
+});
+
+// Accordion expanded state
+const expandedSections = ref({
+  polygonColor: true,
+  iconStyle: false,
+});
+
+const toggleSection = (section) => {
+  expandedSections.value[section] = !expandedSections.value[section];
+};
+
+// Generate polygon preview SVG with current area color
+const polygonPreviewSvg = computed(() => {
+  const size = 24;
+  const color = form.value.color || DEFAULT_AREA_COLOR;
+  // Draw an irregular polygon shape to represent an area boundary
+  const points = '4,8 7,3 14,2 20,5 22,12 19,18 12,21 5,19 2,14';
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
+    <polygon points="${points}" fill="${color}" stroke="#fff" stroke-width="1.5" opacity="0.8"/>
+  </svg>`;
+});
+
+// Generate icon style preview SVG
+const iconStylePreviewSvg = computed(() => {
+  const size = 24;
+  const type = form.value.checkpointStyleType || 'default';
+  const color = form.value.checkpointStyleColor || '';
+
+  if (type === 'default') {
+    // Show inherited style or default gradient
+    if (props.eventDefaultStyleType && props.eventDefaultStyleType !== 'default') {
+      if (fixedIconSvgs[props.eventDefaultStyleType]) {
+        return fixedIconSvgs[props.eventDefaultStyleType](size);
+      }
+      if (shapeSvgGenerators[props.eventDefaultStyleType]) {
+        return shapeSvgGenerators[props.eventDefaultStyleType](props.eventDefaultStyleColor || '#667eea', size);
+      }
+    }
+    // Default gradient circle
+    return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="areaDefaultGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#10B981"/>
+          <stop offset="50%" style="stop-color:#F59E0B"/>
+          <stop offset="100%" style="stop-color:#EF4444"/>
+        </linearGradient>
+      </defs>
+      <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 2}" fill="url(#areaDefaultGrad)" stroke="#fff" stroke-width="1.5"/>
+    </svg>`;
+  }
+
+  // Fixed icons
+  if (fixedIconSvgs[type]) {
+    return fixedIconSvgs[type](size);
+  }
+
+  // Colorizable shapes
+  if (shapeSvgGenerators[type]) {
+    const effectiveColor = getIconColor(type, color);
+    return shapeSvgGenerators[type](effectiveColor, size);
+  }
+
+  return '';
 });
 
 // Computed property for whether this is an existing area
@@ -336,6 +467,7 @@ const availableTabs = computed(() => [
   { value: 'checkpoints', label: terms.value.checkpoints, icon: 'checkpoint' },
   { value: 'checklists', label: terms.value.checklists, icon: 'checklist' },
   { value: 'notes', label: 'Notes', icon: 'notes' },
+  { value: 'appearance', label: 'Appearance', icon: 'appearance' },
 ]);
 
 // Get current tab index and check if on last tab
@@ -510,6 +642,8 @@ watch(() => props.area, (newVal) => {
       displayOrder: newVal.displayOrder || 0,
       isDefault: newVal.isDefault || false,
       polygon: polygon,
+      checkpointStyleType: newVal.checkpointStyleType || 'default',
+      checkpointStyleColor: newVal.checkpointStyleColor || '',
     };
   } else {
     // Creating new area
@@ -520,6 +654,8 @@ watch(() => props.area, (newVal) => {
       displayOrder: props.areas.length,
       isDefault: false,
       polygon: [],
+      checkpointStyleType: 'default',
+      checkpointStyleColor: '',
     };
   }
 }, { immediate: true, deep: true });
@@ -539,6 +675,8 @@ watch(() => props.show, (newVal) => {
         displayOrder: props.areas.length,
         isDefault: false,
         polygon: [],
+        checkpointStyleType: 'default',
+        checkpointStyleColor: '',
       };
     }
     // Clear pending changes in checklist tab if it exists
@@ -564,6 +702,11 @@ const handleInput = () => {
 
 const selectColor = (colorHex) => {
   form.value.color = colorHex;
+  handleInput();
+};
+
+const handleStyleInput = (field, value) => {
+  form.value[field] = value;
   handleInput();
 };
 
@@ -618,6 +761,8 @@ const handleSave = () => {
     color: form.value.color,
     polygon: form.value.polygon.length > 0 ? form.value.polygon : null,
     displayOrder: form.value.displayOrder,
+    checkpointStyleType: form.value.checkpointStyleType,
+    checkpointStyleColor: form.value.checkpointStyleColor,
     // Include pending checklist changes
     checklistChanges: checklistChanges.value || [],
   } : {
@@ -626,6 +771,8 @@ const handleSave = () => {
     description: form.value.description,
     color: form.value.color,
     polygon: form.value.polygon.length > 0 ? form.value.polygon : null,
+    checkpointStyleType: form.value.checkpointStyleType,
+    checkpointStyleColor: form.value.checkpointStyleColor,
   };
 
   emit('save', formData);
@@ -1083,5 +1230,74 @@ const handleClose = () => {
 
 .placeholder-message p {
   margin: 0;
+}
+
+.appearance-tab {
+  padding-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.section-description {
+  color: #666;
+  font-size: 0.9rem;
+  margin: 0 0 1rem 0;
+}
+
+/* Accordion styles */
+.accordion-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.accordion-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.875rem 1rem;
+  background: #f8f9fa;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.2s;
+}
+
+.accordion-header:hover {
+  background: #e9ecef;
+}
+
+.accordion-header.expanded {
+  background: #e7f3ff;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.accordion-icon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.accordion-title {
+  flex: 1;
+  font-weight: 500;
+  color: #333;
+  font-size: 0.95rem;
+}
+
+.accordion-arrow {
+  color: #666;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.accordion-content {
+  padding: 1rem;
+  background: white;
 }
 </style>

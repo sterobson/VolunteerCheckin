@@ -5,6 +5,7 @@
     size="large"
     :confirm-on-close="true"
     :is-dirty="isDirty"
+    :z-index="zIndex"
     @close="handleClose"
   >
     <!-- Tabs in header -->
@@ -96,6 +97,25 @@
       @change="handleInput"
     />
 
+    <!-- Appearance Tab -->
+    <div v-if="activeTab === 'appearance'" class="tab-content appearance-tab">
+      <p class="section-description">
+        Choose a custom icon for this {{ termsLower.checkpoint }}, or leave as Default to inherit from {{ termsLower.area }} or event settings.
+      </p>
+      <CheckpointStylePicker
+        :style-type="form.styleType || 'default'"
+        :style-color="form.styleColor || ''"
+        :inherited-style-type="inheritedStyle.type"
+        :inherited-style-color="inheritedStyle.color"
+        :default-label="`${terms.area} default`"
+        icon-label="Icon style"
+        color-label="Icon colour"
+        :show-preview="true"
+        @update:style-type="handleStyleInput('styleType', $event)"
+        @update:style-color="handleStyleInput('styleColor', $event)"
+      />
+    </div>
+
     <!-- Custom footer with left and right aligned buttons -->
     <template #footer>
       <div class="custom-footer">
@@ -127,6 +147,7 @@ import CheckpointChecklistView from '../../CheckpointChecklistView.vue';
 import NotesView from '../../NotesView.vue';
 import ChecklistPreviewForLocation from '../../ChecklistPreviewForLocation.vue';
 import NotesPreviewForLocation from '../../NotesPreviewForLocation.vue';
+import CheckpointStylePicker from '../../CheckpointStylePicker.vue';
 import { formatDateForInput } from '../../../utils/dateFormatters';
 import { useTerminology } from '../../../composables/useTerminology';
 
@@ -177,6 +198,18 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  eventDefaultStyleType: {
+    type: String,
+    default: 'default',
+  },
+  eventDefaultStyleColor: {
+    type: String,
+    default: '',
+  },
+  zIndex: {
+    type: Number,
+    default: 1000,
+  },
 });
 
 const emit = defineEmits([
@@ -208,6 +241,8 @@ const form = ref({
   startTime: '',
   endTime: '',
   areaIds: [],
+  styleType: 'default',
+  styleColor: '',
 });
 
 // Computed properties for add vs edit mode
@@ -228,6 +263,7 @@ const availableTabs = computed(() => [
   { value: 'marshals', label: terms.value.people, icon: 'marshal' },
   { value: 'checklists', label: terms.value.checklists, icon: 'checklist' },
   { value: 'notes', label: 'Notes', icon: 'notes' },
+  { value: 'appearance', label: 'Appearance', icon: 'appearance' },
 ]);
 
 // Get current tab index and check if on last tab
@@ -237,6 +273,31 @@ const currentTabIndex = computed(() => {
 
 const isLastTab = computed(() => {
   return currentTabIndex.value === availableTabs.value.length - 1;
+});
+
+// Calculate inherited style from area or event
+const inheritedStyle = computed(() => {
+  // First, check if any of the checkpoint's areas have a custom style
+  const areaIds = form.value.areaIds || [];
+  if (areaIds.length > 0) {
+    // Find areas with custom styles, prefer the one with fewest checkpoints (or first match)
+    const styledAreas = props.areas
+      .filter(a => areaIds.includes(a.id) && a.checkpointStyleType && a.checkpointStyleType !== 'default')
+      .sort((a, b) => (a.checkpointCount || 0) - (b.checkpointCount || 0));
+
+    if (styledAreas.length > 0) {
+      return {
+        type: styledAreas[0].checkpointStyleType,
+        color: styledAreas[0].checkpointStyleColor || '',
+      };
+    }
+  }
+
+  // Fall back to event default
+  return {
+    type: props.eventDefaultStyleType || 'default',
+    color: props.eventDefaultStyleColor || '',
+  };
 });
 
 const nextTab = computed(() => {
@@ -277,6 +338,8 @@ watch(() => props.location, (newVal) => {
       startTime: startTimeLocal,
       endTime: endTimeLocal,
       areaIds: newVal.areaIds || newVal.AreaIds || [],
+      styleType: newVal.styleType || 'default',
+      styleColor: newVal.styleColor || '',
     };
   }
 }, { immediate: true, deep: true });
@@ -301,6 +364,8 @@ watch(() => props.show, (newVal) => {
         startTime: '',
         endTime: '',
         areaIds: props.location?.areaIds || [],
+        styleType: 'default',
+        styleColor: '',
       };
     }
     // Clear pending changes in assignments tab if it exists
@@ -385,6 +450,11 @@ const handleAssignMarshal = (marshalId) => {
 const handleClose = () => {
   emit('close');
 };
+
+const handleStyleInput = (field, value) => {
+  form.value[field] = value;
+  handleInput();
+};
 </script>
 
 <style scoped>
@@ -435,5 +505,15 @@ const handleClose = () => {
 
 .placeholder-message p {
   margin: 0;
+}
+
+.appearance-tab {
+  padding-top: 0.5rem;
+}
+
+.section-description {
+  color: #666;
+  font-size: 0.9rem;
+  margin: 0 0 1.5rem 0;
 }
 </style>

@@ -18,11 +18,17 @@ const termMappings = {
     'Helpers': { singular: 'Helper', plural: 'Helpers' },
     'Staff': { singular: 'Staff member', plural: 'Staff' },
     'Stewards': { singular: 'Steward', plural: 'Stewards' },
+    'Team members': { singular: 'Team member', plural: 'Team members' },
   },
   checkpoint: {
     'Checkpoints': { singular: 'Checkpoint', plural: 'Checkpoints' },
     'Stations': { singular: 'Station', plural: 'Stations' },
     'Locations': { singular: 'Location', plural: 'Locations' },
+    'Feed stations': { singular: 'Feed station', plural: 'Feed stations' },
+    'Aid stations': { singular: 'Aid station', plural: 'Aid stations' },
+    'Water stations': { singular: 'Water station', plural: 'Water stations' },
+    // Dynamic term - resolved based on current people terminology
+    'Person points': { singular: null, plural: null, dynamic: true },
   },
   area: {
     'Areas': { singular: 'Area', plural: 'Areas' },
@@ -32,6 +38,7 @@ const termMappings = {
   checklist: {
     'Checklists': { singular: 'Checklist', plural: 'Checklists' },
     'Tasks': { singular: 'Task', plural: 'Tasks' },
+    'Jobs': { singular: 'Job', plural: 'Jobs' },
   },
   course: {
     'Course': { singular: 'Course', plural: 'Courses' },
@@ -43,13 +50,30 @@ const termMappings = {
 };
 
 // Options for each term type (for dropdowns) - sorted alphabetically
+// Note: 'Person points' is a special dynamic option that uses the current people terminology
 export const terminologyOptions = {
-  people: ['Helpers', 'Marshals', 'People', 'Staff', 'Stewards', 'Volunteers'],
-  checkpoint: ['Checkpoints', 'Locations', 'Stations'],
+  people: ['Helpers', 'Marshals', 'People', 'Staff', 'Stewards', 'Team members', 'Volunteers'],
+  checkpoint: ['Aid stations', 'Checkpoints', 'Feed stations', 'Locations', 'Person points', 'Stations', 'Water stations'],
   area: ['Areas', 'Regions', 'Zones'],
-  checklist: ['Checklists', 'Tasks'],
+  checklist: ['Checklists', 'Jobs', 'Tasks'],
   course: ['Course', 'Path', 'Route', 'Track', 'Trail'],
 };
+
+/**
+ * Get the display label for a checkpoint option, resolving dynamic terms
+ * @param {string} option - The checkpoint option value
+ * @param {string} peopleTerm - The current people terminology
+ * @returns {string} The display label
+ */
+export function getCheckpointOptionLabel(option, peopleTerm) {
+  if (option === 'Person points') {
+    // Get the singular form of the people term for the label
+    const peopleMapping = termMappings.people[peopleTerm];
+    const personSingular = peopleMapping?.singular || 'Person';
+    return `${personSingular} points`;
+  }
+  return option;
+}
 
 /**
  * Set terminology from event data
@@ -93,6 +117,15 @@ export function useTerminology() {
   const singular = (type) => {
     const term = terminology.value[type];
     const mapping = termMappings[type]?.[term];
+
+    // Handle dynamic "Person points" term for checkpoints
+    if (type === 'checkpoint' && term === 'Person points') {
+      const peopleTerm = terminology.value.people;
+      const peopleMapping = termMappings.people[peopleTerm];
+      const personSingular = peopleMapping?.singular || 'Person';
+      return `${personSingular} point`;
+    }
+
     return mapping?.singular || term;
   };
 
@@ -100,6 +133,15 @@ export function useTerminology() {
   const plural = (type) => {
     const term = terminology.value[type];
     const mapping = termMappings[type]?.[term];
+
+    // Handle dynamic "Person points" term for checkpoints
+    if (type === 'checkpoint' && term === 'Person points') {
+      const peopleTerm = terminology.value.people;
+      const peopleMapping = termMappings.people[peopleTerm];
+      const personSingular = peopleMapping?.singular || 'Person';
+      return `${personSingular} points`;
+    }
+
     return mapping?.plural || term;
   };
 

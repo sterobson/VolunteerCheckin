@@ -27,4 +27,9 @@ public class EventEntity : ITableEntity
     public string AreaTerm { get; set; } = "Areas";           // Areas, Zones
     public string ChecklistTerm { get; set; } = "Checklists"; // Checklists, Tasks
     public string CourseTerm { get; set; } = "Course";        // Course, Route, Trail
+
+    // Default checkpoint style for this event
+    // Type: default, circle, square, triangle, diamond, star, hexagon, pentagon, water, food, medical, photo, music, start, finish
+    public string DefaultCheckpointStyleType { get; set; } = "default";
+    public string DefaultCheckpointStyleColor { get; set; } = string.Empty; // Hex color for colorizable shapes
 }

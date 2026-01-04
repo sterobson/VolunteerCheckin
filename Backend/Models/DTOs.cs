@@ -18,7 +18,10 @@ public record CreateEventRequest(
     string? CheckpointTerm = null,
     string? AreaTerm = null,
     string? ChecklistTerm = null,
-    string? CourseTerm = null
+    string? CourseTerm = null,
+    // Default checkpoint style (optional)
+    string? DefaultCheckpointStyleType = null,
+    string? DefaultCheckpointStyleColor = null
 );
 
 public record UpdateEventRequest(
@@ -31,7 +34,10 @@ public record UpdateEventRequest(
     string? CheckpointTerm = null,
     string? AreaTerm = null,
     string? ChecklistTerm = null,
-    string? CourseTerm = null
+    string? CourseTerm = null,
+    // Default checkpoint style (optional)
+    string? DefaultCheckpointStyleType = null,
+    string? DefaultCheckpointStyleColor = null
 );
 
 public record RoutePoint(
@@ -55,7 +61,10 @@ public record EventResponse(
     string CheckpointTerm,
     string AreaTerm,
     string ChecklistTerm,
-    string CourseTerm
+    string CourseTerm,
+    // Default checkpoint style
+    string DefaultCheckpointStyleType,
+    string DefaultCheckpointStyleColor
 );
 
 public record CreateLocationRequest(
@@ -69,7 +78,10 @@ public record CreateLocationRequest(
     DateTime? StartTime,
     DateTime? EndTime,
     List<PendingChecklistItem>? PendingNewChecklistItems = null,
-    List<PendingNote>? PendingNewNotes = null
+    List<PendingNote>? PendingNewNotes = null,
+    // Checkpoint style (optional)
+    string? StyleType = null,
+    string? StyleColor = null
 );
 
 public record LocationResponse(
@@ -84,7 +96,13 @@ public record LocationResponse(
     string What3Words,
     DateTime? StartTime,
     DateTime? EndTime,
-    List<string> AreaIds
+    List<string> AreaIds,
+    // Checkpoint style
+    string StyleType,
+    string StyleColor,
+    // Resolved style (computed from checkpoint -> area -> event hierarchy)
+    string ResolvedStyleType,
+    string ResolvedStyleColor
 );
 
 public record AreaContact(
@@ -101,7 +119,10 @@ public record CreateAreaRequest(
     string Description,
     string Color,
     List<AreaContact> Contacts,
-    List<RoutePoint>? Polygon
+    List<RoutePoint>? Polygon,
+    // Default checkpoint style for checkpoints in this area (optional)
+    string? CheckpointStyleType = null,
+    string? CheckpointStyleColor = null
 );
 
 public record UpdateAreaRequest(
@@ -110,7 +131,10 @@ public record UpdateAreaRequest(
     string Color,
     List<AreaContact> Contacts,
     List<RoutePoint>? Polygon,
-    int DisplayOrder
+    int DisplayOrder,
+    // Default checkpoint style for checkpoints in this area (optional)
+    string? CheckpointStyleType = null,
+    string? CheckpointStyleColor = null
 );
 
 public record AreaResponse(
@@ -124,7 +148,10 @@ public record AreaResponse(
     bool IsDefault,
     int DisplayOrder,
     int CheckpointCount,
-    DateTime CreatedDate
+    DateTime CreatedDate,
+    // Default checkpoint style for checkpoints in this area
+    string CheckpointStyleType,
+    string CheckpointStyleColor
 );
 
 public record BulkAssignCheckpointsRequest(
@@ -187,7 +214,13 @@ public record LocationStatusResponse(
     string What3Words,
     DateTime? StartTime,
     DateTime? EndTime,
-    List<string> AreaIds
+    List<string> AreaIds,
+    // Checkpoint style
+    string StyleType,
+    string StyleColor,
+    // Resolved style (computed from checkpoint -> area -> event hierarchy)
+    string ResolvedStyleType,
+    string ResolvedStyleColor
 );
 
 public record UserEventMappingResponse(

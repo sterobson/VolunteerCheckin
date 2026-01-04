@@ -154,7 +154,9 @@ public class AreaFunctions
                     baseResponse.IsDefault,
                     baseResponse.DisplayOrder,
                     baseResponse.CheckpointCount,
-                    baseResponse.CreatedDate
+                    baseResponse.CreatedDate,
+                    baseResponse.CheckpointStyleType,
+                    baseResponse.CheckpointStyleColor
                 );
 
                 return new OkObjectResult(response);
@@ -230,12 +232,13 @@ public class AreaFunctions
             }
 
             // Validate contacts reference valid marshals (batch load instead of N queries)
-            if (request.Contacts.Count > 0)
+            List<AreaContact> contacts = request.Contacts ?? [];
+            if (contacts.Count > 0)
             {
                 IEnumerable<MarshalEntity> allMarshals = await _marshalRepository.GetByEventAsync(eventId);
                 HashSet<string> validMarshalIds = allMarshals.Select(m => m.MarshalId).ToHashSet();
 
-                foreach (AreaContact contact in request.Contacts)
+                foreach (AreaContact contact in contacts)
                 {
                     if (!validMarshalIds.Contains(contact.MarshalId))
                     {
@@ -247,9 +250,12 @@ public class AreaFunctions
             areaEntity.Name = request.Name;
             areaEntity.Description = request.Description;
             areaEntity.Color = request.Color;
-            areaEntity.ContactsJson = JsonSerializer.Serialize(request.Contacts);
+            areaEntity.ContactsJson = JsonSerializer.Serialize(contacts);
             areaEntity.PolygonJson = JsonSerializer.Serialize(request.Polygon ?? []);
             areaEntity.DisplayOrder = request.DisplayOrder;
+            // Update checkpoint style if provided
+            if (request.CheckpointStyleType != null) areaEntity.CheckpointStyleType = request.CheckpointStyleType;
+            if (request.CheckpointStyleColor != null) areaEntity.CheckpointStyleColor = request.CheckpointStyleColor;
 
             await _areaRepository.UpdateAsync(areaEntity);
 

@@ -91,6 +91,176 @@ if (-not $Environment) {
     }
 }
 
+# ============================================================================
+# Git Status Check - Warn about uncommitted/unpushed changes (remote deploys only)
+# ============================================================================
+if ($Environment -ne "local") {
+    $hasUncommitted = $false
+    $hasUnpushed = $false
+    $currentBranch = git branch --show-current 2>$null
+
+    # Check for uncommitted changes (staged + unstaged + untracked)
+    $status = git status --porcelain 2>$null
+    if ($status) {
+        $hasUncommitted = $true
+        $changedFiles = ($status | Measure-Object).Count
+    }
+
+    # Check for unpushed commits
+    $unpushed = git log --oneline "@{u}.." 2>$null
+    if ($LASTEXITCODE -eq 0 -and $unpushed) {
+        $hasUnpushed = $true
+        $unpushedCount = ($unpushed | Measure-Object).Count
+    }
+
+    if ($hasUncommitted -or $hasUnpushed) {
+        Write-Host ""
+        Write-Host "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" -ForegroundColor Red
+        Write-Host "!!                                                          !!" -ForegroundColor Red
+        Write-Host "!!                        WARNING                           !!" -ForegroundColor Red
+        Write-Host "!!                                                          !!" -ForegroundColor Red
+        Write-Host "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" -ForegroundColor Red
+        Write-Host ""
+
+        if ($hasUncommitted) {
+            Write-Host "  *** You have $changedFiles UNCOMMITTED change(s)! ***" -ForegroundColor Yellow
+        }
+        if ($hasUnpushed) {
+            Write-Host "  *** You have $unpushedCount UNPUSHED commit(s)! ***" -ForegroundColor Yellow
+        }
+        if ($currentBranch -and $currentBranch -ne "main" -and $currentBranch -ne "master") {
+            Write-Host "  *** You are on branch '$currentBranch', not main! ***" -ForegroundColor Yellow
+        }
+
+        Write-Host ""
+        Write-Host "  You are about to deploy code that is NOT fully in source control!" -ForegroundColor Yellow
+        Write-Host ""
+
+        # Show the actual changes
+        if ($hasUncommitted) {
+            Write-Host "  Uncommitted changes:" -ForegroundColor Gray
+            git status --short | ForEach-Object { Write-Host "    $_" -ForegroundColor Gray }
+            Write-Host ""
+        }
+
+        if ($hasUnpushed) {
+            Write-Host "  Unpushed commits:" -ForegroundColor Gray
+            git log --oneline "@{u}.." | ForEach-Object { Write-Host "    $_" -ForegroundColor Gray }
+            Write-Host ""
+        }
+
+        Write-Host "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" -ForegroundColor Red
+        Write-Host ""
+
+        # Offer to fix it
+        if ($hasUncommitted) {
+            Write-Host "Would you like to commit and push your changes now?" -ForegroundColor Cyan
+            Write-Host "  1. Yes, commit and push for me" -ForegroundColor White
+            Write-Host "  2. No, deploy anyway (not recommended)" -ForegroundColor White
+            Write-Host "  3. Cancel deployment" -ForegroundColor White
+            Write-Host ""
+
+            $gitChoice = Read-Host "Enter choice (1, 2, or 3)"
+
+            switch ($gitChoice) {
+                "1" {
+                    Write-Host ""
+                    $commitMessage = Read-Host "Enter commit message"
+
+                    if ([string]::IsNullOrWhiteSpace($commitMessage)) {
+                        Write-ErrorMessage "Commit message cannot be empty."
+                        exit 1
+                    }
+
+                    Write-Host ""
+                    Write-Info "Committing changes..."
+
+                    git add -A
+                    if ($LASTEXITCODE -ne 0) {
+                        Write-ErrorMessage "Failed to stage changes."
+                        exit 1
+                    }
+
+                    git commit -m "$commitMessage"
+                    if ($LASTEXITCODE -ne 0) {
+                        Write-ErrorMessage "Failed to commit changes."
+                        exit 1
+                    }
+
+                    Write-Success "Changes committed."
+                    $hasUnpushed = $true  # Now we definitely have unpushed commits
+                }
+                "2" {
+                    Write-Host ""
+                    Write-Warning "Proceeding with deployment despite uncommitted changes..."
+                    Write-Host ""
+                }
+                "3" {
+                    Write-Host ""
+                    Write-Info "Deployment cancelled."
+                    exit 0
+                }
+                default {
+                    Write-ErrorMessage "Invalid choice."
+                    exit 1
+                }
+            }
+        }
+
+        # Check again for unpushed (either from before or from the commit we just made)
+        $unpushed = git log --oneline "@{u}.." 2>$null
+        if ($LASTEXITCODE -eq 0 -and $unpushed) {
+            $unpushedCount = ($unpushed | Measure-Object).Count
+
+            if (-not $hasUncommitted -or $gitChoice -eq "1") {
+                # Either we just committed, or there were only unpushed commits
+                Write-Host ""
+                Write-Host "You have $unpushedCount unpushed commit(s):" -ForegroundColor Yellow
+                git log --oneline "@{u}.." | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+                Write-Host ""
+
+                Write-Host "Would you like to push now?" -ForegroundColor Cyan
+                Write-Host "  1. Yes, push to origin" -ForegroundColor White
+                Write-Host "  2. No, deploy anyway" -ForegroundColor White
+                Write-Host "  3. Cancel deployment" -ForegroundColor White
+                Write-Host ""
+
+                $pushChoice = Read-Host "Enter choice (1, 2, or 3)"
+
+                switch ($pushChoice) {
+                    "1" {
+                        Write-Host ""
+                        Write-Info "Pushing to origin..."
+
+                        git push
+                        if ($LASTEXITCODE -ne 0) {
+                            Write-ErrorMessage "Failed to push. You may need to pull first or resolve conflicts."
+                            exit 1
+                        }
+
+                        Write-Success "Changes pushed to origin."
+                        Write-Host ""
+                    }
+                    "2" {
+                        Write-Host ""
+                        Write-Warning "Proceeding with deployment despite unpushed commits..."
+                        Write-Host ""
+                    }
+                    "3" {
+                        Write-Host ""
+                        Write-Info "Deployment cancelled."
+                        exit 0
+                    }
+                    default {
+                        Write-ErrorMessage "Invalid choice."
+                        exit 1
+                    }
+                }
+            }
+        }
+    }
+}
+
 # Ask what to deploy if not specified
 if (-not $Frontend -and -not $Backend) {
     Write-Host ""

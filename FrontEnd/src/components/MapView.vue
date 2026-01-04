@@ -9,6 +9,12 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import 'leaflet-draw';
 import { truncateText, calculateVisibleDescriptions } from '../utils/labelOverlapDetection';
+import {
+  getCheckpointMarkerHtml,
+  getStatusColor,
+  getStatusBadgeHtml,
+  getCheckpointStatus,
+} from '../constants/checkpointIcons';
 
 const props = defineProps({
   locations: {
@@ -70,7 +76,14 @@ const emit = defineEmits(['location-click', 'map-click', 'area-click', 'polygon-
 const mapContainer = ref(null);
 let map = null;
 
-// Expose methods to get current map state
+// Polygon drawing state
+const polygonPoints = ref([]);
+const polygonHistory = ref([]); // For undo - stores previous states
+const polygonFuture = ref([]); // For redo - stores undone states
+let polygonPreviewLayer = null;
+let polygonMarkersLayer = null;
+
+// Expose methods to get current map state and control polygon drawing
 const getMapCenter = () => {
   if (map) {
     const center = map.getCenter();
@@ -83,10 +96,60 @@ const getMapZoom = () => {
   return map ? map.getZoom() : null;
 };
 
+const undoPolygonPoint = () => {
+  if (polygonPoints.value.length > 0) {
+    // Save current state to future for redo
+    polygonFuture.value.push([...polygonPoints.value]);
+    // Restore previous state
+    const previousState = polygonHistory.value.pop() || [];
+    polygonPoints.value = previousState;
+    updatePolygonPreview();
+    emit('polygon-drawing', polygonPoints.value);
+  }
+};
+
+const redoPolygonPoint = () => {
+  if (polygonFuture.value.length > 0) {
+    // Save current state to history for undo
+    polygonHistory.value.push([...polygonPoints.value]);
+    // Restore future state
+    const futureState = polygonFuture.value.pop();
+    polygonPoints.value = futureState;
+    updatePolygonPreview();
+    emit('polygon-drawing', polygonPoints.value);
+  }
+};
+
+const canUndo = () => polygonPoints.value.length > 0;
+const canRedo = () => polygonFuture.value.length > 0;
+const getPolygonPointCount = () => polygonPoints.value.length;
+
+const completePolygon = () => {
+  if (polygonPoints.value.length >= 3) {
+    emit('polygon-complete', [...polygonPoints.value]);
+    clearPolygonDrawing();
+  }
+};
+
+const clearPolygonDrawing = () => {
+  polygonPoints.value = [];
+  polygonHistory.value = [];
+  polygonFuture.value = [];
+  updatePolygonPreview();
+};
+
 defineExpose({
   getMapCenter,
   getMapZoom,
+  undoPolygonPoint,
+  redoPolygonPoint,
+  canUndo,
+  canRedo,
+  getPolygonPointCount,
+  completePolygon,
+  clearPolygonDrawing,
 });
+
 const markers = ref([]);
 let routePolyline = null;
 const isInitialLoad = ref(true);
@@ -96,6 +159,37 @@ const areaLayers = ref([]);
 let drawControl = null;
 let drawnItems = null;
 let userLocationMarker = null;
+
+// Build default status-based marker with status badge overlay
+const buildDefaultMarker = (checkedInCount, requiredMarshals, isHighlighted, marshalMode) => {
+  const statusColor = getStatusColor(checkedInCount, requiredMarshals);
+  const markerSize = isHighlighted ? '36px' : marshalMode ? '20px' : '30px';
+  const borderColor = isHighlighted ? '#667eea' : 'white';
+  const fontSize = isHighlighted ? '14px' : '12px';
+  const statusBadge = getStatusBadgeHtml(checkedInCount, requiredMarshals);
+
+  return `
+    <div style="position: relative; width: ${markerSize}; height: ${markerSize};">
+      <div style="
+        background-color: ${statusColor};
+        width: ${markerSize};
+        height: ${markerSize};
+        border-radius: 50%;
+        border: 3px solid ${borderColor};
+        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+        font-size: ${fontSize};
+      "></div>
+      <div style="position: absolute; bottom: -4px; right: -4px;">
+        ${statusBadge}
+      </div>
+    </div>
+  `;
+};
 
 const checkVisibleMarkersAndUpdate = () => {
   if (!map) return;
@@ -288,10 +382,68 @@ const updateAreaPolygons = () => {
   });
 };
 
+// Update the polygon preview on the map
+const updatePolygonPreview = () => {
+  if (!map) return;
+
+  // Remove existing preview layers
+  if (polygonPreviewLayer) {
+    polygonPreviewLayer.remove();
+    polygonPreviewLayer = null;
+  }
+  if (polygonMarkersLayer) {
+    polygonMarkersLayer.remove();
+    polygonMarkersLayer = null;
+  }
+
+  if (polygonPoints.value.length === 0) return;
+
+  // Create a layer group for point markers
+  polygonMarkersLayer = L.layerGroup().addTo(map);
+
+  // Add markers for each point
+  polygonPoints.value.forEach((point, index) => {
+    const isFirst = index === 0;
+    const isLast = index === polygonPoints.value.length - 1;
+
+    const markerIcon = L.divIcon({
+      className: 'polygon-point-marker',
+      html: `<div style="
+        width: ${isFirst ? '16px' : '12px'};
+        height: ${isFirst ? '16px' : '12px'};
+        background-color: ${isFirst ? '#667eea' : isLast ? '#ff9800' : 'white'};
+        border: 3px solid #667eea;
+        border-radius: 50%;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      "></div>`,
+      iconSize: [isFirst ? 16 : 12, isFirst ? 16 : 12],
+      iconAnchor: [isFirst ? 8 : 6, isFirst ? 8 : 6],
+    });
+
+    L.marker([point.lat, point.lng], { icon: markerIcon, interactive: false })
+      .addTo(polygonMarkersLayer);
+  });
+
+  // Draw lines between points
+  if (polygonPoints.value.length >= 2) {
+    const coords = polygonPoints.value.map(p => [p.lat, p.lng]);
+    // Close the polygon visually if we have 3+ points
+    if (polygonPoints.value.length >= 3) {
+      coords.push(coords[0]);
+    }
+    polygonPreviewLayer = L.polyline(coords, {
+      color: '#667eea',
+      weight: 3,
+      opacity: 0.8,
+      dashArray: polygonPoints.value.length < 3 ? '10, 10' : null,
+    }).addTo(map);
+  }
+};
+
 const initDrawingMode = () => {
   if (!map) return;
 
-  // Create feature group for drawn items
+  // Create feature group for drawn items (legacy, kept for compatibility)
   if (!drawnItems) {
     drawnItems = new L.FeatureGroup();
     map.addLayer(drawnItems);
@@ -303,135 +455,126 @@ const initDrawingMode = () => {
     drawControl = null;
   }
 
-  if (props.drawingMode) {
-    // Enable drawing mode with improved configuration
-    drawControl = new L.Control.Draw({
-      draw: {
-        polygon: {
-          allowIntersection: false,
-          showArea: false, // Disable area display to avoid leaflet-draw bug
-          shapeOptions: {
-            color: '#667eea',
-            weight: 3,
-            opacity: 0.8,
-            fillOpacity: 0.3,
-          },
-          repeatMode: false, // Don't start a new polygon after finishing one
-          touchExtend: true, // Better touch support
-          metric: true, // Use metric system
-          feet: false, // Don't use imperial
-          nautic: false, // Don't use nautic
-        },
-        polyline: false,
-        rectangle: false,
-        circle: false,
-        marker: false,
-        circlemarker: false,
-      },
-      edit: {
-        featureGroup: drawnItems,
-        remove: false,
-      },
-    });
+  // Clean up any existing custom drawing handlers
+  if (map._customDrawingHandlers) {
+    map.off('click', map._customDrawingHandlers.handleClick);
+    map.getContainer().removeEventListener('touchstart', map._customDrawingHandlers.handleTouchStart);
+    map.getContainer().removeEventListener('touchend', map._customDrawingHandlers.handleTouchEnd);
+    map.getContainer().removeEventListener('touchmove', map._customDrawingHandlers.handleTouchMove);
+    delete map._customDrawingHandlers;
+  }
 
-    map.addControl(drawControl);
-
-    // Disable map dragging while actively placing a vertex to prevent accidental panning
-    let mousedownPos = null;
-    let isDragging = false;
-    const dragThreshold = 5; // pixels
-
-    const handleMouseDown = (e) => {
-      mousedownPos = { x: e.originalEvent.clientX, y: e.originalEvent.clientY };
-      isDragging = false;
-    };
-
-    const handleMouseMove = (e) => {
-      if (mousedownPos) {
-        const dx = e.originalEvent.clientX - mousedownPos.x;
-        const dy = e.originalEvent.clientY - mousedownPos.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-
-        if (distance > dragThreshold) {
-          isDragging = true;
-        }
-      }
-    };
-
-    const handleMouseUp = () => {
-      mousedownPos = null;
-    };
-
-    map.on('mousedown', handleMouseDown);
-    map.on('mousemove', handleMouseMove);
-    map.on('mouseup', handleMouseUp);
-
-    // Start drawing automatically
-    const polygonDrawer = new L.Draw.Polygon(map, drawControl.options.draw.polygon);
-    polygonDrawer.enable();
-
-    // Store handlers for cleanup
-    map._drawingHandlers = { handleMouseDown, handleMouseMove, handleMouseUp };
-
-    // Listen for drawing vertex events to track intermediate polygon state
-    const handleDrawVertex = (e) => {
-      // Emit current polygon points as user draws
-      if (e.layers && e.layers.getLayers().length > 0) {
-        const currentLayer = e.layers.getLayers()[0];
-        if (currentLayer && currentLayer.getLatLngs) {
-          const currentPoints = currentLayer.getLatLngs()[0] || [];
-          emit('polygon-drawing', currentPoints);
-        }
-      }
-    };
-
-    map.on(L.Draw.Event.DRAWVERTEX, handleDrawVertex);
-    map._drawVertexHandler = handleDrawVertex;
-
-    // Listen for created event
-    map.on(L.Draw.Event.CREATED, (event) => {
-      const layer = event.layer;
-      const coordinates = layer.getLatLngs()[0].map((latlng) => ({
-        lat: latlng.lat,
-        lng: latlng.lng,
-      }));
-
-      emit('polygon-complete', coordinates);
-
-      // Clear the drawn layer
-      drawnItems.clearLayers();
-
-      // Clean up handlers
-      if (map._drawingHandlers) {
-        map.off('mousedown', map._drawingHandlers.handleMouseDown);
-        map.off('mousemove', map._drawingHandlers.handleMouseMove);
-        map.off('mouseup', map._drawingHandlers.handleMouseUp);
-        delete map._drawingHandlers;
-      }
-      if (map._drawVertexHandler) {
-        map.off(L.Draw.Event.DRAWVERTEX, map._drawVertexHandler);
-        delete map._drawVertexHandler;
-      }
-    });
-  } else {
-    // Disable drawing mode
+  // Clear polygon preview when exiting drawing mode
+  if (!props.drawingMode) {
+    clearPolygonDrawing();
     if (drawnItems) {
       drawnItems.clearLayers();
     }
-    map.off(L.Draw.Event.CREATED);
-
-    // Clean up drawing handlers if they exist
-    if (map._drawingHandlers) {
-      map.off('mousedown', map._drawingHandlers.handleMouseDown);
-      map.off('mousemove', map._drawingHandlers.handleMouseMove);
-      map.off('mouseup', map._drawingHandlers.handleMouseUp);
-      delete map._drawingHandlers;
-    }
-    if (map._drawVertexHandler) {
-      map.off(L.Draw.Event.DRAWVERTEX, map._drawVertexHandler);
-      delete map._drawVertexHandler;
-    }
+    return;
   }
+
+  // Custom drawing mode implementation for better mobile support
+  // Track touch state for distinguishing taps from gestures
+  let touchStartTime = 0;
+  let touchStartPos = null;
+  let touchMoved = false;
+  let multiTouch = false;
+  const TAP_THRESHOLD_MS = 300; // Max time for a tap
+  const MOVE_THRESHOLD_PX = 15; // Max movement for a tap
+
+  const addPolygonPoint = (latlng) => {
+    // Save current state for undo
+    polygonHistory.value.push([...polygonPoints.value]);
+    // Clear redo stack when adding new points
+    polygonFuture.value = [];
+    // Add the new point
+    polygonPoints.value.push({ lat: latlng.lat, lng: latlng.lng });
+    updatePolygonPreview();
+    emit('polygon-drawing', polygonPoints.value);
+  };
+
+  // Handle click events (for desktop)
+  const handleClick = (e) => {
+    // Only handle if not from a touch event (touch events handle themselves)
+    if (e.originalEvent && e.originalEvent.sourceCapabilities?.firesTouchEvents) {
+      return;
+    }
+    addPolygonPoint(e.latlng);
+  };
+
+  // Handle touch events for mobile
+  const handleTouchStart = (e) => {
+    if (e.touches.length > 1) {
+      multiTouch = true;
+      return;
+    }
+    multiTouch = false;
+    touchStartTime = Date.now();
+    touchStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    touchMoved = false;
+  };
+
+  const handleTouchMove = (e) => {
+    if (!touchStartPos || multiTouch) return;
+
+    const dx = e.touches[0].clientX - touchStartPos.x;
+    const dy = e.touches[0].clientY - touchStartPos.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance > MOVE_THRESHOLD_PX) {
+      touchMoved = true;
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    if (multiTouch) {
+      multiTouch = false;
+      touchStartPos = null;
+      return;
+    }
+
+    const touchDuration = Date.now() - touchStartTime;
+
+    // Only register as a tap if:
+    // 1. Touch was quick (< TAP_THRESHOLD_MS)
+    // 2. Finger didn't move much (< MOVE_THRESHOLD_PX)
+    // 3. It was a single touch (not multi-touch)
+    if (touchDuration < TAP_THRESHOLD_MS && !touchMoved && touchStartPos) {
+      // Get the touch end position
+      const touch = e.changedTouches[0];
+      const containerPoint = L.point(
+        touch.clientX - map.getContainer().getBoundingClientRect().left,
+        touch.clientY - map.getContainer().getBoundingClientRect().top
+      );
+      const latlng = map.containerPointToLatLng(containerPoint);
+
+      // Prevent the map click event
+      e.preventDefault();
+      e.stopPropagation();
+
+      addPolygonPoint(latlng);
+    }
+
+    touchStartPos = null;
+    touchMoved = false;
+  };
+
+  // Add event listeners
+  map.on('click', handleClick);
+  map.getContainer().addEventListener('touchstart', handleTouchStart, { passive: true });
+  map.getContainer().addEventListener('touchmove', handleTouchMove, { passive: true });
+  map.getContainer().addEventListener('touchend', handleTouchEnd, { passive: false });
+
+  // Store handlers for cleanup
+  map._customDrawingHandlers = {
+    handleClick,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+  };
+
+  // Initialize polygon preview
+  updatePolygonPreview();
 };
 
 const updateMarkers = () => {
@@ -448,20 +591,13 @@ const updateMarkers = () => {
   props.locations.forEach((location) => {
     const checkedInCount = location.checkedInCount || 0;
     const requiredMarshals = location.requiredMarshals || 1;
-    const isFull = checkedInCount >= requiredMarshals;
-    const isMissing = checkedInCount === 0;
     const isHighlighted = props.highlightLocationId === location.id ||
                           props.highlightLocationIds.includes(location.id);
     const isGrayed = props.marshalMode && !isHighlighted;
 
-    // In marshal mode, gray out non-assigned checkpoints and hide counts
-    let color;
-    if (props.marshalMode) {
-      // In marshal mode: highlighted = purple, others = gray
-      color = isHighlighted ? '#667eea' : '#999';
-    } else {
-      color = isFull ? 'green' : isMissing ? 'red' : 'orange';
-    }
+    // Check if location has a custom style (not default)
+    const hasCustomStyle = location.resolvedStyleType &&
+                           location.resolvedStyleType !== 'default';
 
     // Area color indicator (hide in marshal mode)
     const areaColor = location.areaColor || '#999';
@@ -489,17 +625,49 @@ const updateMarkers = () => {
 
     // Style adjustments for grayed/highlighted markers
     const markerOpacity = isGrayed ? '0.6' : '1';
-    const markerSize = isHighlighted ? '36px' : props.marshalMode ? '20px' : '30px';
     const labelBg = isHighlighted ? '#667eea' : isGrayed ? '#e0e0e0' : 'white';
     const labelColor = isHighlighted ? 'white' : isGrayed ? '#888' : '#333';
-    const borderColor = isHighlighted ? '#667eea' : 'white';
 
-    // In marshal mode, don't show counts - just a simple dot for non-highlighted checkpoints
-    const markerContent = props.marshalMode && !isHighlighted
-      ? '' // Empty dot for non-assigned checkpoints in marshal mode
-      : props.marshalMode
-        ? '' // No count even for highlighted checkpoint in marshal mode
-        : `${checkedInCount}/${requiredMarshals}`;
+    let markerHtml;
+
+    // In marshal mode with grayed (non-assigned) checkpoints: simple gray circle, no badge
+    if (isGrayed) {
+      const markerSize = '20px';
+      markerHtml = `
+        <div style="
+          background-color: #999;
+          width: ${markerSize};
+          height: ${markerSize};
+          border-radius: 50%;
+          border: 3px solid white;
+          box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        "></div>
+      `;
+    }
+    // Custom styled checkpoint (not grayed)
+    else if (hasCustomStyle && !isGrayed) {
+      // Show count unless in marshal mode (where we hide counts)
+      const showCount = !props.marshalMode;
+      const customMarker = getCheckpointMarkerHtml(
+        location.resolvedStyleType,
+        location.resolvedStyleColor,
+        checkedInCount,
+        requiredMarshals,
+        isHighlighted ? 40 : 32,
+        showCount
+      );
+
+      if (customMarker) {
+        markerHtml = customMarker;
+      } else {
+        // Fallback to default rendering if custom marker fails
+        markerHtml = buildDefaultMarker(checkedInCount, requiredMarshals, isHighlighted, props.marshalMode);
+      }
+    }
+    // Default status-based colored circle with status badge
+    else {
+      markerHtml = buildDefaultMarker(checkedInCount, requiredMarshals, isHighlighted, props.marshalMode);
+    }
 
     const icon = L.divIcon({
       className: 'custom-marker',
@@ -515,22 +683,7 @@ const updateMarkers = () => {
               border: 2px solid white;
               box-shadow: 0 1px 2px rgba(0,0,0,0.3);
             "></div>` : ''}
-            <div style="
-              background-color: ${color};
-              width: ${markerSize};
-              height: ${markerSize};
-              border-radius: 50%;
-              border: 3px solid ${borderColor};
-              box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              color: white;
-              font-weight: bold;
-              font-size: ${isHighlighted ? '14px' : '12px'};
-            ">
-              ${markerContent}
-            </div>
+            ${markerHtml}
           </div>
           <div style="
             background-color: ${labelBg};

@@ -19,19 +19,22 @@ public class AssignmentFunctions
     private readonly IMarshalRepository _marshalRepository;
     private readonly ILocationRepository _locationRepository;
     private readonly IAreaRepository _areaRepository;
+    private readonly IEventRepository _eventRepository;
 
     public AssignmentFunctions(
         ILogger<AssignmentFunctions> logger,
         IAssignmentRepository assignmentRepository,
         IMarshalRepository marshalRepository,
         ILocationRepository locationRepository,
-        IAreaRepository areaRepository)
+        IAreaRepository areaRepository,
+        IEventRepository eventRepository)
     {
         _logger = logger;
         _assignmentRepository = assignmentRepository;
         _marshalRepository = marshalRepository;
         _locationRepository = locationRepository;
         _areaRepository = areaRepository;
+        _eventRepository = eventRepository;
     }
 
     [Function("CreateAssignment")]
@@ -217,9 +220,18 @@ public class AssignmentFunctions
     {
         try
         {
-            IEnumerable<LocationEntity> locations = await _locationRepository.GetByEventAsync(eventId);
-            List<LocationEntity> locationsList = locations.ToList();
-            IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByEventAsync(eventId);
+            // Load all data in parallel for efficiency
+            Task<IEnumerable<LocationEntity>> locationsTask = _locationRepository.GetByEventAsync(eventId);
+            Task<IEnumerable<AssignmentEntity>> assignmentsTask = _assignmentRepository.GetByEventAsync(eventId);
+            Task<EventEntity?> eventTask = _eventRepository.GetAsync(eventId);
+            Task<IEnumerable<AreaEntity>> areasTask = _areaRepository.GetByEventAsync(eventId);
+
+            await Task.WhenAll(locationsTask, assignmentsTask, eventTask, areasTask);
+
+            List<LocationEntity> locationsList = locationsTask.Result.ToList();
+            IEnumerable<AssignmentEntity> assignments = assignmentsTask.Result;
+            EventEntity? eventEntity = eventTask.Result;
+            List<AreaEntity> areasList = areasTask.Result.ToList();
 
             // Check if any checkpoints are missing area assignments
             List<LocationEntity> checkpointsNeedingAreas = locationsList
@@ -230,8 +242,8 @@ public class AssignmentFunctions
             {
                 _logger.LogInformation($"Found {checkpointsNeedingAreas.Count} checkpoints without area assignments. Calculating...");
 
-                // Load areas once for all calculations
-                AreaEntity? defaultArea = await _areaRepository.GetDefaultAreaAsync(eventId);
+                // Find or create default area
+                AreaEntity? defaultArea = areasList.FirstOrDefault(a => a.IsDefault);
                 if (defaultArea == null)
                 {
                     // Create default area if it doesn't exist
@@ -249,9 +261,8 @@ public class AssignmentFunctions
                         DisplayOrder = 0
                     };
                     await _areaRepository.AddAsync(defaultArea);
+                    areasList.Add(defaultArea);
                 }
-
-                IEnumerable<AreaEntity> areas = await _areaRepository.GetByEventAsync(eventId);
 
                 // Calculate and update area assignments for each checkpoint (parallel updates)
                 List<Task> updateTasks = [];
@@ -260,7 +271,7 @@ public class AssignmentFunctions
                     List<string> areaIds = GeometryHelper.CalculateCheckpointAreas(
                         checkpoint.Latitude,
                         checkpoint.Longitude,
-                        areas,
+                        areasList,
                         defaultArea.RowKey
                     );
 
@@ -270,6 +281,17 @@ public class AssignmentFunctions
                 await Task.WhenAll(updateTasks);
 
                 _logger.LogInformation($"Automatically assigned areas to {checkpointsNeedingAreas.Count} checkpoints");
+            }
+
+            // Calculate area checkpoint counts for style resolution tie-breaking
+            Dictionary<string, int> areaCheckpointCounts = [];
+            foreach (LocationEntity location in locationsList)
+            {
+                List<string> locationAreaIds = JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson ?? "[]") ?? [];
+                foreach (string areaId in locationAreaIds)
+                {
+                    areaCheckpointCounts[areaId] = areaCheckpointCounts.GetValueOrDefault(areaId, 0) + 1;
+                }
             }
 
             // Group assignments by location ID once (O(N) instead of O(N*M))
@@ -288,7 +310,11 @@ public class AssignmentFunctions
 
                 int checkedInCount = locationAssignments.Count(a => a.IsCheckedIn);
 
-                List<string> areaIds = System.Text.Json.JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson) ?? [];
+                List<string> areaIds = JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson ?? "[]") ?? [];
+
+                // Resolve checkpoint style from hierarchy
+                (string resolvedStyleType, string resolvedStyleColor) = ResolveCheckpointStyle(
+                    location, areaIds, eventEntity, areasList, areaCheckpointCounts);
 
                 locationStatuses.Add(new LocationStatusResponse(
                     location.RowKey,
@@ -302,7 +328,11 @@ public class AssignmentFunctions
                     location.What3Words,
                     location.StartTime,
                     location.EndTime,
-                    areaIds
+                    areaIds,
+                    location.StyleType ?? "default",
+                    location.StyleColor ?? string.Empty,
+                    resolvedStyleType,
+                    resolvedStyleColor
                 ));
             }
 
@@ -315,5 +345,56 @@ public class AssignmentFunctions
             _logger.LogError(ex, "Error getting event status");
             return new StatusCodeResult(500);
         }
+    }
+
+    /// <summary>
+    /// Resolves the effective checkpoint style from the hierarchy:
+    /// 1. Checkpoint's own style (if not "default")
+    /// 2. Area's style (if not "default") - prefers area with fewest checkpoints if multiple
+    /// 3. Event's default style (if not "default")
+    /// 4. Returns "default" to use status-based colored circles
+    /// </summary>
+    private static (string Type, string Color) ResolveCheckpointStyle(
+        LocationEntity location,
+        List<string> areaIds,
+        EventEntity? eventEntity,
+        List<AreaEntity> areas,
+        Dictionary<string, int> areaCheckpointCounts)
+    {
+        // 1. If checkpoint has its own style (not "default"), use it
+        if (!string.IsNullOrEmpty(location.StyleType) && location.StyleType != "default")
+        {
+            return (location.StyleType, location.StyleColor ?? string.Empty);
+        }
+
+        // 2. Check areas - prefer area with fewest checkpoints that has a style
+        if (areaIds.Count > 0)
+        {
+            IEnumerable<AreaEntity> matchedAreas = areas
+                .Where(a => areaIds.Contains(a.RowKey) &&
+                           !string.IsNullOrEmpty(a.CheckpointStyleType) &&
+                           a.CheckpointStyleType != "default");
+
+            // Sort by checkpoint count (ascending) to prefer smaller areas
+            matchedAreas = matchedAreas.OrderBy(a =>
+                areaCheckpointCounts.TryGetValue(a.RowKey, out int count) ? count : int.MaxValue);
+
+            AreaEntity? styledArea = matchedAreas.FirstOrDefault();
+            if (styledArea != null)
+            {
+                return (styledArea.CheckpointStyleType, styledArea.CheckpointStyleColor ?? string.Empty);
+            }
+        }
+
+        // 3. Use event default if set
+        if (eventEntity != null &&
+            !string.IsNullOrEmpty(eventEntity.DefaultCheckpointStyleType) &&
+            eventEntity.DefaultCheckpointStyleType != "default")
+        {
+            return (eventEntity.DefaultCheckpointStyleType, eventEntity.DefaultCheckpointStyleColor ?? string.Empty);
+        }
+
+        // 4. Return default (status-based rendering)
+        return ("default", string.Empty);
     }
 }

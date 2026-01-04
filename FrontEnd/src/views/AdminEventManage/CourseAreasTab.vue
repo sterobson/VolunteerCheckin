@@ -15,7 +15,31 @@
           @location-click="$emit('location-click', $event)"
           @area-click="$emit('area-click', $event)"
           @polygon-complete="$emit('polygon-complete', $event)"
+          @polygon-drawing="handlePolygonDrawing"
         />
+
+        <!-- Drawing controls overlay - shown when in drawing mode -->
+        <div v-if="drawingMode && polygonPointCount > 0" class="drawing-controls">
+          <div class="point-count">{{ polygonPointCount }} point{{ polygonPointCount !== 1 ? 's' : '' }}</div>
+          <div class="undo-redo-buttons">
+            <button
+              @click="handleUndo"
+              class="btn-drawing undo-btn"
+              :disabled="!canUndoPoints"
+              title="Undo last point"
+            >
+              ↩ Undo
+            </button>
+            <button
+              @click="handleRedo"
+              class="btn-drawing redo-btn"
+              :disabled="!canRedoPoints"
+              title="Redo point"
+            >
+              Redo ↪
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Visibility Filters -->
@@ -140,6 +164,11 @@ const filtersCollapsed = ref(true);
 const addMenuExpanded = ref(false);
 const addButtonRef = ref(null);
 
+// Polygon drawing state
+const polygonPointCount = ref(0);
+const canUndoPoints = ref(false);
+const canRedoPoints = ref(false);
+
 const filters = ref({
   showRoute: true,
   showCheckpoints: true,
@@ -189,6 +218,36 @@ const handleUploadRoute = () => {
   emit('upload-route');
 };
 
+// Handle polygon drawing updates from MapView
+const handlePolygonDrawing = (points) => {
+  polygonPointCount.value = points?.length || 0;
+  updateUndoRedoState();
+};
+
+// Update undo/redo button states
+const updateUndoRedoState = () => {
+  if (mapView.value) {
+    canUndoPoints.value = mapView.value.canUndo();
+    canRedoPoints.value = mapView.value.canRedo();
+  }
+};
+
+// Undo last polygon point
+const handleUndo = () => {
+  if (mapView.value) {
+    mapView.value.undoPolygonPoint();
+    updateUndoRedoState();
+  }
+};
+
+// Redo polygon point
+const handleRedo = () => {
+  if (mapView.value) {
+    mapView.value.redoPolygonPoint();
+    updateUndoRedoState();
+  }
+};
+
 // Expose method to scroll map into view
 const scrollMapIntoView = () => {
   if (mapSection.value) {
@@ -228,6 +287,15 @@ watch(() => props.areas, (newAreas) => {
     );
   }
 }, { immediate: true });
+
+// Reset polygon state when drawing mode changes
+watch(() => props.drawingMode, (newDrawingMode) => {
+  if (!newDrawingMode) {
+    polygonPointCount.value = 0;
+    canUndoPoints.value = false;
+    canRedoPoints.value = false;
+  }
+});
 
 const sortedAreas = computed(() => {
   return [...props.areas].sort((a, b) => {
@@ -476,6 +544,68 @@ const visibleAreas = computed(() => {
   .add-menu-content {
     max-height: calc(100vh - 14rem);
     overflow-y: auto;
+  }
+}
+
+/* Drawing controls overlay */
+.drawing-controls {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 1000;
+}
+
+.point-count {
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.undo-redo-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-drawing {
+  padding: 0.75rem 1.25rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  min-width: 90px;
+  background: white;
+  color: #333;
+}
+
+.btn-drawing:hover:not(:disabled) {
+  background: #f0f0f0;
+}
+
+.btn-drawing:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .drawing-controls {
+    bottom: 1rem;
+  }
+
+  .btn-drawing {
+    padding: 0.6rem 1rem;
+    font-size: 0.9rem;
+    min-width: 80px;
   }
 }
 </style>

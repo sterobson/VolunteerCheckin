@@ -25,4 +25,9 @@ public class AreaEntity : ITableEntity
     /// Area leads have special permissions for checklist items in their area.
     /// </summary>
     public string AreaLeadMarshalIdsJson { get; set; } = "[]";
+
+    // Default checkpoint style for checkpoints in this area (overrides event default)
+    // Type: default, circle, square, triangle, diamond, star, hexagon, pentagon, water, food, medical, photo, music, start, finish
+    public string CheckpointStyleType { get; set; } = "default";
+    public string CheckpointStyleColor { get; set; } = string.Empty; // Hex color for colorizable shapes
 }

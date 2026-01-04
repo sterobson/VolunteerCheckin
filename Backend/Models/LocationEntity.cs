@@ -22,4 +22,9 @@ public class LocationEntity : ITableEntity
     public DateTime? StartTime { get; set; }
     public DateTime? EndTime { get; set; }
     public string AreaIdsJson { get; set; } = "[]"; // JSON array of area IDs this checkpoint belongs to
+
+    // Checkpoint style (overrides area and event defaults)
+    // Type: default, circle, square, triangle, diamond, star, hexagon, pentagon, water, food, medical, photo, music, start, finish
+    public string StyleType { get; set; } = "default";
+    public string StyleColor { get; set; } = string.Empty; // Hex color for colorizable shapes
 }

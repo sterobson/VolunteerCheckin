@@ -25,6 +25,7 @@ namespace VolunteerCheckin.Functions.Tests
         private Mock<IMarshalRepository> _mockMarshalRepository = null!;
         private Mock<ILocationRepository> _mockLocationRepository = null!;
         private Mock<IAreaRepository> _mockAreaRepository = null!;
+        private Mock<IEventRepository> _mockEventRepository = null!;
         private AssignmentFunctions _assignmentFunctions = null!;
 
         [TestInitialize]
@@ -35,13 +36,15 @@ namespace VolunteerCheckin.Functions.Tests
             _mockMarshalRepository = new Mock<IMarshalRepository>();
             _mockLocationRepository = new Mock<ILocationRepository>();
             _mockAreaRepository = new Mock<IAreaRepository>();
+            _mockEventRepository = new Mock<IEventRepository>();
 
             _assignmentFunctions = new AssignmentFunctions(
                 _mockLogger.Object,
                 _mockAssignmentRepository.Object,
                 _mockMarshalRepository.Object,
                 _mockLocationRepository.Object,
-                _mockAreaRepository.Object
+                _mockAreaRepository.Object,
+                _mockEventRepository.Object
             );
         }
 
@@ -341,6 +344,30 @@ namespace VolunteerCheckin.Functions.Tests
             // Arrange
             string eventId = "event-123";
 
+            EventEntity eventEntity = new()
+            {
+                RowKey = eventId,
+                PartitionKey = eventId,
+                Name = "Test Event",
+                Description = "Test event description",
+                DefaultCheckpointStyleType = "default",
+                DefaultCheckpointStyleColor = ""
+            };
+
+            List<AreaEntity> areas = new()
+            {
+                new AreaEntity
+                {
+                    RowKey = "area-1",
+                    PartitionKey = eventId,
+                    EventId = eventId,
+                    Name = "Default Area",
+                    IsDefault = true,
+                    PolygonJson = "[]",
+                    ContactsJson = "[]"
+                }
+            };
+
             List<LocationEntity> locations = new()
             {
                 new LocationEntity
@@ -368,6 +395,14 @@ namespace VolunteerCheckin.Functions.Tests
                     IsCheckedIn = true
                 }
             };
+
+            _mockEventRepository
+                .Setup(r => r.GetAsync(eventId))
+                .ReturnsAsync(eventEntity);
+
+            _mockAreaRepository
+                .Setup(r => r.GetByEventAsync(eventId))
+                .ReturnsAsync(areas);
 
             _mockLocationRepository
                 .Setup(r => r.GetByEventAsync(eventId))

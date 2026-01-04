@@ -311,6 +311,9 @@ public class LocationFunctions
             locationEntity.What3Words = request.What3Words ?? string.Empty;
             locationEntity.StartTime = request.StartTime;
             locationEntity.EndTime = request.EndTime;
+            // Update checkpoint style if provided
+            if (request.StyleType != null) locationEntity.StyleType = request.StyleType;
+            if (request.StyleColor != null) locationEntity.StyleColor = request.StyleColor;
 
             // Recalculate area assignments based on new location
             AreaEntity defaultArea = await EnsureDefaultAreaExists(eventId);

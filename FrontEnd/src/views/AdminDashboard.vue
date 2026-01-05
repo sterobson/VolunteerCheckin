@@ -1,7 +1,7 @@
 <template>
   <div class="admin-dashboard">
     <header class="header">
-      <h1>Admin Dashboard</h1>
+      <h1>Admin dashboard</h1>
       <div class="header-actions">
         <span class="user-email">{{ authStore.adminEmail }}</span>
         <button @click="goToProfile" class="btn btn-secondary">Profile</button>
@@ -12,9 +12,9 @@
     <div class="container">
       <div class="section">
         <div class="section-header">
-          <h2>Your Events</h2>
+          <h2>Your events</h2>
           <button @click="showCreateEvent = true" class="btn btn-primary">
-            Create New Event
+            Create new event
           </button>
         </div>
 
@@ -146,7 +146,7 @@ const editEvent = (event) => {
 };
 
 const confirmDelete = async (event) => {
-  confirmModalTitle.value = 'Delete Event';
+  confirmModalTitle.value = 'Delete event';
   confirmModalMessage.value = `Are you sure you want to delete "${event.name}"?`;
   confirmModalCallback.value = async () => {
     try {

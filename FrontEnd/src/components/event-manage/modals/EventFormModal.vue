@@ -1,7 +1,7 @@
 <template>
   <BaseModal
     :show="show"
-    :title="isEditing ? 'Edit Event' : 'Create New Event'"
+    :title="isEditing ? 'Edit event' : 'Create new event'"
     size="large"
     @close="handleClose"
   >
@@ -14,7 +14,7 @@
           class="tab-button"
           :class="{ active: activeTab === 'basic' }"
         >
-          Basic Details
+          Basic details
         </button>
         <button
           type="button"
@@ -22,17 +22,17 @@
           class="tab-button"
           :class="{ active: activeTab === 'emergency' }"
         >
-          Emergency Contacts
+          Emergency contacts
         </button>
       </div>
     </template>
 
     <!-- Tab content -->
     <form @submit.prevent="handleSubmit">
-      <!-- Basic Details Tab -->
+      <!-- Basic details Tab -->
       <div v-show="activeTab === 'basic'" class="tab-content">
         <div class="form-group">
-          <label>Event Name *</label>
+          <label>Event name *</label>
           <input
             v-model="form.name"
             type="text"
@@ -51,7 +51,7 @@
         </div>
 
         <div class="form-group">
-          <label>Event Date *</label>
+          <label>Event date *</label>
           <input
             v-model="form.eventDate"
             type="datetime-local"
@@ -61,7 +61,7 @@
         </div>
 
         <div class="form-group">
-          <label>Time Zone *</label>
+          <label>Time zone *</label>
           <select
             v-model="form.timeZoneId"
             required
@@ -78,22 +78,22 @@
         </div>
       </div>
 
-      <!-- Emergency Contacts Tab -->
+      <!-- Emergency contacts tab -->
       <div v-show="activeTab === 'emergency'" class="tab-content">
         <div class="emergency-contacts-section">
           <div class="section-header-small">
-            <h3>Emergency Contacts</h3>
+            <h3>Emergency contacts</h3>
             <button
               type="button"
               @click="addEmergencyContact"
               class="btn btn-small btn-primary"
             >
-              + Add Contact
+              + Add contact
             </button>
           </div>
 
           <div v-if="form.emergencyContacts.length === 0" class="empty-state">
-            <p>No emergency contacts added yet. Click "Add Contact" to add one.</p>
+            <p>No emergency contacts added yet. Click "Add contact" to add one.</p>
           </div>
 
           <div
@@ -135,7 +135,7 @@
             </div>
 
             <div class="form-group">
-              <label>Additional Details</label>
+              <label>Additional details</label>
               <textarea
                 v-model="contact.details"
                 rows="2"

@@ -52,7 +52,7 @@
     <ConfirmModal
       v-if="confirmOnClose && !isConfirmModalRefactored"
       :show="showConfirmClose"
-      title="Unsaved Changes"
+      title="Unsaved changes"
       message="You have unsaved changes. Are you sure you want to close?"
       @confirm="handleConfirmCloseConfirm"
       @cancel="handleConfirmCloseCancel"

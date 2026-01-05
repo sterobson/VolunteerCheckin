@@ -1,7 +1,7 @@
 <template>
   <BaseModal
     :show="show"
-    title="Edit Profile"
+    title="Edit profile"
     size="medium"
     :confirm-on-close="true"
     :is-dirty="isDirty"

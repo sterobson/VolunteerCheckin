@@ -8,15 +8,15 @@
       </div>
 
       <div v-else-if="error" class="status error">
-        <h2>Login Failed</h2>
+        <h2>Login failed</h2>
         <p>{{ error }}</p>
         <router-link to="/admin/login" class="btn btn-primary">
-          Try Again
+          Try again
         </router-link>
       </div>
 
       <div v-else class="status success">
-        <h2>Login Successful!</h2>
+        <h2>Login successful!</h2>
         <p>Redirecting to dashboard...</p>
       </div>
     </div>

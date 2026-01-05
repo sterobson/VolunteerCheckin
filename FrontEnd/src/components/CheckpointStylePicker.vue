@@ -122,11 +122,12 @@ const isCustomizationModalOpen = ref(false);
 const isCustom = computed(() => {
   if (localStyleType.value && localStyleType.value !== 'default') return true;
   // Also check if any individual property is customized
-  if (localBackgroundShape.value && localBackgroundShape.value !== 'circle') return true;
+  // 'default' means inherit from parent, which should not count as custom
+  if (localBackgroundShape.value && localBackgroundShape.value !== 'default' && localBackgroundShape.value !== 'circle') return true;
   if (localBackgroundColor.value) return true;
   if (localBorderColor.value) return true;
   if (localIconColor.value) return true;
-  if (localSize.value && localSize.value !== '100') return true;
+  if (localSize.value && localSize.value !== 'default' && localSize.value !== '100') return true;
   return false;
 });
 
@@ -257,11 +258,13 @@ const selectDefault = () => {
   // Clear customizations - use 'default' for UI display, emit '' for data
   localBackgroundShape.value = 'default';
   localBackgroundColor.value = '';
+  localStyleColor.value = ''; // Clear legacy color field
   localBorderColor.value = '';
   localIconColor.value = '';
   localSize.value = 'default';
   emit('update:styleBackgroundShape', '');
   emit('update:styleBackgroundColor', '');
+  emit('update:styleColor', ''); // Clear legacy color field
   emit('update:styleBorderColor', '');
   emit('update:styleIconColor', '');
   emit('update:styleSize', '');

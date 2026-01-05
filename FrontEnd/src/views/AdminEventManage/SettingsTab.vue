@@ -20,14 +20,14 @@
         </div>
       </div>
 
-      <!-- Terminology Settings Section -->
+      <!-- Terminology Section -->
       <div class="accordion-section">
         <button
           class="accordion-header"
           :class="{ active: expandedSection === 'terminology' }"
           @click="toggleSection('terminology')"
         >
-          <span class="accordion-title">Terminology Settings</span>
+          <span class="accordion-title">Terminology</span>
           <span class="accordion-icon">{{ expandedSection === 'terminology' ? '-' : '+' }}</span>
         </button>
         <div v-if="expandedSection === 'terminology'" class="accordion-content">
@@ -158,7 +158,7 @@
 </template>
 
 <script setup>
-import { ref, watch, computed, defineProps, defineEmits } from 'vue';
+import { ref, watch, computed, onMounted, defineProps, defineEmits } from 'vue';
 import { terminologyOptions, getCheckpointOptionLabel, useTerminology } from '../../composables/useTerminology';
 import AdminsList from '../../components/event-manage/lists/AdminsList.vue';
 import CheckpointStylePicker from '../../components/CheckpointStylePicker.vue';
@@ -178,6 +178,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  eventId: {
+    type: String,
+    default: '',
+  },
 });
 
 const emit = defineEmits([
@@ -188,7 +192,20 @@ const emit = defineEmits([
 ]);
 
 const localForm = ref({ ...props.eventData });
+
+// Accordion state persistence
+const ACCORDION_STORAGE_KEY = 'admin_settings_accordion';
+const getStorageKey = () => props.eventId ? `${ACCORDION_STORAGE_KEY}_${props.eventId}` : ACCORDION_STORAGE_KEY;
+
 const expandedSection = ref(null);
+
+// Load saved accordion state on mount
+onMounted(() => {
+  const saved = localStorage.getItem(getStorageKey());
+  if (saved) {
+    expandedSection.value = saved;
+  }
+});
 
 // Compute checkpoint options with dynamic labels based on current people term
 const checkpointOptionsWithLabels = computed(() => {
@@ -200,7 +217,14 @@ const checkpointOptionsWithLabels = computed(() => {
 });
 
 const toggleSection = (section) => {
-  expandedSection.value = expandedSection.value === section ? null : section;
+  const newValue = expandedSection.value === section ? null : section;
+  expandedSection.value = newValue;
+  // Persist accordion state
+  if (newValue) {
+    localStorage.setItem(getStorageKey(), newValue);
+  } else {
+    localStorage.removeItem(getStorageKey());
+  }
 };
 
 watch(() => props.eventData, (newVal) => {

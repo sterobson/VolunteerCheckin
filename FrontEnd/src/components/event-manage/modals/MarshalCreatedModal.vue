@@ -15,7 +15,7 @@
     </div>
 
     <div class="link-section">
-      <label>Login Link</label>
+      <label>Login link</label>
       <p class="help-text">
         Share this unique link with {{ marshalName }} so they can access their dashboard and check in.
       </p>

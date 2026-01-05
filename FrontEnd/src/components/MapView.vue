@@ -11,7 +11,6 @@ import 'leaflet-draw';
 import { truncateText, calculateVisibleDescriptions } from '../utils/labelOverlapDetection';
 import {
   getCheckpointMarkerHtml,
-  getStatusColor,
   getStatusBadgeHtml,
   getCheckpointStatus,
   generateCheckpointSvg,
@@ -165,18 +164,19 @@ let drawControl = null;
 let drawnItems = null;
 let userLocationMarker = null;
 
-// Build default status-based marker with status badge overlay
+// System default color for checkpoint markers
+const SYSTEM_DEFAULT_COLOR = '#667eea';
+
+// Build default marker with system default color and status badge overlay
 const buildDefaultMarker = (checkedInCount, requiredMarshals, isHighlighted, marshalMode) => {
-  const statusColor = getStatusColor(checkedInCount, requiredMarshals);
   const markerSize = isHighlighted ? '36px' : marshalMode ? '20px' : '30px';
   const borderColor = isHighlighted ? '#667eea' : 'white';
-  const fontSize = isHighlighted ? '14px' : '12px';
   const statusBadge = getStatusBadgeHtml(checkedInCount, requiredMarshals);
 
   return `
     <div style="position: relative; width: ${markerSize}; height: ${markerSize};">
       <div style="
-        background-color: ${statusColor};
+        background-color: ${SYSTEM_DEFAULT_COLOR};
         width: ${markerSize};
         height: ${markerSize};
         border-radius: 50%;
@@ -187,7 +187,6 @@ const buildDefaultMarker = (checkedInCount, requiredMarshals, isHighlighted, mar
         justify-content: center;
         color: white;
         font-weight: bold;
-        font-size: ${fontSize};
       "></div>
       <div style="position: absolute; bottom: -4px; right: -4px;">
         ${statusBadge}

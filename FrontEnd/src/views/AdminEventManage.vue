@@ -127,6 +127,7 @@
         <SettingsTab
           v-if="activeTab === 'settings'"
           :event-data="eventDetailsForm"
+          :event-id="route.params.eventId"
           :admins="eventAdmins"
           :form-dirty="eventDetailsFormDirty"
           @submit="handleUpdateEvent"
@@ -760,7 +761,8 @@ const handleUpdateEvent = async (formData) => {
       eventDetailsForm.value = { ...formData };
     }
 
-    const oldEventDate = event.value.eventDate;
+    // Compare dates in the same format (both as input-formatted strings)
+    const oldEventDate = formatDateForInput(event.value.eventDate);
     const newEventDate = eventDetailsForm.value.eventDate;
 
     if (oldEventDate !== newEventDate) {
@@ -823,7 +825,7 @@ const handleShiftCheckpointTimesCancel = () => {
 const tryCloseModal = (closeFunction) => {
   if (formDirty.value || pendingAssignments.value.length > 0 || pendingDeleteAssignments.value.length > 0 ||
       pendingMarshalAssignments.value.length > 0 || pendingMarshalDeleteAssignments.value.length > 0) {
-    showConfirm('Unsaved Changes', 'You have unsaved changes. Are you sure you want to close without saving?', async () => {
+    showConfirm('Unsaved changes', 'You have unsaved changes. Are you sure you want to close without saving?', async () => {
       formDirty.value = false;
       pendingAssignments.value = [];
       pendingDeleteAssignments.value = [];
@@ -1044,7 +1046,7 @@ const handleSaveArea = async (formData) => {
 };
 
 const handleDeleteArea = async (areaId) => {
-  showConfirm('Delete Area', 'Are you sure you want to delete this area? Checkpoints will be automatically reassigned.', async () => {
+  showConfirm('Delete area', 'Are you sure you want to delete this area? Checkpoints will be automatically reassigned.', async () => {
     try {
       // Delete the area (checkpoints will be automatically reassigned to default area on backend)
       await areasApi.delete(route.params.eventId, areaId);
@@ -1130,7 +1132,7 @@ const handleSaveChecklistItem = async (formData) => {
 };
 
 const handleDeleteChecklistItem = async (itemId) => {
-  showConfirm('Delete Checklist Item', 'Are you sure you want to delete this checklist item?', async () => {
+  showConfirm('Delete checklist item', 'Are you sure you want to delete this checklist item?', async () => {
     try {
       await checklistApi.delete(route.params.eventId, itemId);
       await loadChecklists();
@@ -1181,7 +1183,7 @@ const handleSaveNote = async (formData) => {
 };
 
 const handleDeleteNote = async (noteId) => {
-  showConfirm('Delete Note', 'Are you sure you want to delete this note?', async () => {
+  showConfirm('Delete note', 'Are you sure you want to delete this note?', async () => {
     try {
       await notesApi.delete(route.params.eventId, noteId);
       await loadNotes();
@@ -1233,7 +1235,7 @@ const handleSaveContact = async (formData) => {
 };
 
 const handleDeleteContact = async (contactId) => {
-  showConfirm('Delete Contact', 'Are you sure you want to delete this contact?', async () => {
+  showConfirm('Delete contact', 'Are you sure you want to delete this contact?', async () => {
     try {
       await contactsApi.delete(route.params.eventId, contactId);
       await loadContacts();
@@ -2139,7 +2141,7 @@ const handleUpdateLocation = async (formData) => {
 };
 
 const handleDeleteLocation = async (locationId) => {
-  showConfirm('Delete Location', 'Are you sure you want to delete this location?', async () => {
+  showConfirm('Delete location', 'Are you sure you want to delete this location?', async () => {
     try {
       await locationsApi.delete(route.params.eventId, locationId);
       await reloadLocationsAreasAndStatus();

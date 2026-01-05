@@ -44,7 +44,7 @@
 
     <!-- Magic Link Section (only for existing marshals) -->
     <div v-if="marshalId" class="magic-link-section">
-      <label>Login Link</label>
+      <label>Login link</label>
       <p class="help-text">Share this unique link with the marshal so they can access their dashboard.</p>
 
       <div v-if="loadingMagicLink" class="loading-text">Loading link...</div>

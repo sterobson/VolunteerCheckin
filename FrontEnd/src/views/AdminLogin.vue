@@ -1,7 +1,7 @@
 <template>
   <div class="admin-login">
     <div class="login-card">
-      <h2>Admin Login</h2>
+      <h2>Admin login</h2>
 
       <!-- Email sent confirmation -->
       <div v-if="emailSent" class="email-sent">

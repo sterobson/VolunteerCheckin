@@ -399,7 +399,7 @@
 </template>
 
 <script setup>
-import { ref, computed, defineProps, defineEmits, watch } from 'vue';
+import { ref, computed, defineProps, defineEmits, watch, onMounted } from 'vue';
 import BaseModal from '../../BaseModal.vue';
 import TabHeader from '../../TabHeader.vue';
 import CheckpointChecklistView from '../../CheckpointChecklistView.vue';
@@ -577,7 +577,10 @@ const form = ref({
   checkpointTerm: '',
 });
 
-// Accordion expanded state - with 2+ sections, all start collapsed
+// Accordion expanded state - with persistence
+const ACCORDION_STORAGE_KEY = 'edit_area_accordion';
+const getAccordionStorageKey = () => props.eventId ? `${ACCORDION_STORAGE_KEY}_${props.eventId}` : ACCORDION_STORAGE_KEY;
+
 const expandedSections = ref({
   polygonColor: false,
   iconStyle: false,
@@ -585,8 +588,23 @@ const expandedSections = ref({
   checkpointTerm: false,
 });
 
+// Load saved accordion state on mount
+onMounted(() => {
+  const saved = localStorage.getItem(getAccordionStorageKey());
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      expandedSections.value = { ...expandedSections.value, ...parsed };
+    } catch (e) {
+      // Ignore parse errors
+    }
+  }
+});
+
 const toggleSection = (section) => {
   expandedSections.value[section] = !expandedSections.value[section];
+  // Persist accordion state
+  localStorage.setItem(getAccordionStorageKey(), JSON.stringify(expandedSections.value));
 };
 
 // Generate polygon preview SVG with current area color

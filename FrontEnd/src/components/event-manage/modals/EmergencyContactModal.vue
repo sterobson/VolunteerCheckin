@@ -1,13 +1,13 @@
 <template>
   <BaseModal
     :show="show"
-    title="Emergency Information"
+    title="Emergency information"
     size="medium"
     @close="handleClose"
   >
     <!-- Emergency/Urgent notes -->
     <div v-if="notes && notes.length > 0" class="emergency-notes-section">
-      <h2 class="section-header">Emergency Notes</h2>
+      <h2 class="section-header">Emergency notes</h2>
       <div class="emergency-notes-list">
         <div
           v-for="note in sortedNotes"
@@ -28,7 +28,7 @@
 
     <!-- Emergency contacts list -->
     <div v-if="contacts && contacts.length > 0" class="emergency-contacts-section">
-      <h2 class="section-header">Emergency Contacts</h2>
+      <h2 class="section-header">Emergency contacts</h2>
       <div class="emergency-contacts-list">
         <div
           v-for="contact in contacts"
@@ -42,7 +42,7 @@
 
           <div class="contact-details">
             <div v-if="contact.phone" class="info-section">
-              <label>Phone Number</label>
+              <label>Phone number</label>
               <a :href="`tel:${contact.phone}`" class="phone-link">
                 {{ contact.phone }}
               </a>

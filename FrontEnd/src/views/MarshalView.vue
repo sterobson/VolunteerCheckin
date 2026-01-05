@@ -35,9 +35,9 @@
 
       <!-- Login Error -->
       <div v-else-if="loginError" class="selection-card error-card">
-        <h2>Login Failed</h2>
+        <h2>Login failed</h2>
         <p class="error">{{ loginError }}</p>
-        <p class="instruction">Please contact the event organizer for a new login link.</p>
+        <p class="instruction">Please contact the event organiser for a new login link.</p>
       </div>
 
       <!-- Marshal Dashboard -->
@@ -600,7 +600,7 @@ import NotesView from '../components/NotesView.vue';
 import OfflineIndicator from '../components/OfflineIndicator.vue';
 import { setTerminology, useTerminology } from '../composables/useTerminology';
 import { getIcon } from '../utils/icons';
-import { generateCheckpointSvg, getStatusColor } from '../constants/checkpointIcons';
+import { generateCheckpointSvg } from '../constants/checkpointIcons';
 import { useOffline } from '../composables/useOffline';
 import { cacheEventData, getCachedEventData, updateCachedField } from '../services/offlineDb';
 

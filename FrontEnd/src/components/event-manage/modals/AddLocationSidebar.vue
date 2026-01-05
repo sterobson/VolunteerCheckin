@@ -69,7 +69,7 @@
 
       <div v-if="form.useCustomTimes" class="custom-times-section">
         <div class="form-group">
-          <label>Start Date & Time (optional)</label>
+          <label>Start date & time (optional)</label>
           <input
             v-model="form.startTime"
             type="datetime-local"
@@ -82,7 +82,7 @@
         </div>
 
         <div class="form-group">
-          <label>End Date & Time (optional)</label>
+          <label>End date & time (optional)</label>
           <input
             v-model="form.endTime"
             type="datetime-local"

@@ -257,7 +257,7 @@
 </template>
 
 <script setup>
-import { ref, computed, defineProps, defineEmits, watch } from 'vue';
+import { ref, computed, defineProps, defineEmits, watch, onMounted } from 'vue';
 import BaseModal from '../../BaseModal.vue';
 import TabHeader from '../../TabHeader.vue';
 import LocationDetailsTab from '../tabs/LocationDetailsTab.vue';
@@ -400,14 +400,32 @@ const form = ref({
   locationUpdateScopeConfigurations: [],
 });
 
-// Accordion expanded state for appearance tab - with 2+ sections, all start collapsed
+// Accordion expanded state for appearance tab - with persistence
+const ACCORDION_STORAGE_KEY = 'edit_location_accordion';
+const getAccordionStorageKey = () => props.eventId ? `${ACCORDION_STORAGE_KEY}_${props.eventId}` : ACCORDION_STORAGE_KEY;
+
 const expandedSections = ref({
   iconStyle: false,
   terminology: false,
 });
 
+// Load saved accordion state on mount
+onMounted(() => {
+  const saved = localStorage.getItem(getAccordionStorageKey());
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      expandedSections.value = { ...expandedSections.value, ...parsed };
+    } catch (e) {
+      // Ignore parse errors
+    }
+  }
+});
+
 const toggleSection = (section) => {
   expandedSections.value[section] = !expandedSections.value[section];
+  // Persist accordion state
+  localStorage.setItem(getAccordionStorageKey(), JSON.stringify(expandedSections.value));
 };
 
 // Get inherited people term from area hierarchy

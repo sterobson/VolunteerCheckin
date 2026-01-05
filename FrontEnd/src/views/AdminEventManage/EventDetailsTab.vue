@@ -3,7 +3,7 @@
     <div class="event-info-card">
       <form @submit.prevent="handleSubmit" class="event-details-form">
         <div class="form-group">
-          <label>Event Name</label>
+          <label>Event name</label>
           <input
             v-model="localForm.name"
             type="text"
@@ -25,7 +25,7 @@
 
         <div class="form-row">
           <div class="form-group">
-            <label>Event Date & Time</label>
+            <label>Event date & time</label>
             <input
               v-model="localForm.eventDate"
               type="datetime-local"
@@ -36,7 +36,7 @@
           </div>
 
           <div class="form-group">
-            <label>Time Zone</label>
+            <label>Time zone</label>
             <select
               v-model="localForm.timeZoneId"
               required

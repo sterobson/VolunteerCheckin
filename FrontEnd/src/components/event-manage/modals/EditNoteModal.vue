@@ -151,7 +151,7 @@
 
   <InfoModal
     :show="showErrorModal"
-    title="Validation Error"
+    title="Validation error"
     :message="errorMessage"
     @close="showErrorModal = false"
   />

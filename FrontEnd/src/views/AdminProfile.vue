@@ -1,7 +1,7 @@
 <template>
   <div class="admin-profile">
     <header class="header">
-      <h1>My Profile</h1>
+      <h1>My profile</h1>
       <div class="header-actions">
         <span class="user-email">{{ authStore.adminEmail }}</span>
         <button @click="handleLogout" class="btn btn-secondary">Logout</button>
@@ -11,9 +11,9 @@
     <div class="container">
       <div class="section">
         <div class="section-header">
-          <h2>Profile Information</h2>
+          <h2>Profile information</h2>
           <button @click="showEditModal = true" class="btn btn-primary">
-            Edit Profile
+            Edit profile
           </button>
         </div>
 
@@ -41,7 +41,7 @@
           </div>
 
           <div class="profile-field">
-            <label>System Admin</label>
+            <label>System admin</label>
             <div class="field-value">
               <span :class="['badge', profileStore.profile.isSystemAdmin ? 'badge-success' : 'badge-secondary']">
                 {{ profileStore.profile.isSystemAdmin ? 'Yes' : 'No' }}

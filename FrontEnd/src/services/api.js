@@ -94,11 +94,43 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Track consecutive auth errors to detect session expiration
+let authErrorCount = 0;
+const AUTH_ERROR_THRESHOLD = 2; // Redirect after this many consecutive auth errors
+
+/**
+ * Handle authentication errors by redirecting to login
+ */
+function handleAuthError() {
+  authErrorCount++;
+
+  if (authErrorCount >= AUTH_ERROR_THRESHOLD) {
+    // Clear auth data
+    localStorage.removeItem('adminEmail');
+    localStorage.removeItem('sessionToken');
+
+    // Redirect to login page (avoid redirect loop if already on login)
+    if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/auth')) {
+      window.location.href = '/login';
+    }
+  }
+}
+
+/**
+ * Reset auth error count on successful request
+ */
+function resetAuthErrorCount() {
+  authErrorCount = 0;
+}
+
 // Response interceptor to cache successful responses
 api.interceptors.response.use(
   (response) => {
     // Mark as online when we get successful responses
     isOfflineMode = false;
+
+    // Reset auth error count on successful response
+    resetAuthErrorCount();
 
     // Cache GET responses for specific endpoints
     const url = response.config.url;
@@ -113,6 +145,12 @@ api.interceptors.response.use(
   },
   async (error) => {
     const config = error.config;
+
+    // Handle authentication errors (401 Unauthorized, 403 Forbidden)
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+      handleAuthError();
+      return Promise.reject(error);
+    }
 
     // Check if it's a server or network error
     if (isServerOrNetworkError(error)) {

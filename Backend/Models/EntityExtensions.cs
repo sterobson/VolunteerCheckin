@@ -66,6 +66,12 @@ public static class EntityExtensions
         // Resolve the terminology from checkpoint -> area -> event hierarchy
         string resolvedPeopleTerm = ResolveCheckpointPeopleTerm(
             entity, areaIds, eventEntity, areas, areaCheckpointCounts);
+        string resolvedCheckpointTerm = ResolveCheckpointTerm(
+            entity, areaIds, eventEntity, areas, areaCheckpointCounts);
+
+        // Parse location update scope configurations
+        List<ScopeConfiguration> locationUpdateScopeConfigs =
+            JsonSerializer.Deserialize<List<ScopeConfiguration>>(entity.LocationUpdateScopeJson) ?? [];
 
         return new LocationResponse(
             entity.RowKey,
@@ -95,7 +101,13 @@ public static class EntityExtensions
             resolvedStyle.IconColor,
             resolvedStyle.Size,
             entity.PeopleTerm,
-            resolvedPeopleTerm
+            entity.CheckpointTerm,
+            resolvedPeopleTerm,
+            resolvedCheckpointTerm,
+            entity.IsDynamic,
+            locationUpdateScopeConfigs,
+            entity.LastLocationUpdate,
+            entity.LastUpdatedByPersonId
         );
     }
 
@@ -245,26 +257,28 @@ public static class EntityExtensions
         }
 
         // Resolve Type: checkpoint -> area -> event
-        if (!string.IsNullOrEmpty(location.StyleType) && location.StyleType != "default")
+        // 'custom' means "has custom properties but inherit icon type" - treat like 'default'
+        bool IsValidIconType(string? styleType) =>
+            !string.IsNullOrEmpty(styleType) && styleType != "default" && styleType != "custom";
+
+        if (IsValidIconType(location.StyleType))
         {
             type = location.StyleType;
         }
         else if (sortedMatchedAreas != null)
         {
             AreaEntity? styledArea = sortedMatchedAreas.FirstOrDefault(a =>
-                !string.IsNullOrEmpty(a.CheckpointStyleType) && a.CheckpointStyleType != "default");
+                IsValidIconType(a.CheckpointStyleType));
             if (styledArea != null)
             {
                 type = styledArea.CheckpointStyleType;
             }
-            else if (eventEntity != null && !string.IsNullOrEmpty(eventEntity.DefaultCheckpointStyleType) &&
-                     eventEntity.DefaultCheckpointStyleType != "default")
+            else if (eventEntity != null && IsValidIconType(eventEntity.DefaultCheckpointStyleType))
             {
                 type = eventEntity.DefaultCheckpointStyleType;
             }
         }
-        else if (eventEntity != null && !string.IsNullOrEmpty(eventEntity.DefaultCheckpointStyleType) &&
-                 eventEntity.DefaultCheckpointStyleType != "default")
+        else if (eventEntity != null && IsValidIconType(eventEntity.DefaultCheckpointStyleType))
         {
             type = eventEntity.DefaultCheckpointStyleType;
         }
@@ -369,5 +383,62 @@ public static class EntityExtensions
 
         // 4. Return default
         return "Marshals";
+    }
+
+    /// <summary>
+    /// Resolves the effective checkpoint terminology from the hierarchy:
+    /// 1. Checkpoint's own term (if not empty)
+    /// 2. Area's term (if not empty) - prefers area with fewest checkpoints if multiple
+    /// 3. Event's default term (if not empty)
+    /// 4. Returns "Checkpoint" as the default
+    /// </summary>
+    private static string ResolveCheckpointTerm(
+        LocationEntity location,
+        List<string> areaIds,
+        EventEntity? eventEntity,
+        IEnumerable<AreaEntity>? areas,
+        Dictionary<string, int>? areaCheckpointCounts)
+    {
+        // 1. If checkpoint has its own terminology, use it
+        if (!string.IsNullOrEmpty(location.CheckpointTerm))
+        {
+            return location.CheckpointTerm;
+        }
+
+        // 2. Check areas - prefer area with fewest checkpoints that has terminology
+        if (areas != null && areaIds.Count > 0)
+        {
+            IEnumerable<AreaEntity> matchedAreas = areas
+                .Where(a => areaIds.Contains(a.RowKey) &&
+                           !string.IsNullOrEmpty(a.CheckpointTerm));
+
+            // If we have checkpoint counts, sort by count (ascending) to prefer smaller areas
+            if (areaCheckpointCounts != null)
+            {
+                matchedAreas = matchedAreas.OrderBy(a =>
+                    areaCheckpointCounts.TryGetValue(a.RowKey, out int count) ? count : int.MaxValue);
+            }
+
+            AreaEntity? termArea = matchedAreas.FirstOrDefault();
+            if (termArea != null)
+            {
+                return termArea.CheckpointTerm;
+            }
+        }
+
+        // 3. Use event default if set (singular form)
+        if (eventEntity != null && !string.IsNullOrEmpty(eventEntity.CheckpointTerm))
+        {
+            // Event stores plural form, convert to singular for individual checkpoint
+            string term = eventEntity.CheckpointTerm;
+            if (term.EndsWith("s", StringComparison.OrdinalIgnoreCase))
+            {
+                return term[..^1]; // Remove trailing 's' for singular
+            }
+            return term;
+        }
+
+        // 4. Return default
+        return "Checkpoint";
     }
 }

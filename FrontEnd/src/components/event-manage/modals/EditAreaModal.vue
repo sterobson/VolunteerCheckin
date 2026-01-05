@@ -119,11 +119,9 @@
           @click="$emit('select-checkpoint', checkpoint)"
         >
           <div class="checkpoint-header">
+            <span class="checkpoint-icon" v-html="getCheckpointIconSvg(checkpoint)"></span>
             <div class="checkpoint-name-section">
-              <h4>{{ checkpoint.name }}</h4>
-              <p v-if="checkpoint.description" class="checkpoint-description">
-                {{ checkpoint.description }}
-              </p>
+              <h4>{{ checkpoint.name }}<span v-if="checkpoint.description" class="checkpoint-description"> - {{ checkpoint.description }}</span></h4>
             </div>
             <div class="checkpoint-stats">
               <div class="stat-badge" :class="getCheckInStatusClass(checkpoint)">
@@ -256,13 +254,13 @@
           @click="toggleSection('iconStyle')"
         >
           <div class="accordion-icon" v-html="iconStylePreviewSvg"></div>
-          <span class="accordion-title">{{ terms.checkpoint }} icon style</span>
+          <span class="accordion-title">{{ getAreaCheckpointTerm(false) }} icon style</span>
           <span class="accordion-arrow">{{ expandedSections.iconStyle ? '▲' : '▼' }}</span>
         </button>
         <div v-if="expandedSections.iconStyle" class="accordion-content">
           <p class="section-description">
-            Set a default icon style for all {{ termsLower.checkpoints }} in this {{ termsLower.area }}.
-            Individual {{ termsLower.checkpoints }} can override this setting.
+            Set a default icon style for all {{ getAreaCheckpointTermLower() }} in this {{ termsLower.area }}.
+            Individual {{ getAreaCheckpointTermLower() }} can override this setting.
           </p>
           <CheckpointStylePicker
             :style-type="form.checkpointStyleType || 'default'"
@@ -275,7 +273,7 @@
             :inherited-style-type="eventDefaultStyleType"
             :inherited-style-color="eventDefaultStyleColor"
             :inherited-background-shape="eventDefaultStyleBackgroundShape || ''"
-            :inherited-background-color="eventDefaultStyleBackgroundColor || ''"
+            :inherited-background-color="eventDefaultStyleBackgroundColor || eventDefaultStyleColor || ''"
             :inherited-border-color="eventDefaultStyleBorderColor || ''"
             :inherited-icon-color="eventDefaultStyleIconColor || ''"
             :inherited-size="eventDefaultStyleSize || ''"
@@ -602,24 +600,27 @@ const polygonPreviewSvg = computed(() => {
   </svg>`;
 });
 
-// Generate icon style preview SVG
+// Generate icon style preview SVG - each property inherits independently from event
 const iconStylePreviewSvg = computed(() => {
-  const type = form.value.checkpointStyleType || 'default';
+  // Check if this area has any custom style set
+  const hasAreaStyle = form.value.checkpointStyleType !== 'default'
+    || form.value.checkpointStyleBackgroundShape
+    || form.value.checkpointStyleBackgroundColor
+    || form.value.checkpointStyleBorderColor
+    || form.value.checkpointStyleIconColor
+    || form.value.checkpointStyleSize;
 
-  if (type === 'default') {
-    // Show inherited style from event or default gradient
-    if (props.eventDefaultStyleType && props.eventDefaultStyleType !== 'default') {
-      return generateCheckpointSvg({
-        type: props.eventDefaultStyleType,
-        backgroundShape: props.eventDefaultStyleBackgroundShape || 'circle',
-        backgroundColor: props.eventDefaultStyleBackgroundColor || props.eventDefaultStyleColor || '',
-        borderColor: props.eventDefaultStyleBorderColor || '',
-        iconColor: props.eventDefaultStyleIconColor || '',
-        size: props.eventDefaultStyleSize || '100',
-        outputSize: 24,
-      });
-    }
-    // Default gradient circle
+  // Check if event has any default style set
+  const hasEventStyle = props.eventDefaultStyleType !== 'default'
+    || props.eventDefaultStyleBackgroundShape
+    || props.eventDefaultStyleBackgroundColor
+    || props.eventDefaultStyleColor
+    || props.eventDefaultStyleBorderColor
+    || props.eventDefaultStyleIconColor
+    || props.eventDefaultStyleSize;
+
+  // If nothing is set anywhere, show gradient
+  if (!hasAreaStyle && !hasEventStyle) {
     const size = 24;
     return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
       <defs>
@@ -633,14 +634,40 @@ const iconStylePreviewSvg = computed(() => {
     </svg>`;
   }
 
-  // Custom icon with all style options
+  // Resolve each property: area value → event default → fallback
+  const resolvedType = (form.value.checkpointStyleType && form.value.checkpointStyleType !== 'default')
+    ? form.value.checkpointStyleType
+    : (props.eventDefaultStyleType && props.eventDefaultStyleType !== 'default' ? props.eventDefaultStyleType : 'default');
+
+  const resolvedBackgroundShape = form.value.checkpointStyleBackgroundShape
+    || props.eventDefaultStyleBackgroundShape
+    || 'circle';
+
+  const resolvedBackgroundColor = form.value.checkpointStyleBackgroundColor
+    || props.eventDefaultStyleBackgroundColor
+    || props.eventDefaultStyleColor
+    || '#667eea';
+
+  const resolvedBorderColor = form.value.checkpointStyleBorderColor
+    || props.eventDefaultStyleBorderColor
+    || '#ffffff';
+
+  const resolvedIconColor = form.value.checkpointStyleIconColor
+    || props.eventDefaultStyleIconColor
+    || '#ffffff';
+
+  const resolvedSize = form.value.checkpointStyleSize
+    || props.eventDefaultStyleSize
+    || '100';
+
+  // Generate icon with resolved properties
   return generateCheckpointSvg({
-    type: type,
-    backgroundShape: form.value.checkpointStyleBackgroundShape || 'circle',
-    backgroundColor: form.value.checkpointStyleBackgroundColor || form.value.checkpointStyleColor || '',
-    borderColor: form.value.checkpointStyleBorderColor || '',
-    iconColor: form.value.checkpointStyleIconColor || '',
-    size: form.value.checkpointStyleSize || '100',
+    type: resolvedType !== 'default' ? resolvedType : resolvedBackgroundShape,
+    backgroundShape: resolvedBackgroundShape,
+    backgroundColor: resolvedBackgroundColor,
+    borderColor: resolvedBorderColor,
+    iconColor: resolvedIconColor,
+    size: resolvedSize,
     outputSize: 24,
   });
 });
@@ -1020,6 +1047,39 @@ const handleDelete = () => {
 const handleClose = () => {
   emit('close');
 };
+
+// Generate checkpoint icon SVG based on resolved style
+const getCheckpointIconSvg = (checkpoint) => {
+  const resolvedType = checkpoint.resolvedStyleType || checkpoint.ResolvedStyleType;
+  const resolvedBgColor = checkpoint.resolvedStyleBackgroundColor || checkpoint.ResolvedStyleBackgroundColor || checkpoint.resolvedStyleColor || checkpoint.ResolvedStyleColor;
+  const resolvedBorderColor = checkpoint.resolvedStyleBorderColor || checkpoint.ResolvedStyleBorderColor;
+  const resolvedIconColor = checkpoint.resolvedStyleIconColor || checkpoint.ResolvedStyleIconColor;
+  const resolvedShape = checkpoint.resolvedStyleBackgroundShape || checkpoint.ResolvedStyleBackgroundShape;
+
+  // Check if there's any resolved styling
+  const hasResolvedStyle = (resolvedType && resolvedType !== 'default')
+    || resolvedBgColor
+    || resolvedBorderColor
+    || resolvedIconColor
+    || (resolvedShape && resolvedShape !== 'circle');
+
+  if (hasResolvedStyle) {
+    return generateCheckpointSvg({
+      type: resolvedType || 'circle',
+      backgroundShape: resolvedShape || 'circle',
+      backgroundColor: resolvedBgColor || '#667eea',
+      borderColor: resolvedBorderColor || '#ffffff',
+      iconColor: resolvedIconColor || '#ffffff',
+      size: '75',
+      outputSize: 20,
+    });
+  }
+
+  // Default: use neutral colored circle
+  return `<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="10" cy="10" r="8" fill="#667eea" stroke="#fff" stroke-width="1.5"/>
+  </svg>`;
+};
 </script>
 
 <style scoped>
@@ -1292,10 +1352,23 @@ const handleClose = () => {
 
 .checkpoint-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
+  align-items: center;
+  gap: 0.75rem;
   margin-bottom: 0.75rem;
+}
+
+.checkpoint-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+
+.checkpoint-icon :deep(svg) {
+  width: 20px;
+  height: 20px;
 }
 
 .checkpoint-name-section {
@@ -1310,13 +1383,14 @@ const handleClose = () => {
 }
 
 .checkpoint-description {
-  margin: 0.25rem 0 0 0;
-  font-size: 0.85rem;
+  font-weight: normal;
+  font-size: 0.9rem;
   color: #666;
 }
 
 .checkpoint-stats {
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .stat-badge {

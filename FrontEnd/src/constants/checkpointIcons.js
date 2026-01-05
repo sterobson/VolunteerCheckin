@@ -61,6 +61,15 @@ export const CHECKPOINT_ICON_TYPES = [
   { value: 'merch', label: 'Merchandise', isShapeOnly: false, category: 'content', defaultColor: '#A855F7' },
   { value: 'cone', label: 'Road closure', isShapeOnly: false, category: 'content', defaultColor: '#FF6B00' },
   { value: 'traffic', label: 'Traffic management', isShapeOnly: false, category: 'content', defaultColor: '#374151' },
+  { value: 'track', label: 'Track', isShapeOnly: false, category: 'content', defaultColor: '#78716C' },
+  { value: 'tunnel', label: 'Tunnel', isShapeOnly: false, category: 'content', defaultColor: '#57534E' },
+  { value: 'bridge', label: 'Bridge', isShapeOnly: false, category: 'content', defaultColor: '#0284C7' },
+  { value: 'plane', label: 'Plane', isShapeOnly: false, category: 'content', defaultColor: '#0EA5E9' },
+  { value: 'hill', label: 'Hill', isShapeOnly: false, category: 'content', defaultColor: '#65A30D' },
+  { value: 'baggage', label: 'Baggage', isShapeOnly: false, category: 'content', defaultColor: '#A855F7' },
+  { value: 'crown', label: 'Crown', isShapeOnly: false, category: 'content', defaultColor: '#F59E0B' },
+  { value: 'crossing', label: 'Crossing point', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6' },
+  { value: 'trees', label: 'Trees', isShapeOnly: false, category: 'content', defaultColor: '#22C55E' },
   // Directional arrows
   { value: 'arrow-uturn-left', label: 'Left u-turn', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6' },
   { value: 'arrow-left', label: 'Left turn', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6' },
@@ -397,6 +406,42 @@ export const fixedIconSvgs = {
     </svg>`;
   },
 
+  crown: (size = 32) => {
+    const color = '#F59E0B';
+    return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="14" fill="${color}" stroke="#fff" stroke-width="2"/>
+      <path d="M8 21 L8 14 L12 17 L16 11 L20 17 L24 14 L24 21 Z" fill="#fff"/>
+      <rect x="8" y="21" width="16" height="3" rx="1" fill="#fff"/>
+    </svg>`;
+  },
+
+  crossing: (size = 32) => {
+    const color = '#3B82F6';
+    return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="14" fill="${color}" stroke="#fff" stroke-width="2"/>
+      <!-- Crossing stripes -->
+      <rect x="6" y="22" width="20" height="2" fill="#fff" opacity="0.5"/>
+      <rect x="6" y="25" width="20" height="2" fill="#fff" opacity="0.5"/>
+      <!-- Walking pedestrian -->
+      <circle cx="16" cy="7" r="2.5" fill="#fff"/>
+      <path d="M16 10 L16 16" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M13 13 L19 13" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <path d="M16 16 L13 22" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <path d="M16 16 L19 22" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+    </svg>`;
+  },
+
+  trees: (size = 32) => {
+    const color = '#22C55E';
+    return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="14" fill="${color}" stroke="#fff" stroke-width="2"/>
+      <!-- Left tree -->
+      <path d="M10 22 L10 18 L7 18 L11 12 L8 12 L11 7 L14 12 L11 12 L15 18 L12 18 L12 22 Z" fill="#fff"/>
+      <!-- Right tree -->
+      <path d="M20 22 L20 18 L17 18 L21 12 L18 12 L21 7 L24 12 L21 12 L25 18 L22 18 L22 22 Z" fill="#fff"/>
+    </svg>`;
+  },
+
   // Directional arrows
   'arrow-uturn-left': (size = 32) => {
     const color = '#3B82F6';
@@ -477,7 +522,7 @@ export const fixedIconSvgs = {
       <rect x="14" y="18" width="4" height="8" fill="#fff"/>
       <!-- Left fork (correct way - with arrow) -->
       <path d="M16 18 L10 12" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
-      <path d="M6 15 L10 9 L14 13" fill="#fff" stroke="#fff" stroke-width="1" stroke-linejoin="round"/>
+      <path d="M10 12 L6 10 L8 16 Z" fill="#fff"/>
       <!-- Right fork (wrong way - with X) -->
       <path d="M16 18 L22 12" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
       <path d="M20 8 L24 12 M24 8 L20 12" stroke="#EF4444" stroke-width="2" stroke-linecap="round"/>
@@ -496,7 +541,7 @@ export const fixedIconSvgs = {
       <path d="M8 8 L12 12 M12 8 L8 12" stroke="#EF4444" stroke-width="2" stroke-linecap="round"/>
       <!-- Right fork (correct way - with arrow) -->
       <path d="M16 18 L22 12" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
-      <path d="M18 13 L22 9 L26 15" fill="#fff" stroke="#fff" stroke-width="1" stroke-linejoin="round"/>
+      <path d="M22 12 L26 10 L24 16 Z" fill="#fff"/>
     </svg>`;
   },
 
@@ -747,17 +792,21 @@ export const iconContentGenerators = {
   'arrow-fork-left': (iconColor = '#fff') => {
     return `<rect x="14" y="18" width="4" height="8" fill="${iconColor}"/>
       <path d="M16 18 L10 12" stroke="${iconColor}" stroke-width="4" stroke-linecap="round"/>
-      <path d="M6 15 L10 9 L14 13" fill="${iconColor}" stroke="${iconColor}" stroke-width="1" stroke-linejoin="round"/>
+      <!-- Left arrowhead -->
+      <path d="M10 12 L6 10 L8 16 Z" fill="${iconColor}"/>
+      <!-- Wrong way indicator on right -->
       <path d="M16 18 L22 12" stroke="${iconColor}" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
       <path d="M20 8 L24 12 M24 8 L20 12" stroke="#EF4444" stroke-width="2" stroke-linecap="round"/>`;
   },
 
   'arrow-fork-right': (iconColor = '#fff') => {
     return `<rect x="14" y="18" width="4" height="8" fill="${iconColor}"/>
+      <!-- Wrong way indicator on left -->
       <path d="M16 18 L10 12" stroke="${iconColor}" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
       <path d="M8 8 L12 12 M12 8 L8 12" stroke="#EF4444" stroke-width="2" stroke-linecap="round"/>
       <path d="M16 18 L22 12" stroke="${iconColor}" stroke-width="4" stroke-linecap="round"/>
-      <path d="M18 13 L22 9 L26 15" fill="${iconColor}" stroke="${iconColor}" stroke-width="1" stroke-linejoin="round"/>`;
+      <!-- Right arrowhead -->
+      <path d="M22 12 L26 10 L24 16 Z" fill="${iconColor}"/>`;
   },
 
   'arrow-keep-left': (iconColor = '#fff') => {
@@ -770,6 +819,96 @@ export const iconContentGenerators = {
     return `<g transform="rotate(150 16 16)">
         <path d="M16 6 L8 14 L13 14 L13 26 L19 26 L19 14 L24 14 L16 6Z" fill="${iconColor}"/>
       </g>`;
+  },
+
+  // Track (railway crossing view)
+  'track': (iconColor = '#fff') => {
+    return `
+      <rect x="10" y="7" width="2.5" height="18" fill="${iconColor}"/>
+      <rect x="19.5" y="7" width="2.5" height="18" fill="${iconColor}"/>
+      <rect x="8" y="9" width="16" height="2.5" rx="0.5" fill="${iconColor}"/>
+      <rect x="8" y="14.5" width="16" height="2.5" rx="0.5" fill="${iconColor}"/>
+      <rect x="8" y="20" width="16" height="2.5" rx="0.5" fill="${iconColor}"/>`;
+  },
+
+  // Tunnel (simple arch entrance)
+  'tunnel': (iconColor = '#fff') => {
+    return `
+      <path d="M7 25 L7 14 C7 8 11 5 16 5 C21 5 25 8 25 14 L25 25" fill="none" stroke="${iconColor}" stroke-width="2.5"/>
+      <path d="M11 25 L11 16 C11 12 13 10 16 10 C19 10 21 12 21 16 L21 25" fill="none" stroke="${iconColor}" stroke-width="1.5" opacity="0.6"/>`;
+  },
+
+  // Bridge (suspension bridge style)
+  'bridge': (iconColor = '#fff') => {
+    return `
+      <rect x="5" y="18" width="22" height="2.5" rx="0.5" fill="${iconColor}"/>
+      <rect x="7" y="10" width="2" height="8" fill="${iconColor}"/>
+      <rect x="23" y="10" width="2" height="8" fill="${iconColor}"/>
+      <path d="M8 10 Q16 6 24 10" fill="none" stroke="${iconColor}" stroke-width="2" stroke-linecap="round"/>
+      <line x1="12" y1="13" x2="12" y2="18" stroke="${iconColor}" stroke-width="1.5"/>
+      <line x1="16" y1="11.5" x2="16" y2="18" stroke="${iconColor}" stroke-width="1.5"/>
+      <line x1="20" y1="13" x2="20" y2="18" stroke="${iconColor}" stroke-width="1.5"/>`;
+  },
+
+  // Plane (airplane - side view, facing right)
+  'plane': (iconColor = '#fff') => {
+    return `
+      <g fill="${iconColor}">
+        <!-- Fuselage body -->
+        <path d="M27 16 L24 14 L8 14 Q4 16 8 18 L24 18 L27 16 Z"/>
+        <!-- Nose cone -->
+        <path d="M8 14 Q4 16 8 18 L8 14 Z"/>
+        <!-- Tail fin -->
+        <path d="M26 14 L26 9 L22 14 Z"/>
+        <!-- Main wing -->
+        <path d="M20 16 L16 10 L14 10 L16 16 L14 22 L16 22 L20 16 Z"/>
+        <!-- Cockpit window -->
+        <ellipse cx="10" cy="16" rx="1.5" ry="1" fill="none" stroke="${iconColor}" stroke-width="0.5" opacity="0.6"/>
+      </g>`;
+  },
+
+  // Hill (mountain peak)
+  'hill': (iconColor = '#fff') => {
+    return `
+      <path d="M6 24 L13 12 L16 16 L20 10 L26 24 Z" fill="${iconColor}"/>
+      <path d="M20 10 L22 13 L18 13 Z" fill="${iconColor}" opacity="0.6"/>`;
+  },
+
+  // Baggage (suitcase)
+  'baggage': (iconColor = '#fff') => {
+    return `
+      <rect x="8" y="12" width="16" height="12" rx="2" fill="${iconColor}"/>
+      <rect x="12" y="8" width="8" height="4" rx="1" fill="none" stroke="${iconColor}" stroke-width="2"/>
+      <line x1="12" y1="16" x2="20" y2="16" stroke="currentColor" stroke-width="1.5" opacity="0.3"/>
+      <line x1="12" y1="20" x2="20" y2="20" stroke="currentColor" stroke-width="1.5" opacity="0.3"/>`;
+  },
+
+  // Crown
+  'crown': (iconColor = '#fff') => {
+    return `
+      <path d="M8 21 L8 14 L12 17 L16 11 L20 17 L24 14 L24 21 Z" fill="${iconColor}"/>
+      <rect x="8" y="21" width="16" height="3" rx="1" fill="${iconColor}"/>`;
+  },
+
+  // Crossing point (pedestrian walking on crossing stripes)
+  'crossing': (iconColor = '#fff') => {
+    return `
+      <!-- Crossing stripes -->
+      <rect x="6" y="22" width="20" height="2" fill="${iconColor}" opacity="0.5"/>
+      <rect x="6" y="25" width="20" height="2" fill="${iconColor}" opacity="0.5"/>
+      <!-- Walking pedestrian -->
+      <circle cx="16" cy="7" r="2.5" fill="${iconColor}"/>
+      <path d="M16 10 L16 16" stroke="${iconColor}" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M13 13 L19 13" stroke="${iconColor}" stroke-width="2" stroke-linecap="round"/>
+      <path d="M16 16 L13 22" stroke="${iconColor}" stroke-width="2" stroke-linecap="round"/>
+      <path d="M16 16 L19 22" stroke="${iconColor}" stroke-width="2" stroke-linecap="round"/>`;
+  },
+
+  // Trees
+  'trees': (iconColor = '#fff') => {
+    return `
+      <path d="M10 22 L10 18 L7 18 L11 12 L8 12 L11 7 L14 12 L11 12 L15 18 L12 18 L12 22 Z" fill="${iconColor}"/>
+      <path d="M20 22 L20 18 L17 18 L21 12 L18 12 L21 7 L24 12 L21 12 L25 18 L22 18 L22 22 Z" fill="${iconColor}"/>`;
   },
 };
 
@@ -794,14 +933,20 @@ export function generateCheckpointSvg({
   size = '100',
   outputSize = null,
 }) {
-  if (type === 'default') {
-    return null;
+  // Handle 'default', empty, or missing type
+  // If we have custom colors/shape, render with those; otherwise return null for status-based rendering
+  if (!type || type === 'default') {
+    const hasCustomProperties = backgroundColor || borderColor || iconColor
+      || (backgroundShape && backgroundShape !== 'circle' && backgroundShape !== 'default');
+    if (!hasCustomProperties) {
+      // Truly default - no custom properties, use status-based rendering
+      return null;
+    }
+    // Has custom properties - render the shape with custom colors
+    type = (backgroundShape && backgroundShape !== 'default') ? backgroundShape : 'circle';
   }
 
   const config = getIconTypeConfig(type);
-  const effectiveBackgroundColor = backgroundColor || config.defaultColor || '#667eea';
-  const effectiveBorderColor = borderColor || '#fff';
-  const effectiveIconColor = iconColor || '#fff';
   const sizeMultiplier = parseInt(size, 10) / 100;
   const actualSize = outputSize || Math.round(32 * sizeMultiplier);
 
@@ -809,7 +954,10 @@ export function generateCheckpointSvg({
 
   if (config.isShapeOnly) {
     // For shape-only icons (circle, square, etc.), the shape IS the icon
-    // The type itself is the shape
+    // Use the icon's default color only for shape-only icons
+    const effectiveBackgroundColor = backgroundColor || config.defaultColor || '#667eea';
+    const effectiveBorderColor = borderColor || '#fff';
+
     if (backgroundShapeGenerators[type]) {
       svgContent = backgroundShapeGenerators[type]({
         backgroundColor: effectiveBackgroundColor,
@@ -820,7 +968,12 @@ export function generateCheckpointSvg({
       return shapeSvgGenerators[type]?.(effectiveBackgroundColor, actualSize) || null;
     }
   } else {
-    // For content icons, render background shape + icon content
+    // For content icons, background color is INDEPENDENT of the icon
+    // Don't use the icon's defaultColor for background - use passed color or generic default
+    const effectiveBackgroundColor = backgroundColor || '#667eea';
+    const effectiveBorderColor = borderColor || '#fff';
+    const effectiveIconColor = iconColor || '#fff';
+
     const bgShape = backgroundShape || 'circle';
 
     // Render background (if not 'none')

@@ -9,5 +9,6 @@ public interface IMarshalRepository
     Task<IEnumerable<MarshalEntity>> GetByEventAsync(string eventId);
     Task<MarshalEntity?> FindByNameAsync(string eventId, string name);
     Task UpdateAsync(MarshalEntity marshal);
+    Task UpdateUnconditionalAsync(MarshalEntity marshal);
     Task DeleteAsync(string eventId, string marshalId);
 }

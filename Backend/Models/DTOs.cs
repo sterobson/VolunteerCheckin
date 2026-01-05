@@ -103,7 +103,11 @@ public record CreateLocationRequest(
     string? StyleIconColor = null,
     string? StyleSize = null,
     // Terminology override (optional, null = don't change, empty = inherit from area -> event)
-    string? PeopleTerm = null
+    string? PeopleTerm = null,
+    string? CheckpointTerm = null,
+    // Dynamic checkpoint settings (for lead car/sweep vehicle tracking)
+    bool IsDynamic = false,
+    List<ScopeConfiguration>? LocationUpdateScopeConfigurations = null
 );
 
 public record LocationResponse(
@@ -137,8 +141,15 @@ public record LocationResponse(
     string ResolvedStyleSize,
     // Terminology override (empty = inherit from area -> event)
     string PeopleTerm,
+    string CheckpointTerm,
     // Resolved terminology (computed from checkpoint -> area -> event hierarchy)
-    string ResolvedPeopleTerm
+    string ResolvedPeopleTerm,
+    string ResolvedCheckpointTerm,
+    // Dynamic checkpoint settings (for lead car/sweep vehicle tracking)
+    bool IsDynamic,
+    List<ScopeConfiguration> LocationUpdateScopeConfigurations,
+    DateTime? LastLocationUpdate,
+    string LastUpdatedByPersonId
 );
 
 public record AreaContact(
@@ -287,7 +298,14 @@ public record LocationStatusResponse(
     string ResolvedStyleBackgroundColor,
     string ResolvedStyleBorderColor,
     string ResolvedStyleIconColor,
-    string ResolvedStyleSize
+    string ResolvedStyleSize,
+    // Terminology
+    string PeopleTerm,
+    string CheckpointTerm,
+    // Dynamic checkpoint settings
+    bool IsDynamic,
+    List<ScopeConfiguration> LocationUpdateScopeConfigurations,
+    DateTime? LastLocationUpdate
 );
 
 public record UserEventMappingResponse(
@@ -856,4 +874,40 @@ public record AreaLeadTaskInfo(
     string ContextType,
     string ContextId,
     string? MarshalId
+);
+
+// Dynamic Checkpoint Location Update DTOs
+
+/// <summary>
+/// Request to update a dynamic checkpoint's location
+/// </summary>
+public record UpdateCheckpointLocationRequest(
+    double Latitude,
+    double Longitude,
+    string? SourceType = null,  // "gps", "checkpoint", "manual"
+    string? SourceCheckpointId = null  // If copying from another checkpoint
+);
+
+/// <summary>
+/// Response after updating a dynamic checkpoint's location
+/// </summary>
+public record UpdateCheckpointLocationResponse(
+    bool Success,
+    string CheckpointId,
+    double Latitude,
+    double Longitude,
+    DateTime LastLocationUpdate,
+    string? Message = null
+);
+
+/// <summary>
+/// Response for getting dynamic checkpoint locations (for polling)
+/// </summary>
+public record DynamicCheckpointResponse(
+    string CheckpointId,
+    string Name,
+    double Latitude,
+    double Longitude,
+    DateTime? LastLocationUpdate,
+    string? LastUpdatedByPersonId
 );

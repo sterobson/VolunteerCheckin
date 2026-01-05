@@ -175,7 +175,7 @@
       @delete="handleDeleteLocation"
       @move-location="startMoveLocation"
       @remove-assignment="handleRemoveLocationAssignment"
-      @assign-marshal="handleAssignMarshalFromDropdown"
+      @open-assign-modal="openCreateMarshalModal"
       @update:isDirty="markFormDirty"
     />
 
@@ -398,7 +398,7 @@
 // Original file: 2,981 lines → Current file: ~900 lines (70% reduction)
 // Tab components: CourseTab.vue, MarshalsTab.vue, EventDetailsTab.vue
 
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useEventsStore } from '../stores/events';
 import { authApi, checkInApi, eventAdminsApi, eventsApi, locationsApi, marshalsApi, areasApi, checklistApi, notesApi, contactsApi } from '../services/api';
@@ -462,7 +462,7 @@ const {
 } = useConfirmDialog();
 
 // Terminology
-const { tabLabels, termsLower } = useTerminology();
+const { tabLabels, terms, termsLower, termsSentence } = useTerminology();
 
 // Computed tabs with dynamic labels from terminology
 // Order: Details, Course, Zones, Locations, Volunteers, Notes, Tasks, Contacts
@@ -544,6 +544,11 @@ const eventDetailsForm = ref({
   eventDate: '',
   timeZoneId: 'UTC',
   peopleTerm: 'Marshals',
+  defaultCheckpointStyleBackgroundShape: '',
+  defaultCheckpointStyleBackgroundColor: '',
+  defaultCheckpointStyleBorderColor: '',
+  defaultCheckpointStyleIconColor: '',
+  defaultCheckpointStyleSize: '',
   checkpointTerm: 'Checkpoints',
   areaTerm: 'Areas',
   checklistTerm: 'Checklists',
@@ -852,6 +857,11 @@ const loadEventData = async () => {
         courseTerm: event.value.courseTerm || 'Course',
         defaultCheckpointStyleType: event.value.defaultCheckpointStyleType || 'default',
         defaultCheckpointStyleColor: event.value.defaultCheckpointStyleColor || '',
+        defaultCheckpointStyleBackgroundShape: event.value.defaultCheckpointStyleBackgroundShape || '',
+        defaultCheckpointStyleBackgroundColor: event.value.defaultCheckpointStyleBackgroundColor || '',
+        defaultCheckpointStyleBorderColor: event.value.defaultCheckpointStyleBorderColor || '',
+        defaultCheckpointStyleIconColor: event.value.defaultCheckpointStyleIconColor || '',
+        defaultCheckpointStyleSize: event.value.defaultCheckpointStyleSize || '',
       };
       eventDetailsFormDirty.value = false;
       // Update global terminology settings
@@ -1804,6 +1814,14 @@ const handleFullscreenCancel = () => {
     }
     isDrawingAreaBoundary.value = false;
     currentDrawingPolygon.value = null;
+  } else if (fullscreenMode.value === 'move-checkpoint') {
+    // Restore the location modal with preserved form data
+    if (preservedLocationFormData.value && selectedLocation.value) {
+      // Merge preserved form data back into selectedLocation
+      Object.assign(selectedLocation.value, preservedLocationFormData.value);
+    }
+    showEditLocation.value = true;
+    isMovingLocation.value = false;
   } else if (fullscreenMode.value === 'add-multiple') {
     // Clear temp checkpoints without saving
     tempCheckpoints.value = [];
@@ -1908,6 +1926,10 @@ const closeAssignMarshalModal = () => {
   showAssignMarshalModal.value = false;
 };
 
+const openCreateMarshalModal = () => {
+  showAssignMarshalModal.value = true;
+};
+
 const startMoveLocation = (payload) => {
   // Preserve the form data from the modal so we can restore it after the move
   if (payload?.formData) {
@@ -1969,6 +1991,15 @@ const handleUpdateLocation = async (formData) => {
         endTime: formData.endTime,
         styleType: formData.styleType,
         styleColor: formData.styleColor,
+        styleBackgroundShape: formData.styleBackgroundShape,
+        styleBackgroundColor: formData.styleBackgroundColor,
+        styleBorderColor: formData.styleBorderColor,
+        styleIconColor: formData.styleIconColor,
+        styleSize: formData.styleSize,
+        peopleTerm: formData.peopleTerm,
+        checkpointTerm: formData.checkpointTerm,
+        isDynamic: formData.isDynamic || false,
+        locationUpdateScopeConfigurations: formData.locationUpdateScopeConfigurations || [],
         pendingNewChecklistItems: formData.pendingNewChecklistItems || [],
         pendingNewNotes: formData.pendingNewNotes || [],
       });
@@ -2001,6 +2032,15 @@ const handleUpdateLocation = async (formData) => {
           endTime: formData.endTime,
           styleType: formData.styleType,
           styleColor: formData.styleColor,
+          styleBackgroundShape: formData.styleBackgroundShape,
+          styleBackgroundColor: formData.styleBackgroundColor,
+          styleBorderColor: formData.styleBorderColor,
+          styleIconColor: formData.styleIconColor,
+          styleSize: formData.styleSize,
+          peopleTerm: formData.peopleTerm,
+          checkpointTerm: formData.checkpointTerm,
+          isDynamic: formData.isDynamic || false,
+          locationUpdateScopeConfigurations: formData.locationUpdateScopeConfigurations || [],
           // areaId removed - areas are auto-assigned by backend based on polygon boundaries
         }
       );
@@ -2129,9 +2169,12 @@ const toggleCheckIn = async (assignment) => {
   }
 };
 
-const handleRemoveLocationAssignment = (assignmentId) => {
+const handleRemoveLocationAssignment = (assignmentOrId) => {
+  // Handle both assignment object or just ID being passed
+  const assignmentId = assignmentOrId?.id ?? assignmentOrId;
+
   // Check if this is a pending assignment (has temp ID)
-  if (assignmentId.toString().startsWith('temp-')) {
+  if (assignmentId?.toString().startsWith('temp-')) {
     // Remove from pending assignments list
     const assignment = selectedLocation.value.assignments.find(a => a.id === assignmentId);
     if (assignment) {
@@ -2155,12 +2198,6 @@ const handleRemoveLocationAssignment = (assignmentId) => {
       markFormDirty();
     }
   }
-};
-
-// Handler for assigning marshal directly from dropdown in EditLocationModal
-const handleAssignMarshalFromDropdown = async (marshalId) => {
-  // Directly call the existing handler which already handles conflicts
-  await handleAssignExistingMarshal(marshalId);
 };
 
 const handleAssignExistingMarshal = async (marshalId) => {
@@ -2241,12 +2278,29 @@ const handleAddNewMarshalInline = async (marshalData) => {
     });
     const newMarshal = response.data;
 
+    // Refresh marshals list so the new marshal appears in dropdowns
     await loadMarshals();
 
+    // Add to pending assignments
     pendingAssignments.value.push({
       marshalId: newMarshal.id,
       marshalName: newMarshal.name,
     });
+
+    // Optimistically update UI - add temporary assignment to selectedLocation
+    if (selectedLocation.value) {
+      if (!selectedLocation.value.assignments) {
+        selectedLocation.value.assignments = [];
+      }
+      selectedLocation.value.assignments.push({
+        id: `temp-${Date.now()}`, // Temporary ID
+        marshalId: newMarshal.id,
+        marshalName: newMarshal.name,
+        locationId: selectedLocation.value.id,
+        isCheckedIn: false,
+        isPending: true, // Flag to identify pending assignments
+      });
+    }
 
     markFormDirty();
     closeAssignMarshalModal();
@@ -2451,14 +2505,22 @@ const handleSaveMarshal = async (formData) => {
 };
 
 const handleDeleteMarshal = async (marshalId) => {
-  showConfirm('Delete Marshal', 'Are you sure you want to delete this marshal?', async () => {
+  // Use selectedMarshal if no ID is provided (when called from modal)
+  const idToDelete = marshalId || selectedMarshal.value?.id;
+  if (!idToDelete) {
+    console.error('No marshal ID to delete');
+    return;
+  }
+
+  const personTerm = termsLower.value.person;
+  showConfirm(`Delete ${personTerm}`, `Are you sure you want to delete this ${personTerm}?`, async () => {
     try {
-      await marshalsApi.delete(route.params.eventId, marshalId);
+      await marshalsApi.delete(route.params.eventId, idToDelete);
       await reloadMarshalsAndStatus();
       closeEditMarshalModal();
     } catch (error) {
-      console.error('Failed to delete marshal:', error);
-      alert('Failed to delete marshal. Please try again.');
+      console.error(`Failed to delete ${personTerm}:`, error);
+      alert(`Failed to delete ${personTerm}. Please try again.`);
     }
   });
 };
@@ -2585,6 +2647,57 @@ const getLocationName = (locationId) => {
   return location ? location.name : 'Unknown';
 };
 
+// Dynamic checkpoint location polling
+let dynamicCheckpointPollInterval = null;
+
+const pollDynamicCheckpoints = async () => {
+  try {
+    const eventId = route.params.eventId;
+    const response = await locationsApi.getDynamicCheckpoints(eventId);
+    if (response.data && Array.isArray(response.data)) {
+      // Update local positions for dynamic checkpoints
+      for (const dynamicCp of response.data) {
+        const location = locationStatuses.value.find(l => l.id === dynamicCp.checkpointId);
+        if (location) {
+          location.latitude = dynamicCp.latitude;
+          location.longitude = dynamicCp.longitude;
+          location.lastLocationUpdate = dynamicCp.lastLocationUpdate;
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to poll dynamic checkpoints:', error);
+  }
+};
+
+const startDynamicCheckpointPolling = () => {
+  if (dynamicCheckpointPollInterval) return;
+
+  // Check if there are any dynamic checkpoints to poll
+  const hasDynamicCheckpoints = locationStatuses.value.some(l => l.isDynamic || l.IsDynamic);
+  if (!hasDynamicCheckpoints) return;
+
+  // Poll immediately, then every 60 seconds
+  pollDynamicCheckpoints();
+  dynamicCheckpointPollInterval = setInterval(pollDynamicCheckpoints, 60000);
+};
+
+const stopDynamicCheckpointPolling = () => {
+  if (dynamicCheckpointPollInterval) {
+    clearInterval(dynamicCheckpointPollInterval);
+    dynamicCheckpointPollInterval = null;
+  }
+};
+
+// Watch for tab changes to start/stop polling
+watch(activeTab, (newTab) => {
+  if (newTab === 'course') {
+    startDynamicCheckpointPolling();
+  } else {
+    stopDynamicCheckpointPolling();
+  }
+});
+
 // Lifecycle
 onMounted(async () => {
   await loadEventData();
@@ -2596,6 +2709,15 @@ onMounted(async () => {
   } catch (error) {
     console.warn('Failed to fetch user claims:', error);
   }
+
+  // Start polling if already on course tab
+  if (activeTab.value === 'course') {
+    startDynamicCheckpointPolling();
+  }
+});
+
+onUnmounted(() => {
+  stopDynamicCheckpointPolling();
 });
 </script>
 

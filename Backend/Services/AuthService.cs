@@ -39,7 +39,7 @@ public class AuthService
     /// Request a magic link to be sent to an email address.
     /// Creates or updates the person record and sends them a login link.
     /// </summary>
-    public async Task<bool> RequestMagicLinkAsync(string email, string ipAddress, string baseUrl)
+    public virtual async Task<bool> RequestMagicLinkAsync(string email, string ipAddress, string baseUrl)
     {
         // Validate email
         if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
@@ -100,7 +100,7 @@ public class AuthService
     /// <summary>
     /// Verify a magic link token and create a session.
     /// </summary>
-    public async Task<(bool Success, string? SessionToken, PersonInfo? Person, string? Message)> VerifyMagicLinkAsync(string token, string ipAddress)
+    public virtual async Task<(bool Success, string? SessionToken, PersonInfo? Person, string? Message)> VerifyMagicLinkAsync(string token, string ipAddress)
     {
         if (string.IsNullOrWhiteSpace(token))
         {
@@ -163,7 +163,7 @@ public class AuthService
     /// Authenticate a marshal using their magic code.
     /// </summary>
 #pragma warning disable MA0051 // Method is too long - authentication flow with multiple validation steps
-    public async Task<(bool Success, string? SessionToken, PersonInfo? Person, string? MarshalId, string? Message)> AuthenticateWithMagicCodeAsync(
+    public virtual async Task<(bool Success, string? SessionToken, PersonInfo? Person, string? MarshalId, string? Message)> AuthenticateWithMagicCodeAsync(
         string eventId,
         string magicCode,
         string ipAddress)
@@ -242,7 +242,7 @@ public class AuthService
     /// Creates or gets a person and directly creates a session.
     /// WARNING: Only use in development! No email verification!
     /// </summary>
-    public async Task<(bool Success, string? SessionToken, PersonInfo? Person)> InstantLoginAsync(string email, string ipAddress)
+    public virtual async Task<(bool Success, string? SessionToken, PersonInfo? Person)> InstantLoginAsync(string email, string ipAddress)
     {
         // Validate email
         if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))

@@ -57,20 +57,28 @@
             <h4>Show on map:</h4>
             <label class="filter-checkbox">
               <input type="checkbox" v-model="filters.showRoute" />
-              Route
+              {{ terms.course }}
             </label>
             <label class="filter-checkbox">
-              <input type="checkbox" v-model="filters.showCheckpoints" />
-              Checkpoints
+              <input type="checkbox" v-model="filters.showUncheckedIn" />
+              Unchecked-in {{ termsLower.checkpoints }}
+            </label>
+            <label class="filter-checkbox">
+              <input type="checkbox" v-model="filters.showPartiallyCheckedIn" />
+              Partially checked-in {{ termsLower.checkpoints }}
+            </label>
+            <label class="filter-checkbox">
+              <input type="checkbox" v-model="filters.showFullyCheckedIn" />
+              Fully checked-in {{ termsLower.checkpoints }}
             </label>
             <label class="filter-checkbox">
               <input type="checkbox" v-model="filters.showAreas" />
-              Areas
+              {{ terms.areas }}
             </label>
           </div>
 
           <div class="filter-section" v-if="areas.length > 0 && filters.showAreas">
-            <h4>Filter areas:</h4>
+            <h4>Filter {{ termsLower.areas }}:</h4>
             <AreasSelection
               :areas="areas"
               :selected-area-ids="filters.selectedAreas"
@@ -118,6 +126,9 @@ import { ref, computed, watch, defineProps, defineEmits } from 'vue';
 import MapView from '../../components/MapView.vue';
 import AreasSelection from '../../components/event-manage/AreasSelection.vue';
 import { alphanumericCompare } from '../../utils/sortUtils';
+import { useTerminology } from '../../composables/useTerminology';
+
+const { terms, termsLower } = useTerminology();
 
 const props = defineProps({
   checkpoints: {
@@ -171,7 +182,9 @@ const canRedoPoints = ref(false);
 
 const filters = ref({
   showRoute: true,
-  showCheckpoints: true,
+  showUncheckedIn: true,
+  showPartiallyCheckedIn: true,
+  showFullyCheckedIn: true,
   showAreas: true,
   selectedAreas: [],
 });
@@ -310,13 +323,30 @@ const visibleRoute = computed(() => {
   return filters.value.showRoute ? props.route : [];
 });
 
+// Helper to get checkpoint check-in status
+const getCheckpointStatus = (checkpoint) => {
+  const checkedIn = checkpoint.checkedInCount || 0;
+  const required = checkpoint.requiredMarshals || 1;
+  if (checkedIn === 0) return 'unchecked';
+  if (checkedIn >= required) return 'full';
+  return 'partial';
+};
+
 const visibleCheckpoints = computed(() => {
-  if (!filters.value.showCheckpoints) {
+  // If all checkpoint filters are off, show nothing
+  if (!filters.value.showUncheckedIn && !filters.value.showPartiallyCheckedIn && !filters.value.showFullyCheckedIn) {
     return [];
   }
 
-  // Filter checkpoints based on selected areas
+  // Filter checkpoints based on selected areas and check-in status
   return props.checkpoints.filter(checkpoint => {
+    // First, filter by check-in status
+    const status = getCheckpointStatus(checkpoint);
+    if (status === 'unchecked' && !filters.value.showUncheckedIn) return false;
+    if (status === 'partial' && !filters.value.showPartiallyCheckedIn) return false;
+    if (status === 'full' && !filters.value.showFullyCheckedIn) return false;
+
+    // Then, filter by selected areas
     // Handle both areaIds and AreaIds (case variations)
     const checkpointAreas = checkpoint.areaIds || checkpoint.AreaIds;
 

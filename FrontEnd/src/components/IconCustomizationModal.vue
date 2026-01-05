@@ -28,7 +28,7 @@
             <div class="option-button-content">
               <span class="option-button-label">Shape</span>
               <div class="option-button-value icon-value">
-                <div class="icon-preview-small" v-html="getShapePreviewSvg(localBackgroundShape)"></div>
+                <div class="icon-preview-small" v-html="getShapeButtonPreview(localBackgroundShape)"></div>
                 <span>{{ getShapeLabel(localBackgroundShape) }}</span>
               </div>
             </div>
@@ -136,15 +136,15 @@
           </div>
           <div class="popup-grid">
             <button
-              v-for="shape in BACKGROUND_SHAPES"
+              v-for="shape in availableShapes"
               :key="shape.value"
               type="button"
               class="popup-grid-item"
               :class="{ selected: localBackgroundShape === shape.value }"
               @click="selectShape(shape.value)"
             >
-              <div class="popup-item-preview" v-html="getShapePreviewSvg(shape.value)"></div>
-              <span>{{ shape.label }}</span>
+              <div class="popup-item-preview" v-html="getShapePopupPreview(shape.value)"></div>
+              <span v-if="shape.showLabel">{{ shape.label }}</span>
             </button>
           </div>
         </div>
@@ -155,18 +155,18 @@
             <span>Select background</span>
             <button type="button" class="popup-close" @click="closePopups">&times;</button>
           </div>
-          <div class="color-grid">
+          <div class="popup-grid">
             <button
               v-for="color in backgroundColorOptions"
               :key="color.hex"
               type="button"
-              class="color-option"
+              class="popup-grid-item"
               :class="{ selected: isBackgroundColorSelected(color.hex) }"
-              :style="color.hex !== 'default' ? { backgroundColor: color.hex } : {}"
               :title="color.name"
               @click="selectBackgroundColor(color.hex)"
             >
-              <span v-if="color.hex === 'default'" class="default-indicator">D</span>
+              <div class="popup-item-preview" v-html="getBackgroundColorPopupPreview(color.hex)"></div>
+              <span v-if="color.showLabel">{{ color.name }}</span>
             </button>
           </div>
         </div>
@@ -177,26 +177,19 @@
             <span>Select border</span>
             <button type="button" class="popup-close" @click="closePopups">&times;</button>
           </div>
-          <div class="color-grid">
-            <button
-              type="button"
-              class="color-option none-option"
-              :class="{ selected: localBorderColor === 'none' }"
-              title="None"
-              @click="selectBorderColor('none')"
-            >
-              <div class="none-icon"></div>
-            </button>
+          <div class="popup-grid">
             <button
               v-for="color in borderColorOptions"
               :key="color.hex"
               type="button"
-              class="color-option"
+              class="popup-grid-item"
               :class="{ selected: localBorderColor === color.hex }"
-              :style="{ backgroundColor: color.hex }"
               :title="color.name"
               @click="selectBorderColor(color.hex)"
-            ></button>
+            >
+              <div class="popup-item-preview" v-html="getBorderColorPopupPreview(color.hex)"></div>
+              <span v-if="color.showLabel">{{ color.name }}</span>
+            </button>
           </div>
         </div>
 
@@ -206,17 +199,17 @@
             <span>Select icon</span>
             <button type="button" class="popup-close" @click="closePopups">&times;</button>
           </div>
-          <div class="icon-grid">
+          <div class="popup-grid">
             <button
               v-for="iconType in availableContentIcons"
               :key="iconType.value"
               type="button"
-              class="icon-grid-item"
+              class="popup-grid-item"
               :class="{ selected: localIconType === iconType.value }"
               @click="selectIcon(iconType.value)"
             >
-              <div class="icon-grid-preview" v-html="getIconDropdownPreview(iconType.value)"></div>
-              <span class="icon-grid-label">{{ iconType.label }}</span>
+              <div class="popup-item-preview" v-html="getIconPopupPreview(iconType.value)"></div>
+              <span v-if="iconType.showLabel">{{ iconType.label }}</span>
             </button>
           </div>
         </div>
@@ -227,17 +220,19 @@
             <span>Select colour</span>
             <button type="button" class="popup-close" @click="closePopups">&times;</button>
           </div>
-          <div class="color-grid">
+          <div class="popup-grid">
             <button
               v-for="color in iconColorOptions"
               :key="color.hex"
               type="button"
-              class="color-option"
+              class="popup-grid-item"
               :class="{ selected: isIconColorSelected(color.hex) }"
-              :style="{ backgroundColor: color.hex }"
               :title="color.name"
               @click="selectIconColor(color.hex)"
-            ></button>
+            >
+              <div class="popup-item-preview" v-html="getIconColorPopupPreview(color.hex)"></div>
+              <span v-if="color.showLabel">{{ color.name }}</span>
+            </button>
           </div>
         </div>
 
@@ -247,16 +242,17 @@
             <span>Select size</span>
             <button type="button" class="popup-close" @click="closePopups">&times;</button>
           </div>
-          <div class="size-list">
+          <div class="size-grid">
             <button
-              v-for="sizeOption in ICON_SIZES"
+              v-for="sizeOption in availableSizes"
               :key="sizeOption.value"
               type="button"
-              class="size-option"
+              class="size-grid-item"
               :class="{ selected: localSize === sizeOption.value }"
               @click="selectSize(sizeOption.value)"
             >
-              {{ sizeOption.label }}
+              <div class="size-preview" v-html="getSizePopupPreview(sizeOption.value)"></div>
+              <span>{{ sizeOption.label }}</span>
             </button>
           </div>
         </div>
@@ -291,6 +287,13 @@ const props = defineProps({
   iconColor: { type: String, default: '' },
   size: { type: String, default: '100' },
   level: { type: String, default: 'checkpoint' },
+  // Inherited values from parent (area/event) - used as defaults
+  inheritedType: { type: String, default: '' },
+  inheritedBackgroundShape: { type: String, default: '' },
+  inheritedBackgroundColor: { type: String, default: '' },
+  inheritedBorderColor: { type: String, default: '' },
+  inheritedIconColor: { type: String, default: '' },
+  inheritedSize: { type: String, default: '' },
 });
 
 const emit = defineEmits(['update:isOpen', 'apply', 'cancel']);
@@ -306,34 +309,134 @@ const localSize = ref(props.size || '100');
 // Popup state
 const activePopup = ref(null);
 
-// Content icons (icons that go ON TOP of a shape) - excludes shape-only types
-const availableContentIcons = computed(() => {
-  const contentIcons = CHECKPOINT_ICON_TYPES.filter(t =>
-    t.category === 'content' || t.value === 'default'
-  );
-  // Add "None" option at the start for no icon (just shape)
+// Helper to get the effective/resolved value for each property
+const getEffectiveShape = (shapeValue) => {
+  if (shapeValue === 'default') {
+    return props.inheritedBackgroundShape || 'circle';
+  }
+  if (shapeValue === 'none') return 'none';
+  return shapeValue || 'circle';
+};
+
+const getEffectiveBackgroundColorValue = (colorValue) => {
+  if (colorValue === 'default' || !colorValue) {
+    return getDefaultColor();
+  }
+  if (colorValue === 'none') return 'transparent';
+  return colorValue;
+};
+
+const getEffectiveBorderColorValue = (colorValue) => {
+  if (colorValue === 'default') {
+    return props.inheritedBorderColor || '#ffffff';
+  }
+  if (colorValue === 'none' || !colorValue) return 'transparent';
+  return colorValue;
+};
+
+const getEffectiveIconType = (iconValue) => {
+  if (iconValue === 'default') {
+    // Get inherited icon type (content icons only)
+    const inheritedType = props.inheritedType;
+    if (inheritedType && inheritedType !== 'default') {
+      const config = getIconTypeConfig(inheritedType);
+      if (config.category === 'content') return inheritedType;
+    }
+    return 'none';
+  }
+  if (iconValue === 'none' || !iconValue) return 'none';
+  return iconValue;
+};
+
+const getEffectiveIconColorValue = (colorValue) => {
+  if (colorValue === 'default' || !colorValue) {
+    return props.inheritedIconColor || '#ffffff';
+  }
+  if (colorValue === 'none') return 'transparent';
+  return colorValue;
+};
+
+const getEffectiveSizeValue = (sizeValue) => {
+  if (sizeValue === 'default') {
+    return props.inheritedSize || '100';
+  }
+  return sizeValue || '100';
+};
+
+// Available shapes: None, Default, then all shapes (excluding 'none' from BACKGROUND_SHAPES to avoid duplicate)
+const availableShapes = computed(() => {
+  const inheritedShape = props.inheritedBackgroundShape || 'circle';
+  const inheritedLabel = BACKGROUND_SHAPES.find(s => s.value === inheritedShape)?.label || 'Circle';
   return [
-    { value: 'none', label: 'None', category: 'content' },
-    ...contentIcons.filter(t => t.value !== 'default'),
+    { value: 'none', label: 'None', showLabel: true },
+    { value: 'default', label: `Default (${inheritedLabel})`, showLabel: true },
+    ...BACKGROUND_SHAPES.filter(s => s.value !== 'none').map(s => ({ ...s, showLabel: false })),
   ];
 });
 
-// Check if shape is set (not 'none')
-const hasShape = computed(() => localBackgroundShape.value !== 'none');
+// Available icons: None, Default (if inherited), then all content icons
+const availableContentIcons = computed(() => {
+  const contentIcons = CHECKPOINT_ICON_TYPES.filter(t => t.category === 'content');
+  const options = [
+    { value: 'none', label: 'None', category: 'content', showLabel: true },
+  ];
 
-// Check if icon is set (not 'none')
-const hasIcon = computed(() => localIconType.value !== 'none');
-
-// Get default color based on icon type, or a standard default
-const getDefaultColor = () => {
-  if (hasIcon.value) {
-    const config = getIconTypeConfig(localIconType.value);
-    return config.defaultColor || '#667eea';
+  // Add Default option if there's an inherited content icon
+  const inheritedType = props.inheritedType;
+  if (inheritedType && inheritedType !== 'default') {
+    const config = getIconTypeConfig(inheritedType);
+    if (config.category === 'content') {
+      options.push({ value: 'default', label: `Default (${config.label || inheritedType})`, category: 'content', showLabel: true });
+    }
   }
-  return '#667eea';
-};
 
-// Effective colors (with defaults)
+  options.push(...contentIcons.map(i => ({ ...i, showLabel: false })));
+  return options;
+});
+
+// Available sizes: Default, then all sizes (simplified labels without %)
+const availableSizes = computed(() => {
+  const sizeLabels = { '33': 'Small', '66': 'Medium', '100': 'Normal', '150': 'Large' };
+  const inheritedSizeLabel = sizeLabels[props.inheritedSize] || 'Normal';
+  return [
+    { value: 'default', label: `Default (${inheritedSizeLabel})` },
+    ...ICON_SIZES.map(s => ({ value: s.value, label: sizeLabels[s.value] || s.label })),
+  ];
+});
+
+// Check if shape is set (resolved, not 'none')
+const hasShape = computed(() => {
+  const effectiveShape = getEffectiveShape(localBackgroundShape.value);
+  return effectiveShape !== 'none';
+});
+
+// Check if icon is set (resolved, not 'none')
+const hasIcon = computed(() => {
+  const effectiveIcon = getEffectiveIconType(localIconType.value);
+  return effectiveIcon !== 'none';
+});
+
+// System default color when nothing is set in the hierarchy
+const SYSTEM_DEFAULT_BACKGROUND_COLOR = '#667eea';
+
+// Get default background color using cascade: system → inherited (event/area)
+// Using computed for proper reactivity tracking
+const defaultInheritedColor = computed(() => {
+  // props.inheritedBackgroundColor is already combined (inheritedBackgroundColor || inheritedStyleColor) from parent
+  const inherited = props.inheritedBackgroundColor;
+
+  // Use inherited if it's a valid hex color (not empty, not 'default')
+  if (inherited && inherited !== 'default' && inherited.startsWith('#')) {
+    return inherited;
+  }
+
+  // Fall back to system default
+  return SYSTEM_DEFAULT_BACKGROUND_COLOR;
+});
+
+const getDefaultColor = () => defaultInheritedColor.value;
+
+// Effective colors (with inheritance fallback)
 const effectiveBackgroundColor = computed(() => {
   if (localBackgroundColor.value && localBackgroundColor.value !== 'default') {
     return localBackgroundColor.value;
@@ -344,35 +447,56 @@ const effectiveBackgroundColor = computed(() => {
 const effectiveBorderColor = computed(() => {
   if (localBorderColor.value === 'none') return 'transparent';
   if (localBorderColor.value) return localBorderColor.value;
+  // Fall back to inherited border color
+  if (props.inheritedBorderColor && props.inheritedBorderColor !== 'none') {
+    return props.inheritedBorderColor;
+  }
   return '#ffffff';
 });
 
 const effectiveIconColor = computed(() => {
   if (localIconColor.value) return localIconColor.value;
+  // Fall back to inherited icon color
+  if (props.inheritedIconColor) {
+    return props.inheritedIconColor;
+  }
   return '#ffffff';
 });
 
-// Color options
+// Color options - None, Default, then colors (only show names for None/Default)
 const backgroundColorOptions = computed(() => {
+  const defaultColor = defaultInheritedColor.value;
+  const defaultLabel = AREA_COLORS.find(c => c.hex.toLowerCase() === defaultColor.toLowerCase())?.name || 'Custom';
   return [
-    { hex: 'default', name: 'Default' },
-    ...AREA_COLORS.map(c => ({ hex: c.hex, name: c.name })),
+    { hex: 'none', name: 'None', showLabel: true },
+    { hex: 'default', name: `Default (${defaultLabel})`, showLabel: true },
+    ...AREA_COLORS.map(c => ({ hex: c.hex, name: c.name, showLabel: false })),
   ];
 });
 
 const borderColorOptions = computed(() => {
+  const defaultColor = props.inheritedBorderColor || '#ffffff';
+  const defaultLabel = defaultColor === '#ffffff' ? 'White'
+    : (AREA_COLORS.find(c => c.hex === defaultColor)?.name || 'White');
   return [
-    { hex: '#ffffff', name: 'White' },
-    { hex: '#000000', name: 'Black' },
-    ...AREA_COLORS.filter(c => c.hex !== '#ffffff').map(c => ({ hex: c.hex, name: c.name })),
+    { hex: 'none', name: 'None', showLabel: true },
+    { hex: 'default', name: `Default (${defaultLabel})`, showLabel: true },
+    { hex: '#ffffff', name: 'White', showLabel: false },
+    { hex: '#000000', name: 'Black', showLabel: false },
+    ...AREA_COLORS.filter(c => c.hex !== '#ffffff').map(c => ({ hex: c.hex, name: c.name, showLabel: false })),
   ];
 });
 
 const iconColorOptions = computed(() => {
+  const defaultColor = props.inheritedIconColor || '#ffffff';
+  const defaultLabel = defaultColor === '#ffffff' ? 'White'
+    : (AREA_COLORS.find(c => c.hex === defaultColor)?.name || 'White');
   return [
-    { hex: '#ffffff', name: 'White' },
-    { hex: '#000000', name: 'Black' },
-    ...AREA_COLORS.filter(c => c.hex !== '#ffffff').map(c => ({ hex: c.hex, name: c.name })),
+    { hex: 'none', name: 'None', showLabel: true },
+    { hex: 'default', name: `Default (${defaultLabel})`, showLabel: true },
+    { hex: '#ffffff', name: 'White', showLabel: false },
+    { hex: '#000000', name: 'Black', showLabel: false },
+    ...AREA_COLORS.filter(c => c.hex !== '#ffffff').map(c => ({ hex: c.hex, name: c.name, showLabel: false })),
   ];
 });
 
@@ -393,130 +517,340 @@ const isIconColorSelected = (hex) => {
 
 // Get labels
 const getShapeLabel = (value) => {
+  if (value === 'none') return 'None';
+  if (value === 'default') {
+    const inherited = props.inheritedBackgroundShape;
+    if (inherited) {
+      const shape = BACKGROUND_SHAPES.find(s => s.value === inherited);
+      return `Default (${shape?.label || 'Circle'})`;
+    }
+    return 'Default (Circle)';
+  }
   const shape = BACKGROUND_SHAPES.find(s => s.value === value);
   return shape ? shape.label : 'Circle';
 };
 
 const getIconLabel = (value) => {
   if (value === 'none') return 'None';
+  if (value === 'default') {
+    const inheritedType = props.inheritedType;
+    if (inheritedType && inheritedType !== 'default') {
+      const config = getIconTypeConfig(inheritedType);
+      if (config.category === 'content') {
+        return `Default (${config.label || inheritedType})`;
+      }
+    }
+    return 'Default';
+  }
   const icon = CHECKPOINT_ICON_TYPES.find(t => t.value === value);
   return icon ? icon.label : 'None';
 };
 
 const getColorLabel = (value) => {
-  if (!value || value === 'default') return 'Default';
-  const color = [...AREA_COLORS].find(c => c.hex === value);
+  if (value === 'none') return 'None';
+  if (!value || value === 'default') {
+    const inherited = defaultInheritedColor.value;
+    const color = AREA_COLORS.find(c => c.hex.toLowerCase() === inherited.toLowerCase());
+    return `Default (${color?.name || 'Custom'})`;
+  }
+  const color = [...AREA_COLORS].find(c => c.hex.toLowerCase() === value.toLowerCase());
   return color ? color.name : value;
 };
 
 const getBorderColorLabel = (value) => {
   if (value === 'none') return 'None';
+  if (value === 'default') {
+    const inherited = props.inheritedBorderColor;
+    if (inherited && inherited !== 'none') {
+      const color = inherited === '#ffffff' ? 'White' : (AREA_COLORS.find(c => c.hex === inherited)?.name || 'Custom');
+      return `Default (${color})`;
+    }
+    return 'Default (White)';
+  }
   if (!value || value === '#ffffff') return 'White';
   const color = [...borderColorOptions.value].find(c => c.hex === value);
   return color ? color.name : value;
 };
 
 const getIconColorLabel = (value) => {
+  if (value === 'none') return 'None';
+  if (value === 'default') {
+    const inherited = props.inheritedIconColor;
+    if (inherited) {
+      const color = inherited === '#ffffff' ? 'White' : (AREA_COLORS.find(c => c.hex === inherited)?.name || 'Custom');
+      return `Default (${color})`;
+    }
+    return 'Default (White)';
+  }
   if (!value || value === '#ffffff') return 'White';
   const color = [...iconColorOptions.value].find(c => c.hex === value);
   return color ? color.name : value;
 };
 
 const getSizeLabel = (value) => {
-  const size = ICON_SIZES.find(s => s.value === value);
-  return size ? size.label : 'Normal (100%)';
+  const sizeLabels = { '33': 'Small', '66': 'Medium', '100': 'Normal', '150': 'Large' };
+  if (value === 'default') {
+    const inherited = props.inheritedSize;
+    const inheritedLabel = sizeLabels[inherited] || 'Normal';
+    return `Default (${inheritedLabel})`;
+  }
+  return sizeLabels[value] || 'Normal';
 };
 
-// Preview generators
-const getShapePreviewSvg = (shapeValue) => {
+// ===========================================
+// BUTTON PREVIEW GENERATORS (show just the element)
+// ===========================================
+
+// Shape button preview - shows just the shape with current background color
+const getShapeButtonPreview = (shapeValue) => {
   if (shapeValue === 'none') {
     return `<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
       <rect x="2" y="2" width="16" height="16" rx="2" fill="none" stroke="#ccc" stroke-width="1.5" stroke-dasharray="3"/>
     </svg>`;
   }
 
-  if (backgroundShapeGenerators[shapeValue]) {
-    const svgContent = backgroundShapeGenerators[shapeValue]({
-      backgroundColor: '#667eea',
-      borderColor: '#fff',
+  const effectiveShape = getEffectiveShape(shapeValue);
+  const bgColor = getEffectiveBackgroundColorValue(localBackgroundColor.value);
+  const borderClr = getEffectiveBorderColorValue(localBorderColor.value);
+
+  if (backgroundShapeGenerators[effectiveShape]) {
+    const svgContent = backgroundShapeGenerators[effectiveShape]({
+      backgroundColor: bgColor,
+      borderColor: borderClr === 'transparent' ? 'none' : borderClr,
     });
     return `<svg width="20" height="20" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">${svgContent}</svg>`;
   }
-
   return '';
 };
 
-// Preview for the Icon button (shows current selection with full styling)
+// Icon button preview - shows just the icon symbol
 const getIconButtonPreview = (iconTypeValue) => {
-  if (iconTypeValue === 'none') {
+  const effectiveIcon = getEffectiveIconType(iconTypeValue);
+  if (effectiveIcon === 'none') {
     return `<svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
       <rect x="1" y="1" width="16" height="16" rx="2" fill="none" stroke="#ccc" stroke-width="1.5" stroke-dasharray="3"/>
     </svg>`;
   }
 
-  const config = getIconTypeConfig(iconTypeValue);
+  // Show icon on neutral background
   return generateCheckpointSvg({
-    type: iconTypeValue,
+    type: effectiveIcon,
     backgroundShape: 'circle',
-    backgroundColor: config.defaultColor || '#667eea',
-    borderColor: '#fff',
+    backgroundColor: '#94a3b8',
+    borderColor: 'none',
     iconColor: '#fff',
     size: '75',
   });
 };
 
-// Preview for icons in the dropdown (white icon on blue rounded square)
-const getIconDropdownPreview = (iconTypeValue) => {
-  if (iconTypeValue === 'none') {
+// ===========================================
+// POPUP PREVIEW GENERATORS (show complete icon with one property changed)
+// ===========================================
+
+// Generate complete icon preview with a specific shape
+const getShapePopupPreview = (shapeValue) => {
+  const effectiveShape = getEffectiveShape(shapeValue);
+  if (effectiveShape === 'none') {
+    return `<svg width="28" height="28" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="2" width="24" height="24" rx="4" fill="none" stroke="#ccc" stroke-width="2" stroke-dasharray="4"/>
+    </svg>`;
+  }
+
+  const bgColor = getEffectiveBackgroundColorValue(localBackgroundColor.value);
+  const borderClr = getEffectiveBorderColorValue(localBorderColor.value);
+  const effectiveIcon = getEffectiveIconType(localIconType.value);
+  const iconClr = getEffectiveIconColorValue(localIconColor.value);
+
+  const iconType = effectiveIcon !== 'none' ? effectiveIcon : effectiveShape;
+
+  return generateCheckpointSvg({
+    type: iconType,
+    backgroundShape: effectiveShape,
+    backgroundColor: bgColor,
+    borderColor: borderClr === 'transparent' ? 'none' : borderClr,
+    iconColor: iconClr,
+    size: '100',
+    outputSize: 28,
+  });
+};
+
+// Generate complete icon preview with a specific background color
+const getBackgroundColorPopupPreview = (colorValue) => {
+  const bgColor = getEffectiveBackgroundColorValue(colorValue);
+  const effectiveShape = getEffectiveShape(localBackgroundShape.value);
+  const borderClr = getEffectiveBorderColorValue(localBorderColor.value);
+  const effectiveIcon = getEffectiveIconType(localIconType.value);
+  const iconClr = getEffectiveIconColorValue(localIconColor.value);
+
+  if (effectiveShape === 'none') {
+    // Just show a color swatch
+    return `<svg width="28" height="28" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="2" width="24" height="24" rx="4" fill="${bgColor === 'transparent' ? '#e2e8f0' : bgColor}"/>
+    </svg>`;
+  }
+
+  const iconType = effectiveIcon !== 'none' ? effectiveIcon : effectiveShape;
+
+  return generateCheckpointSvg({
+    type: iconType,
+    backgroundShape: effectiveShape,
+    backgroundColor: bgColor === 'transparent' ? '#e2e8f0' : bgColor,
+    borderColor: borderClr === 'transparent' ? 'none' : borderClr,
+    iconColor: iconClr,
+    size: '100',
+    outputSize: 28,
+  });
+};
+
+// Generate complete icon preview with a specific border color
+const getBorderColorPopupPreview = (colorValue) => {
+  const borderClr = getEffectiveBorderColorValue(colorValue);
+  const effectiveShape = getEffectiveShape(localBackgroundShape.value);
+  const bgColor = getEffectiveBackgroundColorValue(localBackgroundColor.value);
+  const effectiveIcon = getEffectiveIconType(localIconType.value);
+  const iconClr = getEffectiveIconColorValue(localIconColor.value);
+
+  if (effectiveShape === 'none') {
+    return `<svg width="28" height="28" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="2" width="24" height="24" rx="4" fill="#e2e8f0" stroke="${borderClr}" stroke-width="2"/>
+    </svg>`;
+  }
+
+  const iconType = effectiveIcon !== 'none' ? effectiveIcon : effectiveShape;
+
+  return generateCheckpointSvg({
+    type: iconType,
+    backgroundShape: effectiveShape,
+    backgroundColor: bgColor,
+    borderColor: borderClr === 'transparent' ? 'none' : borderClr,
+    iconColor: iconClr,
+    size: '100',
+    outputSize: 28,
+  });
+};
+
+// Generate complete icon preview with a specific icon
+const getIconPopupPreview = (iconTypeValue) => {
+  const effectiveIcon = getEffectiveIconType(iconTypeValue);
+  const effectiveShape = getEffectiveShape(localBackgroundShape.value);
+  const bgColor = getEffectiveBackgroundColorValue(localBackgroundColor.value);
+  const borderClr = getEffectiveBorderColorValue(localBorderColor.value);
+  const iconClr = getEffectiveIconColorValue(localIconColor.value);
+
+  if (effectiveIcon === 'none' && effectiveShape === 'none') {
     return `<svg width="28" height="28" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
       <rect x="2" y="2" width="24" height="24" rx="4" fill="#e2e8f0"/>
       <line x1="8" y1="8" x2="20" y2="20" stroke="#a0aec0" stroke-width="2" stroke-linecap="round"/>
     </svg>`;
   }
 
-  // All icons shown as white on blue rounded square
+  const shape = effectiveShape !== 'none' ? effectiveShape : 'circle';
+  const iconType = effectiveIcon !== 'none' ? effectiveIcon : shape;
+
   return generateCheckpointSvg({
-    type: iconTypeValue,
-    backgroundShape: 'square',
-    backgroundColor: '#3182ce',
-    borderColor: 'none',
-    iconColor: '#fff',
+    type: iconType,
+    backgroundShape: shape,
+    backgroundColor: bgColor,
+    borderColor: borderClr === 'transparent' ? 'none' : borderClr,
+    iconColor: iconClr,
     size: '100',
+    outputSize: 42,
   });
 };
 
-// Main preview SVG - combines shape + icon
+// Generate complete icon preview with a specific icon color
+const getIconColorPopupPreview = (colorValue) => {
+  const iconClr = getEffectiveIconColorValue(colorValue);
+  const effectiveShape = getEffectiveShape(localBackgroundShape.value);
+  const bgColor = getEffectiveBackgroundColorValue(localBackgroundColor.value);
+  const borderClr = getEffectiveBorderColorValue(localBorderColor.value);
+  const effectiveIcon = getEffectiveIconType(localIconType.value);
+
+  if (effectiveIcon === 'none') {
+    // Just show a color swatch
+    return `<svg width="28" height="28" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="2" width="24" height="24" rx="4" fill="${iconClr === 'transparent' ? '#e2e8f0' : iconClr}"/>
+    </svg>`;
+  }
+
+  const shape = effectiveShape !== 'none' ? effectiveShape : 'circle';
+
+  return generateCheckpointSvg({
+    type: effectiveIcon,
+    backgroundShape: shape,
+    backgroundColor: bgColor,
+    borderColor: borderClr === 'transparent' ? 'none' : borderClr,
+    iconColor: iconClr === 'transparent' ? '#e2e8f0' : iconClr,
+    size: '100',
+    outputSize: 28,
+  });
+};
+
+// Generate complete icon preview at a specific size
+const getSizePopupPreview = (sizeValue) => {
+  const sizeVal = getEffectiveSizeValue(sizeValue);
+  const effectiveShape = getEffectiveShape(localBackgroundShape.value);
+  const bgColor = getEffectiveBackgroundColorValue(localBackgroundColor.value);
+  const borderClr = getEffectiveBorderColorValue(localBorderColor.value);
+  const effectiveIcon = getEffectiveIconType(localIconType.value);
+  const iconClr = getEffectiveIconColorValue(localIconColor.value);
+
+  if (effectiveShape === 'none' && effectiveIcon === 'none') {
+    return '';
+  }
+
+  const shape = effectiveShape !== 'none' ? effectiveShape : 'circle';
+  const iconType = effectiveIcon !== 'none' ? effectiveIcon : shape;
+
+  return generateCheckpointSvg({
+    type: iconType,
+    backgroundShape: shape,
+    backgroundColor: bgColor,
+    borderColor: borderClr === 'transparent' ? 'none' : borderClr,
+    iconColor: iconClr,
+    size: sizeVal,
+  });
+};
+
+// ===========================================
+// MAIN PREVIEW SVG - shows current complete icon
+// ===========================================
 const previewSvg = computed(() => {
-  const bgColor = localBackgroundColor.value === 'default' || !localBackgroundColor.value
-    ? getDefaultColor()
-    : localBackgroundColor.value;
+  const effectiveShape = getEffectiveShape(localBackgroundShape.value);
+  const bgColor = getEffectiveBackgroundColorValue(localBackgroundColor.value);
+  const borderClr = getEffectiveBorderColorValue(localBorderColor.value);
+  const effectiveIcon = getEffectiveIconType(localIconType.value);
+  const iconClr = getEffectiveIconColorValue(localIconColor.value);
+  const sizeVal = getEffectiveSizeValue(localSize.value);
 
-  // If we have an icon, use the icon type with the background shape
-  if (hasIcon.value) {
+  // If both shape and icon are 'none', nothing to show
+  if (effectiveShape === 'none' && effectiveIcon === 'none') {
+    return '';
+  }
+
+  // If shape is 'none' but we have an icon, render icon without background
+  if (effectiveShape === 'none' && effectiveIcon !== 'none') {
     return generateCheckpointSvg({
-      type: localIconType.value,
-      backgroundShape: localBackgroundShape.value,
+      type: effectiveIcon,
+      backgroundShape: 'none',
       backgroundColor: bgColor,
-      borderColor: localBorderColor.value === 'none' ? 'none' : (localBorderColor.value || '#fff'),
-      iconColor: localIconColor.value || '#fff',
-      size: localSize.value,
+      borderColor: 'none',
+      iconColor: iconClr,
+      size: sizeVal,
     });
   }
 
-  // If no icon, just render the shape
-  if (hasShape.value) {
-    return generateCheckpointSvg({
-      type: localBackgroundShape.value,
-      backgroundShape: localBackgroundShape.value,
-      backgroundColor: bgColor,
-      borderColor: localBorderColor.value === 'none' ? 'none' : (localBorderColor.value || '#fff'),
-      iconColor: '#fff',
-      size: localSize.value,
-    });
-  }
+  // Normal case: shape with or without icon
+  const iconType = effectiveIcon !== 'none' ? effectiveIcon : effectiveShape;
 
-  // Nothing to show
-  return '';
+  return generateCheckpointSvg({
+    type: iconType,
+    backgroundShape: effectiveShape,
+    backgroundColor: bgColor,
+    borderColor: borderClr === 'transparent' ? 'none' : borderClr,
+    iconColor: iconClr,
+    size: sizeVal,
+  });
 });
 
 // Popup control
@@ -535,7 +869,7 @@ const selectShape = (value) => {
 };
 
 const selectBackgroundColor = (value) => {
-  localBackgroundColor.value = value === 'default' ? '' : value;
+  localBackgroundColor.value = value;
   closePopups();
 };
 
@@ -562,12 +896,35 @@ const selectSize = (value) => {
 // Sync local state when props change
 watch(() => props.isOpen, (newVal) => {
   if (newVal) {
-    localBackgroundShape.value = props.backgroundShape || 'circle';
-    localIconType.value = props.iconType || 'none';
-    localBackgroundColor.value = props.backgroundColor || '';
-    localBorderColor.value = props.borderColor || '';
-    localIconColor.value = props.iconColor || '';
-    localSize.value = props.size || '100';
+    // Check if ANY custom value is set (not empty)
+    const hasCustomShape = props.backgroundShape && props.backgroundShape !== 'default' && props.backgroundShape !== 'circle';
+    const hasCustomIcon = props.iconType && props.iconType !== 'none' && props.iconType !== 'default';
+    const hasCustomBgColor = props.backgroundColor && props.backgroundColor !== '';
+    const hasCustomBorderColor = props.borderColor && props.borderColor !== '';
+    const hasCustomIconColor = props.iconColor && props.iconColor !== '';
+    const hasCustomSize = props.size && props.size !== '' && props.size !== '100';
+
+    const hasAnyCustomValue = hasCustomShape || hasCustomIcon || hasCustomBgColor
+      || hasCustomBorderColor || hasCustomIconColor || hasCustomSize;
+
+    if (!hasAnyCustomValue) {
+      // No custom values set - initialize all to 'default' for inheritance
+      localBackgroundShape.value = 'default';
+      localIconType.value = 'default';
+      localBackgroundColor.value = 'default';
+      localBorderColor.value = 'default';
+      localIconColor.value = 'default';
+      localSize.value = 'default';
+    } else {
+      // Load saved values - map empty strings to 'default' for display
+      localBackgroundShape.value = props.backgroundShape || 'default';
+      localIconType.value = props.iconType || 'default';
+      // For colors, empty string means 'default' (inherit)
+      localBackgroundColor.value = props.backgroundColor || 'default';
+      localBorderColor.value = props.borderColor || 'default';
+      localIconColor.value = props.iconColor || 'default';
+      localSize.value = props.size || 'default';
+    }
     activePopup.value = null;
   }
 });
@@ -580,15 +937,34 @@ const cancel = () => {
 
 const apply = () => {
   closePopups();
-  const effectiveType = hasIcon.value ? localIconType.value : localBackgroundShape.value;
+
+  // Convert 'default' to empty string (meaning "use inherited value")
+  // Keep 'none' as-is to indicate explicit no value
+  const resolveValue = (value) => {
+    if (value === 'default') return '';
+    return value;
+  };
+
+  // Each property is independent - emit them separately
+  // iconType is ONLY for content icons (water, food, etc.), not shapes
+  // 'none' = explicitly no icon (override parent)
+  // '' (empty) = inherit from parent
+  // specific value = that content icon
+  let iconTypeValue = '';
+  if (localIconType.value === 'none') {
+    iconTypeValue = 'none'; // Explicitly no icon
+  } else if (localIconType.value && localIconType.value !== 'default') {
+    iconTypeValue = localIconType.value; // Specific content icon
+  }
+  // else: 'default' or empty = inherit (emit empty string)
 
   emit('apply', {
-    iconType: effectiveType,
-    backgroundShape: localBackgroundShape.value,
-    backgroundColor: localBackgroundColor.value,
-    borderColor: localBorderColor.value,
-    iconColor: localIconColor.value,
-    size: localSize.value,
+    iconType: iconTypeValue,
+    backgroundShape: resolveValue(localBackgroundShape.value),
+    backgroundColor: resolveValue(localBackgroundColor.value),
+    borderColor: resolveValue(localBorderColor.value),
+    iconColor: resolveValue(localIconColor.value),
+    size: resolveValue(localSize.value),
   });
   emit('update:isOpen', false);
 };
@@ -676,35 +1052,23 @@ const apply = () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background:
-    linear-gradient(90deg, transparent 48%, #e8e8e8 48%, #e8e8e8 52%, transparent 52%),
-    linear-gradient(0deg, transparent 45%, #e8e8e8 45%, #e8e8e8 55%, transparent 55%),
-    linear-gradient(135deg, #d4d4d4 25%, transparent 25%),
-    linear-gradient(225deg, #d4d4d4 25%, transparent 25%),
-    linear-gradient(45deg, #c9c9c9 25%, transparent 25%),
-    linear-gradient(315deg, #c9c9c9 25%, transparent 25%),
-    #f0f0f0;
-  background-size:
-    100% 100%,
-    100% 100%,
-    20px 20px,
-    20px 20px,
-    20px 20px,
-    20px 20px,
-    100% 100%;
-}
-
-.map-background::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background:
-    radial-gradient(ellipse 30px 20px at 15% 25%, #c8e6c9 0%, transparent 70%),
-    radial-gradient(ellipse 25px 15px at 80% 70%, #c8e6c9 0%, transparent 70%),
-    radial-gradient(ellipse 35px 12px at 65% 20%, #b3d9f7 0%, transparent 70%);
+  /* Base map color - light tan/beige like streets */
+  background-color: #f5f3ef;
+  background-image:
+    /* Main roads - white/light gray */
+    linear-gradient(90deg, transparent 0%, transparent 45%, #fff 45%, #fff 55%, transparent 55%, transparent 100%),
+    linear-gradient(0deg, transparent 0%, transparent 42%, #fff 42%, #fff 58%, transparent 58%, transparent 100%),
+    /* Secondary roads */
+    linear-gradient(90deg, transparent 0%, transparent 20%, #fafafa 20%, #fafafa 23%, transparent 23%, transparent 77%, #fafafa 77%, #fafafa 80%, transparent 80%, transparent 100%),
+    linear-gradient(0deg, transparent 0%, transparent 18%, #fafafa 18%, #fafafa 21%, transparent 21%, transparent 79%, #fafafa 79%, #fafafa 82%, transparent 82%, transparent 100%),
+    /* Parks/green areas */
+    radial-gradient(ellipse 60px 40px at 15% 30%, #d4edda 0%, #d4edda 60%, transparent 60%),
+    radial-gradient(ellipse 50px 35px at 85% 65%, #d4edda 0%, #d4edda 60%, transparent 60%),
+    /* Water feature */
+    radial-gradient(ellipse 40px 25px at 70% 25%, #cce5ff 0%, #cce5ff 50%, transparent 50%),
+    /* Building blocks */
+    radial-gradient(ellipse 25px 20px at 30% 70%, #e9e9e9 0%, #e9e9e9 80%, transparent 80%),
+    radial-gradient(ellipse 20px 15px at 55% 80%, #e9e9e9 0%, #e9e9e9 80%, transparent 80%);
 }
 
 .preview-icon {
@@ -898,8 +1262,8 @@ const apply = () => {
 }
 
 .popup-item-preview {
-  width: 24px;
-  height: 24px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1033,35 +1397,50 @@ const apply = () => {
   white-space: nowrap;
 }
 
-/* Size List */
-.size-list {
-  display: flex;
-  flex-direction: column;
+/* Size Grid */
+.size-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
   padding: 0.75rem;
   flex: 1;
+  align-content: start;
   overflow-y: auto;
 }
 
-.size-option {
-  padding: 0.5rem 0.75rem;
-  border: none;
-  border-radius: 4px;
+.size-grid-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border: 2px solid transparent;
+  border-radius: 6px;
   background: white;
   cursor: pointer;
-  font-size: 0.8rem;
-  color: #4a5568;
-  text-align: left;
   transition: all 0.15s;
 }
 
-.size-option:hover {
+.size-grid-item:hover {
   background: #f7fafc;
 }
 
-.size-option.selected {
+.size-grid-item.selected {
+  border-color: #3182ce;
   background: #ebf8ff;
-  color: #3182ce;
-  font-weight: 500;
+}
+
+.size-grid-item span {
+  font-size: 0.7rem;
+  color: #4a5568;
+  text-align: center;
+}
+
+.size-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
 }
 
 /* Footer */

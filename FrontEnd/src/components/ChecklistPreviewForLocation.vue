@@ -3,7 +3,7 @@
     <!-- Header with add button -->
     <div class="preview-actions">
       <p class="preview-header">
-        {{ isEditing ? `Add new ${termsLower.checklist} for this ${checkpointTermLower}:` : `${termsLower.checklists} that will apply at this ${checkpointTermLower}:` }}
+        {{ isEditing ? `Add new ${termsLower.checklist} for this ${checkpointTermLower}:` : `${terms.checklists} that will apply at this ${checkpointTermLower}:` }}
       </p>
       <button
         type="button"
@@ -113,7 +113,7 @@
 import { ref, computed, defineProps, defineEmits, watch } from 'vue';
 import { useTerminology } from '../composables/useTerminology';
 
-const { termsLower } = useTerminology();
+const { terms, termsLower } = useTerminology();
 
 const props = defineProps({
   allChecklistItems: {

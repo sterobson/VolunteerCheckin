@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using Shouldly;
+using VolunteerCheckin.Functions.Functions;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Repositories;
 using VolunteerCheckin.Functions.Services;
@@ -16,6 +18,312 @@ namespace VolunteerCheckin.Functions.Tests
     [TestClass]
     public class AuthFunctionsTests
     {
+        private Mock<ILogger<AuthFunctions>> _mockLogger = null!;
+        private Mock<AuthService> _mockAuthService = null!;
+        private Mock<ClaimsService> _mockClaimsService = null!;
+        private Mock<IPersonRepository> _mockPersonRepository = null!;
+        private Mock<IMarshalRepository> _mockMarshalRepository = null!;
+        private Mock<RateLimitService> _mockRateLimitService = null!;
+        private AuthFunctions _authFunctions = null!;
+
+        [TestInitialize]
+        public void Setup()
+        {
+            _mockLogger = new Mock<ILogger<AuthFunctions>>();
+            _mockPersonRepository = new Mock<IPersonRepository>();
+            _mockMarshalRepository = new Mock<IMarshalRepository>();
+
+            // Create mock RateLimitService
+            _mockRateLimitService = new Mock<RateLimitService>();
+            _mockRateLimitService.Setup(r => r.IsAllowedMagicLinkRequest(It.IsAny<string>())).Returns(true);
+            _mockRateLimitService.Setup(r => r.IsAllowedMarshalCodeAttempt(It.IsAny<string>())).Returns(true);
+            _mockRateLimitService.Setup(r => r.IsAllowedMarshalCodeAttemptForEvent(It.IsAny<string>())).Returns(true);
+
+            // Create mock ClaimsService with required constructor params
+            _mockClaimsService = new Mock<ClaimsService>(
+                Mock.Of<IAuthSessionRepository>(),
+                Mock.Of<IPersonRepository>(),
+                Mock.Of<IEventRoleRepository>(),
+                Mock.Of<IMarshalRepository>(),
+                Mock.Of<IUserEventMappingRepository>()
+            );
+
+            // Create mock AuthService with required constructor params
+            _mockAuthService = new Mock<AuthService>(
+                Mock.Of<IAuthTokenRepository>(),
+                Mock.Of<IPersonRepository>(),
+                Mock.Of<IMarshalRepository>(),
+                _mockClaimsService.Object,
+                new EmailService("localhost", 25, "", "", "test@test.com", "Test"),
+                Mock.Of<ILogger<AuthService>>()
+            );
+
+            _authFunctions = new AuthFunctions(
+                _mockLogger.Object,
+                _mockAuthService.Object,
+                _mockClaimsService.Object,
+                _mockPersonRepository.Object,
+                _mockMarshalRepository.Object,
+                _mockRateLimitService.Object
+            );
+        }
+
+        // ==================== RequestLogin HTTP Endpoint Tests ====================
+
+        [TestMethod]
+        public async Task RequestLogin_NullBody_ReturnsBadRequest()
+        {
+            // Arrange - Empty JSON object, not empty string (which causes parsing to fail)
+            Microsoft.AspNetCore.Http.HttpRequest request = TestHelpers.CreateHttpRequest(new { });
+
+            // Act
+            IActionResult result = await _authFunctions.RequestLogin(request);
+
+            // Assert - Email is missing so returns BadRequest
+            result.ShouldBeOfType<BadRequestObjectResult>();
+        }
+
+        [TestMethod]
+        public async Task RequestLogin_EmptyEmail_ReturnsBadRequest()
+        {
+            // Arrange
+            RequestLoginRequest body = new("");
+            Microsoft.AspNetCore.Http.HttpRequest request = TestHelpers.CreateHttpRequest(body);
+
+            // Act
+            IActionResult result = await _authFunctions.RequestLogin(request);
+
+            // Assert
+            result.ShouldBeOfType<BadRequestObjectResult>();
+        }
+
+        [TestMethod]
+        public async Task RequestLogin_RateLimitExceeded_Returns429()
+        {
+            // Arrange
+            _mockRateLimitService.Setup(r => r.IsAllowedMagicLinkRequest(It.IsAny<string>())).Returns(false);
+
+            RequestLoginRequest body = new("user@example.com");
+            Microsoft.AspNetCore.Http.HttpRequest request = TestHelpers.CreateHttpRequest(body);
+
+            // Act
+            IActionResult result = await _authFunctions.RequestLogin(request);
+
+            // Assert
+            result.ShouldBeOfType<ObjectResult>();
+            ObjectResult objResult = (ObjectResult)result;
+            objResult.StatusCode.ShouldBe(429);
+        }
+
+        [TestMethod]
+        public async Task RequestLogin_ValidEmail_Success_ReturnsOk()
+        {
+            // Arrange
+            _mockAuthService.Setup(a => a.RequestMagicLinkAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()
+            )).ReturnsAsync(true);
+
+            RequestLoginRequest body = new("user@example.com");
+            Microsoft.AspNetCore.Http.HttpRequest request = TestHelpers.CreateHttpRequest(body);
+
+            // Act
+            IActionResult result = await _authFunctions.RequestLogin(request);
+
+            // Assert
+            result.ShouldBeOfType<OkObjectResult>();
+            OkObjectResult okResult = (OkObjectResult)result;
+            RequestLoginResponse response = (RequestLoginResponse)okResult.Value!;
+            response.Success.ShouldBeTrue();
+        }
+
+        [TestMethod]
+        public async Task RequestLogin_InvalidEmail_ReturnsBadRequest()
+        {
+            // Arrange
+            _mockAuthService.Setup(a => a.RequestMagicLinkAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()
+            )).ReturnsAsync(false);
+
+            RequestLoginRequest body = new("invalid@example.com");
+            Microsoft.AspNetCore.Http.HttpRequest request = TestHelpers.CreateHttpRequest(body);
+
+            // Act
+            IActionResult result = await _authFunctions.RequestLogin(request);
+
+            // Assert
+            result.ShouldBeOfType<BadRequestObjectResult>();
+        }
+
+        // ==================== MarshalLogin HTTP Endpoint Tests ====================
+
+        [TestMethod]
+        public async Task MarshalLogin_NullBody_ReturnsBadRequest()
+        {
+            // Arrange - Empty JSON object, not empty string
+            Microsoft.AspNetCore.Http.HttpRequest request = TestHelpers.CreateHttpRequest(new { });
+
+            // Act
+            IActionResult result = await _authFunctions.MarshalLogin(request);
+
+            // Assert
+            result.ShouldBeOfType<BadRequestObjectResult>();
+        }
+
+        [TestMethod]
+        public async Task MarshalLogin_MissingEventId_ReturnsBadRequest()
+        {
+            // Arrange
+            MarshalLoginRequest body = new("", "ABC123");
+            Microsoft.AspNetCore.Http.HttpRequest request = TestHelpers.CreateHttpRequest(body);
+
+            // Act
+            IActionResult result = await _authFunctions.MarshalLogin(request);
+
+            // Assert
+            result.ShouldBeOfType<BadRequestObjectResult>();
+        }
+
+        [TestMethod]
+        public async Task MarshalLogin_MissingMagicCode_ReturnsBadRequest()
+        {
+            // Arrange
+            MarshalLoginRequest body = new("event-123", "");
+            Microsoft.AspNetCore.Http.HttpRequest request = TestHelpers.CreateHttpRequest(body);
+
+            // Act
+            IActionResult result = await _authFunctions.MarshalLogin(request);
+
+            // Assert
+            result.ShouldBeOfType<BadRequestObjectResult>();
+        }
+
+        [TestMethod]
+        public async Task MarshalLogin_ValidCredentials_ReturnsOk()
+        {
+            // Arrange
+            _mockAuthService.Setup(a => a.AuthenticateWithMagicCodeAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()
+            )).ReturnsAsync((true, "session-token", new PersonInfo("person-1", "Test User", "test@example.com", "", false), "marshal-1", null));
+
+            MarshalLoginRequest body = new("event-123", "ABC123");
+            Microsoft.AspNetCore.Http.HttpRequest request = TestHelpers.CreateHttpRequest(body);
+
+            // Act
+            IActionResult result = await _authFunctions.MarshalLogin(request);
+
+            // Assert
+            result.ShouldBeOfType<OkObjectResult>();
+        }
+
+        [TestMethod]
+        public async Task MarshalLogin_InvalidCredentials_ReturnsBadRequest()
+        {
+            // Arrange
+            _mockAuthService.Setup(a => a.AuthenticateWithMagicCodeAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()
+            )).ReturnsAsync((false, null, null, null, "Invalid code"));
+
+            MarshalLoginRequest body = new("event-123", "WRONG");
+            Microsoft.AspNetCore.Http.HttpRequest request = TestHelpers.CreateHttpRequest(body);
+
+            // Act
+            IActionResult result = await _authFunctions.MarshalLogin(request);
+
+            // Assert - Invalid code returns BadRequest, not Unauthorized
+            result.ShouldBeOfType<BadRequestObjectResult>();
+        }
+
+        // ==================== GetMe HTTP Endpoint Tests ====================
+
+        [TestMethod]
+        public async Task GetMe_NoAuthHeader_ReturnsUnauthorized()
+        {
+            // Arrange
+            Microsoft.AspNetCore.Http.HttpRequest request = TestHelpers.CreateEmptyHttpRequest();
+
+            // Act
+            IActionResult result = await _authFunctions.GetMe(request);
+
+            // Assert
+            result.ShouldBeOfType<UnauthorizedObjectResult>();
+        }
+
+        [TestMethod]
+        public async Task GetMe_InvalidSession_ReturnsUnauthorized()
+        {
+            // Arrange
+            _mockClaimsService.Setup(c => c.GetClaimsAsync(It.IsAny<string>(), null))
+                .ReturnsAsync((UserClaims?)null);
+
+            Microsoft.AspNetCore.Http.HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("invalid-token");
+
+            // Act
+            IActionResult result = await _authFunctions.GetMe(request);
+
+            // Assert
+            result.ShouldBeOfType<UnauthorizedObjectResult>();
+        }
+
+        [TestMethod]
+        public async Task GetMe_ValidSession_ReturnsOk()
+        {
+            // Arrange
+            UserClaims claims = new(
+                PersonId: "person-123",
+                PersonName: "Test User",
+                PersonEmail: "test@example.com",
+                IsSystemAdmin: false,
+                EventId: null,
+                AuthMethod: Constants.AuthMethodSecureEmailLink,
+                MarshalId: null,
+                EventRoles: new List<EventRoleInfo>()
+            );
+            _mockClaimsService.Setup(c => c.GetClaimsAsync(It.IsAny<string>(), null))
+                .ReturnsAsync(claims);
+
+            Microsoft.AspNetCore.Http.HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("valid-token");
+
+            // Act
+            IActionResult result = await _authFunctions.GetMe(request);
+
+            // Assert
+            result.ShouldBeOfType<OkObjectResult>();
+        }
+
+        // ==================== Logout HTTP Endpoint Tests ====================
+
+        [TestMethod]
+        public async Task Logout_NoAuthHeader_ReturnsOk()
+        {
+            // Arrange - Logout is a no-op if no auth header, but still succeeds
+            Microsoft.AspNetCore.Http.HttpRequest request = TestHelpers.CreateEmptyHttpRequest();
+
+            // Act
+            IActionResult result = await _authFunctions.Logout(request);
+
+            // Assert - Logout always succeeds (idempotent)
+            result.ShouldBeOfType<OkObjectResult>();
+        }
+
+        [TestMethod]
+        public async Task Logout_ValidSession_RevokesSession()
+        {
+            // Arrange
+            _mockClaimsService.Setup(c => c.RevokeSessionAsync(It.IsAny<string>()))
+                .Returns(Task.CompletedTask);
+
+            Microsoft.AspNetCore.Http.HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("valid-token");
+
+            // Act
+            IActionResult result = await _authFunctions.Logout(request);
+
+            // Assert
+            result.ShouldBeOfType<OkObjectResult>();
+            _mockClaimsService.Verify(c => c.RevokeSessionAsync("valid-token"), Times.Once);
+        }
+
+        // ==================== Entity and Service Tests (existing) ====================
+
         /// <summary>
         /// Verifies that AuthTokenEntity has RowKey set to TokenHash for O(1) lookup.
         /// This test prevents regression of the bug where RowKey was set to TokenId instead of TokenHash.

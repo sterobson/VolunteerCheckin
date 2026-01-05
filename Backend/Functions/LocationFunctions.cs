@@ -22,6 +22,7 @@ public class LocationFunctions
     private readonly IChecklistItemRepository _checklistItemRepository;
     private readonly INoteRepository _noteRepository;
     private readonly IAreaRepository _areaRepository;
+    private readonly ClaimsService _claimsService;
 
     public LocationFunctions(
         ILogger<LocationFunctions> logger,
@@ -30,7 +31,8 @@ public class LocationFunctions
         IAssignmentRepository assignmentRepository,
         IChecklistItemRepository checklistItemRepository,
         INoteRepository noteRepository,
-        IAreaRepository areaRepository)
+        IAreaRepository areaRepository,
+        ClaimsService claimsService)
     {
         _logger = logger;
         _locationRepository = locationRepository;
@@ -39,6 +41,7 @@ public class LocationFunctions
         _checklistItemRepository = checklistItemRepository;
         _noteRepository = noteRepository;
         _areaRepository = areaRepository;
+        _claimsService = claimsService;
     }
 
     [Function("CreateLocation")]
@@ -80,10 +83,25 @@ public class LocationFunctions
                 defaultArea.RowKey
             );
 
+            string locationId = Guid.NewGuid().ToString();
+
+            // Replace THIS_CHECKPOINT placeholder with actual location ID in scope configurations
+            List<ScopeConfiguration> locationUpdateScopes = request.LocationUpdateScopeConfigurations ?? [];
+            foreach (ScopeConfiguration scope in locationUpdateScopes)
+            {
+                for (int i = 0; i < scope.Ids.Count; i++)
+                {
+                    if (scope.Ids[i] == Constants.ThisCheckpoint)
+                    {
+                        scope.Ids[i] = locationId;
+                    }
+                }
+            }
+
             LocationEntity locationEntity = new()
             {
                 PartitionKey = request.EventId,
-                RowKey = Guid.NewGuid().ToString(),
+                RowKey = locationId,
                 EventId = request.EventId,
                 Name = request.Name,
                 Description = request.Description,
@@ -93,12 +111,24 @@ public class LocationFunctions
                 What3Words = request.What3Words ?? string.Empty,
                 StartTime = request.StartTime,
                 EndTime = request.EndTime,
-                AreaIdsJson = JsonSerializer.Serialize(areaIds)
+                AreaIdsJson = JsonSerializer.Serialize(areaIds),
+                // Checkpoint style
+                StyleType = request.StyleType ?? "default",
+                StyleColor = request.StyleColor ?? string.Empty,
+                StyleBackgroundShape = request.StyleBackgroundShape ?? string.Empty,
+                StyleBackgroundColor = request.StyleBackgroundColor ?? string.Empty,
+                StyleBorderColor = request.StyleBorderColor ?? string.Empty,
+                StyleIconColor = request.StyleIconColor ?? string.Empty,
+                StyleSize = request.StyleSize ?? string.Empty,
+                // Terminology
+                PeopleTerm = request.PeopleTerm ?? string.Empty,
+                CheckpointTerm = request.CheckpointTerm ?? string.Empty,
+                // Dynamic checkpoint settings
+                IsDynamic = request.IsDynamic,
+                LocationUpdateScopeJson = JsonSerializer.Serialize(locationUpdateScopes)
             };
 
             await _locationRepository.AddAsync(locationEntity);
-
-            string locationId = locationEntity.RowKey;
 
             // Create pending checklist items scoped to this checkpoint
             if (request.PendingNewChecklistItems != null && request.PendingNewChecklistItems.Count > 0)
@@ -321,6 +351,13 @@ public class LocationFunctions
             if (request.StyleSize != null) locationEntity.StyleSize = request.StyleSize;
             // Update terminology if provided
             if (request.PeopleTerm != null) locationEntity.PeopleTerm = request.PeopleTerm;
+            if (request.CheckpointTerm != null) locationEntity.CheckpointTerm = request.CheckpointTerm;
+            // Update dynamic checkpoint settings
+            locationEntity.IsDynamic = request.IsDynamic;
+            if (request.LocationUpdateScopeConfigurations != null)
+            {
+                locationEntity.LocationUpdateScopeJson = JsonSerializer.Serialize(request.LocationUpdateScopeConfigurations);
+            }
 
             // Recalculate area assignments based on new location
             AreaEntity defaultArea = await EnsureDefaultAreaExists(eventId);
@@ -356,9 +393,12 @@ public class LocationFunctions
     {
         try
         {
+            // Delete all assignments for this location first to avoid orphaned records
+            await _assignmentRepository.DeleteAllByLocationAsync(eventId, locationId);
+
             await _locationRepository.DeleteAsync(eventId, locationId);
 
-            _logger.LogInformation($"Location deleted: {locationId}");
+            _logger.LogInformation($"Location deleted: {locationId} (including all assignments)");
 
             return new NoContentResult();
         }
@@ -663,6 +703,231 @@ public class LocationFunctions
             _logger.LogError(ex, "Error bulk updating location times");
             return new StatusCodeResult(500);
         }
+    }
+
+    /// <summary>
+    /// Updates the location of a dynamic checkpoint (for lead car/sweep vehicle tracking)
+    /// </summary>
+    [Function("UpdateCheckpointLocation")]
+    public async Task<IActionResult> UpdateCheckpointLocation(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "locations/{eventId}/{locationId}/update-position")] HttpRequest req,
+        string eventId,
+        string locationId)
+    {
+        try
+        {
+            // Extract session token from Authorization header
+            string? sessionToken = req.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "");
+            if (string.IsNullOrWhiteSpace(sessionToken))
+            {
+                return new UnauthorizedObjectResult(new { message = "Authorization header required" });
+            }
+
+            // Validate session and get claims
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
+            }
+
+            (UpdateCheckpointLocationRequest? request, IActionResult? error) = await FunctionHelpers.TryDeserializeRequestAsync<UpdateCheckpointLocationRequest>(req);
+            if (error != null) return error;
+
+            // Validate GPS coordinates
+            if (!Validators.IsValidCoordinates(request!.Latitude, request.Longitude))
+            {
+                return new BadRequestObjectResult(new { message = "Invalid GPS coordinates" });
+            }
+
+            // Get the checkpoint
+            LocationEntity? checkpoint = await _locationRepository.GetAsync(eventId, locationId);
+            if (checkpoint == null)
+            {
+                return new NotFoundObjectResult(new { message = "Checkpoint not found" });
+            }
+
+            // Verify checkpoint is dynamic
+            if (!checkpoint.IsDynamic)
+            {
+                return new BadRequestObjectResult(new { message = "This checkpoint is not configured as a dynamic checkpoint" });
+            }
+
+            // Check if user has permission to update this checkpoint's location
+            bool hasPermission = await CanUserUpdateCheckpointLocation(claims, checkpoint, eventId);
+            if (!hasPermission)
+            {
+                return new UnauthorizedObjectResult(new { message = "You don't have permission to update this checkpoint's location" });
+            }
+
+            // If source is another checkpoint, get its coordinates
+            double newLatitude = request.Latitude;
+            double newLongitude = request.Longitude;
+
+            if (request.SourceType == "checkpoint" && !string.IsNullOrEmpty(request.SourceCheckpointId))
+            {
+                LocationEntity? sourceCheckpoint = await _locationRepository.GetAsync(eventId, request.SourceCheckpointId);
+                if (sourceCheckpoint == null)
+                {
+                    return new BadRequestObjectResult(new { message = "Source checkpoint not found" });
+                }
+                newLatitude = sourceCheckpoint.Latitude;
+                newLongitude = sourceCheckpoint.Longitude;
+            }
+
+            // Update the checkpoint location
+            checkpoint.Latitude = newLatitude;
+            checkpoint.Longitude = newLongitude;
+            checkpoint.LastLocationUpdate = DateTime.UtcNow;
+            checkpoint.LastUpdatedByPersonId = claims.PersonId;
+
+            // Recalculate area assignments based on new location
+            AreaEntity defaultArea = await EnsureDefaultAreaExists(eventId);
+            IEnumerable<AreaEntity> areas = await _areaRepository.GetByEventAsync(eventId);
+            List<string> areaIds = GeometryHelper.CalculateCheckpointAreas(
+                newLatitude,
+                newLongitude,
+                areas,
+                defaultArea.RowKey
+            );
+            checkpoint.AreaIdsJson = JsonSerializer.Serialize(areaIds);
+
+            await _locationRepository.UpdateAsync(checkpoint);
+
+            _logger.LogInformation($"Dynamic checkpoint {locationId} location updated by {claims.PersonId} to ({newLatitude}, {newLongitude})");
+
+            return new OkObjectResult(new UpdateCheckpointLocationResponse(
+                true,
+                locationId,
+                newLatitude,
+                newLongitude,
+                checkpoint.LastLocationUpdate.Value,
+                "Location updated successfully"
+            ));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating checkpoint location");
+            return new StatusCodeResult(500);
+        }
+    }
+
+    /// <summary>
+    /// Gets all dynamic checkpoints for an event (for polling)
+    /// </summary>
+    [Function("GetDynamicCheckpoints")]
+    public async Task<IActionResult> GetDynamicCheckpoints(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/{eventId}/dynamic-checkpoints")] HttpRequest req,
+        string eventId)
+    {
+        try
+        {
+            IEnumerable<LocationEntity> allLocations = await _locationRepository.GetByEventAsync(eventId);
+
+            List<DynamicCheckpointResponse> dynamicCheckpoints = allLocations
+                .Where(l => l.IsDynamic)
+                .Select(l => new DynamicCheckpointResponse(
+                    l.RowKey,
+                    l.Name,
+                    l.Latitude,
+                    l.Longitude,
+                    l.LastLocationUpdate,
+                    l.LastUpdatedByPersonId
+                ))
+                .ToList();
+
+            return new OkObjectResult(dynamicCheckpoints);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting dynamic checkpoints");
+            return new StatusCodeResult(500);
+        }
+    }
+
+    /// <summary>
+    /// Checks if a user has permission to update a checkpoint's location based on scope configurations
+    /// </summary>
+    private async Task<bool> CanUserUpdateCheckpointLocation(UserClaims claims, LocationEntity checkpoint, string eventId)
+    {
+        // Event admins and system admins always have permission
+        if (claims.IsSystemAdmin || claims.IsEventAdmin)
+        {
+            return true;
+        }
+
+        // Parse the scope configurations
+        List<ScopeConfiguration> scopeConfigs = JsonSerializer.Deserialize<List<ScopeConfiguration>>(checkpoint.LocationUpdateScopeJson) ?? [];
+
+        // If no scopes configured, no one can update (except admins, handled above)
+        if (scopeConfigs.Count == 0)
+        {
+            return false;
+        }
+
+        // Get the marshal for this user if they have one
+        if (string.IsNullOrEmpty(claims.MarshalId))
+        {
+            return false;
+        }
+
+        // Get marshal's assignments to determine areas and checkpoints they're assigned to
+        MarshalEntity? marshal = await _marshalRepository.GetAsync(eventId, claims.MarshalId);
+        if (marshal == null)
+        {
+            return false;
+        }
+
+        IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByMarshalAsync(eventId, claims.MarshalId);
+        List<string> assignedLocationIds = assignments.Select(a => a.LocationId).ToList();
+
+        // Get the areas the marshal is assigned to
+        IEnumerable<LocationEntity> assignedLocations = await Task.WhenAll(
+            assignedLocationIds.Select(id => _locationRepository.GetAsync(eventId, id))
+        ).ContinueWith(t => t.Result.Where(l => l != null).Cast<LocationEntity>());
+
+        HashSet<string> assignedAreaIds = [];
+        foreach (LocationEntity loc in assignedLocations)
+        {
+            List<string> locAreaIds = JsonSerializer.Deserialize<List<string>>(loc.AreaIdsJson ?? "[]") ?? [];
+            foreach (string areaId in locAreaIds)
+            {
+                assignedAreaIds.Add(areaId);
+            }
+        }
+
+        // Get areas where this marshal is a lead
+        IEnumerable<AreaEntity> areas = await _areaRepository.GetByEventAsync(eventId);
+        List<string> areaLeadForAreaIds = areas
+            .Where(a =>
+            {
+                List<string> leadIds = JsonSerializer.Deserialize<List<string>>(a.AreaLeadMarshalIdsJson ?? "[]") ?? [];
+                return leadIds.Contains(claims.MarshalId);
+            })
+            .Select(a => a.RowKey)
+            .ToList();
+
+        // Create marshal context for scope evaluation
+        ScopeEvaluator.MarshalContext marshalContext = new(
+            claims.MarshalId,
+            assignedAreaIds.ToList(),
+            assignedLocationIds,
+            areaLeadForAreaIds
+        );
+
+        // Build checkpoint lookup (just this checkpoint for now)
+        Dictionary<string, LocationEntity> checkpointLookup = new()
+        {
+            { checkpoint.RowKey, checkpoint }
+        };
+
+        // Evaluate the scope configurations
+        ScopeEvaluator.ScopeMatchResult result = ScopeEvaluator.EvaluateScopeConfigurations(
+            scopeConfigs,
+            marshalContext,
+            checkpointLookup
+        );
+
+        return result.IsRelevant;
     }
 
     // Helper method to ensure default area exists

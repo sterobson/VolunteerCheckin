@@ -70,6 +70,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  simplifyNonHighlighted: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const emit = defineEmits(['location-click', 'map-click', 'area-click', 'polygon-complete', 'polygon-drawing']);
@@ -271,12 +275,22 @@ const initMap = () => {
     ? props.allLocationsForBounds
     : props.locations;
 
+  // Helper to check if coordinates are valid (not null, undefined, or 0,0)
+  const isValidCoord = (lat, lng) => {
+    return lat != null && lng != null && !(lat === 0 && lng === 0);
+  };
+
   const allPoints = [];
   if (locationsForCenter.length > 0) {
-    allPoints.push(...locationsForCenter.map(loc => ({ lat: loc.latitude, lng: loc.longitude })));
+    // Filter out locations with invalid coordinates (0,0 or null)
+    allPoints.push(...locationsForCenter
+      .filter(loc => isValidCoord(loc.latitude, loc.longitude))
+      .map(loc => ({ lat: loc.latitude, lng: loc.longitude })));
   }
   if (props.route && props.route.length > 0) {
-    allPoints.push(...props.route.map(point => ({ lat: point.lat, lng: point.lng })));
+    allPoints.push(...props.route
+      .filter(point => isValidCoord(point.lat, point.lng))
+      .map(point => ({ lat: point.lat, lng: point.lng })));
   }
 
   if (props.center) {
@@ -590,15 +604,34 @@ const updateMarkers = () => {
   if (!map) return;
 
   props.locations.forEach((location) => {
+    // Skip locations without valid coordinates (no location or 0,0)
+    const lat = location.latitude ?? location.Latitude;
+    const lng = location.longitude ?? location.Longitude;
+    if (lat == null || lng == null || (lat === 0 && lng === 0)) {
+      return;
+    }
+
     const checkedInCount = location.checkedInCount || 0;
     const requiredMarshals = location.requiredMarshals || 1;
     const isHighlighted = props.highlightLocationId === location.id ||
                           props.highlightLocationIds.includes(location.id);
-    const isGrayed = props.marshalMode && !isHighlighted;
+    // Show simplified gray dots for non-highlighted checkpoints when simplifyNonHighlighted is true
+    const showSimplified = props.simplifyNonHighlighted && !isHighlighted;
 
-    // Check if location has a custom style (not default)
-    const hasCustomStyle = location.resolvedStyleType &&
-                           location.resolvedStyleType !== 'default';
+    // Check if location has a custom style (any non-default resolved property)
+    // This includes custom type, background color, border color, icon color, or non-circle shape
+    const resolvedType = location.resolvedStyleType || location.ResolvedStyleType;
+    const resolvedBgColor = location.resolvedStyleBackgroundColor || location.ResolvedStyleBackgroundColor
+      || location.resolvedStyleColor || location.ResolvedStyleColor;
+    const resolvedBorderColor = location.resolvedStyleBorderColor || location.ResolvedStyleBorderColor;
+    const resolvedIconColor = location.resolvedStyleIconColor || location.ResolvedStyleIconColor;
+    const resolvedShape = location.resolvedStyleBackgroundShape || location.ResolvedStyleBackgroundShape;
+
+    const hasCustomStyle = (resolvedType && resolvedType !== 'default')
+      || resolvedBgColor
+      || resolvedBorderColor
+      || resolvedIconColor
+      || (resolvedShape && resolvedShape !== 'circle' && resolvedShape !== 'default');
 
     // Area color indicator (hide in marshal mode)
     const areaColor = location.areaColor || '#999';
@@ -624,15 +657,14 @@ const updateMarkers = () => {
       "></div>
     ` : '';
 
-    // Style adjustments for grayed/highlighted markers
-    const markerOpacity = isGrayed ? '0.6' : '1';
-    const labelBg = isHighlighted ? '#667eea' : isGrayed ? '#e0e0e0' : 'white';
-    const labelColor = isHighlighted ? 'white' : isGrayed ? '#888' : '#333';
+    // Style adjustments for highlighted/simplified markers
+    const labelBg = isHighlighted ? '#667eea' : showSimplified ? '#e0e0e0' : 'white';
+    const labelColor = isHighlighted ? 'white' : showSimplified ? '#888' : '#333';
 
     let markerHtml;
 
-    // In marshal mode with grayed (non-assigned) checkpoints: simple gray circle, no badge
-    if (isGrayed) {
+    // Simplified gray dot for non-highlighted checkpoints when simplifyNonHighlighted is true
+    if (showSimplified) {
       const markerSize = '20px';
       markerHtml = `
         <div style="
@@ -645,8 +677,8 @@ const updateMarkers = () => {
         "></div>
       `;
     }
-    // Custom styled checkpoint (not grayed)
-    else if (hasCustomStyle && !isGrayed) {
+    // Custom styled checkpoint
+    else if (hasCustomStyle) {
       // Show count unless in marshal mode (where we hide counts)
       const showCount = !props.marshalMode;
 
@@ -710,7 +742,7 @@ const updateMarkers = () => {
     const icon = L.divIcon({
       className: 'custom-marker',
       html: `
-        <div style="display: flex; flex-direction: column; align-items: center; position: relative; opacity: ${markerOpacity};">
+        <div style="display: flex; flex-direction: column; align-items: center; position: relative;">
           ${highlightRing}
           <div style="position: relative; display: flex; align-items: center; gap: 4px;">
             ${hasArea ? `<div style="
@@ -771,14 +803,21 @@ const updateMarkers = () => {
       ? props.allLocationsForBounds
       : props.locations;
 
-    // Add location points
+    // Helper to check if coordinates are valid (not null, undefined, or 0,0)
+    const isValidCoord = (lat, lng) => lat != null && lng != null && !(lat === 0 && lng === 0);
+
+    // Add location points (filter out invalid coordinates)
     if (locationsForBounds.length > 0) {
-      allPoints.push(...locationsForBounds.map((loc) => [loc.latitude, loc.longitude]));
+      allPoints.push(...locationsForBounds
+        .filter((loc) => isValidCoord(loc.latitude, loc.longitude))
+        .map((loc) => [loc.latitude, loc.longitude]));
     }
 
-    // Add route points
+    // Add route points (filter out invalid coordinates)
     if (props.route.length > 0) {
-      allPoints.push(...props.route.map((point) => [point.lat, point.lng]));
+      allPoints.push(...props.route
+        .filter((point) => isValidCoord(point.lat, point.lng))
+        .map((point) => [point.lat, point.lng]));
     }
 
     if (allPoints.length > 0) {
@@ -939,6 +978,33 @@ watch(
   () => props.marshalMode,
   () => {
     updateMarkers();
+  }
+);
+
+watch(
+  () => props.simplifyNonHighlighted,
+  () => {
+    updateMarkers();
+  }
+);
+
+// Watch for clickable prop changes and update click handler
+watch(
+  () => props.clickable,
+  (newClickable) => {
+    if (!map) return;
+
+    // Remove existing click handler
+    map.off('click');
+
+    // Add click handler if clickable is true
+    if (newClickable) {
+      map.on('click', (e) => {
+        if (!props.drawingMode) {
+          emit('map-click', { lat: e.latlng.lat, lng: e.latlng.lng });
+        }
+      });
+    }
   }
 );
 </script>

@@ -11,17 +11,17 @@
       <div class="emergency-notes-list">
         <div
           v-for="note in sortedNotes"
-          :key="note.noteId"
+          :key="note.noteId || note.NoteId"
           class="emergency-note-item"
-          :class="{ 'is-emergency': note.priority === 'Emergency' }"
+          :class="{ 'is-emergency': (note.priority || note.Priority) === 'Emergency' }"
         >
           <div class="note-header">
-            <h3>{{ note.title }}</h3>
-            <span class="priority-badge" :class="note.priority.toLowerCase()">
-              {{ note.priority }}
+            <h3>{{ note.title || note.Title }}</h3>
+            <span class="priority-badge" :class="(note.priority || note.Priority).toLowerCase()">
+              {{ note.priority || note.Priority }}
             </span>
           </div>
-          <div v-if="note.content" class="note-content">{{ note.content }}</div>
+          <div v-if="note.content || note.Content" class="note-content">{{ note.content || note.Content }}</div>
         </div>
       </div>
     </div>
@@ -105,9 +105,11 @@ const emit = defineEmits(['close']);
 const sortedNotes = computed(() => {
   if (!props.notes) return [];
   return [...props.notes].sort((a, b) => {
+    const aPriority = a.priority || a.Priority;
+    const bPriority = b.priority || b.Priority;
     // Emergency comes before Urgent
-    if (a.priority === 'Emergency' && b.priority !== 'Emergency') return -1;
-    if (b.priority === 'Emergency' && a.priority !== 'Emergency') return 1;
+    if (aPriority === 'Emergency' && bPriority !== 'Emergency') return -1;
+    if (bPriority === 'Emergency' && aPriority !== 'Emergency') return 1;
     return 0;
   });
 });

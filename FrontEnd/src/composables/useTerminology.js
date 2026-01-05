@@ -19,6 +19,8 @@ const termMappings = {
     'Staff': { singular: 'Staff member', plural: 'Staff' },
     'Stewards': { singular: 'Steward', plural: 'Stewards' },
     'Team members': { singular: 'Team member', plural: 'Team members' },
+    'Drivers': { singular: 'Driver', plural: 'Drivers' },
+    'Pilots': { singular: 'Pilot', plural: 'Pilots' },
   },
   checkpoint: {
     'Checkpoints': { singular: 'Checkpoint', plural: 'Checkpoints' },
@@ -52,7 +54,7 @@ const termMappings = {
 // Options for each term type (for dropdowns) - sorted alphabetically
 // Note: 'Person points' is a special dynamic option that uses the current people terminology
 export const terminologyOptions = {
-  people: ['Helpers', 'Marshals', 'People', 'Staff', 'Stewards', 'Team members', 'Volunteers'],
+  people: ['Drivers', 'Helpers', 'Marshals', 'People', 'Pilots', 'Staff', 'Stewards', 'Team members', 'Volunteers'],
   checkpoint: ['Aid stations', 'Checkpoints', 'Feed stations', 'Locations', 'Person points', 'Stations', 'Water stations'],
   area: ['Areas', 'Regions', 'Zones'],
   checklist: ['Checklists', 'Jobs', 'Tasks'],

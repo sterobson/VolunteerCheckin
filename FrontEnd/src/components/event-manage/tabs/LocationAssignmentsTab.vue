@@ -73,19 +73,15 @@
         </div>
       </div>
 
-      <!-- Assign marshal dropdown -->
-      <div v-if="sortedAvailableMarshals.length > 0" class="form-group" style="margin-top: 1.5rem;">
-        <label>Assign {{ personTermLower }}</label>
-        <select v-model="selectedMarshalId" class="form-input" @change="handleSelectionChange">
-          <option value="">Select {{ personTermLower }}...</option>
-          <option
-            v-for="marshal in sortedAvailableMarshals"
-            :key="marshal.id"
-            :value="marshal.id"
-          >
-            {{ marshal.name }}
-          </option>
-        </select>
+      <!-- Assign marshal button -->
+      <div class="assign-section">
+        <button
+          type="button"
+          class="btn btn-primary assign-btn"
+          @click="$emit('open-assign-modal')"
+        >
+          + Assign {{ personTermLower }}...
+        </button>
       </div>
     </div>
   </div>
@@ -104,10 +100,6 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
-  availableMarshals: {
-    type: Array,
-    default: () => [],
-  },
   peopleTerm: {
     type: String,
     default: 'Marshals',
@@ -122,7 +114,7 @@ const props = defineProps({
 const peopleTermLower = computed(() => props.peopleTerm.toLowerCase());
 const personTermLower = computed(() => props.personTerm.toLowerCase());
 
-const emit = defineEmits(['update:form', 'input', 'remove-assignment', 'assign-marshal']);
+const emit = defineEmits(['update:form', 'input', 'remove-assignment', 'open-assign-modal']);
 
 // Use check-in management composable
 const {
@@ -134,8 +126,6 @@ const {
   getStatusText,
   formatTime,
 } = useCheckInManagement(() => emit('input'));
-
-const selectedMarshalId = ref('');
 
 const totalAssignments = computed(() => {
   return props.assignments?.length || 0;
@@ -150,23 +140,6 @@ const sortedAssignments = computed(() => {
   });
 });
 
-// Sort available marshals alphabetically
-const sortedAvailableMarshals = computed(() => {
-  const sorted = [...props.availableMarshals];
-  sorted.sort((a, b) => {
-    return (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' });
-  });
-  return sorted;
-});
-
-// Auto-assign when selection changes
-const handleSelectionChange = () => {
-  if (selectedMarshalId.value) {
-    emit('assign-marshal', selectedMarshalId.value);
-    selectedMarshalId.value = '';
-  }
-};
-
 const handleNumberInput = (field, value) => {
   emit('update:form', { ...props.form, [field]: Number(value) });
   emit('input');
@@ -177,7 +150,6 @@ defineExpose({
   pendingCheckInChanges,
   clearPendingChanges: () => {
     pendingCheckInChanges.value.clear();
-    selectedMarshalId.value = '';
   },
   getPendingChanges: () => {
     return Array.from(pendingCheckInChanges.value.entries()).map(([assignmentId, shouldBeCheckedIn]) => ({
@@ -368,5 +340,17 @@ defineExpose({
 
 .btn-danger:hover {
   background: #c82333;
+}
+
+.assign-section {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.assign-btn {
+  width: 100%;
 }
 </style>

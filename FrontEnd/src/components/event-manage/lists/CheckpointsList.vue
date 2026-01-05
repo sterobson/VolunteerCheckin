@@ -52,6 +52,7 @@
       >
         <div class="location-info">
           <div class="location-header">
+            <span class="checkpoint-icon" v-html="getCheckpointIconSvg(location)"></span>
             <div class="location-name-desc">
               <strong>{{ location.name }}</strong><span v-if="location.description" class="location-description"> - {{ location.description }}</span>
             </div>
@@ -88,6 +89,7 @@ import { defineProps, defineEmits, computed, ref, onMounted, onUnmounted } from 
 import { alphanumericCompare } from '../../../utils/sortUtils';
 import AreasSelection from '../AreasSelection.vue';
 import { useTerminology } from '../../../composables/useTerminology';
+import { generateCheckpointSvg } from '../../../constants/checkpointIcons';
 
 const { terms, termsLower } = useTerminology();
 
@@ -169,6 +171,40 @@ const getAreaName = (areaId) => {
 const getAreaColor = (areaId) => {
   const area = props.areas.find((a) => a.id === areaId);
   return area ? area.color : '#999';
+};
+
+// Generate checkpoint icon SVG based on resolved style
+const getCheckpointIconSvg = (location) => {
+  const resolvedType = location.resolvedStyleType || location.ResolvedStyleType;
+  const resolvedBgColor = location.resolvedStyleBackgroundColor || location.ResolvedStyleBackgroundColor || location.resolvedStyleColor || location.ResolvedStyleColor;
+  const resolvedBorderColor = location.resolvedStyleBorderColor || location.ResolvedStyleBorderColor;
+  const resolvedIconColor = location.resolvedStyleIconColor || location.ResolvedStyleIconColor;
+  const resolvedShape = location.resolvedStyleBackgroundShape || location.ResolvedStyleBackgroundShape;
+
+  // Check if there's any resolved styling - type, colors, or shape
+  const hasResolvedStyle = (resolvedType && resolvedType !== 'default')
+    || resolvedBgColor
+    || resolvedBorderColor
+    || resolvedIconColor
+    || (resolvedShape && resolvedShape !== 'circle');
+
+  if (hasResolvedStyle) {
+    // Use resolved style from hierarchy
+    return generateCheckpointSvg({
+      type: resolvedType || 'circle',
+      backgroundShape: resolvedShape || 'circle',
+      backgroundColor: resolvedBgColor || '#667eea',
+      borderColor: resolvedBorderColor || '#ffffff',
+      iconColor: resolvedIconColor || '#ffffff',
+      size: '75',
+      outputSize: 24,
+    });
+  }
+
+  // Default: use neutral colored circle (not status-based)
+  return `<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="12" r="10" fill="#667eea" stroke="#fff" stroke-width="2"/>
+  </svg>`;
 };
 </script>
 
@@ -369,6 +405,20 @@ h3 {
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+.checkpoint-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+}
+
+.checkpoint-icon :deep(svg) {
+  width: 24px;
+  height: 24px;
 }
 
 .area-badge {

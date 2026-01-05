@@ -213,6 +213,56 @@ public class AssignmentFunctions
         }
     }
 
+    [Function("CleanupOrphanedAssignments")]
+    public async Task<IActionResult> CleanupOrphanedAssignments(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "assignments/{eventId}/cleanup-orphaned")] HttpRequest req,
+        string eventId)
+    {
+        try
+        {
+            // Get all assignments and locations for the event
+            Task<IEnumerable<AssignmentEntity>> assignmentsTask = _assignmentRepository.GetByEventAsync(eventId);
+            Task<IEnumerable<LocationEntity>> locationsTask = _locationRepository.GetByEventAsync(eventId);
+
+            await Task.WhenAll(assignmentsTask, locationsTask);
+
+            List<AssignmentEntity> assignments = assignmentsTask.Result.ToList();
+            HashSet<string> locationIds = locationsTask.Result.Select(l => l.RowKey).ToHashSet();
+
+            // Find orphaned assignments (where location no longer exists)
+            List<AssignmentEntity> orphanedAssignments = assignments
+                .Where(a => !locationIds.Contains(a.LocationId))
+                .ToList();
+
+            // Delete orphaned assignments
+            foreach (AssignmentEntity orphaned in orphanedAssignments)
+            {
+                await _assignmentRepository.DeleteAsync(eventId, orphaned.RowKey);
+                _logger.LogInformation($"Deleted orphaned assignment: {orphaned.RowKey} (Marshal: {orphaned.MarshalName}, LocationId: {orphaned.LocationId})");
+            }
+
+            _logger.LogInformation($"Cleanup complete. Deleted {orphanedAssignments.Count} orphaned assignments for event {eventId}");
+
+            return new OkObjectResult(new
+            {
+                message = $"Cleanup complete",
+                deletedCount = orphanedAssignments.Count,
+                deletedAssignments = orphanedAssignments.Select(a => new
+                {
+                    assignmentId = a.RowKey,
+                    marshalId = a.MarshalId,
+                    marshalName = a.MarshalName,
+                    locationId = a.LocationId
+                })
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error cleaning up orphaned assignments");
+            return new StatusCodeResult(500);
+        }
+    }
+
     [Function("GetEventStatus")]
     public async Task<IActionResult> GetEventStatus(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/{eventId}/status")] HttpRequest req,
@@ -316,6 +366,10 @@ public class AssignmentFunctions
                 ResolvedCheckpointStyle resolvedStyle = ResolveCheckpointStyle(
                     location, areaIds, eventEntity, areasList, areaCheckpointCounts);
 
+                // Parse location update scope configurations
+                List<ScopeConfiguration> locationUpdateScopeConfigs =
+                    JsonSerializer.Deserialize<List<ScopeConfiguration>>(location.LocationUpdateScopeJson ?? "[]") ?? [];
+
                 locationStatuses.Add(new LocationStatusResponse(
                     location.RowKey,
                     location.Name,
@@ -342,7 +396,12 @@ public class AssignmentFunctions
                     resolvedStyle.BackgroundColor,
                     resolvedStyle.BorderColor,
                     resolvedStyle.IconColor,
-                    resolvedStyle.Size
+                    resolvedStyle.Size,
+                    location.PeopleTerm ?? string.Empty,
+                    location.CheckpointTerm ?? string.Empty,
+                    location.IsDynamic,
+                    locationUpdateScopeConfigs,
+                    location.LastLocationUpdate
                 ));
             }
 
@@ -408,26 +467,28 @@ public class AssignmentFunctions
         }
 
         // Resolve Type: checkpoint -> area -> event
-        if (!string.IsNullOrEmpty(location.StyleType) && location.StyleType != "default")
+        // 'custom' means "has custom properties but inherit icon type" - treat like 'default'
+        bool IsValidIconType(string? styleType) =>
+            !string.IsNullOrEmpty(styleType) && styleType != "default" && styleType != "custom";
+
+        if (IsValidIconType(location.StyleType))
         {
             type = location.StyleType;
         }
         else if (sortedMatchedAreas != null)
         {
             AreaEntity? styledArea = sortedMatchedAreas.FirstOrDefault(a =>
-                !string.IsNullOrEmpty(a.CheckpointStyleType) && a.CheckpointStyleType != "default");
+                IsValidIconType(a.CheckpointStyleType));
             if (styledArea != null)
             {
                 type = styledArea.CheckpointStyleType;
             }
-            else if (eventEntity != null && !string.IsNullOrEmpty(eventEntity.DefaultCheckpointStyleType) &&
-                     eventEntity.DefaultCheckpointStyleType != "default")
+            else if (eventEntity != null && IsValidIconType(eventEntity.DefaultCheckpointStyleType))
             {
                 type = eventEntity.DefaultCheckpointStyleType;
             }
         }
-        else if (eventEntity != null && !string.IsNullOrEmpty(eventEntity.DefaultCheckpointStyleType) &&
-                 eventEntity.DefaultCheckpointStyleType != "default")
+        else if (eventEntity != null && IsValidIconType(eventEntity.DefaultCheckpointStyleType))
         {
             type = eventEntity.DefaultCheckpointStyleType;
         }

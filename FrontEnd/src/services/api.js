@@ -222,6 +222,9 @@ export const locationsApi = {
     });
   },
   bulkUpdateTimes: (eventId, timeDelta) => api.post(`/locations/bulk-update-times/${eventId}`, { timeDelta }),
+  // Dynamic checkpoint location updates
+  updatePosition: (eventId, locationId, data) => api.post(`/locations/${eventId}/${locationId}/update-position`, data),
+  getDynamicCheckpoints: (eventId) => api.get(`/events/${eventId}/dynamic-checkpoints`),
 };
 
 // Assignments API

@@ -1,7 +1,7 @@
 <template>
   <div class="scope-configuration-editor">
     <div class="editor-header">
-      <h4>{{ headerText }}</h4>
+      <h4>{{ effectiveHeaderText }}</h4>
     </div>
 
     <div class="scope-types-list">
@@ -115,6 +115,20 @@
                 class="search-input"
               />
               <div class="checkbox-group scrollable">
+                <!-- This checkpoint option when creating a new checkpoint -->
+                <label
+                  v-if="showThisCheckpointOption"
+                  class="checkbox-label this-checkpoint-option"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="isCheckpointSelected('THIS_CHECKPOINT')"
+                    @change="toggleCheckpoint('THIS_CHECKPOINT')"
+                  />
+                  <div class="checkpoint-info">
+                    <span class="checkpoint-name"><strong>This {{ termsLower.checkpoint }}</strong></span>
+                  </div>
+                </label>
                 <label
                   v-for="location in filteredCheckpoints"
                   :key="location.id"
@@ -179,7 +193,16 @@ const props = defineProps({
   },
   headerText: {
     type: String,
-    default: 'Who can see and complete this item?'
+    default: ''
+  },
+  intent: {
+    type: String,
+    default: 'completion', // 'completion' or 'location-update'
+    validator: (value) => ['completion', 'location-update'].includes(value)
+  },
+  currentCheckpointId: {
+    type: String,
+    default: null
   }
 });
 
@@ -238,6 +261,11 @@ const hasHiddenScopes = computed(() => {
 const hiddenScopeCount = computed(() => {
   const activeCount = availableScopeTypes.value.filter(st => isScopeActive(st.scope)).length;
   return availableScopeTypes.value.length - activeCount;
+});
+
+// Show "This checkpoint" option when creating a new checkpoint (no currentCheckpointId)
+const showThisCheckpointOption = computed(() => {
+  return !props.currentCheckpointId && props.intent === 'location-update';
 });
 
 // Initialize from modelValue
@@ -353,7 +381,29 @@ const getScopeTypeLabel = (scope) => {
   return type ? type.label : scope;
 };
 
+// Computed header text based on intent
+const effectiveHeaderText = computed(() => {
+  if (props.headerText) return props.headerText;
+  if (props.intent === 'location-update') {
+    return 'Who can update this location?';
+  }
+  return 'Who can see and complete this item?';
+});
+
 const getScopeHelp = (scope) => {
+  if (props.intent === 'location-update') {
+    const locationUpdateHelp = {
+      'SpecificPeople': `Select "Everyone" or choose specific ${termsLower.value.people} who can update the location`,
+      'EveryoneAtCheckpoints': `Every ${termsLower.value.person} at the selected ${termsLower.value.checkpoints} can update the location`,
+      'OnePerCheckpoint': `Any ${termsLower.value.person} at each selected ${termsLower.value.checkpoint} can update the location`,
+      'OnePerArea': `Any ${termsLower.value.person} in each selected ${termsLower.value.area} can update the location`,
+      'EveryoneInAreas': `Every ${termsLower.value.person} in the selected ${termsLower.value.areas} can update the location`,
+      'EveryAreaLead': `Every ${termsLower.value.area} lead at the selected ${termsLower.value.areas} can update the location`,
+      'OneLeadPerArea': `Any ${termsLower.value.area} lead at the selected ${termsLower.value.areas} can update the location`,
+    };
+    return locationUpdateHelp[scope] || '';
+  }
+
   const helpText = {
     'SpecificPeople': `Select "Everyone at the event" or choose specific ${termsLower.value.people} who must complete this (personal completion)`,
     'EveryoneAtCheckpoints': `Every ${termsLower.value.person} at the selected ${termsLower.value.checkpoints} must complete this (personal completion)`,
@@ -390,6 +440,10 @@ const getScopePill = (scope) => {
   if (needsCheckpointSelection(scope)) {
     if (ids.includes('ALL_CHECKPOINTS')) {
       return `All ${termsLower.value.checkpoints}`;
+    }
+    // Check if only "This checkpoint" is selected (for new checkpoints)
+    if (ids.length === 1 && ids[0] === 'THIS_CHECKPOINT') {
+      return `This ${termsLower.value.checkpoint}`;
     }
     const count = ids.length;
     return count > 0 ? `${count} ${count !== 1 ? termsLower.value.checkpoints : termsLower.value.checkpoint}` : `Select ${termsLower.value.checkpoints}...`;
@@ -847,6 +901,13 @@ const filteredCheckpoints = computed(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.checkbox-label.this-checkpoint-option {
+  background: #fff8e6;
+  border: 1px dashed #ffc107;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
 }
 
 .modal-footer {

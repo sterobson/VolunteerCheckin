@@ -41,6 +41,13 @@ public class ImportOptimizationTests
         Mock<IChecklistItemRepository> mockChecklistItemRepo = new();
         Mock<INoteRepository> mockNoteRepo = new();
         Mock<ILogger<LocationFunctions>> mockLogger = new();
+        Mock<ClaimsService> mockClaimsService = new(
+            MockBehavior.Loose,
+            new Mock<IAuthSessionRepository>().Object,
+            new Mock<IPersonRepository>().Object,
+            new Mock<IEventRoleRepository>().Object,
+            new Mock<IMarshalRepository>().Object,
+            new Mock<IUserEventMappingRepository>().Object);
 
         // Setup existing marshal that should be found via cache
         MarshalEntity existingMarshal = new()
@@ -79,7 +86,8 @@ public class ImportOptimizationTests
             mockAssignmentRepo.Object,
             mockChecklistItemRepo.Object,
             mockNoteRepo.Object,
-            mockAreaRepo.Object);
+            mockAreaRepo.Object,
+            mockClaimsService.Object);
 
         // Create CSV with two locations, both referencing the same marshal
         string csvContent = "Name,Latitude,Longitude,Marshal1\nLocation A,51.5,-0.1,John Smith\nLocation B,51.6,-0.2,John Smith";
@@ -115,6 +123,13 @@ public class ImportOptimizationTests
         Mock<IChecklistItemRepository> mockChecklistItemRepo = new();
         Mock<INoteRepository> mockNoteRepo = new();
         Mock<ILogger<LocationFunctions>> mockLogger = new();
+        Mock<ClaimsService> mockClaimsService = new(
+            MockBehavior.Loose,
+            new Mock<IAuthSessionRepository>().Object,
+            new Mock<IPersonRepository>().Object,
+            new Mock<IEventRoleRepository>().Object,
+            new Mock<IMarshalRepository>().Object,
+            new Mock<IUserEventMappingRepository>().Object);
 
         mockLocationRepo
             .Setup(r => r.GetByEventAsync(EventId))
@@ -144,7 +159,8 @@ public class ImportOptimizationTests
             mockAssignmentRepo.Object,
             mockChecklistItemRepo.Object,
             mockNoteRepo.Object,
-            mockAreaRepo.Object);
+            mockAreaRepo.Object,
+            mockClaimsService.Object);
 
         // Create CSV with three locations, two referencing "New Marshal"
         // The cache should prevent creating duplicate marshals

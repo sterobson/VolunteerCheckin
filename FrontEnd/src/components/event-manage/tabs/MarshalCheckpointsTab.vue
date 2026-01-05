@@ -71,7 +71,7 @@
             :key="location.id"
             :value="location.id"
           >
-            {{ location.name }}
+            {{ location.name }}<template v-if="location.description"> - {{ location.description }}</template>
           </option>
         </select>
       </div>

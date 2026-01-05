@@ -62,6 +62,7 @@ public static class Constants
     public const string AllCheckpoints = "ALL_CHECKPOINTS";
     public const string AllAreas = "ALL_AREAS";
     public const string AllMarshals = "ALL_MARSHALS";
+    public const string ThisCheckpoint = "THIS_CHECKPOINT";
 
     // Actor Types (who performed an action)
     public const string ActorTypeMarshal = "Marshal";

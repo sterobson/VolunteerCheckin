@@ -42,14 +42,14 @@
         </small>
       </div>
 
-      <div class="form-group">
+      <div class="form-group checkbox-group">
         <label class="checkbox-label">
           <input
             :checked="form.useCustomTimes"
             @change="handleCustomTimesToggle($event.target.checked)"
             type="checkbox"
           />
-          Use custom date/time for this {{ checkpointTermSingular.toLowerCase() }}
+          <span>Use custom date/time for this {{ checkpointTermSingular.toLowerCase() }}</span>
         </label>
         <small class="form-help">
           By default, {{ peopleTermPlural.toLowerCase() }} are expected during the event date/time. Enable this to set a specific time range.
@@ -185,19 +185,30 @@ const handleCustomTimesToggle = (checked) => {
   box-sizing: border-box;
 }
 
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  font-weight: 500;
-  color: #333;
+.checkbox-group {
+  margin-bottom: 0.5rem;
 }
 
-.checkbox-label input[type="checkbox"] {
+.checkbox-group .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   cursor: pointer;
-  width: 1.1rem;
-  height: 1.1rem;
+  font-weight: normal;
+  padding: 0.5rem 0;
+  margin-bottom: 0;
+}
+
+.checkbox-group .checkbox-label input[type="checkbox"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.checkbox-group .checkbox-label span {
+  line-height: 1.4;
 }
 
 .form-help {

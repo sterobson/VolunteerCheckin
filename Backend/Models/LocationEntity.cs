@@ -35,4 +35,11 @@ public class LocationEntity : ITableEntity
 
     // Terminology override for this checkpoint (empty = inherit from area -> event)
     public string PeopleTerm { get; set; } = string.Empty;
+    public string CheckpointTerm { get; set; } = string.Empty; // Vehicle, Car, Bike, or empty to inherit
+
+    // Dynamic checkpoint settings (for lead car/sweep vehicle tracking)
+    public bool IsDynamic { get; set; } = false;
+    public string LocationUpdateScopeJson { get; set; } = "[]"; // JSON array of ScopeConfiguration - who can update location
+    public DateTime? LastLocationUpdate { get; set; }
+    public string LastUpdatedByPersonId { get; set; } = string.Empty;
 }

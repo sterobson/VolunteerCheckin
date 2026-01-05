@@ -65,7 +65,7 @@ public class ClaimsService
             if (marshal != null)
             {
                 marshal.LastAccessedDate = DateTime.UtcNow;
-                await _marshalRepository.UpdateAsync(marshal);
+                await _marshalRepository.UpdateUnconditionalAsync(marshal);
             }
         }
 
@@ -203,7 +203,7 @@ public class ClaimsService
     /// <summary>
     /// Revoke a session (logout).
     /// </summary>
-    public async Task RevokeSessionAsync(string sessionToken)
+    public virtual async Task RevokeSessionAsync(string sessionToken)
     {
         string tokenHash = HashToken(sessionToken);
         AuthSessionEntity? session = await _sessionRepository.GetBySessionTokenHashAsync(tokenHash);

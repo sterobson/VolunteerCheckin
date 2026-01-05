@@ -53,14 +53,14 @@
         </small>
       </div>
 
-      <div class="form-group">
+      <div class="form-group checkbox-group">
         <label class="checkbox-label">
           <input
             v-model="form.useCustomTimes"
             type="checkbox"
             @change="handleCustomTimesToggle"
           />
-          Use custom date/time for this checkpoint
+          <span>Use custom date/time for this checkpoint</span>
         </label>
         <small class="form-help">
           By default, marshals are expected during the event date/time. Enable this to set a specific time range.
@@ -300,19 +300,30 @@ const handleClose = () => {
   margin-top: 0.25rem;
 }
 
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  font-weight: 500;
-  color: #333;
+.checkbox-group {
+  margin-bottom: 0.5rem;
 }
 
-.checkbox-label input[type="checkbox"] {
+.checkbox-group .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   cursor: pointer;
-  width: 1.1rem;
-  height: 1.1rem;
+  font-weight: normal;
+  padding: 0.5rem 0;
+  margin-bottom: 0;
+}
+
+.checkbox-group .checkbox-label input[type="checkbox"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.checkbox-group .checkbox-label span {
+  line-height: 1.4;
 }
 
 .form-help {

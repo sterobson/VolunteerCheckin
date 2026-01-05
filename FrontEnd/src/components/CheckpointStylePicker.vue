@@ -34,6 +34,12 @@
       :icon-color="localIconColor"
       :size="localSize"
       :level="level"
+      :inherited-type="inheritedStyleType"
+      :inherited-background-shape="inheritedBackgroundShape"
+      :inherited-background-color="inheritedBackgroundColor || inheritedStyleColor"
+      :inherited-border-color="inheritedBorderColor"
+      :inherited-icon-color="inheritedIconColor"
+      :inherited-size="inheritedSize"
       @apply="handleCustomizationApply"
       @cancel="handleCustomizationCancel"
     />
@@ -84,13 +90,14 @@ const emit = defineEmits([
 ]);
 
 // Local state
+// Empty string means 'inherit from parent' - use 'default' for UI display
 const localStyleType = ref(props.styleType);
 const localStyleColor = ref(props.styleColor || '');
-const localBackgroundShape = ref(props.styleBackgroundShape || 'circle');
+const localBackgroundShape = ref(props.styleBackgroundShape || 'default');
 const localBackgroundColor = ref(props.styleBackgroundColor || '');
 const localBorderColor = ref(props.styleBorderColor || '');
 const localIconColor = ref(props.styleIconColor || '');
-const localSize = ref(props.styleSize || '100');
+const localSize = ref(props.styleSize || 'default');
 
 // Determine the content icon - if styleType is a content icon, use it; otherwise 'none'
 const isContentIcon = (type) => {
@@ -99,28 +106,79 @@ const isContentIcon = (type) => {
   return config.category === 'content';
 };
 
-const localContentIcon = ref(isContentIcon(props.styleType) ? props.styleType : 'none');
+// Only use styleType as content icon if it's actually a content icon (not 'default' or 'custom')
+// Use 'default' (inherit from parent) when no specific icon is set, not 'none' (explicitly no icon)
+const localContentIcon = ref(
+  props.styleType && props.styleType !== 'default' && props.styleType !== 'custom' && isContentIcon(props.styleType)
+    ? props.styleType
+    : 'default'
+);
 
 // Modal state
 const isCustomizationModalOpen = ref(false);
 
 // Check if custom style is selected (anything other than 'default')
-const isCustom = computed(() => localStyleType.value !== 'default');
+// This includes 'custom' (style without content icon) or any content icon value
+const isCustom = computed(() => {
+  if (localStyleType.value && localStyleType.value !== 'default') return true;
+  // Also check if any individual property is customized
+  if (localBackgroundShape.value && localBackgroundShape.value !== 'circle') return true;
+  if (localBackgroundColor.value) return true;
+  if (localBorderColor.value) return true;
+  if (localIconColor.value) return true;
+  if (localSize.value && localSize.value !== '100') return true;
+  return false;
+});
 
-// Generate preview SVG for the "Default" option
+// System default color
+const SYSTEM_DEFAULT_COLOR = '#667eea';
+
+// Helper to check if a value is a valid inherited value (not empty, not 'default')
+const isValidInheritedValue = (value) => {
+  return value && value !== '' && value !== 'default';
+};
+
+// Helper to check if a value is a valid hex color
+const isValidHexColor = (value) => {
+  return value && value.startsWith('#');
+};
+
+// Generate preview SVG for the "Default" option - shows combined inherited properties
 const defaultPreviewSvg = computed(() => {
   const size = 24;
-  // If there's an inherited style, show that as the default preview
-  if (props.inheritedStyleType && props.inheritedStyleType !== 'default') {
+
+  // Check if there are ANY inherited style properties (valid values that aren't 'default')
+  const hasInheritedType = isValidInheritedValue(props.inheritedStyleType);
+  const hasInheritedShape = isValidInheritedValue(props.inheritedBackgroundShape);
+  const hasInheritedColor = isValidHexColor(props.inheritedBackgroundColor) || isValidHexColor(props.inheritedStyleColor);
+  const hasInheritedBorder = isValidHexColor(props.inheritedBorderColor);
+  const hasInheritedIconColor = isValidHexColor(props.inheritedIconColor);
+  const hasInheritedSize = isValidInheritedValue(props.inheritedSize);
+
+  const hasAnyInherited = hasInheritedType || hasInheritedShape || hasInheritedColor
+    || hasInheritedBorder || hasInheritedIconColor || hasInheritedSize;
+
+  if (hasAnyInherited) {
+    // Resolve the effective type: inherited type, or inherited shape if no type
+    const effectiveType = hasInheritedType
+      ? props.inheritedStyleType
+      : (hasInheritedShape ? props.inheritedBackgroundShape : 'circle');
+
+    // Cascade: inherited background color → inherited style color → system default
+    const bgColor = (isValidHexColor(props.inheritedBackgroundColor) ? props.inheritedBackgroundColor : null)
+      || (isValidHexColor(props.inheritedStyleColor) ? props.inheritedStyleColor : null)
+      || SYSTEM_DEFAULT_COLOR;
+
     return generateCheckpointSvg({
-      type: props.inheritedStyleType,
+      type: effectiveType,
       backgroundShape: props.inheritedBackgroundShape || 'circle',
-      backgroundColor: props.inheritedBackgroundColor || props.inheritedStyleColor || '',
-      borderColor: props.inheritedBorderColor || '',
-      iconColor: props.inheritedIconColor || '',
+      backgroundColor: bgColor,
+      borderColor: props.inheritedBorderColor || '#ffffff',
+      iconColor: props.inheritedIconColor || '#ffffff',
       size: '75',
     });
   }
+
   // Show a generic circle with gradient for truly default (no inheritance)
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
     <defs>
@@ -138,17 +196,50 @@ const defaultPreviewSvg = computed(() => {
 const customPreviewSvg = computed(() => {
   if (isCustom.value) {
     // Determine what to render based on content icon vs shape-only
-    const hasContentIcon = localContentIcon.value && localContentIcon.value !== 'none';
-    const effectiveType = hasContentIcon ? localContentIcon.value : localBackgroundShape.value;
-    const config = getIconTypeConfig(effectiveType);
-    const bgColor = localBackgroundColor.value || config.defaultColor || '#667eea';
+    // 'none' = explicitly no icon, 'default' = inherit from parent
+    const hasLocalContentIcon = localContentIcon.value
+      && localContentIcon.value !== 'none'
+      && localContentIcon.value !== 'default';
+
+    // Check if there's an inherited content icon we should show
+    let inheritedContentIcon = null;
+    if (props.inheritedStyleType && props.inheritedStyleType !== 'default' && props.inheritedStyleType !== 'custom') {
+      const config = getIconTypeConfig(props.inheritedStyleType);
+      if (config.category === 'content') {
+        inheritedContentIcon = props.inheritedStyleType;
+      }
+    }
+
+    // If local icon is 'default' (inherit), use inherited icon if available
+    // If local icon is 'none' (explicitly no icon), don't show any icon
+    const shouldInheritIcon = localContentIcon.value === 'default' && inheritedContentIcon;
+    const hasContentIcon = hasLocalContentIcon || shouldInheritIcon;
+    const contentIconToUse = hasLocalContentIcon ? localContentIcon.value : (shouldInheritIcon ? inheritedContentIcon : null);
+
+    // Resolve effective shape (use inherited if 'default' or not set)
+    const effectiveShape = localBackgroundShape.value && localBackgroundShape.value !== 'default'
+      ? localBackgroundShape.value
+      : (props.inheritedBackgroundShape || 'circle');
+
+    const effectiveType = hasContentIcon ? contentIconToUse : effectiveShape;
+
+    // Use saved background color, or inherited, or default
+    // Background color is INDEPENDENT of icon - don't use icon's defaultColor
+    const bgColor = localBackgroundColor.value
+      || props.inheritedBackgroundColor
+      || props.inheritedStyleColor
+      || '#667eea';
+
+    // Use saved border/icon colors, or inherited, or defaults
+    const borderClr = localBorderColor.value || props.inheritedBorderColor || '#ffffff';
+    const iconClr = localIconColor.value || props.inheritedIconColor || '#ffffff';
 
     return generateCheckpointSvg({
       type: effectiveType,
-      backgroundShape: localBackgroundShape.value,
+      backgroundShape: effectiveShape,
       backgroundColor: bgColor,
-      borderColor: localBorderColor.value || '',
-      iconColor: localIconColor.value || '',
+      borderColor: borderClr,
+      iconColor: iconClr,
       size: '75',
     });
   }
@@ -161,14 +252,14 @@ const customPreviewSvg = computed(() => {
 
 const selectDefault = () => {
   localStyleType.value = 'default';
-  localContentIcon.value = 'none';
+  localContentIcon.value = 'default'; // Inherit from parent
   emit('update:styleType', 'default');
-  // Clear customizations
-  localBackgroundShape.value = 'circle';
+  // Clear customizations - use 'default' for UI display, emit '' for data
+  localBackgroundShape.value = 'default';
   localBackgroundColor.value = '';
   localBorderColor.value = '';
   localIconColor.value = '';
-  localSize.value = '100';
+  localSize.value = 'default';
   emit('update:styleBackgroundShape', '');
   emit('update:styleBackgroundColor', '');
   emit('update:styleBorderColor', '');
@@ -182,18 +273,45 @@ const openCustomModal = () => {
 };
 
 const handleCustomizationApply = (customization) => {
-  // Update local state
-  localContentIcon.value = customization.iconType === customization.backgroundShape ? 'none' : customization.iconType;
-  localBackgroundShape.value = customization.backgroundShape;
-  localBackgroundColor.value = customization.backgroundColor;
-  localBorderColor.value = customization.borderColor;
-  localIconColor.value = customization.iconColor;
-  localSize.value = customization.size;
+  // Update local state - each property is independent
+  // iconType: 'none' = explicitly no icon, '' = inherit from parent, other = specific icon
+  if (customization.iconType === 'none') {
+    localContentIcon.value = 'none'; // Explicitly no icon
+  } else if (customization.iconType) {
+    localContentIcon.value = customization.iconType; // Specific content icon
+  } else {
+    // Empty string = inherit from parent
+    localContentIcon.value = 'default';
+  }
 
-  // The styleType is what gets saved - it's the effective type (icon if present, otherwise shape)
-  localStyleType.value = customization.iconType;
+  // Empty string = inherit from parent, use 'default' for UI display
+  localBackgroundShape.value = customization.backgroundShape || 'default';
+  localBackgroundColor.value = customization.backgroundColor || '';
+  localBorderColor.value = customization.borderColor || '';
+  localIconColor.value = customization.iconColor || '';
+  localSize.value = customization.size || 'default';
 
-  emit('update:styleType', customization.iconType);
+  // Determine if we have a custom style (any non-default value)
+  // Note: 'none' for iconType IS a custom value (explicitly no icon)
+  const hasCustomStyle = customization.iconType === 'none'
+    || (customization.iconType && customization.iconType !== '')
+    || customization.backgroundShape
+    || customization.backgroundColor
+    || customization.borderColor
+    || customization.iconColor
+    || customization.size;
+
+  // styleType: use content icon if set (not 'none'), otherwise 'custom' if any customization, otherwise 'default'
+  if (customization.iconType && customization.iconType !== 'none') {
+    localStyleType.value = customization.iconType; // Specific content icon
+  } else if (hasCustomStyle) {
+    localStyleType.value = 'custom'; // Has custom properties but no specific icon
+  } else {
+    localStyleType.value = 'default'; // Everything inherited
+  }
+
+  // Emit all properties separately
+  emit('update:styleType', localStyleType.value);
   emit('update:styleBackgroundShape', customization.backgroundShape);
   emit('update:styleBackgroundColor', customization.backgroundColor);
   emit('update:styleBorderColor', customization.borderColor);
@@ -222,10 +340,12 @@ const emitChange = () => {
 // Sync local state with props
 watch(() => props.styleType, (newVal) => {
   localStyleType.value = newVal;
-  if (newVal && newVal !== 'default') {
-    localContentIcon.value = isContentIcon(newVal) ? newVal : 'none';
+  // Only set content icon if it's actually a content icon type (not 'custom' or 'default')
+  if (newVal && newVal !== 'default' && newVal !== 'custom' && isContentIcon(newVal)) {
+    localContentIcon.value = newVal;
   } else {
-    localContentIcon.value = 'none';
+    // Use 'default' (inherit) not 'none' (explicitly no icon)
+    localContentIcon.value = 'default';
   }
 });
 
@@ -234,7 +354,7 @@ watch(() => props.styleColor, (newVal) => {
 });
 
 watch(() => props.styleBackgroundShape, (newVal) => {
-  localBackgroundShape.value = newVal || 'circle';
+  localBackgroundShape.value = newVal || 'default';
 });
 
 watch(() => props.styleBackgroundColor, (newVal) => {
@@ -250,7 +370,7 @@ watch(() => props.styleIconColor, (newVal) => {
 });
 
 watch(() => props.styleSize, (newVal) => {
-  localSize.value = newVal || '100';
+  localSize.value = newVal || 'default';
 });
 </script>
 

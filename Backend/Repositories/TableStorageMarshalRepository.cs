@@ -60,6 +60,11 @@ public class TableStorageMarshalRepository : IMarshalRepository
         await _table.UpdateEntityAsync(marshal, marshal.ETag);
     }
 
+    public async Task UpdateUnconditionalAsync(MarshalEntity marshal)
+    {
+        await _table.UpdateEntityAsync(marshal, ETag.All, TableUpdateMode.Merge);
+    }
+
     public async Task DeleteAsync(string eventId, string marshalId)
     {
         await _table.DeleteEntityAsync(eventId, marshalId);

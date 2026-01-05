@@ -21,7 +21,7 @@
       :form="form"
       :event-id="eventId"
       :marshal-id="isEditing ? marshal?.id : null"
-      @update:form="form = $event"
+      @update:form="updateForm"
       @input="handleInput"
     />
 
@@ -297,6 +297,10 @@ watch(() => props.show, (newVal) => {
     }
   }
 });
+
+const updateForm = (newFormData) => {
+  form.value = newFormData;
+};
 
 const handleInput = () => {
   emit('update:isDirty', true);

@@ -32,6 +32,7 @@ public class LocationEntity : ITableEntity
     public string StyleBorderColor { get; set; } = string.Empty; // Hex color for border (empty = white, "none" = no border)
     public string StyleIconColor { get; set; } = string.Empty; // Hex color for icon content (empty = white)
     public string StyleSize { get; set; } = string.Empty; // 33, 66, 100, 150 (percentage, empty = 100)
+    public string StyleMapRotation { get; set; } = string.Empty; // Rotation in degrees (-180 to 180, empty = inherit)
 
     // Terminology override for this checkpoint (empty = inherit from area -> event)
     public string PeopleTerm { get; set; } = string.Empty;

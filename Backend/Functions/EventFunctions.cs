@@ -215,6 +215,7 @@ public class EventFunctions
             if (request.DefaultCheckpointStyleBorderColor != null) eventEntity.DefaultCheckpointStyleBorderColor = request.DefaultCheckpointStyleBorderColor;
             if (request.DefaultCheckpointStyleIconColor != null) eventEntity.DefaultCheckpointStyleIconColor = request.DefaultCheckpointStyleIconColor;
             if (request.DefaultCheckpointStyleSize != null) eventEntity.DefaultCheckpointStyleSize = request.DefaultCheckpointStyleSize;
+            if (request.DefaultCheckpointStyleMapRotation != null) eventEntity.DefaultCheckpointStyleMapRotation = request.DefaultCheckpointStyleMapRotation;
 
             await _eventRepository.UpdateAsync(eventEntity);
 

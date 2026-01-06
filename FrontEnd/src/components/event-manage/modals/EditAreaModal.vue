@@ -259,7 +259,7 @@
         </button>
         <div v-if="expandedSections.iconStyle" class="accordion-content">
           <p class="section-description">
-            Set a default icon style for all {{ getAreaCheckpointTermLower() }} in this {{ termsLower.area }}.
+            Set a default marker style for all {{ getAreaCheckpointTermLower() }} in this {{ termsLower.area }}.
             Individual {{ getAreaCheckpointTermLower() }} can override this setting.
           </p>
           <CheckpointStylePicker
@@ -270,6 +270,7 @@
             :style-border-color="form.checkpointStyleBorderColor || ''"
             :style-icon-color="form.checkpointStyleIconColor || ''"
             :style-size="form.checkpointStyleSize || ''"
+            :style-map-rotation="form.checkpointStyleMapRotation ?? ''"
             :inherited-style-type="eventDefaultStyleType"
             :inherited-style-color="eventDefaultStyleColor"
             :inherited-background-shape="eventDefaultStyleBackgroundShape || ''"
@@ -277,6 +278,7 @@
             :inherited-border-color="eventDefaultStyleBorderColor || ''"
             :inherited-icon-color="eventDefaultStyleIconColor || ''"
             :inherited-size="eventDefaultStyleSize || ''"
+            :inherited-map-rotation="eventDefaultStyleMapRotation ?? ''"
             default-label="Event default"
             icon-label="Icon style"
             level="area"
@@ -288,6 +290,7 @@
             @update:style-border-color="handleStyleInput('checkpointStyleBorderColor', $event)"
             @update:style-icon-color="handleStyleInput('checkpointStyleIconColor', $event)"
             @update:style-size="handleStyleInput('checkpointStyleSize', $event)"
+            @update:style-map-rotation="handleStyleInput('checkpointStyleMapRotation', $event)"
           />
         </div>
       </div>
@@ -532,6 +535,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  eventDefaultStyleMapRotation: {
+    type: [String, Number],
+    default: '',
+  },
   eventPeopleTerm: {
     type: String,
     default: 'Marshals',
@@ -573,6 +580,7 @@ const form = ref({
   checkpointStyleBorderColor: '',
   checkpointStyleIconColor: '',
   checkpointStyleSize: '',
+  checkpointStyleMapRotation: '',
   peopleTerm: '',
   checkpointTerm: '',
 });
@@ -894,6 +902,7 @@ watch(() => props.area, (newVal) => {
       checkpointStyleBorderColor: newVal.checkpointStyleBorderColor || '',
       checkpointStyleIconColor: newVal.checkpointStyleIconColor || '',
       checkpointStyleSize: newVal.checkpointStyleSize || '',
+      checkpointStyleMapRotation: newVal.checkpointStyleMapRotation ?? '',
       peopleTerm: newVal.peopleTerm || '',
       checkpointTerm: newVal.checkpointTerm || '',
     };
@@ -913,6 +922,7 @@ watch(() => props.area, (newVal) => {
       checkpointStyleBorderColor: '',
       checkpointStyleIconColor: '',
       checkpointStyleSize: '',
+      checkpointStyleMapRotation: '',
       peopleTerm: '',
       checkpointTerm: '',
     };
@@ -941,6 +951,7 @@ watch(() => props.show, (newVal) => {
         checkpointStyleBorderColor: '',
         checkpointStyleIconColor: '',
         checkpointStyleSize: '',
+        checkpointStyleMapRotation: '',
         peopleTerm: '',
         checkpointTerm: '',
       };
@@ -1034,6 +1045,9 @@ const handleSave = () => {
     checkpointStyleBorderColor: form.value.checkpointStyleBorderColor,
     checkpointStyleIconColor: form.value.checkpointStyleIconColor,
     checkpointStyleSize: form.value.checkpointStyleSize,
+    checkpointStyleMapRotation: form.value.checkpointStyleMapRotation != null && form.value.checkpointStyleMapRotation !== ''
+      ? String(form.value.checkpointStyleMapRotation)
+      : null,
     peopleTerm: form.value.peopleTerm,
     checkpointTerm: form.value.checkpointTerm,
     // Include pending checklist changes
@@ -1051,6 +1065,9 @@ const handleSave = () => {
     checkpointStyleBorderColor: form.value.checkpointStyleBorderColor,
     checkpointStyleIconColor: form.value.checkpointStyleIconColor,
     checkpointStyleSize: form.value.checkpointStyleSize,
+    checkpointStyleMapRotation: form.value.checkpointStyleMapRotation != null && form.value.checkpointStyleMapRotation !== ''
+      ? String(form.value.checkpointStyleMapRotation)
+      : null,
     peopleTerm: form.value.peopleTerm,
     checkpointTerm: form.value.checkpointTerm,
   };

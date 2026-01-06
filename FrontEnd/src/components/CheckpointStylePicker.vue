@@ -9,7 +9,7 @@
           :class="{ selected: !isCustom }"
           @click="selectDefault"
         >
-          <div class="option-preview" v-html="defaultPreviewSvg"></div>
+          <div class="option-preview" :style="defaultPreviewRotationStyle" v-html="defaultPreviewSvg"></div>
           <span class="option-label">{{ defaultLabel }}</span>
         </button>
         <button
@@ -18,7 +18,7 @@
           :class="{ selected: isCustom }"
           @click="openCustomModal"
         >
-          <div class="option-preview" v-html="customPreviewSvg"></div>
+          <div class="option-preview" :style="customPreviewRotationStyle" v-html="customPreviewSvg"></div>
           <span class="option-label">Custom</span>
         </button>
       </div>
@@ -33,6 +33,7 @@
       :border-color="localBorderColor"
       :icon-color="localIconColor"
       :size="localSize"
+      :map-rotation="localMapRotation"
       :level="level"
       :inherited-type="inheritedStyleType"
       :inherited-background-shape="inheritedBackgroundShape"
@@ -40,6 +41,7 @@
       :inherited-border-color="inheritedBorderColor"
       :inherited-icon-color="inheritedIconColor"
       :inherited-size="inheritedSize"
+      :inherited-map-rotation="inheritedMapRotation"
       @apply="handleCustomizationApply"
       @cancel="handleCustomizationCancel"
     />
@@ -62,6 +64,7 @@ const props = defineProps({
   styleBorderColor: { type: String, default: '' },
   styleIconColor: { type: String, default: '' },
   styleSize: { type: String, default: '' },
+  styleMapRotation: { type: [String, Number], default: '' },
   iconLabel: { type: String, default: 'Icon style' },
   showPreview: { type: Boolean, default: true },
   // Inherited style from parent (area for checkpoints, event for areas)
@@ -72,6 +75,7 @@ const props = defineProps({
   inheritedBorderColor: { type: String, default: '' },
   inheritedIconColor: { type: String, default: '' },
   inheritedSize: { type: String, default: '' },
+  inheritedMapRotation: { type: [String, Number], default: '' },
   // Custom label for the "Default" option
   defaultLabel: { type: String, default: 'Default' },
   // Level: 'event', 'area', or 'checkpoint' - determines available icons
@@ -86,6 +90,7 @@ const emit = defineEmits([
   'update:styleBorderColor',
   'update:styleIconColor',
   'update:styleSize',
+  'update:styleMapRotation',
   'change',
 ]);
 
@@ -98,6 +103,7 @@ const localBackgroundColor = ref(props.styleBackgroundColor || '');
 const localBorderColor = ref(props.styleBorderColor || '');
 const localIconColor = ref(props.styleIconColor || '');
 const localSize = ref(props.styleSize || 'default');
+const localMapRotation = ref(props.styleMapRotation || '');
 
 // Determine the content icon - if styleType is a content icon, use it; otherwise 'none'
 const isContentIcon = (type) => {
@@ -193,6 +199,32 @@ const defaultPreviewSvg = computed(() => {
   </svg>`;
 });
 
+// Rotation style for the Default preview - shows inherited rotation
+const defaultPreviewRotationStyle = computed(() => {
+  const rotation = props.inheritedMapRotation;
+  if (rotation !== '' && rotation !== undefined && rotation !== null && rotation !== 0) {
+    return { transform: `rotate(${rotation}deg)` };
+  }
+  return {};
+});
+
+// Rotation style for the Custom preview - shows local rotation or inherited
+const customPreviewRotationStyle = computed(() => {
+  // If we have a local rotation value, use it
+  if (localMapRotation.value !== '' && localMapRotation.value !== undefined && localMapRotation.value !== null) {
+    const rotation = parseInt(localMapRotation.value, 10) || 0;
+    if (rotation !== 0) {
+      return { transform: `rotate(${rotation}deg)` };
+    }
+  }
+  // Otherwise fall back to inherited rotation
+  const inherited = props.inheritedMapRotation;
+  if (inherited !== '' && inherited !== undefined && inherited !== null && inherited !== 0) {
+    return { transform: `rotate(${inherited}deg)` };
+  }
+  return {};
+});
+
 // Generate preview SVG for the "Custom" option
 const customPreviewSvg = computed(() => {
   if (isCustom.value) {
@@ -262,12 +294,14 @@ const selectDefault = () => {
   localBorderColor.value = '';
   localIconColor.value = '';
   localSize.value = 'default';
+  localMapRotation.value = '';
   emit('update:styleBackgroundShape', '');
   emit('update:styleBackgroundColor', '');
   emit('update:styleColor', ''); // Clear legacy color field
   emit('update:styleBorderColor', '');
   emit('update:styleIconColor', '');
   emit('update:styleSize', '');
+  emit('update:styleMapRotation', '');
   emitChange();
 };
 
@@ -293,16 +327,19 @@ const handleCustomizationApply = (customization) => {
   localBorderColor.value = customization.borderColor || '';
   localIconColor.value = customization.iconColor || '';
   localSize.value = customization.size || 'default';
+  localMapRotation.value = customization.mapRotation ?? '';
 
   // Determine if we have a custom style (any non-default value)
   // Note: 'none' for iconType IS a custom value (explicitly no icon)
+  // Note: mapRotation of 0 is the default, so only non-zero values count as custom
   const hasCustomStyle = customization.iconType === 'none'
     || (customization.iconType && customization.iconType !== '')
     || customization.backgroundShape
     || customization.backgroundColor
     || customization.borderColor
     || customization.iconColor
-    || customization.size;
+    || customization.size
+    || (customization.mapRotation !== '' && customization.mapRotation !== 0);
 
   // styleType: use content icon if set (not 'none'), otherwise 'custom' if any customization, otherwise 'default'
   if (customization.iconType && customization.iconType !== 'none') {
@@ -320,6 +357,7 @@ const handleCustomizationApply = (customization) => {
   emit('update:styleBorderColor', customization.borderColor);
   emit('update:styleIconColor', customization.iconColor);
   emit('update:styleSize', customization.size);
+  emit('update:styleMapRotation', customization.mapRotation ?? '');
 
   emitChange();
 };
@@ -337,6 +375,7 @@ const emitChange = () => {
     styleBorderColor: localBorderColor.value,
     styleIconColor: localIconColor.value,
     styleSize: localSize.value,
+    styleMapRotation: localMapRotation.value,
   });
 };
 
@@ -374,6 +413,10 @@ watch(() => props.styleIconColor, (newVal) => {
 
 watch(() => props.styleSize, (newVal) => {
   localSize.value = newVal || 'default';
+});
+
+watch(() => props.styleMapRotation, (newVal) => {
+  localMapRotation.value = newVal ?? '';
 });
 </script>
 

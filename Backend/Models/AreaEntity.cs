@@ -35,6 +35,7 @@ public class AreaEntity : ITableEntity
     public string CheckpointStyleBorderColor { get; set; } = string.Empty; // Hex color for border (empty = white, "none" = no border)
     public string CheckpointStyleIconColor { get; set; } = string.Empty; // Hex color for icon content (empty = white)
     public string CheckpointStyleSize { get; set; } = string.Empty; // 33, 66, 100, 150 (percentage)
+    public string CheckpointStyleMapRotation { get; set; } = string.Empty; // Rotation in degrees (-180 to 180, empty = inherit)
 
     // Terminology overrides for this area (empty = inherit from event)
     public string PeopleTerm { get; set; } = string.Empty;

@@ -162,6 +162,7 @@ public class AreaFunctions
                     baseResponse.CheckpointStyleBorderColor,
                     baseResponse.CheckpointStyleIconColor,
                     baseResponse.CheckpointStyleSize,
+                    baseResponse.CheckpointStyleMapRotation,
                     baseResponse.PeopleTerm,
                     baseResponse.CheckpointTerm
                 );
@@ -268,6 +269,7 @@ public class AreaFunctions
             if (request.CheckpointStyleBorderColor != null) areaEntity.CheckpointStyleBorderColor = request.CheckpointStyleBorderColor;
             if (request.CheckpointStyleIconColor != null) areaEntity.CheckpointStyleIconColor = request.CheckpointStyleIconColor;
             if (request.CheckpointStyleSize != null) areaEntity.CheckpointStyleSize = request.CheckpointStyleSize;
+            if (request.CheckpointStyleMapRotation != null) areaEntity.CheckpointStyleMapRotation = request.CheckpointStyleMapRotation;
             // Update terminology if provided
             if (request.PeopleTerm != null) areaEntity.PeopleTerm = request.PeopleTerm;
             if (request.CheckpointTerm != null) areaEntity.CheckpointTerm = request.CheckpointTerm;

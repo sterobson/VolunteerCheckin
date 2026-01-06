@@ -11,7 +11,7 @@
         <div class="preview-section">
           <div class="map-preview">
             <div class="map-background"></div>
-            <div class="preview-icon" v-html="previewSvg"></div>
+            <div class="preview-icon" :style="{ transform: `rotate(${getEffectiveMapRotationValue(localMapRotation)}deg)` }" v-html="previewSvg"></div>
           </div>
         </div>
 
@@ -122,6 +122,20 @@
             <div class="option-button-content">
               <span class="option-button-label">Size</span>
               <span class="option-button-value">{{ getSizeLabel(localSize) }}</span>
+            </div>
+            <span class="option-button-arrow">&#9662;</span>
+          </button>
+
+          <!-- Row 4: Map Rotation -->
+          <button
+            type="button"
+            class="option-button option-button-full"
+            :class="{ active: activePopup === 'mapRotation' }"
+            @click="togglePopup('mapRotation')"
+          >
+            <div class="option-button-content">
+              <span class="option-button-label">Map rotation</span>
+              <span class="option-button-value">{{ getMapRotationLabel(localMapRotation) }}</span>
             </div>
             <span class="option-button-arrow">&#9662;</span>
           </button>
@@ -256,6 +270,55 @@
             </button>
           </div>
         </div>
+
+        <!-- Map Rotation Popup -->
+        <div v-if="activePopup === 'mapRotation'" class="centered-popup">
+          <div class="popup-header">
+            <span>Set map rotation</span>
+            <button type="button" class="popup-close" @click="closePopups">&times;</button>
+          </div>
+          <div class="rotation-content">
+            <!-- Rotation Preview -->
+            <div class="rotation-preview-container">
+              <div class="rotation-preview-icon" :style="{ transform: `rotate(${getEffectiveMapRotationValue(localMapRotation)}deg)` }" v-html="previewSvg"></div>
+            </div>
+            <p class="rotation-description">
+              Rotate the marker on the map. This rotation is added to any map rotation.
+            </p>
+            <div class="rotation-control">
+              <button
+                type="button"
+                class="rotation-preset"
+                :class="{ selected: localMapRotation === 'default' || localMapRotation === '' }"
+                @click="selectMapRotation('default')"
+              >
+                Default
+              </button>
+              <div class="rotation-slider-container">
+                <input
+                  type="range"
+                  min="-180"
+                  max="180"
+                  step="5"
+                  class="rotation-slider"
+                  :value="localMapRotation === 'default' || localMapRotation === '' ? 0 : localMapRotation"
+                  @input="updateMapRotationFromSlider(parseInt($event.target.value, 10))"
+                />
+                <div class="rotation-value">
+                  {{ localMapRotation === 'default' || localMapRotation === '' ? '0' : localMapRotation }}°
+                </div>
+              </div>
+            </div>
+            <div class="rotation-presets">
+              <button type="button" class="rotation-preset-btn" :class="{ selected: localMapRotation === -90 }" @click="selectMapRotation(-90)">-90°</button>
+              <button type="button" class="rotation-preset-btn" :class="{ selected: localMapRotation === -45 }" @click="selectMapRotation(-45)">-45°</button>
+              <button type="button" class="rotation-preset-btn" :class="{ selected: localMapRotation === 0 }" @click="selectMapRotation(0)">0°</button>
+              <button type="button" class="rotation-preset-btn" :class="{ selected: localMapRotation === 45 }" @click="selectMapRotation(45)">+45°</button>
+              <button type="button" class="rotation-preset-btn" :class="{ selected: localMapRotation === 90 }" @click="selectMapRotation(90)">+90°</button>
+              <button type="button" class="rotation-preset-btn" :class="{ selected: localMapRotation === 180 }" @click="selectMapRotation(180)">180°</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="modal-footer">
@@ -286,6 +349,7 @@ const props = defineProps({
   borderColor: { type: String, default: '' },
   iconColor: { type: String, default: '' },
   size: { type: String, default: '100' },
+  mapRotation: { type: [String, Number], default: '' },
   level: { type: String, default: 'checkpoint' },
   // Inherited values from parent (area/event) - used as defaults
   inheritedType: { type: String, default: '' },
@@ -294,6 +358,7 @@ const props = defineProps({
   inheritedBorderColor: { type: String, default: '' },
   inheritedIconColor: { type: String, default: '' },
   inheritedSize: { type: String, default: '' },
+  inheritedMapRotation: { type: [String, Number], default: '' },
 });
 
 const emit = defineEmits(['update:isOpen', 'apply', 'cancel']);
@@ -305,6 +370,7 @@ const localBackgroundColor = ref(props.backgroundColor || '');
 const localBorderColor = ref(props.borderColor || '');
 const localIconColor = ref(props.iconColor || '');
 const localSize = ref(props.size || '100');
+const localMapRotation = ref(props.mapRotation ?? '');
 
 // Popup state
 const activePopup = ref(null);
@@ -361,6 +427,17 @@ const getEffectiveSizeValue = (sizeValue) => {
     return props.inheritedSize || '100';
   }
   return sizeValue || '100';
+};
+
+const getEffectiveMapRotationValue = (rotationValue) => {
+  if (rotationValue === 'default' || rotationValue === '') {
+    const inherited = props.inheritedMapRotation;
+    if (inherited !== '' && inherited !== undefined && inherited !== null) {
+      return parseInt(inherited, 10) || 0;
+    }
+    return 0;
+  }
+  return parseInt(rotationValue, 10) || 0;
 };
 
 // Available shapes: None, Default, then all shapes (excluding 'none' from BACKGROUND_SHAPES to avoid duplicate)
@@ -595,6 +672,17 @@ const getSizeLabel = (value) => {
     return `Default (${inheritedLabel})`;
   }
   return sizeLabels[value] || 'Normal';
+};
+
+const getMapRotationLabel = (value) => {
+  if (value === 'default' || value === '' || value === undefined || value === null) {
+    const inherited = props.inheritedMapRotation;
+    if (inherited !== '' && inherited !== undefined && inherited !== null) {
+      return `Default (${inherited}°)`;
+    }
+    return 'Default (0°)';
+  }
+  return `${value}°`;
 };
 
 // ===========================================
@@ -893,6 +981,16 @@ const selectSize = (value) => {
   closePopups();
 };
 
+const selectMapRotation = (value) => {
+  localMapRotation.value = value;
+  closePopups();
+};
+
+// Separate handler for slider - updates value without closing popup
+const updateMapRotationFromSlider = (value) => {
+  localMapRotation.value = value;
+};
+
 // Sync local state when props change
 watch(() => props.isOpen, (newVal) => {
   if (newVal) {
@@ -903,9 +1001,10 @@ watch(() => props.isOpen, (newVal) => {
     const hasCustomBorderColor = props.borderColor && props.borderColor !== '';
     const hasCustomIconColor = props.iconColor && props.iconColor !== '';
     const hasCustomSize = props.size && props.size !== '' && props.size !== '100';
+    const hasCustomMapRotation = props.mapRotation !== '' && props.mapRotation !== undefined && props.mapRotation !== null && props.mapRotation !== 0;
 
     const hasAnyCustomValue = hasCustomShape || hasCustomIcon || hasCustomBgColor
-      || hasCustomBorderColor || hasCustomIconColor || hasCustomSize;
+      || hasCustomBorderColor || hasCustomIconColor || hasCustomSize || hasCustomMapRotation;
 
     if (!hasAnyCustomValue) {
       // No custom values set - initialize all to 'default' for inheritance
@@ -915,6 +1014,7 @@ watch(() => props.isOpen, (newVal) => {
       localBorderColor.value = 'default';
       localIconColor.value = 'default';
       localSize.value = 'default';
+      localMapRotation.value = 'default';
     } else {
       // Load saved values - map empty strings to 'default' for display
       localBackgroundShape.value = props.backgroundShape || 'default';
@@ -924,6 +1024,7 @@ watch(() => props.isOpen, (newVal) => {
       localBorderColor.value = props.borderColor || 'default';
       localIconColor.value = props.iconColor || 'default';
       localSize.value = props.size || 'default';
+      localMapRotation.value = (props.mapRotation !== '' && props.mapRotation !== undefined && props.mapRotation !== null) ? props.mapRotation : 'default';
     }
     activePopup.value = null;
   }
@@ -958,6 +1059,12 @@ const apply = () => {
   }
   // else: 'default' or empty = inherit (emit empty string)
 
+  // For mapRotation: 'default' means inherit, otherwise emit the numeric value
+  let mapRotationValue = '';
+  if (localMapRotation.value !== 'default' && localMapRotation.value !== '' && localMapRotation.value !== undefined) {
+    mapRotationValue = parseInt(localMapRotation.value, 10) || 0;
+  }
+
   emit('apply', {
     iconType: iconTypeValue,
     backgroundShape: resolveValue(localBackgroundShape.value),
@@ -965,6 +1072,7 @@ const apply = () => {
     borderColor: resolveValue(localBorderColor.value),
     iconColor: resolveValue(localIconColor.value),
     size: resolveValue(localSize.value),
+    mapRotation: mapRotationValue,
   });
   emit('update:isOpen', false);
 };
@@ -1481,5 +1589,146 @@ const apply = () => {
 
 .btn-apply:hover {
   background: #2c5282;
+}
+
+/* Full-width button for map rotation */
+.option-button-full {
+  grid-column: span 2;
+}
+
+/* Rotation Controls */
+.rotation-content {
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.rotation-preview-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0.5rem;
+  background: #f7fafc;
+  border-radius: 8px;
+  min-height: 60px;
+}
+
+.rotation-preview-icon {
+  transition: transform 0.15s ease-out;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.rotation-description {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #718096;
+  text-align: center;
+}
+
+.rotation-control {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.rotation-preset {
+  padding: 0.5rem 1rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #4a5568;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.rotation-preset:hover {
+  background: #f7fafc;
+  border-color: #cbd5e0;
+}
+
+.rotation-preset.selected {
+  border-color: #3182ce;
+  background: #ebf8ff;
+  color: #2c5282;
+}
+
+.rotation-slider-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.rotation-slider {
+  flex: 1;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(to right, #e2e8f0 0%, #3182ce 50%, #e2e8f0 100%);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.rotation-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: #3182ce;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.rotation-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: #3182ce;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.rotation-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #2d3748;
+  min-width: 45px;
+  text-align: right;
+}
+
+.rotation-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.rotation-preset-btn {
+  padding: 0.375rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: #4a5568;
+  transition: all 0.15s;
+}
+
+.rotation-preset-btn:hover {
+  background: #f7fafc;
+  border-color: #cbd5e0;
+}
+
+.rotation-preset-btn.selected {
+  border-color: #3182ce;
+  background: #ebf8ff;
+  color: #2c5282;
 }
 </style>

@@ -110,8 +110,10 @@ function handleAuthError() {
     localStorage.removeItem('sessionToken');
 
     // Redirect to login page (avoid redirect loop if already on login)
-    if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/auth')) {
-      window.location.href = '/login';
+    // Use hash check since app uses hash-based routing
+    const currentHash = window.location.hash || '';
+    if (!currentHash.includes('/login') && !currentHash.includes('/verify')) {
+      window.location.href = '/#/admin/login';
     }
   }
 }

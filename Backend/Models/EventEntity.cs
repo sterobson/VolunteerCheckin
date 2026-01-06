@@ -37,4 +37,5 @@ public class EventEntity : ITableEntity
     public string DefaultCheckpointStyleBorderColor { get; set; } = string.Empty; // Hex color for border (empty = white, "none" = no border)
     public string DefaultCheckpointStyleIconColor { get; set; } = string.Empty; // Hex color for icon content (empty = white)
     public string DefaultCheckpointStyleSize { get; set; } = string.Empty; // 33, 66, 100, 150 (percentage)
+    public string DefaultCheckpointStyleMapRotation { get; set; } = string.Empty; // Rotation in degrees (-180 to 180)
 }

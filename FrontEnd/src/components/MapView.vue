@@ -168,10 +168,10 @@ let userLocationMarker = null;
 const SYSTEM_DEFAULT_COLOR = '#667eea';
 
 // Build default marker with system default color and status badge overlay
-const buildDefaultMarker = (checkedInCount, requiredMarshals, isHighlighted, marshalMode) => {
+const buildDefaultMarker = (checkedInCount, requiredMarshals, isHighlighted, marshalMode, skipBadge = false) => {
   const markerSize = isHighlighted ? '36px' : marshalMode ? '20px' : '30px';
   const borderColor = isHighlighted ? '#667eea' : 'white';
-  const statusBadge = getStatusBadgeHtml(checkedInCount, requiredMarshals);
+  const statusBadge = skipBadge ? '' : getStatusBadgeHtml(checkedInCount, requiredMarshals);
 
   return `
     <div style="position: relative; width: ${markerSize}; height: ${markerSize};">
@@ -188,9 +188,9 @@ const buildDefaultMarker = (checkedInCount, requiredMarshals, isHighlighted, mar
         color: white;
         font-weight: bold;
       "></div>
-      <div style="position: absolute; bottom: -4px; right: -4px;">
+      ${skipBadge ? '' : `<div style="position: absolute; bottom: -4px; right: -4px;">
         ${statusBadge}
-      </div>
+      </div>`}
     </div>
   `;
 };
@@ -632,6 +632,15 @@ const updateMarkers = () => {
       || resolvedIconColor
       || (resolvedShape && resolvedShape !== 'circle' && resolvedShape !== 'default');
 
+    // Get resolved map rotation (can be from checkpoint, area, or event)
+    // Fall back to direct styleMapRotation if resolved value not available
+    const resolvedMapRotation = location.resolvedStyleMapRotation
+      ?? location.ResolvedStyleMapRotation
+      ?? location.styleMapRotation
+      ?? location.StyleMapRotation
+      ?? 0;
+    const rotationDegrees = parseInt(resolvedMapRotation, 10) || 0;
+
     // Area color indicator (hide in marshal mode)
     const areaColor = location.areaColor || '#999';
     const hasArea = location.areaId && !props.marshalMode;
@@ -676,11 +685,26 @@ const updateMarkers = () => {
         "></div>
       `;
     }
-    // Custom styled checkpoint
-    else if (hasCustomStyle) {
-      // Show count unless in marshal mode (where we hide counts)
-      const showCount = !props.marshalMode;
+    // Show count unless in marshal mode (where we hide counts)
+    const showCount = !props.marshalMode;
 
+    // Generate badge HTML separately so it won't be rotated
+    const statusBadge = getStatusBadgeHtml(checkedInCount, requiredMarshals);
+    const countBadge = showCount ? `<div style="
+      position: absolute;
+      bottom: -2px;
+      right: -6px;
+      background-color: white;
+      border-radius: 8px;
+      padding: 1px 4px;
+      font-size: 9px;
+      font-weight: bold;
+      color: #333;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    ">${checkedInCount}/${requiredMarshals}</div>` : '';
+
+    // Custom styled checkpoint
+    if (hasCustomStyle) {
       // Use the new composable SVG generator with all resolved style fields
       const baseSize = isHighlighted ? 40 : 32;
       const sizePercent = location.resolvedStyleSize || location.ResolvedStyleSize || '100';
@@ -696,30 +720,8 @@ const updateMarkers = () => {
       });
 
       if (customSvg) {
-        // Wrap the SVG with status badge overlay
-        const status = getCheckpointStatus(checkedInCount, requiredMarshals);
-        const statusBadge = getStatusBadgeHtml(checkedInCount, requiredMarshals);
-
-        markerHtml = `
-          <div style="position: relative; display: inline-block;">
-            ${customSvg}
-            <div style="position: absolute; top: -4px; right: -4px;">
-              ${statusBadge}
-            </div>
-            ${showCount ? `<div style="
-              position: absolute;
-              bottom: -2px;
-              right: -6px;
-              background-color: white;
-              border-radius: 8px;
-              padding: 1px 4px;
-              font-size: 9px;
-              font-weight: bold;
-              color: #333;
-              box-shadow: 0 1px 2px rgba(0,0,0,0.3);
-            ">${checkedInCount}/${requiredMarshals}</div>` : ''}
-          </div>
-        `;
+        // Just the SVG - badge will be added separately outside rotation
+        markerHtml = customSvg;
       } else {
         // Fallback to legacy marker if new generator fails
         const legacyMarker = getCheckpointMarkerHtml(
@@ -730,13 +732,17 @@ const updateMarkers = () => {
           baseSize,
           showCount
         );
-        markerHtml = legacyMarker || buildDefaultMarker(checkedInCount, requiredMarshals, isHighlighted, props.marshalMode);
+        markerHtml = legacyMarker || buildDefaultMarker(checkedInCount, requiredMarshals, isHighlighted, props.marshalMode, true);
       }
     }
     // Default status-based colored circle with status badge
     else {
-      markerHtml = buildDefaultMarker(checkedInCount, requiredMarshals, isHighlighted, props.marshalMode);
+      // Skip badge in the marker itself - we'll add it separately
+      markerHtml = buildDefaultMarker(checkedInCount, requiredMarshals, isHighlighted, props.marshalMode, true);
     }
+
+    // Build rotation style if rotation is set
+    const rotationStyle = rotationDegrees !== 0 ? `transform: rotate(${rotationDegrees}deg);` : '';
 
     const icon = L.divIcon({
       className: 'custom-marker',
@@ -752,7 +758,15 @@ const updateMarkers = () => {
               border: 2px solid white;
               box-shadow: 0 1px 2px rgba(0,0,0,0.3);
             "></div>` : ''}
-            ${markerHtml}
+            <div style="position: relative; display: inline-block;">
+              <div style="${rotationStyle}">
+                ${markerHtml}
+              </div>
+              ${showSimplified ? '' : `<div style="position: absolute; top: -4px; right: -4px;">
+                ${statusBadge}
+              </div>`}
+              ${showSimplified ? '' : countBadge}
+            </div>
           </div>
           <div style="
             background-color: ${labelBg};

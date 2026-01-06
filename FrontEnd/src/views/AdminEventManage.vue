@@ -169,6 +169,7 @@
       :event-default-style-border-color="event?.defaultCheckpointStyleBorderColor || event?.DefaultCheckpointStyleBorderColor || ''"
       :event-default-style-icon-color="event?.defaultCheckpointStyleIconColor || event?.DefaultCheckpointStyleIconColor || ''"
       :event-default-style-size="event?.defaultCheckpointStyleSize || event?.DefaultCheckpointStyleSize || ''"
+      :event-default-style-map-rotation="event?.defaultCheckpointStyleMapRotation ?? event?.DefaultCheckpointStyleMapRotation ?? ''"
       :event-people-term="event?.peopleTerm || 'Marshals'"
       :z-index="showEditArea ? 1100 : 1000"
       @close="closeEditLocationModal"
@@ -299,6 +300,7 @@
       :event-default-style-border-color="event?.defaultCheckpointStyleBorderColor || event?.DefaultCheckpointStyleBorderColor || ''"
       :event-default-style-icon-color="event?.defaultCheckpointStyleIconColor || event?.DefaultCheckpointStyleIconColor || ''"
       :event-default-style-size="event?.defaultCheckpointStyleSize || event?.DefaultCheckpointStyleSize || ''"
+      :event-default-style-map-rotation="event?.defaultCheckpointStyleMapRotation ?? event?.DefaultCheckpointStyleMapRotation ?? ''"
       :event-people-term="event?.peopleTerm || 'Marshals'"
       :event-checkpoint-term="event?.checkpointTerm || 'Checkpoints'"
       @close="closeEditAreaModal"
@@ -550,6 +552,7 @@ const eventDetailsForm = ref({
   defaultCheckpointStyleBorderColor: '',
   defaultCheckpointStyleIconColor: '',
   defaultCheckpointStyleSize: '',
+  defaultCheckpointStyleMapRotation: '',
   checkpointTerm: 'Checkpoints',
   areaTerm: 'Areas',
   checklistTerm: 'Checklists',
@@ -790,6 +793,10 @@ const performEventUpdate = async (shouldShiftCheckpoints, timeDeltaMs) => {
   try {
     await eventsStore.updateEvent(route.params.eventId, {
       ...eventDetailsForm.value,
+      // Ensure map rotation is sent as string to match backend DTO
+      defaultCheckpointStyleMapRotation: eventDetailsForm.value.defaultCheckpointStyleMapRotation != null
+        ? String(eventDetailsForm.value.defaultCheckpointStyleMapRotation)
+        : null,
     });
 
     if (shouldShiftCheckpoints && timeDeltaMs !== null) {
@@ -864,6 +871,7 @@ const loadEventData = async () => {
         defaultCheckpointStyleBorderColor: event.value.defaultCheckpointStyleBorderColor || '',
         defaultCheckpointStyleIconColor: event.value.defaultCheckpointStyleIconColor || '',
         defaultCheckpointStyleSize: event.value.defaultCheckpointStyleSize || '',
+        defaultCheckpointStyleMapRotation: event.value.defaultCheckpointStyleMapRotation ?? '',
       };
       eventDetailsFormDirty.value = false;
       // Update global terminology settings
@@ -1998,6 +2006,7 @@ const handleUpdateLocation = async (formData) => {
         styleBorderColor: formData.styleBorderColor,
         styleIconColor: formData.styleIconColor,
         styleSize: formData.styleSize,
+        styleMapRotation: formData.styleMapRotation != null ? String(formData.styleMapRotation) : null,
         peopleTerm: formData.peopleTerm,
         checkpointTerm: formData.checkpointTerm,
         isDynamic: formData.isDynamic || false,
@@ -2039,6 +2048,7 @@ const handleUpdateLocation = async (formData) => {
           styleBorderColor: formData.styleBorderColor,
           styleIconColor: formData.styleIconColor,
           styleSize: formData.styleSize,
+          styleMapRotation: formData.styleMapRotation != null ? String(formData.styleMapRotation) : null,
           peopleTerm: formData.peopleTerm,
           checkpointTerm: formData.checkpointTerm,
           isDynamic: formData.isDynamic || false,

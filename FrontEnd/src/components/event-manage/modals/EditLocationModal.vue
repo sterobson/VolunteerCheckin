@@ -143,6 +143,7 @@
             :style-border-color="form.styleBorderColor || ''"
             :style-icon-color="form.styleIconColor || ''"
             :style-size="form.styleSize || ''"
+            :style-map-rotation="form.styleMapRotation ?? ''"
             :inherited-style-type="inheritedStyle.type"
             :inherited-style-color="inheritedStyle.color"
             :inherited-background-shape="inheritedStyle.backgroundShape || ''"
@@ -150,6 +151,7 @@
             :inherited-border-color="inheritedStyle.borderColor || ''"
             :inherited-icon-color="inheritedStyle.iconColor || ''"
             :inherited-size="inheritedStyle.size || ''"
+            :inherited-map-rotation="inheritedStyle.mapRotation ?? ''"
             :default-label="defaultStyleLabel"
             icon-label="Icon style"
             level="checkpoint"
@@ -161,6 +163,7 @@
             @update:style-border-color="handleStyleInput('styleBorderColor', $event)"
             @update:style-icon-color="handleStyleInput('styleIconColor', $event)"
             @update:style-size="handleStyleInput('styleSize', $event)"
+            @update:style-map-rotation="handleStyleInput('styleMapRotation', $event)"
           />
         </div>
       </div>
@@ -188,7 +191,7 @@
         </button>
         <div v-if="expandedSections.terminology" class="accordion-content">
           <p class="section-description">
-            Customize what this {{ effectiveCheckpointTermSingularLower }} and its {{ effectivePeopleTerm.toLowerCase() }} are called.
+            Customise what this {{ effectiveCheckpointTermSingularLower }} and its {{ effectivePeopleTerm.toLowerCase() }} are called.
           </p>
 
           <div class="terminology-row">
@@ -347,6 +350,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  eventDefaultStyleMapRotation: {
+    type: [String, Number],
+    default: '',
+  },
   eventPeopleTerm: {
     type: String,
     default: 'Marshals',
@@ -394,6 +401,7 @@ const form = ref({
   styleBorderColor: '',
   styleIconColor: '',
   styleSize: '',
+  styleMapRotation: '',
   peopleTerm: '',
   checkpointTerm: '',
   isDynamic: false,
@@ -605,9 +613,13 @@ const inheritedStyle = computed(() => {
     a => a.checkpointStyleSize || a.CheckpointStyleSize,
     props.eventDefaultStyleSize
   );
+  const mapRotation = resolveProperty(
+    a => a.checkpointStyleMapRotation ?? a.CheckpointStyleMapRotation,
+    props.eventDefaultStyleMapRotation
+  );
 
   // Determine overall source (for label display)
-  const sources = [type, backgroundShape, backgroundColor, borderColor, iconColor, size];
+  const sources = [type, backgroundShape, backgroundColor, borderColor, iconColor, size, mapRotation];
   const hasAreaSource = sources.some(s => s.source === 'area');
 
   return {
@@ -618,6 +630,7 @@ const inheritedStyle = computed(() => {
     borderColor: borderColor.value,
     iconColor: iconColor.value,
     size: size.value,
+    mapRotation: mapRotation.value,
     source: hasAreaSource ? 'area' : (type.value ? 'event' : 'none'),
   };
 });
@@ -765,6 +778,7 @@ watch(() => props.location, (newVal) => {
         styleBorderColor: newVal.styleBorderColor || newVal.StyleBorderColor || '',
         styleIconColor: newVal.styleIconColor || newVal.StyleIconColor || '',
         styleSize: newVal.styleSize || newVal.StyleSize || '',
+        styleMapRotation: newVal.styleMapRotation ?? newVal.StyleMapRotation ?? '',
         peopleTerm: newVal.peopleTerm || '',
         checkpointTerm: newVal.checkpointTerm || '',
         isDynamic: newVal.isDynamic || false,

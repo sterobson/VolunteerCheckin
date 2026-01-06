@@ -120,6 +120,7 @@ public class LocationFunctions
                 StyleBorderColor = request.StyleBorderColor ?? string.Empty,
                 StyleIconColor = request.StyleIconColor ?? string.Empty,
                 StyleSize = request.StyleSize ?? string.Empty,
+                StyleMapRotation = request.StyleMapRotation ?? string.Empty,
                 // Terminology
                 PeopleTerm = request.PeopleTerm ?? string.Empty,
                 CheckpointTerm = request.CheckpointTerm ?? string.Empty,
@@ -349,6 +350,7 @@ public class LocationFunctions
             if (request.StyleBorderColor != null) locationEntity.StyleBorderColor = request.StyleBorderColor;
             if (request.StyleIconColor != null) locationEntity.StyleIconColor = request.StyleIconColor;
             if (request.StyleSize != null) locationEntity.StyleSize = request.StyleSize;
+            if (request.StyleMapRotation != null) locationEntity.StyleMapRotation = request.StyleMapRotation;
             // Update terminology if provided
             if (request.PeopleTerm != null) locationEntity.PeopleTerm = request.PeopleTerm;
             if (request.CheckpointTerm != null) locationEntity.CheckpointTerm = request.CheckpointTerm;

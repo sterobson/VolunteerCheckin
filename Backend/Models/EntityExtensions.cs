@@ -31,7 +31,8 @@ public static class EntityExtensions
             entity.DefaultCheckpointStyleBackgroundColor,
             entity.DefaultCheckpointStyleBorderColor,
             entity.DefaultCheckpointStyleIconColor,
-            entity.DefaultCheckpointStyleSize
+            entity.DefaultCheckpointStyleSize,
+            entity.DefaultCheckpointStyleMapRotation
         );
     }
 
@@ -93,6 +94,7 @@ public static class EntityExtensions
             entity.StyleBorderColor,
             entity.StyleIconColor,
             entity.StyleSize,
+            entity.StyleMapRotation,
             resolvedStyle.Type,
             resolvedStyle.Color,
             resolvedStyle.BackgroundShape,
@@ -100,6 +102,7 @@ public static class EntityExtensions
             resolvedStyle.BorderColor,
             resolvedStyle.IconColor,
             resolvedStyle.Size,
+            resolvedStyle.MapRotation,
             entity.PeopleTerm,
             entity.CheckpointTerm,
             resolvedPeopleTerm,
@@ -135,6 +138,7 @@ public static class EntityExtensions
             entity.CheckpointStyleBorderColor,
             entity.CheckpointStyleIconColor,
             entity.CheckpointStyleSize,
+            entity.CheckpointStyleMapRotation,
             entity.PeopleTerm,
             entity.CheckpointTerm
         );
@@ -216,7 +220,8 @@ public static class EntityExtensions
         string BackgroundColor,
         string BorderColor,
         string IconColor,
-        string Size
+        string Size,
+        string MapRotation
     );
 
     /// <summary>
@@ -242,6 +247,7 @@ public static class EntityExtensions
         string borderColor = string.Empty;
         string iconColor = string.Empty;
         string size = string.Empty;
+        string mapRotation = string.Empty;
 
         // Get matched areas sorted by checkpoint count for consistent resolution
         List<AreaEntity>? sortedMatchedAreas = null;
@@ -331,7 +337,12 @@ public static class EntityExtensions
             a => a.CheckpointStyleSize,
             eventEntity?.DefaultCheckpointStyleSize);
 
-        return new CheckpointStyleResolution(type, color, backgroundShape, backgroundColor, borderColor, iconColor, size);
+        mapRotation = ResolveProperty(
+            location.StyleMapRotation,
+            a => a.CheckpointStyleMapRotation,
+            eventEntity?.DefaultCheckpointStyleMapRotation);
+
+        return new CheckpointStyleResolution(type, color, backgroundShape, backgroundColor, borderColor, iconColor, size, mapRotation);
     }
 
     /// <summary>

@@ -26,7 +26,8 @@ public record CreateEventRequest(
     string? DefaultCheckpointStyleBackgroundColor = null,
     string? DefaultCheckpointStyleBorderColor = null,
     string? DefaultCheckpointStyleIconColor = null,
-    string? DefaultCheckpointStyleSize = null
+    string? DefaultCheckpointStyleSize = null,
+    string? DefaultCheckpointStyleMapRotation = null
 );
 
 public record UpdateEventRequest(
@@ -47,7 +48,8 @@ public record UpdateEventRequest(
     string? DefaultCheckpointStyleBackgroundColor = null,
     string? DefaultCheckpointStyleBorderColor = null,
     string? DefaultCheckpointStyleIconColor = null,
-    string? DefaultCheckpointStyleSize = null
+    string? DefaultCheckpointStyleSize = null,
+    string? DefaultCheckpointStyleMapRotation = null
 );
 
 public record RoutePoint(
@@ -79,7 +81,8 @@ public record EventResponse(
     string DefaultCheckpointStyleBackgroundColor,
     string DefaultCheckpointStyleBorderColor,
     string DefaultCheckpointStyleIconColor,
-    string DefaultCheckpointStyleSize
+    string DefaultCheckpointStyleSize,
+    string DefaultCheckpointStyleMapRotation
 );
 
 public record CreateLocationRequest(
@@ -102,6 +105,7 @@ public record CreateLocationRequest(
     string? StyleBorderColor = null,
     string? StyleIconColor = null,
     string? StyleSize = null,
+    string? StyleMapRotation = null,
     // Terminology override (optional, null = don't change, empty = inherit from area -> event)
     string? PeopleTerm = null,
     string? CheckpointTerm = null,
@@ -131,6 +135,7 @@ public record LocationResponse(
     string StyleBorderColor,
     string StyleIconColor,
     string StyleSize,
+    string StyleMapRotation,
     // Resolved style (computed from checkpoint -> area -> event hierarchy)
     string ResolvedStyleType,
     string ResolvedStyleColor,
@@ -139,6 +144,7 @@ public record LocationResponse(
     string ResolvedStyleBorderColor,
     string ResolvedStyleIconColor,
     string ResolvedStyleSize,
+    string ResolvedStyleMapRotation,
     // Terminology override (empty = inherit from area -> event)
     string PeopleTerm,
     string CheckpointTerm,
@@ -174,7 +180,8 @@ public record CreateAreaRequest(
     string? CheckpointStyleBackgroundColor = null,
     string? CheckpointStyleBorderColor = null,
     string? CheckpointStyleIconColor = null,
-    string? CheckpointStyleSize = null
+    string? CheckpointStyleSize = null,
+    string? CheckpointStyleMapRotation = null
 );
 
 public record UpdateAreaRequest(
@@ -192,6 +199,7 @@ public record UpdateAreaRequest(
     string? CheckpointStyleBorderColor = null,
     string? CheckpointStyleIconColor = null,
     string? CheckpointStyleSize = null,
+    string? CheckpointStyleMapRotation = null,
     // Terminology overrides (optional, null = don't change, empty = inherit from event)
     string? PeopleTerm = null,
     string? CheckpointTerm = null
@@ -217,6 +225,7 @@ public record AreaResponse(
     string CheckpointStyleBorderColor,
     string CheckpointStyleIconColor,
     string CheckpointStyleSize,
+    string CheckpointStyleMapRotation,
     // Terminology overrides (empty = inherit from event)
     string PeopleTerm,
     string CheckpointTerm
@@ -291,6 +300,7 @@ public record LocationStatusResponse(
     string StyleBorderColor,
     string StyleIconColor,
     string StyleSize,
+    string StyleMapRotation,
     // Resolved style (computed from checkpoint -> area -> event hierarchy)
     string ResolvedStyleType,
     string ResolvedStyleColor,
@@ -299,6 +309,7 @@ public record LocationStatusResponse(
     string ResolvedStyleBorderColor,
     string ResolvedStyleIconColor,
     string ResolvedStyleSize,
+    string ResolvedStyleMapRotation,
     // Terminology
     string PeopleTerm,
     string CheckpointTerm,

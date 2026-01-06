@@ -390,6 +390,7 @@ public class AssignmentFunctions
                     location.StyleBorderColor ?? string.Empty,
                     location.StyleIconColor ?? string.Empty,
                     location.StyleSize ?? string.Empty,
+                    location.StyleMapRotation ?? string.Empty,
                     resolvedStyle.Type,
                     resolvedStyle.Color,
                     resolvedStyle.BackgroundShape,
@@ -397,6 +398,7 @@ public class AssignmentFunctions
                     resolvedStyle.BorderColor,
                     resolvedStyle.IconColor,
                     resolvedStyle.Size,
+                    resolvedStyle.MapRotation,
                     location.PeopleTerm ?? string.Empty,
                     location.CheckpointTerm ?? string.Empty,
                     location.IsDynamic,
@@ -426,7 +428,8 @@ public class AssignmentFunctions
         string BackgroundColor,
         string BorderColor,
         string IconColor,
-        string Size
+        string Size,
+        string MapRotation
     );
 
     /// <summary>
@@ -452,6 +455,7 @@ public class AssignmentFunctions
         string borderColor = string.Empty;
         string iconColor = string.Empty;
         string size = string.Empty;
+        string mapRotation = string.Empty;
 
         // Get matched areas sorted by checkpoint count for consistent resolution
         List<AreaEntity>? sortedMatchedAreas = null;
@@ -541,6 +545,11 @@ public class AssignmentFunctions
             a => a.CheckpointStyleSize,
             eventEntity?.DefaultCheckpointStyleSize);
 
-        return new ResolvedCheckpointStyle(type, color, backgroundShape, backgroundColor, borderColor, iconColor, size);
+        mapRotation = ResolveProperty(
+            location.StyleMapRotation,
+            a => a.CheckpointStyleMapRotation,
+            eventEntity?.DefaultCheckpointStyleMapRotation);
+
+        return new ResolvedCheckpointStyle(type, color, backgroundShape, backgroundColor, borderColor, iconColor, size, mapRotation);
     }
 }

@@ -110,19 +110,19 @@
         </div>
       </div>
 
-      <!-- Checkpoint Appearance Section -->
+      <!-- Checkpoint appearance section -->
       <div class="accordion-section">
         <button
           class="accordion-header"
           :class="{ active: expandedSection === 'appearance' }"
           @click="toggleSection('appearance')"
         >
-          <span class="accordion-title">{{ terms.checkpoint }} Appearance</span>
+          <span class="accordion-title">{{ terms.checkpoint }} appearance</span>
           <span class="accordion-icon">{{ expandedSection === 'appearance' ? '-' : '+' }}</span>
         </button>
         <div v-if="expandedSection === 'appearance'" class="accordion-content">
           <p class="section-description">
-            Set the default icon style for all {{ termsLower.checkpoints }} in this event.
+            Set the default marker style for all {{ termsLower.checkpoints }} in this event.
             Individual {{ termsLower.areas }} and {{ termsLower.checkpoints }} can override this setting.
           </p>
 
@@ -134,7 +134,8 @@
             :style-border-color="localForm.defaultCheckpointStyleBorderColor || ''"
             :style-icon-color="localForm.defaultCheckpointStyleIconColor || ''"
             :style-size="localForm.defaultCheckpointStyleSize || ''"
-            icon-label="Default icon style"
+            :style-map-rotation="localForm.defaultCheckpointStyleMapRotation ?? ''"
+            icon-label="Default marker style"
             level="event"
             :show-preview="true"
             @update:style-type="handleStyleChange('defaultCheckpointStyleType', $event)"
@@ -144,6 +145,7 @@
             @update:style-border-color="handleStyleChange('defaultCheckpointStyleBorderColor', $event)"
             @update:style-icon-color="handleStyleChange('defaultCheckpointStyleIconColor', $event)"
             @update:style-size="handleStyleChange('defaultCheckpointStyleSize', $event)"
+            @update:style-map-rotation="handleStyleChange('defaultCheckpointStyleMapRotation', $event)"
           />
 
           <div class="form-actions">

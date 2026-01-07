@@ -25,6 +25,7 @@ public class TableStorageService
     private const string NotesTable = "Notes";
     private const string EventContactsTable = "EventContacts";
     private const string PersonEmailIndexTable = "PersonEmailIndex";
+    private const string IncidentsTable = "Incidents";
 
     public TableStorageService(string connectionString)
     {
@@ -65,4 +66,5 @@ public class TableStorageService
     public TableClient GetNotesTable() => GetOrCreateTable(NotesTable);
     public TableClient GetEventContactsTable() => GetOrCreateTable(EventContactsTable);
     public TableClient GetPersonEmailIndexTable() => GetOrCreateTable(PersonEmailIndexTable);
+    public TableClient GetIncidentsTable() => GetOrCreateTable(IncidentsTable);
 }

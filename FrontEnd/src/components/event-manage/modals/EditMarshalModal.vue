@@ -84,6 +84,21 @@
       @change="handleInput"
     />
 
+    <!-- Incidents Tab (only when there are incidents) -->
+    <div v-if="activeTab === 'incidents'" class="tab-content incidents-tab">
+      <div v-if="incidents && incidents.length > 0" class="incidents-list">
+        <IncidentCard
+          v-for="incident in incidents"
+          :key="incident.incidentId"
+          :incident="incident"
+          @click="$emit('select-incident', incident)"
+        />
+      </div>
+      <div v-else class="empty-state">
+        No incidents for this {{ termsLower.person }}.
+      </div>
+    </div>
+
     <!-- Custom footer with left and right aligned buttons -->
     <template #footer>
       <div class="custom-footer">
@@ -114,6 +129,7 @@ import MarshalChecklistView from '../../MarshalChecklistView.vue';
 import ChecklistPreview from '../../ChecklistPreview.vue';
 import NotesView from '../../NotesView.vue';
 import NotesPreview from '../../NotesPreview.vue';
+import IncidentCard from '../../IncidentCard.vue';
 import { useTerminology } from '../../../composables/useTerminology';
 
 const { terms, termsLower } = useTerminology();
@@ -163,6 +179,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  incidents: {
+    type: Array,
+    default: () => [],
+  },
 });
 
 const emit = defineEmits([
@@ -173,6 +193,7 @@ const emit = defineEmits([
   'remove-assignment',
   'assign-to-location',
   'update:isDirty',
+  'select-incident',
 ]);
 
 const activeTab = ref('details');
@@ -195,12 +216,19 @@ const modalTitle = computed(() => {
   return name ? `${baseTitle} - ${name}` : baseTitle;
 });
 
-const availableTabs = computed(() => [
-  { value: 'details', label: 'Details', icon: 'details' },
-  { value: 'checkpoints', label: terms.value.checkpoints, icon: 'checkpoint' },
-  { value: 'checklists', label: terms.value.checklists, icon: 'checklist' },
-  { value: 'notes', label: 'Notes', icon: 'notes' },
-]);
+const availableTabs = computed(() => {
+  const tabs = [
+    { value: 'details', label: 'Details', icon: 'details' },
+    { value: 'checkpoints', label: terms.value.checkpoints, icon: 'checkpoint' },
+    { value: 'checklists', label: terms.value.checklists, icon: 'checklist' },
+    { value: 'notes', label: 'Notes', icon: 'notes' },
+  ];
+  // Only show incidents tab if there are incidents for this marshal or their checkpoints
+  if (props.incidents && props.incidents.length > 0) {
+    tabs.push({ value: 'incidents', label: 'Incidents', icon: 'incidents' });
+  }
+  return tabs;
+});
 
 // Get current tab index and check if on last tab
 const currentTabIndex = computed(() => {
@@ -417,5 +445,27 @@ const handleClose = () => {
 
 .placeholder-message p {
   margin: 0;
+}
+
+/* Incidents tab */
+.incidents-tab {
+  padding-top: 0.5rem;
+}
+
+.incidents-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 150px;
+  color: var(--text-muted, #666);
+  font-style: italic;
+  text-align: center;
+  padding: 2rem;
 }
 </style>

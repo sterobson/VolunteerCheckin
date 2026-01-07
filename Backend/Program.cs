@@ -91,5 +91,6 @@ builder.Services.AddSingleton<IAuthTokenRepository, TableStorageAuthTokenReposit
 builder.Services.AddSingleton<IAuthSessionRepository, TableStorageAuthSessionRepository>();
 builder.Services.AddSingleton<INoteRepository, TableStorageNoteRepository>();
 builder.Services.AddSingleton<IEventContactRepository, TableStorageEventContactRepository>();
+builder.Services.AddSingleton<IIncidentRepository, TableStorageIncidentRepository>();
 
 await builder.Build().RunAsync();

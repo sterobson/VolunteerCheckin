@@ -937,3 +937,122 @@ public record DynamicCheckpointResponse(
     DateTime? LastLocationUpdate,
     string? LastUpdatedByPersonId
 );
+
+// Incident Reporting DTOs
+
+/// <summary>
+/// Request to create a new incident report
+/// </summary>
+public record CreateIncidentRequest(
+    string Description,
+    string? Title = null,
+    string Severity = "medium",  // "low", "medium", "high", "critical"
+    DateTime? IncidentTime = null,  // Defaults to now if not provided
+    double? Latitude = null,
+    double? Longitude = null,
+    string? CheckpointId = null,  // Checkpoint where reporter was assigned
+    bool SkipCheckpointAutoAssign = false  // If true, don't auto-assign checkpoint from marshal's assignment
+);
+
+/// <summary>
+/// Request to update an incident's status
+/// </summary>
+public record UpdateIncidentStatusRequest(
+    string Status,  // "acknowledged", "in_progress", "resolved", "closed"
+    string? Note = null  // Optional explanation for the status change
+);
+
+/// <summary>
+/// Request to add a note to an incident
+/// </summary>
+public record AddIncidentNoteRequest(
+    string Note
+);
+
+/// <summary>
+/// Information about who reported the incident
+/// </summary>
+public record IncidentReporterInfo(
+    string PersonId,
+    string Name,
+    string? MarshalId
+);
+
+/// <summary>
+/// Information about the area associated with an incident
+/// </summary>
+public record IncidentAreaInfo(
+    string AreaId,
+    string AreaName
+);
+
+/// <summary>
+/// Checkpoint snapshot for incident response
+/// </summary>
+public record IncidentCheckpointInfo(
+    string CheckpointId,
+    string Name,
+    string Description,
+    double Latitude,
+    double Longitude,
+    List<string> AreaIds,
+    List<string> AreaNames
+);
+
+/// <summary>
+/// Marshal snapshot for incident response
+/// </summary>
+public record IncidentMarshalInfo(
+    string MarshalId,
+    string Name,
+    bool WasCheckedIn,
+    DateTime? CheckInTime,
+    string? CheckInMethod
+);
+
+/// <summary>
+/// Context information for incident response
+/// </summary>
+public record IncidentContextInfo(
+    IncidentCheckpointInfo? Checkpoint,
+    List<IncidentMarshalInfo> MarshalsPresentAtCheckpoint
+);
+
+/// <summary>
+/// Update/note added to an incident
+/// </summary>
+public record IncidentUpdateInfo(
+    string UpdateId,
+    DateTime Timestamp,
+    string AuthorPersonId,
+    string AuthorName,
+    string Note,
+    string? StatusChange
+);
+
+/// <summary>
+/// Full incident response
+/// </summary>
+public record IncidentResponse(
+    string IncidentId,
+    string EventId,
+    string Title,
+    string Description,
+    string Severity,
+    DateTime IncidentTime,
+    DateTime CreatedAt,
+    double? Latitude,
+    double? Longitude,
+    string Status,
+    IncidentReporterInfo ReportedBy,
+    IncidentAreaInfo? Area,
+    IncidentContextInfo Context,
+    List<IncidentUpdateInfo> Updates
+);
+
+/// <summary>
+/// Response containing list of incidents
+/// </summary>
+public record IncidentsListResponse(
+    List<IncidentResponse> Incidents
+);

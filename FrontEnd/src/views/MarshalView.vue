@@ -9,6 +9,17 @@
         <img :src="brandingLogoUrl" alt="Event logo" class="header-logo-cover-img" />
       </div>
 
+      <!-- Logout button on left (when logo is on right) -->
+      <button
+        v-if="isAuthenticated && brandingLogoPosition === 'right'"
+        @click="confirmLogout"
+        class="btn-logout-icon btn-logout-left"
+        :style="{ color: headerTextColor }"
+        :title="`Logout ${currentPerson?.name || ''}`"
+      >
+        <span v-html="getIcon('logout')"></span>
+      </button>
+
       <!-- Left logo -->
       <div v-if="brandingLogoUrl && brandingLogoPosition === 'left'" class="header-logo header-logo-left">
         <img :src="brandingLogoUrl" alt="Event logo" class="header-logo-img" />
@@ -21,12 +32,12 @@
             {{ formatEventDate(event.eventDate) }}
           </div>
         </div>
-        <div class="header-actions">
-          <button v-if="isAuthenticated" @click="showEmergency = true" class="btn-emergency">
-            Emergency Info
+        <div v-if="isAuthenticated" class="header-actions">
+          <button @click="showReportIncident = true" class="btn-header-action btn-report-incident">
+            Report Incident
           </button>
-          <button v-if="isAuthenticated" @click="handleLogout" class="btn-logout" :style="{ color: headerTextColor }">
-            Logout {{ currentPerson?.name || '' }}
+          <button @click="showEmergency = true" class="btn-header-action btn-emergency">
+            Emergency Info
           </button>
         </div>
       </div>
@@ -35,6 +46,17 @@
       <div v-if="brandingLogoUrl && brandingLogoPosition === 'right'" class="header-logo header-logo-right">
         <img :src="brandingLogoUrl" alt="Event logo" class="header-logo-img" />
       </div>
+
+      <!-- Logout button on right (when logo is on left, cover, or none) -->
+      <button
+        v-if="isAuthenticated && brandingLogoPosition !== 'right'"
+        @click="confirmLogout"
+        class="btn-logout-icon btn-logout-right"
+        :style="{ color: headerTextColor }"
+        :title="`Logout ${currentPerson?.name || ''}`"
+      >
+        <span v-html="getIcon('logout')"></span>
+      </button>
     </header>
 
     <div class="container">
@@ -433,6 +455,40 @@
             </div>
           </div>
 
+          <!-- Your Incidents Section -->
+          <div v-if="myIncidents.length > 0 || incidentsLoading" class="accordion-section">
+            <button
+              class="accordion-header"
+              :class="{ active: expandedSection === 'incidents' }"
+              @click="toggleSection('incidents')"
+            >
+              <span class="accordion-title">
+                <span class="section-icon" v-html="getIcon('incidents')"></span>
+                Your incidents ({{ myIncidents.length }})
+                <span v-if="openIncidentsCount > 0" class="incidents-badge-count">
+                  {{ openIncidentsCount }} open
+                </span>
+              </span>
+              <span class="accordion-icon">{{ expandedSection === 'incidents' ? '−' : '+' }}</span>
+            </button>
+            <div v-if="expandedSection === 'incidents'" class="accordion-content">
+              <div v-if="incidentsLoading" class="loading-state">
+                Loading incidents...
+              </div>
+              <div v-else-if="myIncidents.length === 0" class="empty-state">
+                <p>No incidents to show.</p>
+              </div>
+              <div v-else class="incidents-list">
+                <IncidentCard
+                  v-for="incident in myIncidents"
+                  :key="incident.incidentId"
+                  :incident="incident"
+                  @select="openIncidentDetail(incident)"
+                />
+              </div>
+            </div>
+          </div>
+
           <!-- Area Lead Section (if user is an area lead) -->
           <div v-if="isAreaLead" class="accordion-section">
             <button
@@ -506,12 +562,76 @@
       @close="showEmergency = false"
     />
 
+    <!-- Report Incident Modal -->
+    <ReportIncidentModal
+      :show="showReportIncident"
+      :event-id="eventId || ''"
+      :checkpoint="defaultIncidentCheckpoint"
+      :initial-location="userLocation"
+      :checkpoints="allLocations"
+      :route="eventRoute"
+      @close="showReportIncident = false"
+      @submit="handleReportIncident"
+    />
+
+    <IncidentDetailModal
+      :show="showIncidentDetail"
+      :incident="selectedIncident"
+      :route="eventRoute"
+      :checkpoints="allLocations"
+      :can-manage="isAreaLead"
+      @close="showIncidentDetail = false"
+      @status-change="handleIncidentStatusChange"
+      @open-add-note="openAddIncidentNoteModal"
+    />
+
+    <!-- Add Incident Update Modal -->
+    <BaseModal
+      :show="showAddIncidentNoteModal"
+      title="Add update"
+      size="small"
+      @close="closeAddIncidentNoteModal"
+    >
+      <div class="add-note-form">
+        <textarea
+          v-model="incidentNoteText"
+          class="note-textarea"
+          placeholder="Enter your update..."
+          rows="4"
+        ></textarea>
+      </div>
+      <template #footer>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" @click="closeAddIncidentNoteModal">
+            Cancel
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            @click="submitIncidentNote"
+            :disabled="!incidentNoteText.trim() || submittingIncidentNote"
+          >
+            {{ submittingIncidentNote ? 'Adding...' : 'Add update' }}
+          </button>
+        </div>
+      </template>
+    </BaseModal>
+
     <ConfirmModal
       :show="showConfirmModal"
       :title="confirmModalTitle"
       :message="confirmModalMessage"
       @confirm="handleConfirmModalConfirm"
       @cancel="handleConfirmModalCancel"
+    />
+
+    <!-- Message Modal (for success/error messages) -->
+    <ConfirmModal
+      :show="showMessageModal"
+      :title="messageModalTitle"
+      :message="messageModalMessage"
+      :show-cancel="false"
+      @confirm="handleMessageModalClose"
     />
 
     <!-- Check-in Reminder Modal -->
@@ -733,10 +853,14 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { authApi, checkInApi, checklistApi, eventsApi, assignmentsApi, locationsApi, areasApi, notesApi, contactsApi, queueOfflineAction, getOfflineMode } from '../services/api';
+import { authApi, checkInApi, checklistApi, eventsApi, assignmentsApi, locationsApi, areasApi, notesApi, contactsApi, incidentsApi, queueOfflineAction, getOfflineMode } from '../services/api';
 import MapView from '../components/MapView.vue';
 import ConfirmModal from '../components/ConfirmModal.vue';
+import BaseModal from '../components/BaseModal.vue';
 import EmergencyContactModal from '../components/event-manage/modals/EmergencyContactModal.vue';
+import ReportIncidentModal from '../components/ReportIncidentModal.vue';
+import IncidentCard from '../components/IncidentCard.vue';
+import IncidentDetailModal from '../components/IncidentDetailModal.vue';
 import AreaLeadSection from '../components/AreaLeadSection.vue';
 import NotesView from '../components/NotesView.vue';
 import OfflineIndicator from '../components/OfflineIndicator.vue';
@@ -759,6 +883,9 @@ const {
 const route = useRoute();
 const router = useRouter();
 
+// Event ID from route params (reactive for template usage)
+const eventId = computed(() => route.params.eventId);
+
 // Auth state
 const isAuthenticated = ref(false);
 const authenticating = ref(false);
@@ -775,6 +902,91 @@ const areaLeadAreaIds = computed(() => {
 });
 
 const isAreaLead = computed(() => areaLeadAreaIds.value.length > 0);
+
+// All checkpoints available for incident reporting
+// Marshals: see their assigned checkpoints
+// Area leads: see all checkpoints in their areas plus their own assignments
+const incidentCheckpoints = computed(() => {
+  const checkpointMap = new Map();
+
+  // Add marshal's assigned checkpoints
+  for (const assign of assignmentsWithDetails.value) {
+    if (assign.location) {
+      checkpointMap.set(assign.location.id, {
+        id: assign.location.id,
+        name: assign.location.name,
+        description: assign.location.description,
+        order: assign.location.order ?? 999,
+      });
+    }
+  }
+
+  // For area leads, also add all checkpoints in their areas
+  if (isAreaLead.value) {
+    for (const loc of allLocations.value) {
+      if (checkpointMap.has(loc.id)) continue;
+      const locAreaIds = loc.areaIds || loc.AreaIds || [];
+      if (locAreaIds.some(areaId => areaLeadAreaIds.value.includes(areaId))) {
+        checkpointMap.set(loc.id, {
+          id: loc.id,
+          name: loc.name,
+          description: loc.description,
+          order: loc.order ?? 999,
+        });
+      }
+    }
+  }
+
+  // Sort by order, then by name (natural sort so "2 A" comes before "10 - B")
+  return Array.from(checkpointMap.values()).sort((a, b) => {
+    if (a.order !== b.order) return a.order - b.order;
+    return (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' });
+  });
+});
+
+// Default checkpoint for incident reporting - the checked-in checkpoint or first assignment
+const defaultIncidentCheckpoint = computed(() => {
+  // Find the first checked-in checkpoint
+  const checkedIn = assignmentsWithDetails.value.find(a => {
+    const effectiveIsCheckedIn = a.isCheckedIn && !isCheckInStale(a.checkInTime);
+    return effectiveIsCheckedIn && a.location;
+  });
+
+  if (checkedIn?.location) {
+    return {
+      id: checkedIn.location.id,
+      locationId: checkedIn.location.id,
+      name: checkedIn.location.name,
+      description: checkedIn.location.description,
+    };
+  }
+
+  // Otherwise use expanded or first assignment
+  if (expandedCheckpoint.value) {
+    const expanded = assignmentsWithDetails.value.find(a => a.id === expandedCheckpoint.value);
+    if (expanded?.location) {
+      return {
+        id: expanded.location.id,
+        locationId: expanded.location.id,
+        name: expanded.location.name,
+        description: expanded.location.description,
+      };
+    }
+  }
+
+  // Fall back to first assignment
+  const first = assignmentsWithDetails.value[0];
+  if (first?.location) {
+    return {
+      id: first.location.id,
+      locationId: first.location.id,
+      name: first.location.name,
+      description: first.location.description,
+    };
+  }
+
+  return null;
+});
 
 // Check if user is an event admin
 const isEventAdmin = computed(() => {
@@ -842,6 +1054,15 @@ const brandingLogoPosition = computed(() => event.value?.brandingLogoPosition ||
 // Accordion state
 const expandedSection = ref('assignments');
 
+// Track when each section's data was last loaded (for stale data refresh)
+const STALE_DATA_THRESHOLD_MS = 60000; // 60 seconds
+const sectionLastLoadedAt = ref({
+  checklist: 0,
+  notes: 0,
+  incidents: 0,
+  eventContacts: 0,
+});
+
 // Check-in state
 const checkingIn = ref(null); // Now stores the assignment ID being checked in
 const checkingInAssignment = ref(null);
@@ -855,6 +1076,22 @@ const savingChecklist = ref(false);
 
 // Notes state
 const notes = ref([]);
+
+// Incidents state (my incidents and area lead incidents)
+const myIncidents = ref([]);
+const incidentsLoading = ref(false);
+const selectedIncident = ref(null);
+const showIncidentDetail = ref(false);
+const showAddIncidentNoteModal = ref(false);
+const incidentNoteText = ref('');
+const submittingIncidentNote = ref(false);
+
+// Count of open incidents for badge
+const openIncidentsCount = computed(() => {
+  return myIncidents.value.filter(i =>
+    i.status === 'open' || i.status === 'acknowledged' || i.status === 'in_progress'
+  ).length;
+});
 
 // Dynamic checkpoint update state
 const showLocationUpdateModal = ref(false);
@@ -871,10 +1108,17 @@ const areaLeadRef = ref(null);
 
 // UI state
 const showEmergency = ref(false);
+const showReportIncident = ref(false);
+const reportingIncident = ref(false);
 const showConfirmModal = ref(false);
 const confirmModalTitle = ref('');
 const confirmModalMessage = ref('');
 const confirmModalCallback = ref(null);
+
+// Message modal state (for success/error messages)
+const showMessageModal = ref(false);
+const messageModalTitle = ref('');
+const messageModalMessage = ref('');
 
 // Check-in reminder modal state
 const showCheckInReminderModal = ref(false);
@@ -901,7 +1145,37 @@ let locationWatchId = null;
 
 // Toggle accordion section
 const toggleSection = (section) => {
-  expandedSection.value = expandedSection.value === section ? null : section;
+  const wasExpanded = expandedSection.value === section;
+  expandedSection.value = wasExpanded ? null : section;
+
+  // If expanding a section, check if data is stale and refresh in background
+  if (!wasExpanded) {
+    const now = Date.now();
+    const isStale = (key) => now - sectionLastLoadedAt.value[key] > STALE_DATA_THRESHOLD_MS;
+
+    switch (section) {
+      case 'checklist':
+        if (isStale('checklist')) {
+          loadChecklist();
+        }
+        break;
+      case 'notes':
+        if (isStale('notes')) {
+          loadNotes();
+        }
+        break;
+      case 'incidents':
+        if (isStale('incidents')) {
+          loadMyIncidents();
+        }
+        break;
+      case 'eventContacts':
+        if (isStale('eventContacts')) {
+          loadContacts();
+        }
+        break;
+    }
+  }
 };
 
 // Track which checkpoint accordion is expanded (by assignment ID)
@@ -1348,11 +1622,12 @@ const loadEventData = async () => {
     console.error('Failed to load event status:', statusResult.reason);
   }
 
-  // Phase 2: Supplementary data (3 calls in parallel)
+  // Phase 2: Supplementary data (4 calls in parallel)
   await Promise.allSettled([
     loadChecklist(),
     loadContacts(),
-    loadNotes()
+    loadNotes(),
+    loadMyIncidents()
   ]);
 
   // Cache all data for offline access
@@ -1423,25 +1698,80 @@ const preloadOfflineData = async () => {
 };
 
 const loadNotes = async () => {
-  const eventId = route.params.eventId;
+  const eventIdVal = route.params.eventId;
   try {
     // Use getMyNotes to get notes relevant to the current marshal
-    const response = await notesApi.getMyNotes(eventId);
+    const response = await notesApi.getMyNotes(eventIdVal);
     notes.value = response.data || [];
+    sectionLastLoadedAt.value.notes = Date.now();
     console.log('Notes loaded:', notes.value.length);
   } catch (error) {
     console.error('Failed to load notes:', error);
   }
 };
 
-const loadContacts = async () => {
+// Load incidents for "Your incidents" section
+// Shows: incidents I reported + incidents in areas I'm a lead for
+const loadMyIncidents = async () => {
   const eventId = route.params.eventId;
+  incidentsLoading.value = true;
+
+  try {
+    const incidentMap = new Map();
+
+    // For area leads, load incidents from their areas
+    if (isAreaLead.value && areaLeadAreaIds.value.length > 0) {
+      for (const areaId of areaLeadAreaIds.value) {
+        try {
+          const response = await incidentsApi.getForArea(eventId, areaId);
+          const areaIncidents = response.data.incidents || [];
+          for (const incident of areaIncidents) {
+            incidentMap.set(incident.incidentId, incident);
+          }
+        } catch (err) {
+          console.warn(`Failed to load incidents for area ${areaId}:`, err);
+        }
+      }
+    }
+
+    // Also try to get all incidents and filter to ones I reported
+    // (in case I reported an incident outside my area)
+    try {
+      const response = await incidentsApi.getAll(eventId);
+      const allIncidents = response.data.incidents || [];
+      for (const incident of allIncidents) {
+        if (incident.reportedBy?.marshalId === currentMarshalId.value) {
+          incidentMap.set(incident.incidentId, incident);
+        }
+      }
+    } catch (err) {
+      // Non-leads may not have access to getAll, which is fine
+      console.debug('Could not load all incidents:', err);
+    }
+
+    myIncidents.value = Array.from(incidentMap.values()).sort((a, b) => {
+      // Sort by date, most recent first
+      return new Date(b.incidentTime || b.createdAt) - new Date(a.incidentTime || a.createdAt);
+    });
+
+    sectionLastLoadedAt.value.incidents = Date.now();
+    console.log('My incidents loaded:', myIncidents.value.length);
+  } catch (error) {
+    console.error('Failed to load incidents:', error);
+  } finally {
+    incidentsLoading.value = false;
+  }
+};
+
+const loadContacts = async () => {
+  const eventIdVal = route.params.eventId;
   contactsLoading.value = true;
 
   try {
     // Load contacts using the new API that returns scoped contacts for this user
-    const response = await contactsApi.getMyContacts(eventId);
+    const response = await contactsApi.getMyContacts(eventIdVal);
     myContacts.value = response.data || [];
+    sectionLastLoadedAt.value.eventContacts = Date.now();
     console.log('Contacts loaded:', myContacts.value.length);
   } catch (error) {
     console.warn('Failed to load contacts:', error);
@@ -1471,6 +1801,7 @@ const loadChecklist = async () => {
     console.log('Fetching checklist for marshal:', currentMarshalId.value);
     const response = await checklistApi.getMarshalChecklist(route.params.eventId, currentMarshalId.value);
     checklistItems.value = response.data || [];
+    sectionLastLoadedAt.value.checklist = Date.now();
     console.log('Checklist loaded:', checklistItems.value.length, 'items');
   } catch (error) {
     console.error('Failed to load checklist:', error.response?.status, error.response?.data);
@@ -1795,6 +2126,88 @@ const handleConfirmModalConfirm = () => {
 const handleConfirmModalCancel = () => {
   showConfirmModal.value = false;
   confirmModalCallback.value = null;
+};
+
+// Message modal helper
+const showMessage = (title, message) => {
+  messageModalTitle.value = title;
+  messageModalMessage.value = message;
+  showMessageModal.value = true;
+};
+
+const handleMessageModalClose = () => {
+  showMessageModal.value = false;
+};
+
+// Incident reporting
+const handleReportIncident = async (incidentData) => {
+  reportingIncident.value = true;
+  try {
+    await incidentsApi.create(eventId.value, incidentData);
+    showReportIncident.value = false;
+    // Reload incidents to show the new one
+    loadMyIncidents();
+    showMessage('Incident Reported', 'An administrator will review it shortly.');
+  } catch (error) {
+    console.error('Failed to report incident:', error);
+    showMessage('Error', error.response?.data?.message || 'Failed to report incident. Please try again.');
+  } finally {
+    reportingIncident.value = false;
+  }
+};
+
+// Incident detail handlers
+const openIncidentDetail = (incident) => {
+  selectedIncident.value = incident;
+  showIncidentDetail.value = true;
+};
+
+const handleIncidentStatusChange = async ({ incidentId, status }) => {
+  try {
+    await incidentsApi.updateStatus(eventId.value, incidentId, { status });
+    // Update local state
+    const incident = myIncidents.value.find(i => i.incidentId === incidentId);
+    if (incident) {
+      incident.status = status;
+    }
+    if (selectedIncident.value?.incidentId === incidentId) {
+      selectedIncident.value.status = status;
+    }
+  } catch (error) {
+    console.error('Failed to update incident status:', error);
+    showMessage('Error', 'Failed to update status. Please try again.');
+  }
+};
+
+const openAddIncidentNoteModal = () => {
+  incidentNoteText.value = '';
+  showAddIncidentNoteModal.value = true;
+};
+
+const closeAddIncidentNoteModal = () => {
+  showAddIncidentNoteModal.value = false;
+  incidentNoteText.value = '';
+};
+
+const submitIncidentNote = async () => {
+  if (!incidentNoteText.value.trim() || !selectedIncident.value) return;
+
+  submittingIncidentNote.value = true;
+  try {
+    await incidentsApi.addNote(eventId.value, selectedIncident.value.incidentId, incidentNoteText.value.trim());
+    // Close the modal
+    closeAddIncidentNoteModal();
+    // Reload to get the updated incident with new note
+    loadMyIncidents();
+    // Also reload the selected incident
+    const response = await incidentsApi.get(eventId.value, selectedIncident.value.incidentId);
+    selectedIncident.value = response.data;
+  } catch (error) {
+    console.error('Failed to add note:', error);
+    showMessage('Error', 'Failed to add note. Please try again.');
+  } finally {
+    submittingIncidentNote.value = false;
+  }
 };
 
 // Dynamic checkpoint location update methods
@@ -2195,6 +2608,13 @@ const handleLogout = async () => {
   router.push('/');
 };
 
+const confirmLogout = () => {
+  confirmModalTitle.value = 'Logout';
+  confirmModalMessage.value = `Are you sure you want to logout${currentPerson.value?.name ? `, ${currentPerson.value.name}` : ''}?`;
+  confirmModalCallback.value = handleLogout;
+  showConfirmModal.value = true;
+};
+
 const formatTime = (dateString) => {
   if (!dateString) return '';
   return new Date(dateString).toLocaleTimeString('en-US', {
@@ -2391,7 +2811,7 @@ onUnmounted(() => {
 
 .header {
   backdrop-filter: blur(10px);
-  padding: 1.5rem 2rem;
+  padding: 1rem 2rem;
   display: flex;
   align-items: center;
   position: relative;
@@ -2471,39 +2891,73 @@ onUnmounted(() => {
 
 .header-actions {
   display: flex;
-  gap: 0.75rem;
+  gap: 0.5rem;
   position: relative;
   z-index: 1;
+}
+
+.btn-header-action {
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+  min-width: 110px;
+  text-align: center;
+}
+
+.btn-report-incident {
+  background: #fd7e14;
+  color: white;
+}
+
+.btn-report-incident:hover {
+  background: #e56b00;
 }
 
 .btn-emergency {
   background: #ff4444;
   color: white;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: all 0.3s;
 }
 
 .btn-emergency:hover {
   background: #cc0000;
 }
 
-.btn-logout {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  padding: 0.75rem 1.5rem;
-  border-radius: 6px;
+.btn-logout-icon {
+  position: absolute;
+  top: 35%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  width: 54px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  font-weight: 600;
-  transition: all 0.3s;
+  transition: all 0.2s;
+  z-index: 2;
 }
 
-.btn-logout:hover {
-  background: rgba(255, 255, 255, 0.3);
+.btn-logout-icon:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.btn-logout-icon svg {
+  width: 26px;
+  height: 26px;
+}
+
+.btn-logout-left {
+  left: 1rem;
+}
+
+.btn-logout-right {
+  right: 1rem;
 }
 
 .container {
@@ -2541,6 +2995,13 @@ onUnmounted(() => {
 
 /* Contact list styles */
 .contact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Incidents list styles */
+.incidents-list {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -2799,6 +3260,40 @@ onUnmounted(() => {
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* Add Incident Note Modal */
+.add-note-form {
+  padding: 0.5rem 0;
+}
+
+.note-textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--input-border, #ccc);
+  border-radius: 6px;
+  background: var(--input-bg, white);
+  color: var(--text-primary, #333);
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 80px;
+}
+
+.note-textarea:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.modal-actions .btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
 }
 
 .error {

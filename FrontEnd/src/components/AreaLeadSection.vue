@@ -128,6 +128,52 @@
       </div>
     </div>
 
+    <!-- Incidents Section (Accordion) -->
+    <div class="incidents-accordion-section">
+      <button
+        class="incidents-accordion-header"
+        :class="{ active: showIncidentsSection }"
+        @click="toggleIncidentsSection"
+      >
+        <div class="incidents-header-content">
+          <span class="incidents-title">Incidents</span>
+          <span v-if="openIncidentsCount > 0" class="incidents-badge">
+            {{ openIncidentsCount }} open
+          </span>
+        </div>
+        <span class="accordion-icon">{{ showIncidentsSection ? '−' : '+' }}</span>
+      </button>
+
+      <div v-if="showIncidentsSection" class="incidents-accordion-content">
+        <div v-if="incidentsLoading" class="loading-state">
+          Loading incidents...
+        </div>
+
+        <div v-else-if="incidents.length === 0" class="empty-state">
+          <p>No incidents reported in your areas.</p>
+        </div>
+
+        <div v-else class="incidents-list">
+          <IncidentCard
+            v-for="incident in incidents"
+            :key="incident.incidentId"
+            :incident="incident"
+            @select="handleSelectIncident"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- Incident Detail Modal -->
+    <IncidentDetailModal
+      :show="showIncidentDetail"
+      :incident="selectedIncident"
+      :can-manage="true"
+      @close="closeIncidentDetailModal"
+      @status-change="handleIncidentStatusChange"
+      @add-note="handleIncidentAddNote"
+    />
+
     <!-- Marshal Details Modal -->
     <BaseModal
       :show="showMarshalModal"
@@ -253,13 +299,15 @@
 
 <script setup>
 import { ref, computed, defineProps, defineEmits, watch } from 'vue';
-import { areasApi, checklistApi, checkInApi, getOfflineMode, queueOfflineAction } from '../services/api';
+import { areasApi, checklistApi, checkInApi, incidentsApi, getOfflineMode, queueOfflineAction } from '../services/api';
 import { useTerminology } from '../composables/useTerminology';
 import { alphanumericCompare } from '../utils/sortUtils';
 import { getCachedEventData, updateCachedField, cacheEventData } from '../services/offlineDb';
 import { useOffline } from '../composables/useOffline';
 import MapView from './MapView.vue';
 import BaseModal from './BaseModal.vue';
+import IncidentCard from './IncidentCard.vue';
+import IncidentDetailModal from './IncidentDetailModal.vue';
 
 const { terms, termsLower } = useTerminology();
 const { updatePendingCount } = useOffline();
@@ -316,6 +364,13 @@ defineExpose({
 const showMarshalModal = ref(false);
 const selectedMarshal = ref(null);
 const selectedCheckpoint = ref(null);
+
+// Incidents state
+const incidents = ref([]);
+const incidentsLoading = ref(false);
+const showIncidentsSection = ref(false);
+const selectedIncident = ref(null);
+const showIncidentDetail = ref(false);
 
 const loadDashboard = async () => {
   if (!props.eventId || props.areaIds.length === 0) return;
@@ -384,6 +439,100 @@ const loadDashboard = async () => {
     error.value = err.response?.data?.message || 'Failed to load dashboard';
   } finally {
     loading.value = false;
+  }
+};
+
+// Load incidents for all areas this lead manages
+const loadIncidents = async () => {
+  if (!props.eventId || props.areaIds.length === 0) return;
+
+  incidentsLoading.value = true;
+  try {
+    // Load incidents for each area and combine
+    const allIncidents = [];
+    for (const areaId of props.areaIds) {
+      try {
+        const response = await incidentsApi.getForArea(props.eventId, areaId);
+        const areaIncidents = response.data.incidents || [];
+        allIncidents.push(...areaIncidents);
+      } catch (err) {
+        console.warn(`Failed to load incidents for area ${areaId}:`, err);
+      }
+    }
+
+    // Deduplicate incidents (in case same incident appears in multiple areas)
+    const uniqueIncidents = allIncidents.reduce((acc, incident) => {
+      if (!acc.find(i => i.incidentId === incident.incidentId)) {
+        acc.push(incident);
+      }
+      return acc;
+    }, []);
+
+    // Sort by date, most recent first
+    incidents.value = uniqueIncidents.sort((a, b) => {
+      return new Date(b.incidentTime || b.createdAt) - new Date(a.incidentTime || a.createdAt);
+    });
+  } catch (err) {
+    console.error('Failed to load incidents:', err);
+  } finally {
+    incidentsLoading.value = false;
+  }
+};
+
+// Computed for open incidents count
+const openIncidentsCount = computed(() => {
+  return incidents.value.filter(i => i.status === 'open' || i.status === 'acknowledged' || i.status === 'in_progress').length;
+});
+
+// Incident handlers
+const toggleIncidentsSection = () => {
+  showIncidentsSection.value = !showIncidentsSection.value;
+  if (showIncidentsSection.value && incidents.value.length === 0) {
+    loadIncidents();
+  }
+};
+
+const handleSelectIncident = (incident) => {
+  selectedIncident.value = incident;
+  showIncidentDetail.value = true;
+};
+
+const closeIncidentDetailModal = () => {
+  showIncidentDetail.value = false;
+  selectedIncident.value = null;
+};
+
+const handleIncidentStatusChange = async ({ incidentId, status }) => {
+  try {
+    await incidentsApi.updateStatus(props.eventId, incidentId, { status });
+    await loadIncidents();
+    // Update selected incident if still viewing
+    if (selectedIncident.value?.incidentId === incidentId) {
+      const updated = incidents.value.find(i => i.incidentId === incidentId);
+      if (updated) {
+        selectedIncident.value = updated;
+      }
+    }
+  } catch (err) {
+    console.error('Failed to update incident status:', err);
+    alert(err.response?.data?.message || 'Failed to update status');
+  }
+};
+
+const handleIncidentAddNote = async ({ incidentId, note }) => {
+  try {
+    await incidentsApi.addNote(props.eventId, incidentId, note);
+    await loadIncidents();
+    // Update selected incident if still viewing
+    if (selectedIncident.value?.incidentId === incidentId) {
+      const updated = incidents.value.find(i => i.incidentId === incidentId);
+      if (updated) {
+        selectedIncident.value = updated;
+      }
+    }
+  } catch (err) {
+    console.error('Failed to add note to incident:', err);
+    alert(err.response?.data?.message || 'Failed to add note');
   }
 };
 
@@ -1162,5 +1311,71 @@ watch(() => [props.eventId, props.areaIds], () => {
   .contact-buttons .btn {
     width: 100%;
   }
+}
+
+/* Incidents Section Styles */
+.incidents-accordion-section {
+  margin-top: 1rem;
+  background: #fff3e0;
+  border: 1px solid #ffcc80;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.incidents-accordion-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  background: #fff3e0;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #333;
+  transition: background 0.2s;
+  gap: 0.5rem;
+}
+
+.incidents-accordion-header:hover {
+  background: #ffe0b2;
+}
+
+.incidents-accordion-header.active {
+  background: #ffcc80;
+  border-bottom: 1px solid #ffb74d;
+}
+
+.incidents-header-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.incidents-title {
+  font-weight: 600;
+  color: #333;
+}
+
+.incidents-badge {
+  padding: 0.2rem 0.6rem;
+  background: #f44336;
+  color: white;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.incidents-accordion-content {
+  padding: 1rem;
+  background: #fffbf5;
+}
+
+.incidents-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 </style>

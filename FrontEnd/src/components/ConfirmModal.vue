@@ -4,7 +4,7 @@
       <h3>{{ title }}</h3>
       <p>{{ message }}</p>
       <div class="confirm-actions">
-        <button @click="handleCancel" class="btn btn-secondary">{{ cancelText }}</button>
+        <button v-if="showCancel" @click="handleCancel" class="btn btn-secondary">{{ cancelText }}</button>
         <button @click="handleConfirm" class="btn btn-primary">{{ confirmText }}</button>
       </div>
     </div>
@@ -34,6 +34,10 @@ defineProps({
   cancelText: {
     type: String,
     default: 'Cancel',
+  },
+  showCancel: {
+    type: Boolean,
+    default: true,
   },
 });
 

@@ -107,6 +107,15 @@
           @select-note="handleSelectNote"
         />
 
+        <IncidentsTab
+          v-if="activeTab === 'incidents'"
+          :incidents="incidents"
+          :areas="areas"
+          :loading="incidentsLoading"
+          @select-incident="handleSelectIncident"
+          @report-incident="handleReportIncident"
+        />
+
         <ContactsTab
           v-if="activeTab === 'contacts'"
           :contacts="contacts"
@@ -173,6 +182,7 @@
       :event-default-style-size="event?.defaultCheckpointStyleSize || event?.DefaultCheckpointStyleSize || ''"
       :event-default-style-map-rotation="event?.defaultCheckpointStyleMapRotation ?? event?.DefaultCheckpointStyleMapRotation ?? ''"
       :event-people-term="event?.peopleTerm || 'Marshals'"
+      :incidents="selectedLocationIncidents"
       :z-index="showEditArea ? 1100 : 1000"
       @close="closeEditLocationModal"
       @save="handleUpdateLocation"
@@ -181,6 +191,7 @@
       @remove-assignment="handleRemoveLocationAssignment"
       @open-assign-modal="openCreateMarshalModal"
       @update:isDirty="markFormDirty"
+      @select-incident="handleSelectLocationIncident"
     />
 
     <ShareLinkModal
@@ -238,6 +249,7 @@
       :is-editing="!!selectedMarshal"
       :event-notes="notes"
       :all-checklist-items="checklistItems"
+      :incidents="selectedMarshalIncidents"
       :is-dirty="formDirty"
       @close="closeEditMarshalModal"
       @save="handleSaveMarshal"
@@ -245,6 +257,7 @@
       @remove-assignment="handleRemoveMarshalAssignment"
       @assign-to-location="assignMarshalToLocation"
       @update:isDirty="markFormDirty"
+      @select-incident="handleSelectMarshalIncident"
     />
 
     <ImportMarshalsModal
@@ -343,6 +356,60 @@
       @update:isDirty="markFormDirty"
     />
 
+    <IncidentDetailModal
+      :show="showIncidentDetail"
+      :incident="selectedIncident"
+      :route="event?.route || []"
+      :checkpoints="locationStatuses"
+      :can-manage="true"
+      @close="closeIncidentDetailModal"
+      @status-change="handleIncidentStatusChange"
+      @open-add-note="openAddIncidentNoteModal"
+    />
+
+    <!-- Add Incident Update Modal -->
+    <BaseModal
+      :show="showAddIncidentNoteModal"
+      title="Add update"
+      size="small"
+      @close="closeAddIncidentNoteModal"
+    >
+      <div class="add-note-form">
+        <textarea
+          v-model="incidentNoteText"
+          class="note-textarea"
+          placeholder="Enter your update..."
+          rows="4"
+        ></textarea>
+      </div>
+      <template #footer>
+        <div class="modal-footer-actions">
+          <button type="button" class="btn btn-secondary" @click="closeAddIncidentNoteModal">
+            Cancel
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            @click="submitIncidentNote"
+            :disabled="!incidentNoteText.trim() || submittingIncidentNote"
+          >
+            {{ submittingIncidentNote ? 'Adding...' : 'Add update' }}
+          </button>
+        </div>
+      </template>
+    </BaseModal>
+
+    <ReportIncidentModal
+      :show="showReportIncident"
+      :event-id="route.params.eventId"
+      :checkpoint="null"
+      :initial-location="null"
+      :checkpoints="locationStatuses"
+      :route="event?.route || []"
+      @close="showReportIncident = false"
+      @submit="handleSubmitIncident"
+    />
+
     <EditContactModal
       :show="showEditContact"
       :contact="selectedContact"
@@ -406,7 +473,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useEventsStore } from '../stores/events';
-import { authApi, checkInApi, eventAdminsApi, eventsApi, locationsApi, marshalsApi, areasApi, checklistApi, notesApi, contactsApi } from '../services/api';
+import { authApi, checkInApi, eventAdminsApi, eventsApi, locationsApi, marshalsApi, areasApi, checklistApi, notesApi, contactsApi, incidentsApi } from '../services/api';
 
 // Composables
 import { useTabs } from '../composables/useTabs';
@@ -436,6 +503,7 @@ import NotesTab from './AdminEventManage/NotesTab.vue';
 import ContactsTab from './AdminEventManage/ContactsTab.vue';
 import EventDetailsTab from './AdminEventManage/EventDetailsTab.vue';
 import SettingsTab from './AdminEventManage/SettingsTab.vue';
+import IncidentsTab from './AdminEventManage/IncidentsTab.vue';
 import CheckpointsList from '../components/event-manage/lists/CheckpointsList.vue';
 import AreasList from '../components/event-manage/lists/AreasList.vue';
 import ResponsiveTabHeader from '../components/ResponsiveTabHeader.vue';
@@ -455,9 +523,12 @@ import ShiftCheckpointTimesModal from '../components/event-manage/modals/ShiftCh
 import EditAreaModal from '../components/event-manage/modals/EditAreaModal.vue';
 import EditChecklistItemModal from '../components/event-manage/modals/EditChecklistItemModal.vue';
 import EditNoteModal from '../components/event-manage/modals/EditNoteModal.vue';
+import IncidentDetailModal from '../components/IncidentDetailModal.vue';
+import ReportIncidentModal from '../components/ReportIncidentModal.vue';
 import EditContactModal from '../components/event-manage/modals/EditContactModal.vue';
 import InfoModal from '../components/InfoModal.vue';
 import ConfirmModal from '../components/ConfirmModal.vue';
+import BaseModal from '../components/BaseModal.vue';
 import FullscreenMapOverlay from '../components/FullscreenMapOverlay.vue';
 import AddLocationModal from '../components/event-manage/modals/AddLocationModal.vue';
 import ThemeToggle from '../components/ThemeToggle.vue';
@@ -496,7 +567,7 @@ const eventAdminsComposable = useEventAdmins(eventId);
 const { colorScheme } = useAdminTheme();
 
 // Computed tabs with dynamic labels from terminology
-// Order: Details, Course, Zones, Locations, Volunteers, Notes, Tasks, Contacts
+// Order: Details, Course, Zones, Locations, Volunteers, Notes, Incidents, Tasks, Contacts
 const mainTabs = computed(() => [
   { value: 'details', label: 'Event details', icon: 'details' },
   { value: 'course', label: tabLabels.value.course, icon: 'course' },
@@ -504,6 +575,7 @@ const mainTabs = computed(() => [
   { value: 'checkpoints', label: tabLabels.value.checkpoints, icon: 'checkpoint' },
   { value: 'marshals', label: tabLabels.value.marshals, icon: 'marshal' },
   { value: 'notes', label: 'Notes', icon: 'notes' },
+  { value: 'incidents', label: 'Incidents', icon: 'incidents' },
   { value: 'checklists', label: tabLabels.value.checklists, icon: 'checklist' },
   { value: 'contacts', label: 'Contacts', icon: 'contacts' },
   { value: 'settings', label: 'Settings', icon: 'settings' },
@@ -513,6 +585,18 @@ const mainTabs = computed(() => [
 const event = ref(null);
 const locations = ref([]);
 const locationStatuses = ref([]);
+
+// Track when each tab's data was last loaded (for stale data refresh)
+const STALE_DATA_THRESHOLD_MS = 60000; // 60 seconds
+const dataLastLoadedAt = ref({
+  marshals: 0,
+  areas: 0,
+  checkpoints: 0,
+  checklists: 0,
+  notes: 0,
+  incidents: 0,
+  contacts: 0,
+});
 const selectedLocation = ref(null);
 const showAddLocation = ref(false);
 const courseAreasTab = ref(null);
@@ -632,6 +716,14 @@ const notes = ref([]);
 const selectedNote = ref(null);
 const showEditNote = ref(false);
 const noteInitialTab = ref('details');
+const incidents = ref([]);
+const incidentsLoading = ref(false);
+const selectedIncident = ref(null);
+const showIncidentDetail = ref(false);
+const showReportIncident = ref(false);
+const showAddIncidentNoteModal = ref(false);
+const incidentNoteText = ref('');
+const submittingIncidentNote = ref(false);
 const contacts = ref([]);
 const contactRoles = ref({ builtInRoles: [], customRoles: [] });
 const selectedContact = ref(null);
@@ -652,6 +744,25 @@ const switchToMarshalMode = () => {
 // Computed
 const marshalLink = computed(() => {
   return `${window.location.origin}/#/event/${route.params.eventId}`;
+});
+
+// Incidents for the selected location (checkpoint)
+const selectedLocationIncidents = computed(() => {
+  if (!selectedLocation.value?.id) return [];
+  return incidents.value.filter(
+    incident => incident.checkpointId === selectedLocation.value.id
+  );
+});
+
+// Incidents for the selected marshal (at any of their assigned checkpoints)
+const selectedMarshalIncidents = computed(() => {
+  if (!selectedMarshal.value?.id) return [];
+  // Get the marshal's assigned checkpoint IDs
+  const assignedCheckpointIds = selectedMarshal.value.assignedLocationIds || [];
+  // Filter incidents that are at any of these checkpoints
+  return incidents.value.filter(
+    incident => assignedCheckpointIds.includes(incident.checkpointId)
+  );
 });
 
 const allAssignments = computed(() => {
@@ -911,7 +1022,7 @@ const loadEventData = async () => {
       setTerminology(event.value);
     }
 
-    // Phase 2: Load all other data in parallel (8 independent calls)
+    // Phase 2: Load all other data in parallel (9 independent calls)
     const results = await Promise.allSettled([
       eventsStore.fetchLocations(route.params.eventId),
       eventsStore.fetchEventStatus(route.params.eventId),
@@ -920,6 +1031,7 @@ const loadEventData = async () => {
       loadAreas(),
       loadChecklists(),
       loadNotes(),
+      loadIncidents(),
       loadContacts(),
     ]);
 
@@ -943,6 +1055,7 @@ const loadMarshals = async () => {
   try {
     const response = await marshalsApi.getByEvent(route.params.eventId);
     marshals.value = response.data;
+    dataLastLoadedAt.value.marshals = Date.now();
   } catch (error) {
     console.error('Failed to load marshals:', error);
   }
@@ -952,6 +1065,7 @@ const loadAreas = async () => {
   try {
     const response = await areasApi.getByEvent(route.params.eventId);
     areas.value = response.data;
+    dataLastLoadedAt.value.areas = Date.now();
   } catch (error) {
     console.error('Failed to load areas:', error);
   }
@@ -965,6 +1079,7 @@ const loadChecklists = async () => {
     ]);
     checklistItems.value = itemsResponse.data;
     checklistCompletionReport.value = reportResponse.data;
+    dataLastLoadedAt.value.checklists = Date.now();
   } catch (error) {
     console.error('Failed to load checklists:', error);
   }
@@ -974,8 +1089,22 @@ const loadNotes = async () => {
   try {
     const response = await notesApi.getByEvent(route.params.eventId);
     notes.value = response.data;
+    dataLastLoadedAt.value.notes = Date.now();
   } catch (error) {
     console.error('Failed to load notes:', error);
+  }
+};
+
+const loadIncidents = async () => {
+  incidentsLoading.value = true;
+  try {
+    const response = await incidentsApi.getAll(route.params.eventId);
+    incidents.value = response.data.incidents || [];
+    dataLastLoadedAt.value.incidents = Date.now();
+  } catch (error) {
+    console.error('Failed to load incidents:', error);
+  } finally {
+    incidentsLoading.value = false;
   }
 };
 
@@ -987,6 +1116,7 @@ const loadContacts = async () => {
     ]);
     contacts.value = contactsResponse.data;
     contactRoles.value = rolesResponse.data;
+    dataLastLoadedAt.value.contacts = Date.now();
   } catch (error) {
     console.error('Failed to load contacts:', error);
   }
@@ -999,6 +1129,7 @@ const reloadLocationsAndStatus = async () => {
     eventsStore.fetchEventStatus(route.params.eventId),
   ]);
   locations.value = eventsStore.locations;
+  dataLastLoadedAt.value.checkpoints = Date.now();
   locationStatuses.value = eventsStore.eventStatus.locations;
 };
 
@@ -1239,6 +1370,81 @@ const closeEditNoteModal = () => {
   showEditNote.value = false;
   selectedNote.value = null;
   formDirty.value = false;
+};
+
+// Incident handlers
+const handleReportIncident = () => {
+  showReportIncident.value = true;
+};
+
+const handleSubmitIncident = async (incidentData) => {
+  try {
+    await incidentsApi.create(route.params.eventId, incidentData);
+    showReportIncident.value = false;
+    await loadIncidents();
+  } catch (error) {
+    console.error('Failed to report incident:', error);
+    alert(error.response?.data?.message || 'Failed to report incident. Please try again.');
+  }
+};
+
+const handleSelectIncident = (incident) => {
+  selectedIncident.value = incident;
+  showIncidentDetail.value = true;
+};
+
+const closeIncidentDetailModal = () => {
+  showIncidentDetail.value = false;
+  selectedIncident.value = null;
+};
+
+const handleIncidentStatusChange = async ({ incidentId, status }) => {
+  try {
+    await incidentsApi.updateStatus(route.params.eventId, incidentId, { status });
+    await loadIncidents();
+    // Update the selected incident if still viewing
+    if (selectedIncident.value?.incidentId === incidentId) {
+      const updated = incidents.value.find(i => i.incidentId === incidentId);
+      if (updated) {
+        selectedIncident.value = updated;
+      }
+    }
+  } catch (error) {
+    console.error('Failed to update incident status:', error);
+    alert(error.response?.data?.message || 'Failed to update status. Please try again.');
+  }
+};
+
+const openAddIncidentNoteModal = () => {
+  incidentNoteText.value = '';
+  showAddIncidentNoteModal.value = true;
+};
+
+const closeAddIncidentNoteModal = () => {
+  showAddIncidentNoteModal.value = false;
+  incidentNoteText.value = '';
+};
+
+const submitIncidentNote = async () => {
+  if (!incidentNoteText.value.trim() || !selectedIncident.value) return;
+
+  submittingIncidentNote.value = true;
+  try {
+    await incidentsApi.addNote(route.params.eventId, selectedIncident.value.incidentId, incidentNoteText.value.trim());
+    // Close the modal
+    closeAddIncidentNoteModal();
+    await loadIncidents();
+    // Update the selected incident if still viewing
+    const updated = incidents.value.find(i => i.incidentId === selectedIncident.value.incidentId);
+    if (updated) {
+      selectedIncident.value = updated;
+    }
+  } catch (error) {
+    console.error('Failed to add note to incident:', error);
+    alert(error.response?.data?.message || 'Failed to add note. Please try again.');
+  } finally {
+    submittingIncidentNote.value = false;
+  }
 };
 
 // Contacts handlers
@@ -1793,6 +1999,12 @@ const closeEditLocationModal = () => {
   pendingAssignments.value = [];
   pendingDeleteAssignments.value = [];
   formDirty.value = false;
+};
+
+// Handle selecting an incident from the location modal
+const handleSelectLocationIncident = (incident) => {
+  selectedIncident.value = incident;
+  showIncidentDetail.value = true;
 };
 
 const closeAssignMarshalModal = () => {
@@ -2437,6 +2649,12 @@ const closeEditMarshalModal = () => {
   formDirty.value = false;
 };
 
+// Handle selecting an incident from the marshal modal
+const handleSelectMarshalIncident = (incident) => {
+  selectedIncident.value = incident;
+  showIncidentDetail.value = true;
+};
+
 const handleImportMarshalsSubmit = async ({ file }) => {
   const result = await importExport.importMarshals(file);
   if (result) {
@@ -2536,12 +2754,54 @@ const stopDynamicCheckpointPolling = () => {
   }
 };
 
-// Watch for tab changes to start/stop polling
+// Watch for tab changes to start/stop polling and refresh stale data
 watch(activeTab, (newTab) => {
   if (newTab === 'course') {
     startDynamicCheckpointPolling();
   } else {
     stopDynamicCheckpointPolling();
+  }
+
+  // Check if data for this tab is stale (>60 seconds) and refresh in background
+  const now = Date.now();
+  const isStale = (key) => now - dataLastLoadedAt.value[key] > STALE_DATA_THRESHOLD_MS;
+
+  switch (newTab) {
+    case 'marshals':
+      if (isStale('marshals')) {
+        loadMarshals();
+      }
+      break;
+    case 'areas':
+      if (isStale('areas')) {
+        loadAreas();
+      }
+      break;
+    case 'checkpoints':
+      if (isStale('checkpoints')) {
+        reloadLocationsAndStatus();
+      }
+      break;
+    case 'checklists':
+      if (isStale('checklists')) {
+        loadChecklists();
+      }
+      break;
+    case 'notes':
+      if (isStale('notes')) {
+        loadNotes();
+      }
+      break;
+    case 'incidents':
+      if (isStale('incidents')) {
+        loadIncidents();
+      }
+      break;
+    case 'contacts':
+      if (isStale('contacts')) {
+        loadContacts();
+      }
+      break;
   }
 });
 
@@ -2569,6 +2829,35 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* Add Incident Note Modal */
+.add-note-form {
+  padding: 0.5rem 0;
+}
+
+.note-textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 80px;
+}
+
+.note-textarea:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.modal-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
 /* Preserved styles from original file */
 .admin-event-manage {
   min-height: 100vh;

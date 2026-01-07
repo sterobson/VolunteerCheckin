@@ -364,4 +364,20 @@ export const contactsApi = {
   getMyContacts: (eventId) => api.get(`/events/${eventId}/my-contacts`),
 };
 
+// Incidents API
+export const incidentsApi = {
+  // Create new incident (marshal)
+  create: (eventId, data) => api.post(`/events/${eventId}/incidents`, data),
+  // Get all incidents for event (admin)
+  getAll: (eventId, params = {}) => api.get(`/events/${eventId}/incidents`, { params }),
+  // Get incidents for area (area lead)
+  getForArea: (eventId, areaId) => api.get(`/events/${eventId}/areas/${areaId}/incidents`),
+  // Get single incident
+  get: (eventId, incidentId) => api.get(`/events/${eventId}/incidents/${incidentId}`),
+  // Update status (admin/area lead)
+  updateStatus: (eventId, incidentId, data) => api.patch(`/events/${eventId}/incidents/${incidentId}`, data),
+  // Add note (admin/area lead)
+  addNote: (eventId, incidentId, note) => api.post(`/events/${eventId}/incidents/${incidentId}/notes`, { note }),
+};
+
 export default api;

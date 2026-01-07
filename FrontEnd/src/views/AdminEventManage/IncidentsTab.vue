@@ -222,18 +222,18 @@ const sortedIncidents = computed(() => {
 }
 
 .summary-item.open {
-  background: #e3f2fd;
-  color: #1565c0;
+  background: var(--status-open-bg);
+  color: var(--status-open);
 }
 
 .summary-item.in-progress {
-  background: #f3e5f5;
-  color: #7b1fa2;
+  background: var(--status-in-progress-bg);
+  color: var(--status-in-progress);
 }
 
 .summary-item.resolved {
-  background: #e8f5e9;
-  color: #2e7d32;
+  background: var(--status-resolved-bg);
+  color: var(--status-resolved);
 }
 
 .filters-section {
@@ -291,17 +291,17 @@ const sortedIncidents = computed(() => {
 }
 
 /* Status dots */
-.status-dot.open { background: #1565c0; }
-.status-dot.acknowledged { background: #e65100; }
-.status-dot.in_progress { background: #7b1fa2; }
-.status-dot.resolved { background: #2e7d32; }
-.status-dot.closed { background: #616161; }
+.status-dot.open { background: var(--status-open); }
+.status-dot.acknowledged { background: var(--status-acknowledged); }
+.status-dot.in_progress { background: var(--status-in-progress); }
+.status-dot.resolved { background: var(--status-resolved); }
+.status-dot.closed { background: var(--status-closed); }
 
 /* Severity dots */
-.severity-dot.critical { background: #dc3545; }
-.severity-dot.high { background: #fd7e14; }
-.severity-dot.medium { background: #ffc107; }
-.severity-dot.low { background: #667eea; }
+.severity-dot.critical { background: var(--severity-critical); }
+.severity-dot.high { background: var(--severity-high); }
+.severity-dot.medium { background: var(--severity-medium); }
+.severity-dot.low { background: var(--severity-low); }
 
 .loading-state,
 .empty-state {
@@ -333,12 +333,12 @@ const sortedIncidents = computed(() => {
 }
 
 .btn-secondary {
-  background: #6c757d;
+  background: var(--btn-secondary-bg);
   color: white;
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--btn-secondary-hover);
 }
 
 @media (max-width: 768px) {

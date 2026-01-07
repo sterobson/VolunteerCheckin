@@ -359,7 +359,7 @@ onMounted(() => {
 }
 
 .btn-primary:hover {
-  background: #5568d3;
+  background: var(--accent-primary-hover);
 }
 
 .btn-secondary {
@@ -372,12 +372,12 @@ onMounted(() => {
 }
 
 .btn-danger {
-  background: var(--accent-danger);
+  background: var(--danger);
   color: white;
 }
 
 .btn-danger:hover {
-  background: #cc0000;
+  background: var(--danger-hover);
 }
 
 @media (max-width: 768px) {

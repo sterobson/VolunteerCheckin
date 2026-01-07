@@ -115,13 +115,13 @@ onMounted(() => {
 <style scoped>
 .admin-profile {
   min-height: 100vh;
-  background: #f5f7fa;
+  background: var(--bg-secondary);
 }
 
 .header {
-  background: white;
+  background: var(--card-bg);
   padding: 1.5rem 2rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -129,7 +129,7 @@ onMounted(() => {
 
 .header h1 {
   margin: 0;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .header-actions {
@@ -139,7 +139,7 @@ onMounted(() => {
 }
 
 .user-email {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.875rem;
 }
 
@@ -153,10 +153,10 @@ onMounted(() => {
 }
 
 .section {
-  background: white;
+  background: var(--card-bg);
   padding: 2rem;
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .section-header {
@@ -168,18 +168,18 @@ onMounted(() => {
 
 .section-header h2 {
   margin: 0;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .loading,
 .error {
   text-align: center;
   padding: 3rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .error p {
-  color: #ff4444;
+  color: var(--danger);
   margin-bottom: 1rem;
 }
 
@@ -197,17 +197,17 @@ onMounted(() => {
 
 .profile-field label {
   font-weight: 600;
-  color: #333;
+  color: var(--text-dark);
   font-size: 0.875rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .field-value {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 1rem;
   padding: 0.75rem;
-  background: #f5f7fa;
+  background: var(--bg-muted);
   border-radius: 6px;
 }
 
@@ -220,13 +220,13 @@ onMounted(() => {
 }
 
 .badge-success {
-  background: #d4edda;
-  color: #155724;
+  background: var(--success-bg);
+  color: var(--success-text);
 }
 
 .badge-secondary {
-  background: #e0e0e0;
-  color: #666;
+  background: var(--btn-cancel-bg);
+  color: var(--text-secondary);
 }
 
 .btn {
@@ -239,20 +239,20 @@ onMounted(() => {
 }
 
 .btn-primary {
-  background: #667eea;
+  background: var(--brand-primary);
   color: white;
 }
 
 .btn-primary:hover {
-  background: #5568d3;
+  background: var(--brand-primary-hover);
 }
 
 .btn-secondary {
-  background: #e0e0e0;
-  color: #333;
+  background: var(--btn-cancel-bg);
+  color: var(--btn-cancel-text);
 }
 
 .btn-secondary:hover {
-  background: #d0d0d0;
+  background: var(--btn-cancel-hover);
 }
 </style>

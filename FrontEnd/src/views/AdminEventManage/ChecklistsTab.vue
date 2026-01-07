@@ -615,17 +615,17 @@ const getIncompleteDetails = (item) => {
 }
 
 .checkbox-list::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--bg-secondary);
   border-radius: 3px;
 }
 
 .checkbox-list::-webkit-scrollbar-thumb {
-  background: #888;
+  background: var(--text-light);
   border-radius: 3px;
 }
 
 .checkbox-list::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: var(--text-darker);
 }
 
 .checkbox-item {
@@ -748,12 +748,12 @@ const getIncompleteDetails = (item) => {
 }
 
 .btn-secondary {
-  background: #6c757d;
+  background: var(--btn-secondary-bg);
   color: white;
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--btn-secondary-hover);
 }
 
 @media (max-width: 768px) {

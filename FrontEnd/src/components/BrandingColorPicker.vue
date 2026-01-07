@@ -133,7 +133,7 @@ function selectColor(color) {
 .picker-label {
   display: block;
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 0.25rem;
 }
 
@@ -142,21 +142,21 @@ function selectColor(color) {
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0.75rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-medium);
   border-radius: 6px;
-  background: white;
+  background: var(--card-bg);
   cursor: pointer;
   min-width: 140px;
   transition: all 0.2s;
 }
 
 .color-button:hover {
-  border-color: #667eea;
+  border-color: var(--brand-primary);
 }
 
 .color-button.active {
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 2px var(--brand-shadow);
 }
 
 .color-swatch {
@@ -174,7 +174,7 @@ function selectColor(color) {
 }
 
 .arrow {
-  color: #999;
+  color: var(--text-muted);
   font-size: 0.7rem;
 }
 
@@ -183,10 +183,10 @@ function selectColor(color) {
   top: 100%;
   left: 0;
   margin-top: 4px;
-  background: white;
-  border: 1px solid #ddd;
+  background: var(--card-bg);
+  border: 1px solid var(--border-medium);
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
   z-index: 100;
   min-width: 280px;
 }
@@ -196,7 +196,7 @@ function selectColor(color) {
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border-lighter);
   font-weight: 500;
 }
 
@@ -205,13 +205,13 @@ function selectColor(color) {
   border: none;
   font-size: 1.25rem;
   cursor: pointer;
-  color: #666;
+  color: var(--text-secondary);
   padding: 0;
   line-height: 1;
 }
 
 .popup-close:hover {
-  color: #333;
+  color: var(--text-dark);
 }
 
 .color-grid {
@@ -238,16 +238,16 @@ function selectColor(color) {
 }
 
 .color-option.selected {
-  border-color: #333;
-  box-shadow: 0 0 0 2px white, 0 0 0 4px #333;
+  border-color: var(--text-dark);
+  box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px var(--text-dark);
 }
 
 .default-option {
-  background: linear-gradient(135deg, #f0f0f0 50%, #ddd 50%);
+  background: linear-gradient(135deg, var(--bg-hover) 50%, var(--border-medium) 50%);
   flex-direction: column;
   gap: 2px;
   font-size: 0.6rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .default-icon {
@@ -262,7 +262,7 @@ function selectColor(color) {
 
 .contrast-preview {
   padding: 0.75rem 1rem;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border-lighter);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -270,7 +270,7 @@ function selectColor(color) {
 
 .preview-label {
   font-size: 0.8rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .preview-text {

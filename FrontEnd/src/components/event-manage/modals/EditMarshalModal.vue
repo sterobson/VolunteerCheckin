@@ -84,18 +84,15 @@
       @change="handleInput"
     />
 
-    <!-- Incidents Tab (only when there are incidents) -->
+    <!-- Incidents Tab (only shown if there are incidents) -->
     <div v-if="activeTab === 'incidents'" class="tab-content incidents-tab">
-      <div v-if="incidents && incidents.length > 0" class="incidents-list">
+      <div class="incidents-list">
         <IncidentCard
           v-for="incident in incidents"
           :key="incident.incidentId"
           :incident="incident"
-          @click="$emit('select-incident', incident)"
+          @select="$emit('select-incident', $event)"
         />
-      </div>
-      <div v-else class="empty-state">
-        No incidents for this {{ termsLower.person }}.
       </div>
     </div>
 
@@ -223,7 +220,7 @@ const availableTabs = computed(() => {
     { value: 'checklists', label: terms.value.checklists, icon: 'checklist' },
     { value: 'notes', label: 'Notes', icon: 'notes' },
   ];
-  // Only show incidents tab if there are incidents for this marshal or their checkpoints
+  // Only show incidents tab if there are incidents
   if (props.incidents && props.incidents.length > 0) {
     tabs.push({ value: 'incidents', label: 'Incidents', icon: 'incidents' });
   }
@@ -415,21 +412,21 @@ const handleClose = () => {
 }
 
 .btn-primary {
-  background: #007bff;
-  color: white;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
 }
 
 .btn-primary:hover {
-  background: #0056b3;
+  background: var(--btn-primary-hover);
 }
 
 .btn-danger {
-  background: #dc3545;
-  color: white;
+  background: var(--danger);
+  color: var(--btn-primary-text);
 }
 
 .btn-danger:hover {
-  background: #c82333;
+  background: var(--danger-hover);
 }
 
 .placeholder-message {
@@ -437,7 +434,7 @@ const handleClose = () => {
   align-items: center;
   justify-content: center;
   min-height: 150px;
-  color: #666;
+  color: var(--text-secondary);
   font-style: italic;
   text-align: center;
   padding: 2rem;
@@ -447,7 +444,6 @@ const handleClose = () => {
   margin: 0;
 }
 
-/* Incidents tab */
 .incidents-tab {
   padding-top: 0.5rem;
 }
@@ -456,16 +452,5 @@ const handleClose = () => {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-}
-
-.empty-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 150px;
-  color: var(--text-muted, #666);
-  font-style: italic;
-  text-align: center;
-  padding: 2rem;
 }
 </style>

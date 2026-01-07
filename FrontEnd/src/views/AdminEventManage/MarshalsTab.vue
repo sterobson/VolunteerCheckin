@@ -81,10 +81,10 @@
             </template>
             <tr v-else class="marshal-row" @click="$emit('select-marshal', marshal)">
               <td>{{ marshal.name }}</td>
-              <td style="color: #999; font-style: italic;">No {{ terms.checkpoint.toLowerCase() }} assigned</td>
+              <td class="no-checkpoint-text">No {{ terms.checkpoint.toLowerCase() }} assigned</td>
               <td>
                 <span class="hide-on-mobile">-</span>
-                <span class="status-icon show-on-mobile" style="color: #999;">-</span>
+                <span class="status-icon show-on-mobile no-checkpoint-text">-</span>
               </td>
               <td class="hide-on-mobile last-active-cell">
                 <span v-if="marshal.lastAccessedDate" class="last-active-text">
@@ -217,6 +217,11 @@ const getStatusClass = (assignment) => {
 <style scoped>
 .marshals-tab {
   width: 100%;
+}
+
+.no-checkpoint-text {
+  color: var(--text-muted);
+  font-style: italic;
 }
 
 .marshals-tab-header {

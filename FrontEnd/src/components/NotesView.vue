@@ -448,11 +448,11 @@ defineExpose({
 .empty-state {
   text-align: center;
   padding: 2rem 1rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .error-state {
-  color: #dc3545;
+  color: var(--danger);
 }
 
 .empty-state {
@@ -466,16 +466,16 @@ defineExpose({
 }
 
 .note-item {
-  background: #f8f9fa;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
   border-radius: 8px;
   padding: 1rem;
   transition: all 0.2s;
 }
 
 .note-item.pinned {
-  border-left: 4px solid #667eea;
-  background: #fafbff;
+  border-left: 4px solid var(--brand-primary);
+  background: var(--brand-primary-bg);
 }
 
 .note-header {
@@ -506,14 +506,14 @@ defineExpose({
   flex-shrink: 0;
 }
 
-.priority-indicator.urgent { background: #dc3545; }
-.priority-indicator.high { background: #fd7e14; }
-.priority-indicator.normal { background: #28a745; }
-.priority-indicator.low { background: #6c757d; }
+.priority-indicator.urgent { background: var(--priority-urgent); }
+.priority-indicator.high { background: var(--priority-high); }
+.priority-indicator.normal { background: var(--priority-normal); }
+.priority-indicator.low { background: var(--priority-low); }
 
 .note-title {
   font-size: 0.95rem;
-  color: #333;
+  color: var(--text-dark);
   word-wrap: break-word;
 }
 
@@ -526,8 +526,8 @@ defineExpose({
 
 .category-badge {
   padding: 0.15rem 0.5rem;
-  background: #e9ecef;
-  color: #495057;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
   border-radius: 10px;
   font-size: 0.7rem;
   font-weight: 500;
@@ -542,28 +542,28 @@ defineExpose({
 }
 
 .priority-badge.urgent {
-  background: #f8d7da;
-  color: #721c24;
+  background: var(--priority-urgent-bg);
+  color: var(--priority-urgent-text);
 }
 
 .priority-badge.high {
-  background: #fff3cd;
-  color: #856404;
+  background: var(--priority-high-bg);
+  color: var(--priority-high-text);
 }
 
 .priority-badge.normal {
-  background: #d4edda;
-  color: #155724;
+  background: var(--priority-normal-bg);
+  color: var(--priority-normal-text);
 }
 
 .priority-badge.low {
-  background: #e2e3e5;
-  color: #383d41;
+  background: var(--priority-low-bg);
+  color: var(--priority-low-text);
 }
 
 .note-content {
   font-size: 0.9rem;
-  color: #555;
+  color: var(--text-darker);
   line-height: 1.5;
   margin-bottom: 0.75rem;
   white-space: pre-wrap;
@@ -574,9 +574,9 @@ defineExpose({
   justify-content: space-between;
   align-items: center;
   font-size: 0.75rem;
-  color: #999;
+  color: var(--text-muted);
   padding-top: 0.5rem;
-  border-top: 1px solid #e9ecef;
+  border-top: 1px solid var(--border-lighter);
 }
 
 .scope-info {
@@ -594,12 +594,12 @@ defineExpose({
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--btn-secondary-hover);
 }
 
 .btn-small {

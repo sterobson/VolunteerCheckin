@@ -72,7 +72,7 @@ const handleClose = () => {
 
 <style scoped>
 .instruction {
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 1.5rem;
 }
 
@@ -85,7 +85,7 @@ const handleClose = () => {
 .form-input {
   flex: 1;
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-medium);
   border-radius: 4px;
   font-size: 0.9rem;
 }
@@ -100,20 +100,20 @@ const handleClose = () => {
 }
 
 .btn-primary {
-  background: #007bff;
-  color: white;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
 }
 
 .btn-primary:hover {
-  background: #0056b3;
+  background: var(--btn-primary-hover);
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--btn-secondary-hover);
 }
 </style>

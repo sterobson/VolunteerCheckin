@@ -187,20 +187,22 @@ const handleClose = () => {
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 500;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .form-input {
   width: 100%;
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-medium);
   border-radius: 4px;
   font-size: 1rem;
+  background: var(--input-bg);
+  color: var(--text-primary);
 }
 
 .form-input:focus {
   outline: none;
-  border-color: #007bff;
+  border-color: var(--input-focus-border);
 }
 
 .form-row {
@@ -209,7 +211,7 @@ const handleClose = () => {
 }
 
 .form-error {
-  color: #dc3545;
+  color: var(--danger);
   font-size: 0.85rem;
   margin-top: 0.25rem;
   display: block;
@@ -227,8 +229,8 @@ const handleClose = () => {
 
 .icon-btn {
   padding: 0.5rem 0.75rem;
-  border: 1px solid #007bff;
-  background: white;
+  border: 1px solid var(--brand-primary);
+  background: var(--card-bg);
   border-radius: 4px;
   cursor: pointer;
   font-size: 1.2rem;
@@ -238,7 +240,7 @@ const handleClose = () => {
 }
 
 .icon-btn:hover {
-  background: #007bff;
+  background: var(--brand-primary);
   transform: scale(1.05);
 }
 
@@ -259,20 +261,20 @@ const handleClose = () => {
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
 }
 
 .btn-secondary:hover {
-  background: #5a6268;
+  background: var(--btn-secondary-hover);
 }
 
 .btn-primary {
-  background: #007bff;
-  color: white;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
 }
 
 .btn-primary:hover {
-  background: #0056b3;
+  background: var(--btn-primary-hover);
 }
 </style>

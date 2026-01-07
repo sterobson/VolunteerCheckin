@@ -811,11 +811,11 @@ watch(() => [props.eventId, props.areaIds], () => {
 .empty-state {
   padding: 1.5rem;
   text-align: center;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .error-state {
-  color: #dc3545;
+  color: var(--danger);
 }
 
 .error-state button {
@@ -830,8 +830,8 @@ watch(() => [props.eventId, props.areaIds], () => {
 }
 
 .checkpoint-accordion-section {
-  background: #f8f9fa;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
   border-radius: 10px;
   overflow: hidden;
 }
@@ -842,24 +842,24 @@ watch(() => [props.eventId, props.areaIds], () => {
   justify-content: space-between;
   align-items: flex-start;
   padding: 1rem 1.25rem;
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   border: none;
   cursor: pointer;
   text-align: left;
   font-size: 1rem;
   font-weight: 600;
-  color: #333;
+  color: var(--text-dark);
   transition: background 0.2s;
   gap: 0.5rem;
 }
 
 .checkpoint-accordion-header:hover {
-  background: #f0f2f5;
+  background: var(--bg-hover);
 }
 
 .checkpoint-accordion-header.active {
-  background: #e8ecf4;
-  border-bottom: 1px solid #e0e0e0;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-light);
 }
 
 .checkpoint-header-content {
@@ -879,13 +879,13 @@ watch(() => [props.eventId, props.areaIds], () => {
 
 .checkpoint-name {
   font-weight: 600;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .area-badge {
   display: inline-block;
   padding: 0.2rem 0.6rem;
-  background: #667eea;
+  background: var(--brand-primary);
   color: white;
   font-size: 0.75rem;
   font-weight: 500;
@@ -895,7 +895,7 @@ watch(() => [props.eventId, props.areaIds], () => {
 .checkpoint-description-preview {
   font-size: 0.85rem;
   font-weight: 400;
-  color: #666;
+  color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -915,24 +915,24 @@ watch(() => [props.eventId, props.areaIds], () => {
 }
 
 .marshals-status {
-  background: #e3f2fd;
-  color: #1565c0;
+  background: var(--info-bg);
+  color: var(--status-open);
 }
 
 .tasks-status {
-  background: #fff3e0;
-  color: #ef6c00;
+  background: var(--warning-bg-light);
+  color: var(--warning-dark);
 }
 
 .accordion-icon {
   font-size: 1.5rem;
   font-weight: 300;
-  color: #667eea;
+  color: var(--brand-primary);
 }
 
 .checkpoint-accordion-content {
   padding: 1rem 1.25rem;
-  background: white;
+  background: var(--card-bg);
 }
 
 /* Checkpoint Map - taller for better centering */
@@ -940,7 +940,7 @@ watch(() => [props.eventId, props.areaIds], () => {
   margin-bottom: 1rem;
   border-radius: 8px;
   overflow: hidden;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--border-light);
 }
 
 .checkpoint-mini-map :deep(.map-container) {
@@ -952,13 +952,13 @@ watch(() => [props.eventId, props.areaIds], () => {
 .checkpoint-marshals-section {
   margin: 0.75rem 0;
   padding: 0.75rem;
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   border-radius: 8px;
 }
 
 .marshals-label {
   font-size: 0.8rem;
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 0.5rem;
   font-weight: 500;
 }
@@ -971,21 +971,21 @@ watch(() => [props.eventId, props.areaIds], () => {
 
 .marshal-card {
   padding: 0.75rem 1rem;
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--card-bg);
+  border: 1px solid var(--border-light);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .marshal-card:hover {
-  border-color: #667eea;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+  border-color: var(--brand-primary);
+  box-shadow: 0 2px 8px var(--brand-shadow);
 }
 
 .marshal-card.is-checked-in {
-  background: #f1f8f4;
-  border-color: #c8e6c9;
+  background: var(--checked-in-bg);
+  border-color: var(--checked-in-border);
 }
 
 .marshal-header {
@@ -1004,14 +1004,14 @@ watch(() => [props.eventId, props.areaIds], () => {
 
 .marshal-name {
   font-weight: 600;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .task-count {
   font-size: 0.7rem;
   padding: 0.15rem 0.4rem;
-  background: #fff3e0;
-  color: #ef6c00;
+  background: var(--warning-bg-light);
+  color: var(--warning-dark);
   border-radius: 6px;
 }
 
@@ -1026,20 +1026,20 @@ watch(() => [props.eventId, props.areaIds], () => {
   font-size: 0.75rem;
   padding: 0.2rem 0.5rem;
   border-radius: 8px;
-  background: #ffebee;
-  color: #c62828;
+  background: var(--danger-bg-light);
+  color: var(--danger-dark);
   white-space: nowrap;
 }
 
 .check-status.checked-in {
-  background: #e8f5e9;
-  color: #2e7d32;
+  background: var(--success-bg-light);
+  color: var(--success-dark);
 }
 
 .quick-checkin-btn {
   font-size: 0.7rem;
   padding: 0.2rem 0.5rem;
-  background: #667eea;
+  background: var(--brand-primary);
   color: white;
   border: none;
   border-radius: 4px;
@@ -1049,7 +1049,7 @@ watch(() => [props.eventId, props.areaIds], () => {
 }
 
 .quick-checkin-btn:hover:not(:disabled) {
-  background: #5567d5;
+  background: var(--brand-primary-hover);
 }
 
 .quick-checkin-btn:disabled {
@@ -1058,11 +1058,11 @@ watch(() => [props.eventId, props.areaIds], () => {
 }
 
 .quick-checkin-btn.undo-btn {
-  background: #ff9800;
+  background: var(--warning-dark);
 }
 
 .quick-checkin-btn.undo-btn:hover:not(:disabled) {
-  background: #f57c00;
+  background: var(--warning-dark);
 }
 
 .checked-in-section {
@@ -1077,20 +1077,20 @@ watch(() => [props.eventId, props.areaIds], () => {
 
 .check-in-time {
   font-size: 0.75rem;
-  color: #666;
+  color: var(--text-secondary);
   margin-top: 0.25rem;
 }
 
 .last-access-time {
   font-size: 0.7rem;
-  color: #888;
+  color: var(--text-light);
   margin-top: 0.25rem;
   font-style: italic;
 }
 
 .last-access-detail {
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-secondary);
   margin-top: 0.75rem;
   font-style: italic;
 }
@@ -1099,7 +1099,7 @@ watch(() => [props.eventId, props.areaIds], () => {
 .checkpoint-tasks-section {
   margin-top: 0.75rem;
   padding: 0.75rem;
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   border-radius: 8px;
 }
 
@@ -1114,8 +1114,8 @@ watch(() => [props.eventId, props.areaIds], () => {
   align-items: flex-start;
   gap: 0.75rem;
   padding: 0.5rem;
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--card-bg);
+  border: 1px solid var(--border-light);
   border-radius: 6px;
 }
 
@@ -1129,7 +1129,7 @@ watch(() => [props.eventId, props.areaIds], () => {
 .task-text {
   flex: 1;
   font-size: 0.9rem;
-  color: #333;
+  color: var(--text-dark);
 }
 
 /* Modal */
@@ -1141,7 +1141,7 @@ watch(() => [props.eventId, props.areaIds], () => {
 
 .details-section {
   padding-bottom: 1.5rem;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .details-section:last-child {
@@ -1152,7 +1152,7 @@ watch(() => [props.eventId, props.areaIds], () => {
 .details-section h4 {
   margin: 0 0 1rem 0;
   font-size: 0.95rem;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .contact-info {
@@ -1167,12 +1167,12 @@ watch(() => [props.eventId, props.areaIds], () => {
 }
 
 .contact-label {
-  color: #666;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
 .contact-row a {
-  color: #667eea;
+  color: var(--brand-primary);
   text-decoration: none;
 }
 
@@ -1182,7 +1182,7 @@ watch(() => [props.eventId, props.areaIds], () => {
 
 .no-contact,
 .no-tasks {
-  color: #666;
+  color: var(--text-secondary);
   font-style: italic;
 }
 
@@ -1191,25 +1191,25 @@ watch(() => [props.eventId, props.areaIds], () => {
   align-items: flex-start;
   gap: 0.75rem;
   padding: 1rem;
-  background: #e8f5e9;
+  background: var(--success-bg-light);
   border-radius: 8px;
 }
 
 .check-icon {
   font-size: 1.5rem;
-  color: #2e7d32;
+  color: var(--success-dark);
 }
 
 .check-time-detail {
   margin: 0.25rem 0 0 0;
   font-size: 0.9rem;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .check-method {
   margin: 0.25rem 0 0 0;
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .not-checked-in-section {
@@ -1223,9 +1223,9 @@ watch(() => [props.eventId, props.areaIds], () => {
   align-items: center;
   gap: 0.5rem;
   padding: 1rem;
-  background: #ffebee;
+  background: var(--danger-bg-light);
   border-radius: 8px;
-  color: #c62828;
+  color: var(--danger-dark);
 }
 
 .check-in-btn {
@@ -1265,21 +1265,21 @@ watch(() => [props.eventId, props.areaIds], () => {
 }
 
 .btn-primary {
-  background: #667eea;
+  background: var(--brand-primary);
   color: white;
 }
 
 .btn-primary:hover {
-  background: #5567d5;
+  background: var(--brand-primary-hover);
 }
 
 .btn-secondary {
-  background: #6c757d;
+  background: var(--btn-secondary-bg);
   color: white;
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--btn-secondary-hover);
 }
 
 @media (max-width: 768px) {
@@ -1316,8 +1316,8 @@ watch(() => [props.eventId, props.areaIds], () => {
 /* Incidents Section Styles */
 .incidents-accordion-section {
   margin-top: 1rem;
-  background: #fff3e0;
-  border: 1px solid #ffcc80;
+  background: var(--warning-bg-light);
+  border: 1px solid var(--warning);
   border-radius: 10px;
   overflow: hidden;
 }
@@ -1328,24 +1328,24 @@ watch(() => [props.eventId, props.areaIds], () => {
   justify-content: space-between;
   align-items: center;
   padding: 1rem 1.25rem;
-  background: #fff3e0;
+  background: var(--warning-bg-light);
   border: none;
   cursor: pointer;
   text-align: left;
   font-size: 1rem;
   font-weight: 600;
-  color: #333;
+  color: var(--text-dark);
   transition: background 0.2s;
   gap: 0.5rem;
 }
 
 .incidents-accordion-header:hover {
-  background: #ffe0b2;
+  background: var(--warning-bg);
 }
 
 .incidents-accordion-header.active {
-  background: #ffcc80;
-  border-bottom: 1px solid #ffb74d;
+  background: var(--warning-bg);
+  border-bottom: 1px solid var(--warning);
 }
 
 .incidents-header-content {
@@ -1356,12 +1356,12 @@ watch(() => [props.eventId, props.areaIds], () => {
 
 .incidents-title {
   font-weight: 600;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .incidents-badge {
   padding: 0.2rem 0.6rem;
-  background: #f44336;
+  background: var(--danger);
   color: white;
   border-radius: 10px;
   font-size: 0.75rem;
@@ -1370,7 +1370,7 @@ watch(() => [props.eventId, props.areaIds], () => {
 
 .incidents-accordion-content {
   padding: 1rem;
-  background: #fffbf5;
+  background: var(--warning-bg-lighter);
 }
 
 .incidents-list {

@@ -85,23 +85,23 @@ const toggleAll = () => {
   display: flex;
   justify-content: flex-start;
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .toggle-all-btn {
   padding: 0.4rem 0.75rem;
-  background: #f0f0f0;
-  border: 1px solid #ddd;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-medium);
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.8rem;
-  color: #333;
+  color: var(--text-dark);
   transition: background-color 0.2s;
   font-weight: 500;
 }
 
 .toggle-all-btn:hover {
-  background: #e0e0e0;
+  background: var(--border-light);
 }
 
 .areas-list {
@@ -118,17 +118,17 @@ const toggleAll = () => {
 }
 
 .areas-list::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--bg-secondary);
   border-radius: 3px;
 }
 
 .areas-list::-webkit-scrollbar-thumb {
-  background: #888;
+  background: var(--text-light);
   border-radius: 3px;
 }
 
 .areas-list::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: var(--text-darker);
 }
 
 .area-checkbox {
@@ -137,7 +137,7 @@ const toggleAll = () => {
   gap: 0.5rem;
   font-size: 0.9rem;
   cursor: pointer;
-  color: #333;
+  color: var(--text-dark);
   padding: 0.25rem 0;
 }
 

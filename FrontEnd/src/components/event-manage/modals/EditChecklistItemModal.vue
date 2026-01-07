@@ -295,7 +295,7 @@ const handleDelete = () => {
 .tab-headers {
   display: flex;
   gap: 0;
-  border-bottom: 2px solid #e0e0e0;
+  border-bottom: 2px solid var(--border-light);
   margin-bottom: 1.5rem;
 }
 
@@ -307,19 +307,19 @@ const handleDelete = () => {
   cursor: pointer;
   font-size: 0.95rem;
   font-weight: 500;
-  color: #666;
+  color: var(--text-secondary);
   transition: all 0.2s;
   margin-bottom: -2px;
 }
 
 .tab-header:hover {
-  color: #333;
-  background: #f8f9fa;
+  color: var(--text-dark);
+  background: var(--bg-secondary);
 }
 
 .tab-header.active {
-  color: #007bff;
-  border-bottom-color: #007bff;
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
   background: transparent;
 }
 
@@ -350,7 +350,7 @@ const handleDelete = () => {
 
 label {
   font-weight: 500;
-  color: #333;
+  color: var(--text-dark);
   font-size: 0.9rem;
 }
 
@@ -361,10 +361,12 @@ textarea,
 select,
 .search-input {
   padding: 0.6rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-medium);
   border-radius: 4px;
   font-size: 0.9rem;
   font-family: inherit;
+  background: var(--input-bg);
+  color: var(--text-primary);
 }
 
 textarea {
@@ -373,13 +375,13 @@ textarea {
 }
 
 select {
-  background: white;
+  background: var(--input-bg);
   cursor: pointer;
 }
 
 .help-text {
   font-size: 0.8rem;
-  color: #666;
+  color: var(--text-secondary);
   font-style: italic;
 }
 
@@ -388,9 +390,9 @@ select {
   flex-direction: column;
   gap: 0.5rem;
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-medium);
   border-radius: 4px;
-  background: #f9f9f9;
+  background: var(--bg-muted);
 }
 
 .checkbox-group.scrollable {
@@ -423,9 +425,9 @@ select {
 .create-separate-items {
   margin-top: 0.5rem;
   padding: 0.5rem;
-  background: #f0f7ff;
+  background: var(--info-bg);
   border-radius: 4px;
-  border: 1px solid #b3d9ff;
+  border: 1px solid var(--accent-primary-light);
 }
 
 .search-input {
@@ -451,21 +453,21 @@ select {
 }
 
 .btn-primary {
-  background: #007bff;
-  color: white;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
 }
 
 .btn-primary:hover {
-  background: #0056b3;
+  background: var(--btn-primary-hover);
 }
 
 .btn-danger {
-  background: #dc3545;
-  color: white;
+  background: var(--danger);
+  color: var(--btn-primary-text);
 }
 
 .btn-danger:hover {
-  background: #c82333;
+  background: var(--danger-hover);
 }
 
 @media (max-width: 768px) {

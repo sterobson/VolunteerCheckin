@@ -438,7 +438,7 @@ const handleSubmit = () => {
 }
 
 .btn-primary:hover {
-  background: #0056b3;
+  background: var(--btn-primary-hover);
 }
 
 .btn-primary:disabled {

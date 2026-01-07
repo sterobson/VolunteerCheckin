@@ -2806,7 +2806,7 @@ onUnmounted(() => {
   --z-fullscreen-map: 2000;
   --z-modal: calc(var(--z-fullscreen-map) + 1000);
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--brand-gradient);
 }
 
 .header {
@@ -2909,29 +2909,29 @@ onUnmounted(() => {
 }
 
 .btn-report-incident {
-  background: #fd7e14;
+  background: var(--warning-orange);
   color: white;
 }
 
 .btn-report-incident:hover {
-  background: #e56b00;
+  background: var(--warning-dark);
 }
 
 .btn-emergency {
-  background: #ff4444;
+  background: var(--emergency-bg);
   color: white;
 }
 
 .btn-emergency:hover {
-  background: #cc0000;
+  background: var(--emergency-hover);
 }
 
 .btn-logout-icon {
   position: absolute;
   top: 35%;
   transform: translateY(-50%);
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
   border-radius: 50%;
   width: 54px;
   height: 54px;
@@ -2944,7 +2944,7 @@ onUnmounted(() => {
 }
 
 .btn-logout-icon:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--glass-bg-strong);
 }
 
 .btn-logout-icon svg {
@@ -2972,15 +2972,15 @@ onUnmounted(() => {
 .checklist-card,
 .contacts-card,
 .map-card {
-  background: white;
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 2rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-lg);
   margin-bottom: 2rem;
 }
 
 .error-card {
-  border: 2px solid #ff4444;
+  border: 2px solid var(--emergency-bg);
 }
 
 .selection-card h2,
@@ -2990,7 +2990,7 @@ onUnmounted(() => {
 .contacts-card h3,
 .map-card h3 {
   margin: 0 0 1rem 0;
-  color: #333;
+  color: var(--text-dark);
 }
 
 /* Contact list styles */
@@ -3012,19 +3012,19 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem;
-  background: #f5f7fa;
+  background: var(--bg-muted);
   border-radius: 8px;
   gap: 1rem;
 }
 
 .contact-name {
   font-weight: 500;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .contact-role {
   font-weight: 400;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .contact-name-row {
@@ -3035,15 +3035,15 @@ onUnmounted(() => {
 }
 
 .primary-badge {
-  color: #ffc107;
+  color: var(--warning);
   font-size: 0.9rem;
 }
 
 .contact-role-badge {
   display: inline-block;
   padding: 0.15rem 0.5rem;
-  background: #e9ecef;
-  color: #495057;
+  background: var(--bg-tertiary);
+  color: var(--text-darker);
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 500;
@@ -3051,14 +3051,14 @@ onUnmounted(() => {
 
 .contact-notes-text {
   font-size: 0.85rem;
-  color: #555;
+  color: var(--text-darker);
   font-style: italic;
   margin-top: 0.25rem;
 }
 
 .primary-contact {
-  border-left: 3px solid #ffc107;
-  background: #fffef8;
+  border-left: 3px solid var(--warning);
+  background: var(--warning-bg-lighter);
 }
 
 .contact-actions {
@@ -3072,7 +3072,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.25rem;
   padding: 0.5rem 0.75rem;
-  background: #667eea;
+  background: var(--brand-primary);
   color: white;
   text-decoration: none;
   border-radius: 6px;
@@ -3082,7 +3082,7 @@ onUnmounted(() => {
 }
 
 .contact-link:hover {
-  background: #5568d3;
+  background: var(--brand-primary-hover);
 }
 
 .contact-icon {
@@ -3091,14 +3091,14 @@ onUnmounted(() => {
 }
 
 .instruction {
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 1rem;
 }
 
 .loading {
   text-align: center;
   padding: 2rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 /* Welcome bar - compact horizontal layout */
@@ -3106,11 +3106,11 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: white;
+  background: var(--card-bg);
   border-radius: 10px;
   padding: 0.75rem 1.25rem;
   margin-bottom: 0.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .welcome-info {
@@ -3121,12 +3121,12 @@ onUnmounted(() => {
 
 .welcome-name {
   font-weight: 600;
-  color: #333;
+  color: var(--text-dark);
   font-size: 1rem;
 }
 
 .welcome-email {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.8rem;
 }
 
@@ -3135,7 +3135,7 @@ onUnmounted(() => {
 }
 
 .btn-mode-switch {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--brand-gradient);
   color: white;
   border: none;
   padding: 0.5rem 1rem;
@@ -3148,12 +3148,12 @@ onUnmounted(() => {
 
 .btn-mode-switch:hover {
   transform: translateY(-1px);
-  box-shadow: 0 3px 10px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 3px 10px var(--brand-shadow-lg);
 }
 
 .reauth-hint {
   font-size: 0.75rem;
-  color: #999;
+  color: var(--text-muted);
   font-style: italic;
   cursor: help;
 }
@@ -3161,28 +3161,28 @@ onUnmounted(() => {
 .location-info {
   margin-bottom: 1.5rem;
   padding: 1rem;
-  background: #f5f7fa;
+  background: var(--bg-muted);
   border-radius: 8px;
 }
 
 .location-info strong {
   font-size: 1.125rem;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .location-info p {
   margin: 0.5rem 0 0 0;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .time-range {
   font-size: 0.9rem;
-  color: #667eea;
+  color: var(--brand-primary);
   font-weight: 500;
 }
 
 .no-assignment {
-  color: #666;
+  color: var(--text-secondary);
   font-style: italic;
 }
 
@@ -3191,25 +3191,25 @@ onUnmounted(() => {
   align-items: center;
   gap: 1rem;
   padding: 1.5rem;
-  background: #f1f8f4;
-  border: 2px solid #4caf50;
+  background: var(--checked-in-bg);
+  border: 2px solid var(--success-light);
   border-radius: 8px;
 }
 
 .check-icon {
   font-size: 2rem;
-  color: #4caf50;
+  color: var(--checked-in-text);
 }
 
 .checked-in-status strong {
-  color: #4caf50;
+  color: var(--checked-in-text);
   font-size: 1.125rem;
 }
 
 .check-time,
 .check-method {
   margin: 0.25rem 0 0 0;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.875rem;
 }
 
@@ -3239,22 +3239,22 @@ onUnmounted(() => {
 }
 
 .btn-primary {
-  background: #667eea;
+  background: var(--brand-primary);
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #5568d3;
+  background: var(--brand-primary-hover);
   transform: translateY(-2px);
 }
 
 .btn-secondary {
-  background: #e0e0e0;
-  color: #333;
+  background: var(--btn-cancel-bg);
+  color: var(--btn-cancel-text);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: #d0d0d0;
+  background: var(--btn-cancel-hover);
 }
 
 .btn:disabled {
@@ -3282,7 +3282,7 @@ onUnmounted(() => {
 
 .note-textarea:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--brand-primary);
 }
 
 .modal-actions {
@@ -3298,8 +3298,8 @@ onUnmounted(() => {
 
 .error {
   padding: 1rem;
-  background: #fee;
-  color: #c33;
+  background: var(--danger-bg-lighter);
+  color: var(--danger);
   border-radius: 6px;
   font-size: 0.875rem;
 }
@@ -3315,15 +3315,15 @@ onUnmounted(() => {
   display: flex;
   gap: 0.75rem;
   padding: 0.75rem;
-  background: #f8f9fa;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
   border-radius: 6px;
   transition: all 0.2s;
 }
 
 .checklist-item.item-completed {
-  background: #f1f8f4;
-  border-color: #c8e6c9;
+  background: var(--checked-in-bg);
+  border-color: var(--checked-in-border);
 }
 
 .item-checkbox {
@@ -3353,17 +3353,17 @@ onUnmounted(() => {
 
 .item-text {
   font-size: 0.95rem;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .item-text.text-completed {
   text-decoration: line-through;
-  color: #888;
+  color: var(--text-light);
 }
 
 .item-context {
   font-size: 0.85rem;
-  color: #667eea;
+  color: var(--brand-primary);
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -3375,21 +3375,21 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 0.1rem;
   font-size: 0.8rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .completion-text {
-  color: #4caf50;
+  color: var(--checked-in-text);
 }
 
 .completion-time {
-  color: #999;
+  color: var(--text-muted);
 }
 
 .empty-state {
   text-align: center;
   padding: 1.5rem;
-  color: #666;
+  color: var(--text-secondary);
   font-style: italic;
 }
 
@@ -3408,14 +3408,14 @@ onUnmounted(() => {
   font-size: 0.75rem;
   padding: 0.25rem 0.5rem;
   border-radius: 12px;
-  background: #e0e0e0;
-  color: #666;
+  background: var(--btn-cancel-bg);
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
 .location-status.active {
-  background: #e8f5e9;
-  color: #4caf50;
+  background: var(--success-bg-light);
+  color: var(--checked-in-text);
 }
 
 .map-card :deep(.map-container) {
@@ -3431,9 +3431,9 @@ onUnmounted(() => {
 }
 
 .accordion-section {
-  background: white;
+  background: var(--card-bg);
   border-radius: 12px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
   margin-bottom: 0.5rem;
 }
@@ -3444,23 +3444,23 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 1.25rem 1.5rem;
-  background: white;
+  background: var(--card-bg);
   border: none;
   cursor: pointer;
   text-align: left;
   font-size: 1rem;
   font-weight: 600;
-  color: #333;
+  color: var(--text-dark);
   transition: background 0.2s;
 }
 
 .accordion-header:hover {
-  background: #f8f9fa;
+  background: var(--bg-secondary);
 }
 
 .accordion-header.active {
-  background: #f0f4ff;
-  color: #667eea;
+  background: var(--brand-primary-bg);
+  color: var(--brand-primary);
 }
 
 .accordion-title {
@@ -3473,7 +3473,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #667eea;
+  color: var(--brand-primary);
 }
 
 .section-icon :deep(svg) {
@@ -3484,12 +3484,12 @@ onUnmounted(() => {
 .accordion-icon {
   font-size: 1.5rem;
   font-weight: 300;
-  color: #667eea;
+  color: var(--brand-primary);
 }
 
 .accordion-content {
   padding: 1rem 1.5rem 1.5rem;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border-light);
 }
 
 .accordion-content.map-content {
@@ -3527,12 +3527,12 @@ onUnmounted(() => {
   position: absolute;
   top: 10px;
   right: 10px;
-  background: white;
+  background: var(--card-bg);
   border: none;
   border-radius: 4px;
   padding: 8px;
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3541,7 +3541,7 @@ onUnmounted(() => {
 }
 
 .fullscreen-btn:hover {
-  background: #f0f0f0;
+  background: var(--bg-hover);
 }
 
 .fullscreen-btn svg {
@@ -3560,8 +3560,8 @@ onUnmounted(() => {
 }
 
 .checkpoint-accordion-section {
-  background: #f8f9fa;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
   border-radius: 10px;
   overflow: hidden;
 }
@@ -3572,32 +3572,32 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: flex-start;
   padding: 1rem 1.25rem;
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   border: none;
   cursor: pointer;
   text-align: left;
   font-size: 1rem;
   font-weight: 600;
-  color: #333;
+  color: var(--text-dark);
   transition: background 0.2s;
   gap: 0.5rem;
 }
 
 .checkpoint-accordion-header:hover {
-  background: #f0f2f5;
+  background: var(--bg-hover);
 }
 
 .checkpoint-accordion-header.active {
-  background: #e8ecf4;
-  border-bottom: 1px solid #e0e0e0;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-light);
 }
 
 .checkpoint-accordion-header.checked-in {
-  background: #f1f8f4;
+  background: var(--checked-in-bg);
 }
 
 .checkpoint-accordion-header.checked-in.active {
-  background: #e8f5e9;
+  background: var(--success-bg-light);
 }
 
 .checkpoint-header-content {
@@ -3630,34 +3630,34 @@ onUnmounted(() => {
 }
 
 .checkpoint-check-icon {
-  color: #4caf50;
+  color: var(--checked-in-text);
   font-weight: bold;
   flex-shrink: 0;
 }
 
 .checkpoint-name {
-  color: #333;
+  color: var(--text-dark);
 }
 
 .checkpoint-time-badge {
   font-size: 0.8rem;
   font-weight: 500;
-  color: #667eea;
-  background: #e8ecf4;
+  color: var(--brand-primary);
+  background: var(--bg-tertiary);
   padding: 0.15rem 0.5rem;
   border-radius: 4px;
   white-space: nowrap;
 }
 
 .checkpoint-accordion-header.checked-in .checkpoint-time-badge {
-  background: #d4edda;
-  color: #28a745;
+  background: var(--success-bg);
+  color: var(--success);
 }
 
 .checkpoint-description-preview {
   font-size: 0.85rem;
   font-weight: 400;
-  color: #666;
+  color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3665,13 +3665,13 @@ onUnmounted(() => {
 
 .checkpoint-accordion-content {
   padding: 1rem 1.25rem;
-  background: white;
+  background: var(--card-bg);
 }
 
 .checkpoint-area-contacts {
   margin: 0.75rem 0;
   padding: 0.75rem;
-  background: #f5f7fa;
+  background: var(--bg-muted);
   border-radius: 8px;
 }
 
@@ -3680,7 +3680,7 @@ onUnmounted(() => {
 }
 
 .checkpoint-area-contacts .contact-item {
-  background: white;
+  background: var(--card-bg);
 }
 
 /* Assignment list styles */
@@ -3691,8 +3691,8 @@ onUnmounted(() => {
 }
 
 .assignment-item {
-  background: #f8f9fa;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
   border-radius: 10px;
   padding: 1rem;
 }
@@ -3707,11 +3707,11 @@ onUnmounted(() => {
 
 .assignment-header strong {
   font-size: 1.1rem;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .assignment-description {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.9rem;
   margin: 0 0 0.5rem 0;
 }
@@ -3719,7 +3719,7 @@ onUnmounted(() => {
 .area-badge {
   display: inline-block;
   padding: 0.2rem 0.6rem;
-  background: #667eea;
+  background: var(--brand-primary);
   color: white;
   font-size: 0.75rem;
   font-weight: 500;
@@ -3752,13 +3752,13 @@ onUnmounted(() => {
 .checkpoint-marshals {
   margin: 0.75rem 0;
   padding: 0.75rem;
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 8px;
 }
 
 .marshals-label {
   font-size: 0.8rem;
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 0.5rem;
   font-weight: 500;
 }
@@ -3774,25 +3774,25 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.25rem;
   padding: 0.3rem 0.6rem;
-  background: #e8e8e8;
+  background: var(--bg-tertiary);
   border-radius: 16px;
   font-size: 0.85rem;
-  color: #555;
+  color: var(--text-darker);
 }
 
 .marshal-tag.is-you {
-  background: #e3e9ff;
-  color: #667eea;
+  background: var(--brand-primary-bg);
+  color: var(--brand-primary);
   font-weight: 500;
 }
 
 .marshal-tag.checked-in {
-  background: #e8f5e9;
-  color: #4caf50;
+  background: var(--success-bg-light);
+  color: var(--checked-in-text);
 }
 
 .marshal-tag.is-you.checked-in {
-  background: linear-gradient(135deg, #e3e9ff 50%, #e8f5e9 50%);
+  background: linear-gradient(135deg, var(--brand-primary-bg) 50%, var(--success-bg-light) 50%);
 }
 
 .check-badge {
@@ -3811,8 +3811,8 @@ onUnmounted(() => {
 .area-group-title {
   margin: 0 0 0.75rem 0;
   padding-bottom: 0.5rem;
-  border-bottom: 2px solid #667eea;
-  color: #333;
+  border-bottom: 2px solid var(--brand-primary);
+  color: var(--text-dark);
   font-size: 1rem;
 }
 
@@ -3824,7 +3824,7 @@ onUnmounted(() => {
 
 .contact-detail {
   font-size: 0.85rem;
-  color: #555;
+  color: var(--text-darker);
 }
 
 /* Event details styles */
@@ -3848,7 +3848,7 @@ onUnmounted(() => {
 
 .detail-label {
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-secondary);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -3856,7 +3856,7 @@ onUnmounted(() => {
 
 .detail-value {
   font-size: 1rem;
-  color: #333;
+  color: var(--text-dark);
   margin: 0;
 }
 
@@ -3870,7 +3870,7 @@ onUnmounted(() => {
   margin-top: 1rem;
   border-radius: 8px;
   overflow: hidden;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--border-light);
   position: relative;
 }
 
@@ -3889,9 +3889,9 @@ onUnmounted(() => {
 .dynamic-location-section {
   margin-top: 1rem;
   padding: 0.75rem;
-  background: #f0f4ff;
+  background: var(--brand-primary-bg);
   border-radius: 8px;
-  border-left: 3px solid #667eea;
+  border-left: 3px solid var(--brand-primary);
 }
 
 .dynamic-location-header {
@@ -3906,7 +3906,7 @@ onUnmounted(() => {
 .dynamic-badge {
   display: inline-block;
   padding: 0.25rem 0.5rem;
-  background: #667eea;
+  background: var(--brand-primary);
   color: white;
   font-size: 0.75rem;
   font-weight: 600;
@@ -3916,7 +3916,7 @@ onUnmounted(() => {
 
 .last-update {
   font-size: 0.8rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .dynamic-location-actions {
@@ -3928,7 +3928,7 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  background: #667eea;
+  background: var(--brand-primary);
   color: white;
   padding: 0.6rem 1rem;
   border-radius: 6px;
@@ -3936,31 +3936,31 @@ onUnmounted(() => {
 }
 
 .btn-update-location:hover:not(:disabled) {
-  background: #5568d3;
+  background: var(--brand-primary-hover);
 }
 
 .btn-auto-update {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  background: #e0e0e0;
-  color: #333;
+  background: var(--btn-cancel-bg);
+  color: var(--btn-cancel-text);
   padding: 0.6rem 0.75rem;
   border-radius: 6px;
   font-size: 0.9rem;
 }
 
 .btn-auto-update:hover:not(:disabled) {
-  background: #d0d0d0;
+  background: var(--btn-cancel-hover);
 }
 
 .btn-auto-update.active {
-  background: #4caf50;
+  background: var(--checked-in-text);
   color: white;
 }
 
 .btn-auto-update.active:hover:not(:disabled) {
-  background: #43a047;
+  background: var(--success);
 }
 
 .btn-icon {
@@ -3976,7 +3976,7 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--modal-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3985,13 +3985,13 @@ onUnmounted(() => {
 }
 
 .modal-content {
-  background: white;
+  background: var(--modal-bg);
   border-radius: 12px;
   max-width: 500px;
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-xl);
 }
 
 /* Check-in Reminder Modal */
@@ -4000,18 +4000,18 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 1rem 1.5rem;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .check-in-reminder-modal .modal-header.warning {
-  background: #fff3cd;
-  border-bottom: 1px solid #ffc107;
+  background: var(--warning-bg);
+  border-bottom: 1px solid var(--warning);
 }
 
 .check-in-reminder-modal .modal-header h3 {
   margin: 0;
   font-size: 1.1rem;
-  color: #856404;
+  color: var(--warning-text);
 }
 
 .check-in-reminder-modal .modal-body {
@@ -4026,13 +4026,13 @@ onUnmounted(() => {
 
 .check-in-reminder-modal .reminder-message {
   font-size: 1.1rem;
-  color: #333;
+  color: var(--text-dark);
   margin-bottom: 0.75rem;
 }
 
 .check-in-reminder-modal .reminder-hint {
   font-size: 0.9rem;
-  color: #666;
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -4041,7 +4041,7 @@ onUnmounted(() => {
   justify-content: flex-end;
   gap: 0.75rem;
   padding: 1rem 1.5rem;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border-light);
 }
 
 .location-update-modal .modal-header {
@@ -4049,13 +4049,13 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 1rem 1.5rem;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .location-update-modal .modal-header h3 {
   margin: 0;
   font-size: 1.1rem;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .modal-close {
@@ -4063,13 +4063,13 @@ onUnmounted(() => {
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #666;
+  color: var(--text-secondary);
   padding: 0;
   line-height: 1;
 }
 
 .modal-close:hover {
-  color: #333;
+  color: var(--text-dark);
 }
 
 .modal-body {
@@ -4078,7 +4078,7 @@ onUnmounted(() => {
 
 .modal-description {
   margin: 0 0 1.5rem 0;
-  color: #555;
+  color: var(--text-darker);
 }
 
 .update-option {
@@ -4088,7 +4088,7 @@ onUnmounted(() => {
 .option-label {
   display: block;
   font-size: 0.9rem;
-  color: #555;
+  color: var(--text-darker);
   margin-bottom: 0.5rem;
 }
 
@@ -4110,14 +4110,14 @@ onUnmounted(() => {
 
 .no-checkpoints {
   font-size: 0.85rem;
-  color: #888;
+  color: var(--text-light);
   font-style: italic;
 }
 
 .success-message {
   padding: 1rem;
-  background: #e8f5e9;
-  color: #2e7d32;
+  background: var(--success-bg-light);
+  color: var(--success-dark);
   border-radius: 8px;
   text-align: center;
   font-weight: 500;
@@ -4127,16 +4127,16 @@ onUnmounted(() => {
   display: flex;
   justify-content: flex-end;
   padding: 1rem 1.5rem;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border-light);
 }
 
 /* New modal elements */
 .last-update-info {
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 1rem;
   padding: 0.5rem;
-  background: #f5f5f5;
+  background: var(--bg-muted);
   border-radius: 4px;
 }
 
@@ -4145,12 +4145,12 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 1rem;
 }
 
 .gps-status.active {
-  color: #2e7d32;
+  color: var(--success-dark);
 }
 
 .gps-status .status-icon {
@@ -4159,7 +4159,7 @@ onUnmounted(() => {
 }
 
 .auto-update-option {
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   padding: 1rem;
   border-radius: 8px;
 }
@@ -4180,16 +4180,16 @@ onUnmounted(() => {
 
 .option-hint {
   font-size: 0.8rem;
-  color: #666;
+  color: var(--text-secondary);
   margin: 0.5rem 0 0 0;
   padding-left: 27px;
 }
 
 /* Map selection mode */
 .map-selection-banner {
-  background: #e3f2fd;
+  background: var(--info-bg);
   border: none;
-  border-bottom: 1px solid #2196f3;
+  border-bottom: 1px solid var(--info);
   border-radius: 0;
   padding: 0.75rem 1rem;
   margin: 0;
@@ -4201,7 +4201,7 @@ onUnmounted(() => {
 
 .map-selection-banner span {
   flex: 1;
-  color: #1565c0;
+  color: var(--status-open);
 }
 
 .btn-sm {
@@ -4334,7 +4334,7 @@ onUnmounted(() => {
   z-index: var(--z-fullscreen-map, 2000);
   display: flex;
   flex-direction: column;
-  background: #f5f5f5;
+  background: var(--bg-muted);
 }
 
 .fullscreen-map-header {
@@ -4351,7 +4351,7 @@ onUnmounted(() => {
 }
 
 .fullscreen-close-btn {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--glass-bg-medium);
   border: none;
   border-radius: 50%;
   padding: 8px;
@@ -4363,7 +4363,7 @@ onUnmounted(() => {
 }
 
 .fullscreen-close-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--glass-hover);
 }
 
 .fullscreen-map-banner {
@@ -4372,8 +4372,8 @@ onUnmounted(() => {
   justify-content: center;
   gap: 1rem;
   padding: 0.75rem 1rem;
-  background: #fff3cd;
-  border-bottom: 1px solid #ffc107;
+  background: var(--warning-bg);
+  border-bottom: 1px solid var(--warning);
   flex-shrink: 0;
 }
 
@@ -4390,8 +4390,8 @@ onUnmounted(() => {
 
 .fullscreen-map-actions {
   padding: 1rem;
-  background: white;
-  border-top: 1px solid #e0e0e0;
+  background: var(--card-bg);
+  border-top: 1px solid var(--border-light);
   display: flex;
   justify-content: center;
   flex-shrink: 0;

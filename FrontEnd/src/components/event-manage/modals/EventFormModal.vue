@@ -244,7 +244,7 @@ const handleClose = () => {
   padding: 0.5rem 1rem;
   border: none;
   background: transparent;
-  color: #666;
+  color: var(--text-secondary);
   cursor: pointer;
   font-size: 0.9rem;
   border-bottom: 2px solid transparent;
@@ -252,12 +252,12 @@ const handleClose = () => {
 }
 
 .tab-button:hover {
-  color: #333;
+  color: var(--text-dark);
 }
 
 .tab-button.active {
-  color: #007bff;
-  border-bottom-color: #007bff;
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
   font-weight: 500;
 }
 
@@ -280,14 +280,14 @@ const handleClose = () => {
 .section-header-small h3 {
   margin: 0;
   font-size: 1rem;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .emergency-contact-card {
   padding: 1.5rem;
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   border-radius: 8px;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--border-color);
 }
 
 .card-header {
@@ -300,13 +300,13 @@ const handleClose = () => {
 .card-header h4 {
   margin: 0;
   font-size: 0.95rem;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .btn-remove {
   background: none;
   border: none;
-  color: #dc3545;
+  color: var(--danger);
   cursor: pointer;
   font-size: 1.25rem;
   padding: 0.25rem 0.5rem;
@@ -315,6 +315,6 @@ const handleClose = () => {
 }
 
 .btn-remove:hover {
-  background: rgba(220, 53, 69, 0.1);
+  background: var(--danger-bg);
 }
 </style>

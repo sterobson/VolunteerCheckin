@@ -1429,7 +1429,7 @@ const apply = () => {
   left: -2px;
   right: -2px;
   height: 2px;
-  background: #ef4444;
+  background: var(--danger-light);
   transform: rotate(-45deg);
 }
 

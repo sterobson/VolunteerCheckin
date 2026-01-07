@@ -171,22 +171,24 @@ const handleClose = () => {
 .form-input {
   width: 100%;
   padding: 0.75rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-medium);
   border-radius: 4px;
   font-size: 0.9rem;
   box-sizing: border-box;
+  background: var(--input-bg);
+  color: var(--text-primary);
 }
 
 .checkpoint-list {
   max-height: 400px;
   overflow-y: auto;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--border-light);
   border-radius: 4px;
 }
 
 .checkpoint-item {
   padding: 1rem;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-light);
   cursor: pointer;
   transition: background-color 0.2s;
 }
@@ -196,7 +198,7 @@ const handleClose = () => {
 }
 
 .checkpoint-item:hover {
-  background-color: #f8f9fa;
+  background-color: var(--bg-secondary);
 }
 
 .checkpoint-label {
@@ -222,12 +224,12 @@ const handleClose = () => {
 }
 
 .checkpoint-info strong {
-  color: #333;
+  color: var(--text-dark);
 }
 
 .checkpoint-description {
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .checkpoint-meta {
@@ -239,34 +241,34 @@ const handleClose = () => {
 
 .area-badge {
   padding: 0.2rem 0.5rem;
-  background: #e0e0e0;
+  background: var(--border-light);
   border-radius: 4px;
   font-size: 0.75rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .marshals-badge {
   padding: 0.2rem 0.5rem;
-  background: #e7f3ff;
+  background: var(--accent-primary-light);
   border-radius: 4px;
   font-size: 0.75rem;
-  color: #0056b3;
+  color: var(--accent-primary-hover);
 }
 
 .warning-badge {
   margin-top: 0.5rem;
   padding: 0.5rem;
-  background: #fff3cd;
-  border: 1px solid #ffc107;
+  background: var(--warning-bg);
+  border: 1px solid var(--warning);
   border-radius: 4px;
   font-size: 0.8rem;
-  color: #856404;
+  color: var(--warning-text);
 }
 
 .empty-state {
   text-align: center;
   padding: 2rem;
-  color: #999;
+  color: var(--text-muted);
 }
 
 .empty-state p {
@@ -284,12 +286,12 @@ const handleClose = () => {
 }
 
 .btn-primary {
-  background: #007bff;
-  color: white;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #0056b3;
+  background: var(--btn-primary-hover);
 }
 
 .btn-primary:disabled {
@@ -298,11 +300,11 @@ const handleClose = () => {
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--btn-secondary-hover);
 }
 </style>

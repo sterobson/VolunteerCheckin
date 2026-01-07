@@ -212,18 +212,18 @@ defineExpose({
 }
 
 .assignment-item.checked-in {
-  background: #d4edda;
-  border-color: #c3e6cb;
+  background: var(--success-bg);
+  border-color: var(--success-border);
 }
 
 .assignment-item.is-pending {
-  background: #fff8e6;
-  border-color: #ffc107;
+  background: var(--warning-bg-light);
+  border-color: var(--warning);
   border-style: dashed;
 }
 
 .pending-indicator {
-  color: #ffc107;
+  color: var(--warning);
 }
 
 .assignment-info {
@@ -253,7 +253,7 @@ defineExpose({
 }
 
 .pending-badge {
-  color: #ff8c00;
+  color: var(--warning-orange);
   font-size: 0.85rem;
   font-weight: 600;
   font-style: italic;
@@ -294,21 +294,21 @@ defineExpose({
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--btn-secondary-hover);
 }
 
 .btn-danger {
-  background: #dc3545;
-  color: white;
+  background: var(--danger);
+  color: var(--btn-primary-text);
 }
 
 .btn-danger:hover {
-  background: #c82333;
+  background: var(--danger-hover);
 }
 
 .btn:disabled {

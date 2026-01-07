@@ -457,10 +457,10 @@ const handleStatusChange = async (newStatus) => {
   flex-shrink: 0;
 }
 
-.severity-indicator.critical { background: #dc3545; }
-.severity-indicator.high { background: #fd7e14; }
-.severity-indicator.medium { background: #ffc107; }
-.severity-indicator.low { background: #667eea; }
+.severity-indicator.critical { background: var(--severity-critical); }
+.severity-indicator.high { background: var(--severity-high); }
+.severity-indicator.medium { background: var(--severity-medium); }
+.severity-indicator.low { background: var(--severity-low); }
 
 .modal-title {
   margin: 0;
@@ -523,7 +523,7 @@ const handleStatusChange = async (newStatus) => {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-md);
   z-index: 100;
   min-width: 140px;
   overflow: hidden;
@@ -564,22 +564,22 @@ const handleStatusChange = async (newStatus) => {
   flex-shrink: 0;
 }
 
-.status-dot.open { background: #1565c0; }
-.status-dot.acknowledged { background: #e65100; }
-.status-dot.in_progress { background: #7b1fa2; }
-.status-dot.resolved { background: #2e7d32; }
-.status-dot.closed { background: #616161; }
+.status-dot.open { background: var(--status-open); }
+.status-dot.acknowledged { background: var(--status-acknowledged); }
+.status-dot.in_progress { background: var(--status-in-progress); }
+.status-dot.resolved { background: var(--status-resolved); }
+.status-dot.closed { background: var(--status-closed); }
 
-.severity-badge.critical { background: #f8d7da; color: #721c24; }
-.severity-badge.high { background: #fff3cd; color: #856404; }
-.severity-badge.medium { background: #fff9e6; color: #856404; }
-.severity-badge.low { background: #e8edff; color: #3d5afe; }
+.severity-badge.critical { background: var(--severity-critical-bg); color: var(--severity-critical-text); }
+.severity-badge.high { background: var(--severity-high-bg); color: var(--severity-high-text); }
+.severity-badge.medium { background: var(--severity-medium-bg); color: var(--severity-medium-text); }
+.severity-badge.low { background: var(--severity-low-bg); color: var(--severity-low-text); }
 
-.status-badge.open { background: #e3f2fd; color: #1565c0; }
-.status-badge.acknowledged { background: #fff3e0; color: #e65100; }
-.status-badge.in_progress { background: #f3e5f5; color: #7b1fa2; }
-.status-badge.resolved { background: #e8f5e9; color: #2e7d32; }
-.status-badge.closed { background: #f5f5f5; color: #616161; }
+.status-badge.open { background: var(--status-open-bg); color: var(--status-open); }
+.status-badge.acknowledged { background: var(--status-acknowledged-bg); color: var(--status-acknowledged); }
+.status-badge.in_progress { background: var(--status-in-progress-bg); color: var(--status-in-progress); }
+.status-badge.resolved { background: var(--status-resolved-bg); color: var(--status-resolved); }
+.status-badge.closed { background: var(--status-closed-bg); color: var(--status-closed); }
 
 .incident-detail-content {
   display: flex;
@@ -708,7 +708,7 @@ const handleStatusChange = async (newStatus) => {
 }
 
 .marshal-item.checked-in {
-  background: #e8f5e9;
+  background: var(--success-bg-light);
 }
 
 .marshal-name {
@@ -724,13 +724,13 @@ const handleStatusChange = async (newStatus) => {
 }
 
 .checkin-badge.success {
-  background: #c8e6c9;
-  color: #2e7d32;
+  background: var(--success-border);
+  color: var(--status-resolved);
 }
 
 .checkin-badge.not-checked-in {
-  background: #ffcdd2;
-  color: #c62828;
+  background: var(--danger-border);
+  color: var(--danger-dark);
 }
 
 .notes-timeline {
@@ -809,7 +809,7 @@ const handleStatusChange = async (newStatus) => {
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #0056b3;
+  background: var(--accent-primary-hover);
 }
 
 .btn-primary:disabled {

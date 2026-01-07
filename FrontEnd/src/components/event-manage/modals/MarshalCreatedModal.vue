@@ -179,8 +179,8 @@ watch(() => props.show, (newVal) => {
 .success-icon {
   width: 60px;
   height: 60px;
-  background: #28a745;
-  color: white;
+  background: var(--success);
+  color: var(--card-bg);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -191,12 +191,12 @@ watch(() => props.show, (newVal) => {
 
 .success-message {
   font-size: 1.1rem;
-  color: #333;
+  color: var(--text-dark);
   margin: 0;
 }
 
 .link-section {
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   padding: 1.5rem;
   border-radius: 8px;
 }
@@ -205,17 +205,17 @@ watch(() => props.show, (newVal) => {
   display: block;
   margin-bottom: 0.25rem;
   font-weight: 600;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .help-text {
   margin: 0 0 1rem 0;
   font-size: 0.9rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .loading-text {
-  color: #666;
+  color: var(--text-secondary);
   font-style: italic;
 }
 
@@ -228,14 +228,14 @@ watch(() => props.show, (newVal) => {
 .form-input {
   width: 100%;
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-medium);
   border-radius: 4px;
   font-size: 0.9rem;
   box-sizing: border-box;
 }
 
 .magic-link-input {
-  background-color: white;
+  background-color: var(--card-bg);
   font-family: monospace;
   font-size: 0.85rem;
 }
@@ -256,37 +256,37 @@ watch(() => props.show, (newVal) => {
 }
 
 .btn-primary {
-  background: #007bff;
-  color: white;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #0056b3;
+  background: var(--btn-primary-hover);
 }
 
 .btn-primary:disabled {
-  background: #6c9bd1;
+  background: var(--btn-primary-disabled);
   cursor: not-allowed;
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--btn-secondary-hover);
 }
 
 .success-text {
   margin: 0.5rem 0 0 0;
-  color: #28a745;
+  color: var(--success);
   font-size: 0.85rem;
 }
 
 .error-text {
   margin: 0.5rem 0 0 0;
-  color: #dc3545;
+  color: var(--danger);
   font-size: 0.85rem;
 }
 </style>

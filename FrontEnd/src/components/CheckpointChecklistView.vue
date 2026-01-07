@@ -323,11 +323,11 @@ watch(() => [props.eventId, props.locationId, props.areaId], () => {
 .empty-state {
   text-align: center;
   padding: 3rem 1rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .error-state {
-  color: #dc3545;
+  color: var(--danger);
 }
 
 .error-state p {
@@ -344,25 +344,25 @@ watch(() => [props.eventId, props.locationId, props.areaId], () => {
   display: flex;
   gap: 0.75rem;
   padding: 0.75rem;
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--card-bg);
+  border: 1px solid var(--border-light);
   border-radius: 6px;
   transition: all 0.2s;
 }
 
 .checklist-item:hover {
-  border-color: #ddd;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  border-color: var(--border-medium);
+  box-shadow: var(--shadow-xs);
 }
 
 .checklist-item.item-completed {
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   opacity: 0.8;
 }
 
 .checklist-item.item-modified {
-  border-color: #ffc107;
-  background: #fffbf0;
+  border-color: var(--warning);
+  background: var(--warning-bg-lighter);
 }
 
 .item-checkbox {
@@ -409,13 +409,13 @@ watch(() => [props.eventId, props.locationId, props.areaId], () => {
 
 .item-text {
   font-size: 0.95rem;
-  color: #333;
+  color: var(--text-dark);
   word-wrap: break-word;
 }
 
 .item-context {
   font-size: 0.85rem;
-  color: #667eea;
+  color: var(--brand-primary);
   font-weight: 500;
 }
 
@@ -427,8 +427,8 @@ watch(() => [props.eventId, props.locationId, props.areaId], () => {
 .scope-pill {
   display: inline-block;
   padding: 0.25rem 0.65rem;
-  background: #e3f2fd;
-  color: #1976d2;
+  background: var(--info-bg);
+  color: var(--info-blue);
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 500;
@@ -440,7 +440,7 @@ watch(() => [props.eventId, props.locationId, props.areaId], () => {
   flex-direction: column;
   gap: 0.25rem;
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .completion-text {
@@ -449,36 +449,36 @@ watch(() => [props.eventId, props.locationId, props.areaId], () => {
 
 .completion-time {
   font-size: 0.8rem;
-  color: #999;
+  color: var(--text-muted);
 }
 
 .pending-info {
   font-size: 0.85rem;
-  color: #999;
+  color: var(--text-muted);
   font-style: italic;
 }
 
 .pending-text {
   font-size: 0.85rem;
-  color: #ff9800;
+  color: var(--warning-dark);
   font-weight: 500;
   font-style: italic;
 }
 
 .uncomplete-info {
   font-size: 0.85rem;
-  color: #dc3545;
+  color: var(--danger);
 }
 
 .disabled-reason {
   font-size: 0.85rem;
-  color: #dc3545;
+  color: var(--danger);
   font-style: italic;
 }
 
 .help-text {
   font-size: 0.8rem;
-  color: #999;
+  color: var(--text-muted);
   margin-top: 0.5rem;
 }
 
@@ -493,12 +493,12 @@ watch(() => [props.eventId, props.locationId, props.areaId], () => {
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--btn-secondary-hover);
 }
 
 .btn-small {

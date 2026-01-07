@@ -381,6 +381,18 @@
       </div>
     </div>
 
+    <!-- Incidents Tab (only shown if there are incidents) -->
+    <div v-if="activeTab === 'incidents'" class="tab-content incidents-tab">
+      <div class="incidents-list">
+        <IncidentCard
+          v-for="incident in incidents"
+          :key="incident.incidentId"
+          :incident="incident"
+          @select="$emit('select-incident', $event)"
+        />
+      </div>
+    </div>
+
     <!-- Custom footer with left and right aligned buttons -->
     <template #footer>
       <div class="custom-footer">
@@ -408,6 +420,7 @@ import TabHeader from '../../TabHeader.vue';
 import CheckpointChecklistView from '../../CheckpointChecklistView.vue';
 import NotesView from '../../NotesView.vue';
 import CheckpointStylePicker from '../../CheckpointStylePicker.vue';
+import IncidentCard from '../../IncidentCard.vue';
 import { AREA_COLORS, DEFAULT_AREA_COLOR, getNextAvailableColor } from '../../../constants/areaColors';
 import { checklistApi } from '../../../services/api';
 import { useTerminology, terminologyOptions, getCheckpointOptionLabel, getSingularTerm, getPluralTerm } from '../../../composables/useTerminology';
@@ -547,6 +560,10 @@ const props = defineProps({
     type: String,
     default: 'Checkpoints',
   },
+  incidents: {
+    type: Array,
+    default: () => [],
+  },
 });
 
 const emit = defineEmits([
@@ -558,6 +575,7 @@ const emit = defineEmits([
   'select-checkpoint',
   'add-area-contact',
   'edit-contact',
+  'select-incident',
 ]);
 
 const activeTab = ref('details');
@@ -703,16 +721,23 @@ const isExistingArea = computed(() => {
   return props.area && props.area.id;
 });
 
-// All tabs always available
-const availableTabs = computed(() => [
-  { value: 'details', label: 'Details', icon: 'details' },
-  { value: 'boundary', label: 'Boundary', icon: 'area' },
-  { value: 'contacts', label: 'Contacts', icon: 'marshal' },
-  { value: 'checkpoints', label: getAreaCheckpointTerm(), icon: 'checkpoint' },
-  { value: 'checklists', label: terms.value.checklists, icon: 'checklist' },
-  { value: 'notes', label: 'Notes', icon: 'notes' },
-  { value: 'appearance', label: 'Appearance', icon: 'appearance' },
-]);
+// All tabs - incidents shown conditionally
+const availableTabs = computed(() => {
+  const tabs = [
+    { value: 'details', label: 'Details', icon: 'details' },
+    { value: 'boundary', label: 'Boundary', icon: 'area' },
+    { value: 'contacts', label: 'Contacts', icon: 'marshal' },
+    { value: 'checkpoints', label: getAreaCheckpointTerm(), icon: 'checkpoint' },
+    { value: 'checklists', label: terms.value.checklists, icon: 'checklist' },
+    { value: 'notes', label: 'Notes', icon: 'notes' },
+    { value: 'appearance', label: 'Appearance', icon: 'appearance' },
+  ];
+  // Only show incidents tab if there are incidents
+  if (props.incidents && props.incidents.length > 0) {
+    tabs.push({ value: 'incidents', label: 'Incidents', icon: 'incidents' });
+  }
+  return tabs;
+});
 
 // Get current tab index and check if on last tab
 const currentTabIndex = computed(() => {
@@ -1356,30 +1381,30 @@ const getCheckpointIconSvg = (checkpoint) => {
 }
 
 .btn-primary {
-  background: #007bff;
-  color: white;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
 }
 
 .btn-primary:hover {
-  background: #0056b3;
+  background: var(--btn-primary-hover);
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--btn-secondary-hover);
 }
 
 .btn-danger {
-  background: #dc3545;
-  color: white;
+  background: var(--danger);
+  color: var(--btn-primary-text);
 }
 
 .btn-danger:hover {
-  background: #c82333;
+  background: var(--danger-hover);
 }
 
 .checkpoint-card {
@@ -1683,13 +1708,23 @@ const getCheckpointIconSvg = (checkpoint) => {
 }
 
 .accordion-arrow {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.75rem;
   flex-shrink: 0;
 }
 
 .accordion-content {
   padding: 1rem;
-  background: white;
+  background: var(--card-bg);
+}
+
+.incidents-tab {
+  padding-top: 0.5rem;
+}
+
+.incidents-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 </style>

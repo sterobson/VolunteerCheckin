@@ -183,7 +183,7 @@ onUnmounted(() => {
   position: fixed;
   inset: 0;
   z-index: 2000;
-  background: white;
+  background: var(--card-bg);
   display: flex;
   flex-direction: column;
 }
@@ -194,21 +194,21 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem 2rem;
-  background: white;
-  border-bottom: 2px solid #e0e0e0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: var(--card-bg);
+  border-bottom: 2px solid var(--border-light);
+  box-shadow: var(--shadow-md);
 }
 
 .context-info h3 {
   margin: 0 0 0.25rem 0;
   font-size: 1.25rem;
-  color: #333;
+  color: var(--text-dark);
   font-weight: 600;
 }
 
 .context-info p {
   margin: 0;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.9rem;
 }
 
@@ -235,25 +235,25 @@ onUnmounted(() => {
 }
 
 .btn-cancel {
-  background-color: #6c757d;
-  color: white;
+  background-color: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
 }
 
 .btn-cancel:hover {
-  background-color: #5a6268;
+  background-color: var(--btn-secondary-hover);
 }
 
 .btn-done {
-  background-color: #007bff;
-  color: white;
+  background-color: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
 }
 
 .btn-done:hover:not(:disabled) {
-  background-color: #0056b3;
+  background-color: var(--btn-primary-hover);
 }
 
 .btn-done:disabled {
-  background-color: #ccc;
+  background-color: var(--disabled-bg);
   cursor: not-allowed;
   opacity: 0.6;
 }
@@ -296,8 +296,8 @@ onUnmounted(() => {
 }
 
 .point-count {
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
+  background: var(--shadow-overlay);
+  color: var(--btn-primary-text);
   padding: 0.5rem 1rem;
   border-radius: 20px;
   font-size: 0.9rem;
@@ -317,26 +317,26 @@ onUnmounted(() => {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-md);
   min-width: 90px;
 }
 
 .undo-btn {
-  background: white;
-  color: #333;
+  background: var(--card-bg);
+  color: var(--text-dark);
 }
 
 .undo-btn:hover:not(:disabled) {
-  background: #f0f0f0;
+  background: var(--bg-hover);
 }
 
 .redo-btn {
-  background: white;
-  color: #333;
+  background: var(--card-bg);
+  color: var(--text-dark);
 }
 
 .redo-btn:hover:not(:disabled) {
-  background: #f0f0f0;
+  background: var(--bg-hover);
 }
 
 .btn-drawing:disabled {

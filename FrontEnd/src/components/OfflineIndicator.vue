@@ -124,17 +124,17 @@ watch(syncStatus, (status) => {
 }
 
 .offline-banner {
-  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%);
+  background: linear-gradient(135deg, var(--danger-text) 0%, var(--danger-light) 100%);
   color: white;
 }
 
 .pending-banner {
-  background: linear-gradient(135deg, #ffc107 0%, #ffb300 100%);
-  color: #333;
+  background: linear-gradient(135deg, var(--warning) 0%, var(--warning-hover) 100%);
+  color: var(--text-dark);
 }
 
 .pending-banner.offline-pending {
-  background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+  background: linear-gradient(135deg, var(--warning-orange) 0%, var(--warning-dark) 100%);
   color: white;
 }
 
@@ -194,16 +194,16 @@ watch(syncStatus, (status) => {
   border-radius: 8px;
   font-size: 0.9rem;
   font-weight: 500;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-md);
 }
 
 .sync-toast.success {
-  background: #4caf50;
+  background: var(--success-light);
   color: white;
 }
 
 .sync-toast.error {
-  background: #ff6b6b;
+  background: var(--danger-light);
   color: white;
 }
 

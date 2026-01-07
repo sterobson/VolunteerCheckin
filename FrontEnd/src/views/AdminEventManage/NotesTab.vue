@@ -380,10 +380,10 @@ const formatRelativeTime = (dateString) => {
   border-radius: 50%;
 }
 
-.priority-dot.urgent { background: #dc3545; }
-.priority-dot.high { background: #fd7e14; }
-.priority-dot.normal { background: #28a745; }
-.priority-dot.low { background: #6c757d; }
+.priority-dot.urgent { background: var(--priority-urgent); }
+.priority-dot.high { background: var(--priority-high); }
+.priority-dot.normal { background: var(--priority-normal); }
+.priority-dot.low { background: var(--priority-low); }
 
 .checkbox-dropdown {
   display: flex;
@@ -482,10 +482,10 @@ const formatRelativeTime = (dateString) => {
   flex-shrink: 0;
 }
 
-.priority-indicator.urgent { background: #dc3545; }
-.priority-indicator.high { background: #fd7e14; }
-.priority-indicator.normal { background: #28a745; }
-.priority-indicator.low { background: #6c757d; }
+.priority-indicator.urgent { background: var(--priority-urgent); }
+.priority-indicator.high { background: var(--priority-high); }
+.priority-indicator.normal { background: var(--priority-normal); }
+.priority-indicator.low { background: var(--priority-low); }
 
 .note-title-row strong {
   font-size: 1rem;
@@ -560,12 +560,12 @@ const formatRelativeTime = (dateString) => {
 }
 
 .btn-secondary {
-  background: #6c757d;
+  background: var(--btn-secondary-bg);
   color: white;
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--btn-secondary-hover);
 }
 
 @media (max-width: 768px) {

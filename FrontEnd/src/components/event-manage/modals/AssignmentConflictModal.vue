@@ -67,17 +67,17 @@ const handleCancel = () => {
 <style scoped>
 p {
   margin: 0 0 1rem 0;
-  color: #333;
+  color: var(--text-dark);
 }
 
 p strong {
-  color: #007bff;
+  color: var(--brand-primary);
 }
 
 .locations-list {
   margin: 1rem 0;
   padding-left: 1.5rem;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .locations-list li {
@@ -105,20 +105,20 @@ p strong {
 }
 
 .btn-primary {
-  background: #007bff;
-  color: white;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
 }
 
 .btn-primary:hover {
-  background: #0056b3;
+  background: var(--btn-primary-hover);
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--btn-secondary-hover);
 }
 </style>

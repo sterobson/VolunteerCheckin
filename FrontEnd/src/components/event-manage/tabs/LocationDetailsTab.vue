@@ -32,7 +32,7 @@
             v-for="area in checkpointAreas"
             :key="area.id"
             class="area-badge"
-            :style="{ backgroundColor: area.color || '#667eea' }"
+            :style="{ backgroundColor: area.color || 'var(--brand-primary)' }"
           >
             {{ area.name }}
           </span>
@@ -242,7 +242,7 @@ const handleCustomTimesToggle = (checked) => {
   display: inline-block;
   padding: 0.35rem 0.75rem;
   border-radius: 16px;
-  color: white;
+  color: var(--btn-primary-text);
   font-size: 0.85rem;
   font-weight: 500;
 }

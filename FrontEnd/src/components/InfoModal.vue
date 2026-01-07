@@ -48,7 +48,7 @@ const handleClose = () => {
 
 <style scoped>
 .info-content {
-  color: #666;
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 
@@ -63,11 +63,11 @@ const handleClose = () => {
 }
 
 .btn-primary {
-  background: #007bff;
+  background: var(--accent-primary);
   color: white;
 }
 
 .btn-primary:hover {
-  background: #0056b3;
+  background: var(--accent-primary-hover);
 }
 </style>

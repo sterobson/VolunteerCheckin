@@ -384,7 +384,7 @@ const visibleAreas = computed(() => {
   height: 500px;
   border-radius: 8px;
   overflow: visible;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .map-wrapper {
@@ -401,9 +401,9 @@ const visibleAreas = computed(() => {
   position: absolute;
   top: 1rem;
   right: 1rem;
-  background: white;
+  background: var(--card-bg);
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-md);
   z-index: 500;
   transition: all 0.3s ease;
 }
@@ -414,7 +414,7 @@ const visibleAreas = computed(() => {
 
 .filters-toggle {
   padding: 0.5rem 1rem;
-  background: #007bff;
+  background: var(--btn-primary-bg);
   color: white;
   border: none;
   border-radius: 4px;
@@ -429,12 +429,12 @@ const visibleAreas = computed(() => {
   align-items: center;
   justify-content: center;
   position: relative;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-xs);
   white-space: nowrap;
 }
 
 .filters-toggle:hover {
-  background: #0056b3;
+  background: var(--btn-primary-hover);
 }
 
 .filters-content {
@@ -456,7 +456,7 @@ const visibleAreas = computed(() => {
   margin: 0 0 0.5rem 0;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #333;
+  color: var(--text-dark);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -468,7 +468,7 @@ const visibleAreas = computed(() => {
   margin-bottom: 0.5rem;
   font-size: 0.9rem;
   cursor: pointer;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .filter-checkbox input[type="checkbox"] {
@@ -482,9 +482,9 @@ const visibleAreas = computed(() => {
   position: absolute;
   top: 5rem;
   right: 1rem;
-  background: white;
+  background: var(--card-bg);
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-md);
   z-index: 500;
   transition: all 0.3s ease;
 }
@@ -495,7 +495,7 @@ const visibleAreas = computed(() => {
 
 .add-toggle {
   padding: 0.5rem 1rem;
-  background: #007bff;
+  background: var(--btn-primary-bg);
   color: white;
   border: none;
   border-radius: 4px;
@@ -510,12 +510,12 @@ const visibleAreas = computed(() => {
   align-items: center;
   justify-content: center;
   position: relative;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-xs);
   white-space: nowrap;
 }
 
 .add-toggle:hover {
-  background: #0056b3;
+  background: var(--btn-primary-hover);
 }
 
 .add-menu-content {
@@ -529,17 +529,17 @@ const visibleAreas = computed(() => {
   display: block;
   width: 100%;
   padding: 0.75rem 1rem;
-  background: white;
+  background: var(--card-bg);
   border: none;
   text-align: left;
   cursor: pointer;
   font-size: 0.9rem;
-  color: #333;
+  color: var(--text-dark);
   transition: background-color 0.2s;
 }
 
 .add-menu-item:hover {
-  background: #f5f5f5;
+  background: var(--bg-tertiary);
 }
 
 .add-menu-item:first-child {
@@ -612,14 +612,14 @@ const visibleAreas = computed(() => {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-sm);
   min-width: 90px;
-  background: white;
-  color: #333;
+  background: var(--card-bg);
+  color: var(--text-dark);
 }
 
 .btn-drawing:hover:not(:disabled) {
-  background: #f0f0f0;
+  background: var(--bg-hover);
 }
 
 .btn-drawing:disabled {

@@ -390,7 +390,7 @@ function applyPreset(preset) {
 
 .presets-label {
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .presets-row {
@@ -405,15 +405,15 @@ function applyPreset(preset) {
   align-items: center;
   gap: 0.25rem;
   padding: 0.35rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-medium);
   border-radius: 6px;
-  background: white;
+  background: var(--card-bg);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .preset-btn:hover {
-  border-color: #667eea;
+  border-color: var(--brand-primary);
   transform: translateY(-1px);
 }
 
@@ -425,7 +425,7 @@ function applyPreset(preset) {
 
 .preset-name {
   font-size: 0.65rem;
-  color: #666;
+  color: var(--text-secondary);
   max-width: 50px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -436,11 +436,11 @@ function applyPreset(preset) {
 .mockup-frame {
   width: 280px;
   margin: 0 auto;
-  border: 6px solid #1a1a1a;
+  border: 6px solid var(--mockup-frame);
   border-radius: 28px;
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  background: #1a1a1a;
+  box-shadow: var(--shadow-lg);
+  background: var(--mockup-frame);
 }
 
 .mockup-page {
@@ -596,7 +596,7 @@ function applyPreset(preset) {
 }
 
 .btn-emergency {
-  background: #ff4444;
+  background: var(--emergency-bg);
   color: white;
   padding: 0.4rem 0.75rem;
   border-radius: 4px;
@@ -617,19 +617,19 @@ function applyPreset(preset) {
 }
 
 .mockup-card {
-  background: white;
+  background: var(--card-bg);
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .card-header {
   padding: 0.5rem 0.75rem;
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   font-size: 0.8rem;
   font-weight: 500;
-  color: #333;
-  border-bottom: 1px solid #eee;
+  color: var(--text-dark);
+  border-bottom: 1px solid var(--border-lighter);
 }
 
 .card-content {
@@ -658,7 +658,7 @@ function applyPreset(preset) {
 
 .mockup-checkin-btn:hover::after,
 .mockup-checkin-btn.region-active::after {
-  border-color: #333;
+  border-color: var(--text-dark);
 }
 
 /* Region Active State */
@@ -679,9 +679,9 @@ function applyPreset(preset) {
 }
 
 .editor-modal {
-  background: white;
+  background: var(--card-bg);
   border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-xl);
   max-width: 400px;
   width: 100%;
   max-height: 90vh;
@@ -693,7 +693,7 @@ function applyPreset(preset) {
   justify-content: space-between;
   align-items: center;
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid #e9ecef;
+  border-bottom: 1px solid var(--border-color);
   font-weight: 600;
   font-size: 1.1rem;
 }
@@ -703,7 +703,7 @@ function applyPreset(preset) {
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #666;
+  color: var(--text-secondary);
   padding: 0;
   line-height: 1;
   width: 32px;
@@ -716,8 +716,8 @@ function applyPreset(preset) {
 }
 
 .editor-close:hover {
-  background: #f0f0f0;
-  color: #333;
+  background: var(--bg-hover);
+  color: var(--text-dark);
 }
 
 .editor-content {
@@ -726,7 +726,7 @@ function applyPreset(preset) {
 
 .editor-description {
   margin: 0 0 1rem 0;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.9rem;
 }
 
@@ -734,7 +734,7 @@ function applyPreset(preset) {
   display: block;
   font-size: 0.85rem;
   font-weight: 500;
-  color: #333;
+  color: var(--text-dark);
   margin-bottom: 0.5rem;
 }
 
@@ -750,8 +750,8 @@ function applyPreset(preset) {
 .position-btn {
   flex: 1;
   padding: 0.5rem 0.75rem;
-  border: 2px solid #ddd;
-  background: white;
+  border: 2px solid var(--border-medium);
+  background: var(--card-bg);
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.85rem;
@@ -759,26 +759,26 @@ function applyPreset(preset) {
 }
 
 .position-btn:hover {
-  border-color: #667eea;
-  background: #f8f9ff;
+  border-color: var(--brand-primary);
+  background: var(--brand-primary-bg);
 }
 
 .position-btn.selected {
-  border-color: #667eea;
-  background: #667eea;
-  color: white;
+  border-color: var(--brand-primary);
+  background: var(--brand-primary);
+  color: var(--btn-primary-text);
 }
 
 .editor-footer {
   padding: 1rem 1.25rem;
-  border-top: 1px solid #e9ecef;
+  border-top: 1px solid var(--border-color);
   display: flex;
   justify-content: flex-end;
 }
 
 .btn-done {
-  background: #667eea;
-  color: white;
+  background: var(--brand-primary);
+  color: var(--btn-primary-text);
   border: none;
   padding: 0.6rem 1.5rem;
   border-radius: 6px;
@@ -788,7 +788,7 @@ function applyPreset(preset) {
 }
 
 .btn-done:hover {
-  background: #5568d3;
+  background: var(--brand-primary-hover);
 }
 
 /* Color Swatches */
@@ -802,7 +802,7 @@ function applyPreset(preset) {
   display: block;
   font-size: 0.85rem;
   font-weight: 500;
-  color: #333;
+  color: var(--text-dark);
   margin-bottom: 0.5rem;
 }
 
@@ -827,17 +827,17 @@ function applyPreset(preset) {
 
 .color-swatch-btn:hover {
   transform: scale(1.1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-md);
 }
 
 .color-swatch-btn.selected {
-  border-color: #333;
-  box-shadow: 0 0 0 2px white, 0 0 0 4px #333;
+  border-color: var(--text-dark);
+  box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px var(--text-dark);
 }
 
 .color-swatch-btn .check {
-  color: white;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  color: var(--btn-primary-text);
+  text-shadow: var(--shadow-xs);
   font-weight: bold;
   font-size: 0.9rem;
 }
@@ -845,7 +845,7 @@ function applyPreset(preset) {
 /* Instructions */
 .instructions {
   font-size: 0.8rem;
-  color: #888;
+  color: var(--text-light);
   margin: 0;
   text-align: center;
 }

@@ -133,19 +133,19 @@ const formatRelativeTime = (dateString) => {
 
 /* Severity left border */
 .incident-card.severity-critical {
-  border-left: 4px solid #dc3545;
+  border-left: 4px solid var(--danger);
 }
 
 .incident-card.severity-high {
-  border-left: 4px solid #fd7e14;
+  border-left: 4px solid var(--warning-orange);
 }
 
 .incident-card.severity-medium {
-  border-left: 4px solid #ffc107;
+  border-left: 4px solid var(--warning);
 }
 
 .incident-card.severity-low {
-  border-left: 4px solid #667eea;
+  border-left: 4px solid var(--brand-primary);
 }
 
 .incident-header {
@@ -171,10 +171,10 @@ const formatRelativeTime = (dateString) => {
   flex-shrink: 0;
 }
 
-.severity-indicator.critical { background: #dc3545; }
-.severity-indicator.high { background: #fd7e14; }
-.severity-indicator.medium { background: #ffc107; }
-.severity-indicator.low { background: #667eea; }
+.severity-indicator.critical { background: var(--severity-critical); }
+.severity-indicator.high { background: var(--severity-high); }
+.severity-indicator.medium { background: var(--severity-medium); }
+.severity-indicator.low { background: var(--severity-low); }
 
 .incident-title {
   font-size: 0.95rem;
@@ -200,49 +200,49 @@ const formatRelativeTime = (dateString) => {
 
 /* Severity badges */
 .severity-badge.critical {
-  background: #f8d7da;
-  color: #721c24;
+  background: var(--severity-critical-bg);
+  color: var(--severity-critical-text);
 }
 
 .severity-badge.high {
-  background: #fff3cd;
-  color: #856404;
+  background: var(--severity-high-bg);
+  color: var(--severity-high-text);
 }
 
 .severity-badge.medium {
-  background: #fff9e6;
-  color: #856404;
+  background: var(--severity-medium-bg);
+  color: var(--severity-medium-text);
 }
 
 .severity-badge.low {
-  background: #e8edff;
-  color: #3d5afe;
+  background: var(--severity-low-bg);
+  color: var(--severity-low-text);
 }
 
 /* Status badges */
 .status-badge.open {
-  background: #e3f2fd;
-  color: #1565c0;
+  background: var(--status-open-bg);
+  color: var(--status-open);
 }
 
 .status-badge.acknowledged {
-  background: #fff3e0;
-  color: #e65100;
+  background: var(--status-acknowledged-bg);
+  color: var(--status-acknowledged);
 }
 
 .status-badge.in_progress {
-  background: #f3e5f5;
-  color: #7b1fa2;
+  background: var(--status-in-progress-bg);
+  color: var(--status-in-progress);
 }
 
 .status-badge.resolved {
-  background: #e8f5e9;
-  color: #2e7d32;
+  background: var(--status-resolved-bg);
+  color: var(--status-resolved);
 }
 
 .status-badge.closed {
-  background: #f5f5f5;
-  color: #616161;
+  background: var(--status-closed-bg);
+  color: var(--status-closed);
 }
 
 .incident-description {

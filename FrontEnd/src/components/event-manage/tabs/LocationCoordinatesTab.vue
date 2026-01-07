@@ -249,7 +249,7 @@ const isValidWhat3Words = (value) => {
 
 .form-error {
   display: block;
-  color: #dc3545;
+  color: var(--danger);
   font-size: 0.85rem;
   margin-top: 0.25rem;
 }
@@ -271,7 +271,7 @@ const isValidWhat3Words = (value) => {
 
 .btn-primary {
   background: var(--accent-primary);
-  color: white;
+  color: var(--btn-primary-text);
 }
 
 .btn-primary:hover {
@@ -279,12 +279,12 @@ const isValidWhat3Words = (value) => {
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--btn-secondary-hover);
 }
 
 .btn-with-icon {

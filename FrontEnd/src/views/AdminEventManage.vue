@@ -172,6 +172,7 @@
       :notes="notes"
       :available-marshals="availableMarshalsForAssignment"
       :all-checklist-items="checklistItems"
+      :incidents="selectedLocationIncidents"
       :is-dirty="formDirty"
       :event-default-style-type="event?.defaultCheckpointStyleType || event?.DefaultCheckpointStyleType || 'default'"
       :event-default-style-color="event?.defaultCheckpointStyleColor || event?.DefaultCheckpointStyleColor || ''"
@@ -182,7 +183,6 @@
       :event-default-style-size="event?.defaultCheckpointStyleSize || event?.DefaultCheckpointStyleSize || ''"
       :event-default-style-map-rotation="event?.defaultCheckpointStyleMapRotation ?? event?.DefaultCheckpointStyleMapRotation ?? ''"
       :event-people-term="event?.peopleTerm || 'Marshals'"
-      :incidents="selectedLocationIncidents"
       :z-index="showEditArea ? 1100 : 1000"
       @close="closeEditLocationModal"
       @save="handleUpdateLocation"
@@ -308,6 +308,7 @@
       :assignments="allAssignments"
       :notes="notes"
       :contacts="contacts"
+      :incidents="selectedAreaIncidents"
       :event-default-style-type="event?.defaultCheckpointStyleType || event?.DefaultCheckpointStyleType || 'default'"
       :event-default-style-color="event?.defaultCheckpointStyleColor || event?.DefaultCheckpointStyleColor || ''"
       :event-default-style-background-shape="event?.defaultCheckpointStyleBackgroundShape || event?.DefaultCheckpointStyleBackgroundShape || ''"
@@ -326,6 +327,7 @@
       @select-checkpoint="selectLocation"
       @add-area-contact="handleAddAreaContact"
       @edit-contact="handleEditContactFromArea"
+      @select-incident="handleSelectAreaIncident"
     />
 
     <EditChecklistItemModal
@@ -746,24 +748,6 @@ const marshalLink = computed(() => {
   return `${window.location.origin}/#/event/${route.params.eventId}`;
 });
 
-// Incidents for the selected location (checkpoint)
-const selectedLocationIncidents = computed(() => {
-  if (!selectedLocation.value?.id) return [];
-  return incidents.value.filter(
-    incident => incident.checkpointId === selectedLocation.value.id
-  );
-});
-
-// Incidents for the selected marshal (at any of their assigned checkpoints)
-const selectedMarshalIncidents = computed(() => {
-  if (!selectedMarshal.value?.id) return [];
-  // Get the marshal's assigned checkpoint IDs
-  const assignedCheckpointIds = selectedMarshal.value.assignedLocationIds || [];
-  // Filter incidents that are at any of these checkpoints
-  return incidents.value.filter(
-    incident => assignedCheckpointIds.includes(incident.checkpointId)
-  );
-});
 
 const allAssignments = computed(() => {
   const assignments = [];
@@ -871,6 +855,68 @@ const displayAreas = computed(() => {
 
   return areasList;
 });
+
+// Incidents for selected marshal - includes incidents they reported OR at their assigned checkpoints
+const selectedMarshalIncidents = computed(() => {
+  if (!selectedMarshal.value || !incidents.value.length) return [];
+
+  const marshalId = selectedMarshal.value.id;
+  const assignedLocationIds = selectedMarshal.value.assignedLocationIds || [];
+
+  return incidents.value.filter(incident => {
+    // Reported by this marshal
+    if (incident.reportedBy?.marshalId === marshalId) return true;
+    // Or at a checkpoint this marshal is assigned to
+    const checkpointId = incident.context?.checkpoint?.checkpointId;
+    if (checkpointId && assignedLocationIds.includes(checkpointId)) return true;
+    return false;
+  }).sort((a, b) => new Date(b.incidentTime || b.createdAt) - new Date(a.incidentTime || a.createdAt));
+});
+
+// Incidents for selected location/checkpoint
+const selectedLocationIncidents = computed(() => {
+  if (!selectedLocation.value || !incidents.value.length) return [];
+
+  const locationId = selectedLocation.value.id;
+
+  return incidents.value.filter(incident => {
+    const checkpointId = incident.context?.checkpoint?.checkpointId;
+    return checkpointId === locationId;
+  }).sort((a, b) => new Date(b.incidentTime || b.createdAt) - new Date(a.incidentTime || a.createdAt));
+});
+
+// Incidents for selected area
+const selectedAreaIncidents = computed(() => {
+  if (!selectedArea.value || !incidents.value.length) return [];
+
+  const areaId = selectedArea.value.id;
+
+  // Get checkpoint IDs in this area
+  const areaCheckpointIds = locationStatuses.value
+    .filter(loc => loc.areaIds && loc.areaIds.includes(areaId))
+    .map(loc => loc.id);
+
+  return incidents.value.filter(incident => {
+    const checkpointId = incident.context?.checkpoint?.checkpointId;
+    return checkpointId && areaCheckpointIds.includes(checkpointId);
+  }).sort((a, b) => new Date(b.incidentTime || b.createdAt) - new Date(a.incidentTime || a.createdAt));
+});
+
+// Handlers for selecting incidents from modals
+const handleSelectMarshalIncident = (incident) => {
+  selectedIncident.value = incident;
+  showIncidentDetail.value = true;
+};
+
+const handleSelectLocationIncident = (incident) => {
+  selectedIncident.value = incident;
+  showIncidentDetail.value = true;
+};
+
+const handleSelectAreaIncident = (incident) => {
+  selectedIncident.value = incident;
+  showIncidentDetail.value = true;
+};
 
 // Methods
 const goBack = () => {
@@ -2002,10 +2048,6 @@ const closeEditLocationModal = () => {
 };
 
 // Handle selecting an incident from the location modal
-const handleSelectLocationIncident = (incident) => {
-  selectedIncident.value = incident;
-  showIncidentDetail.value = true;
-};
 
 const closeAssignMarshalModal = () => {
   showAssignMarshalModal.value = false;
@@ -2649,11 +2691,6 @@ const closeEditMarshalModal = () => {
   formDirty.value = false;
 };
 
-// Handle selecting an incident from the marshal modal
-const handleSelectMarshalIncident = (incident) => {
-  selectedIncident.value = incident;
-  showIncidentDetail.value = true;
-};
 
 const handleImportMarshalsSubmit = async ({ file }) => {
   const result = await importExport.importMarshals(file);
@@ -2914,7 +2951,7 @@ onUnmounted(() => {
 }
 
 .btn-marshal-mode {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--brand-gradient);
   color: white;
   border: none;
   padding: 0.5rem 1rem;
@@ -2927,7 +2964,7 @@ onUnmounted(() => {
 
 .btn-marshal-mode:hover {
   transform: translateY(-1px);
-  box-shadow: 0 3px 10px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 3px 10px var(--brand-shadow-lg);
 }
 
 .container {

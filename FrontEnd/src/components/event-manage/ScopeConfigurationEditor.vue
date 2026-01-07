@@ -629,14 +629,14 @@ const filteredCheckpoints = computed(() => {
 
 .editor-header h4 {
   margin: 0 0 0.5rem 0;
-  color: #333;
+  color: var(--text-dark);
   font-size: 1rem;
 }
 
 .editor-header .help-text {
   margin: 0;
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-secondary);
   font-style: italic;
 }
 
@@ -644,7 +644,7 @@ const filteredCheckpoints = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-medium);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -654,10 +654,10 @@ const filteredCheckpoints = computed(() => {
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1rem;
-  background: white;
+  background: var(--card-bg);
   cursor: pointer;
   transition: background-color 0.15s;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--bg-hover);
 }
 
 .scope-type-row:last-child {
@@ -665,27 +665,27 @@ const filteredCheckpoints = computed(() => {
 }
 
 .scope-type-row:hover {
-  background: #f8f9fa;
+  background: var(--bg-secondary);
 }
 
 .scope-type-row.active {
-  background: #e3f2fd;
+  background: var(--info-bg);
 }
 
 .scope-type-row.active:hover {
-  background: #d1e7fd;
+  background: var(--accent-primary-light);
 }
 
 .scope-type-label {
   font-size: 0.9rem;
-  color: #333;
+  color: var(--text-dark);
   font-weight: 500;
 }
 
 .scope-type-pill {
   padding: 0.25rem 0.75rem;
-  background: #e0e0e0;
-  color: #666;
+  background: var(--border-light);
+  color: var(--text-secondary);
   border-radius: 12px;
   font-size: 0.8rem;
   font-weight: 500;
@@ -693,8 +693,8 @@ const filteredCheckpoints = computed(() => {
 }
 
 .scope-type-row.active .scope-type-pill {
-  background: #667eea;
-  color: white;
+  background: var(--brand-primary);
+  color: var(--btn-primary-text);
 }
 
 .expand-row {
@@ -702,24 +702,24 @@ const filteredCheckpoints = computed(() => {
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1rem;
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   cursor: pointer;
   transition: background-color 0.15s;
 }
 
 .expand-row:hover {
-  background: #e9ecef;
+  background: var(--bg-tertiary);
 }
 
 .expand-label {
   font-size: 0.85rem;
-  color: #667eea;
+  color: var(--brand-primary);
   font-weight: 500;
 }
 
 .expand-icon {
   font-size: 0.7rem;
-  color: #667eea;
+  color: var(--brand-primary);
 }
 
 /* Modal styles */
@@ -738,14 +738,14 @@ const filteredCheckpoints = computed(() => {
 }
 
 .modal-content {
-  background: white;
+  background: var(--card-bg);
   border-radius: 8px;
   max-width: 600px;
   width: 100%;
   max-height: 80vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
 }
 
 .modal-header {
@@ -753,20 +753,20 @@ const filteredCheckpoints = computed(() => {
   justify-content: space-between;
   align-items: center;
   padding: 1.25rem;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .modal-header h5 {
   margin: 0;
   font-size: 1.1rem;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .btn-close {
   background: none;
   border: none;
   font-size: 1.5rem;
-  color: #999;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 0;
   width: 2rem;
@@ -779,8 +779,8 @@ const filteredCheckpoints = computed(() => {
 }
 
 .btn-close:hover {
-  background: #f0f0f0;
-  color: #333;
+  background: var(--bg-hover);
+  color: var(--text-dark);
 }
 
 .modal-body {
@@ -792,16 +792,16 @@ const filteredCheckpoints = computed(() => {
 .scope-help {
   margin: 0 0 1rem 0;
   padding: 0.75rem;
-  background: #f8f9fa;
-  border-left: 3px solid #667eea;
+  background: var(--bg-secondary);
+  border-left: 3px solid var(--brand-primary);
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-secondary);
   border-radius: 4px;
 }
 
 .scope-enabled-toggle {
   padding: 1rem;
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   border-radius: 6px;
 }
 
@@ -823,7 +823,7 @@ const filteredCheckpoints = computed(() => {
 }
 
 .checkbox-label:hover {
-  background: #f8f9fa;
+  background: var(--bg-secondary);
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -834,13 +834,13 @@ const filteredCheckpoints = computed(() => {
 }
 
 .checkbox-label.special-option {
-  background: #f8f9fa;
-  border: 2px solid #667eea;
+  background: var(--bg-secondary);
+  border: 2px solid var(--brand-primary);
   margin-bottom: 1rem;
 }
 
 .checkbox-label.special-option:hover {
-  background: #e3f2fd;
+  background: var(--info-bg);
 }
 
 .specific-selection {
@@ -851,10 +851,11 @@ const filteredCheckpoints = computed(() => {
 
 .search-input {
   padding: 0.6rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-medium);
   border-radius: 4px;
   font-size: 0.9rem;
-  background: white;
+  background: var(--input-bg);
+  color: var(--text-primary);
 }
 
 .checkbox-group {
@@ -862,9 +863,9 @@ const filteredCheckpoints = computed(() => {
   flex-direction: column;
   gap: 0.25rem;
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-medium);
   border-radius: 4px;
-  background: white;
+  background: var(--card-bg);
 }
 
 .checkbox-group.scrollable {
@@ -890,13 +891,13 @@ const filteredCheckpoints = computed(() => {
 
 .checkpoint-name {
   font-weight: 500;
-  color: #333;
+  color: var(--text-dark);
   flex-shrink: 0;
 }
 
 .checkpoint-description {
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-secondary);
   font-style: italic;
   white-space: nowrap;
   overflow: hidden;
@@ -904,8 +905,8 @@ const filteredCheckpoints = computed(() => {
 }
 
 .checkbox-label.this-checkpoint-option {
-  background: #fff8e6;
-  border: 1px dashed #ffc107;
+  background: var(--warning-bg-light);
+  border: 1px dashed var(--warning);
   border-radius: 4px;
   margin-bottom: 0.5rem;
 }
@@ -914,7 +915,7 @@ const filteredCheckpoints = computed(() => {
   display: flex;
   justify-content: space-between;
   padding: 1rem 1.25rem;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border-light);
   gap: 1rem;
 }
 
@@ -929,20 +930,20 @@ const filteredCheckpoints = computed(() => {
 }
 
 .btn-primary {
-  background: #007bff;
-  color: white;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
 }
 
 .btn-primary:hover {
-  background: #0056b3;
+  background: var(--btn-primary-hover);
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--btn-secondary-hover);
 }
 </style>

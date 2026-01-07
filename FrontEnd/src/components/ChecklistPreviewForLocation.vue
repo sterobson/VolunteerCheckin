@@ -316,14 +316,14 @@ const getContextInfo = (item) => {
 
 .preview-header {
   margin: 0;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.9rem;
 }
 
 .add-item-btn {
   padding: 0.4rem 0.75rem;
-  background: #667eea;
-  color: white;
+  background: var(--brand-primary);
+  color: var(--card-bg);
   border: none;
   border-radius: 4px;
   font-size: 0.85rem;
@@ -332,7 +332,7 @@ const getContextInfo = (item) => {
 }
 
 .add-item-btn:hover {
-  background: #5a6fd6;
+  background: var(--brand-primary-hover);
 }
 
 .add-item-form {
@@ -340,27 +340,27 @@ const getContextInfo = (item) => {
   gap: 0.5rem;
   margin-bottom: 1rem;
   padding: 0.75rem;
-  background: #f0f4ff;
+  background: var(--brand-primary-light);
   border-radius: 6px;
 }
 
 .add-item-input {
   flex: 1;
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-medium);
   border-radius: 4px;
   font-size: 0.9rem;
 }
 
 .add-item-input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--brand-primary);
 }
 
 .save-item-btn {
   padding: 0.5rem 1rem;
-  background: #28a745;
-  color: white;
+  background: var(--success);
+  color: var(--card-bg);
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -368,12 +368,12 @@ const getContextInfo = (item) => {
 }
 
 .save-item-btn:disabled {
-  background: #ccc;
+  background: var(--border-dark);
   cursor: not-allowed;
 }
 
 .save-item-btn:not(:disabled):hover {
-  background: #218838;
+  background: var(--success-hover);
 }
 
 .pending-items {
@@ -383,7 +383,7 @@ const getContextInfo = (item) => {
 .empty-state {
   text-align: center;
   padding: 2rem 1rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .empty-state p {
@@ -393,7 +393,7 @@ const getContextInfo = (item) => {
 .help-text {
   font-size: 0.85rem;
   font-style: italic;
-  color: #999;
+  color: var(--text-muted);
 }
 
 .checklist-items {
@@ -406,14 +406,14 @@ const getContextInfo = (item) => {
   display: flex;
   gap: 0.75rem;
   padding: 0.75rem;
-  background: #f8f9fa;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
   border-radius: 6px;
 }
 
 .checklist-item.pending {
-  background: #f0f4ff;
-  border-color: #667eea;
+  background: var(--brand-primary-light);
+  border-color: var(--brand-primary);
 }
 
 .item-checkbox {
@@ -448,7 +448,7 @@ const getContextInfo = (item) => {
 
 .item-text {
   font-size: 0.95rem;
-  color: #333;
+  color: var(--text-dark);
   word-wrap: break-word;
   flex: 1;
   min-width: 150px;
@@ -464,8 +464,8 @@ const getContextInfo = (item) => {
 .scope-pill {
   display: inline-block;
   padding: 0.2rem 0.5rem;
-  background: #e3f2fd;
-  color: #1976d2;
+  background: var(--info-bg);
+  color: var(--info-blue);
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 500;
@@ -473,14 +473,14 @@ const getContextInfo = (item) => {
 }
 
 .scope-pill.new-pill {
-  background: #e8f5e9;
-  color: #388e3c;
+  background: var(--success-bg-light);
+  color: var(--success-dark);
 }
 
 .remove-item-btn {
   background: none;
   border: none;
-  color: #dc3545;
+  color: var(--danger);
   font-size: 1.2rem;
   line-height: 1;
   cursor: pointer;
@@ -488,12 +488,12 @@ const getContextInfo = (item) => {
 }
 
 .remove-item-btn:hover {
-  color: #c82333;
+  color: var(--danger-hover);
 }
 
 .item-context {
   font-size: 0.85rem;
-  color: #667eea;
+  color: var(--brand-primary);
   font-weight: 500;
 }
 </style>

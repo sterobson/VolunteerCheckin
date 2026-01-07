@@ -281,7 +281,7 @@ textarea.form-input {
 
 .btn-primary {
   background: var(--accent-primary);
-  color: white;
+  color: var(--btn-primary-text);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -289,28 +289,28 @@ textarea.form-input {
 }
 
 .btn-primary:disabled {
-  background: #6c9bd1;
+  background: var(--btn-secondary-bg);
   cursor: not-allowed;
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--btn-secondary-hover);
 }
 
 .success-text {
   margin: 0.5rem 0 0 0;
-  color: #28a745;
+  color: var(--success);
   font-size: 0.85rem;
 }
 
 .error-text {
   margin: 0.5rem 0 0 0;
-  color: #dc3545;
+  color: var(--danger);
   font-size: 0.85rem;
 }
 </style>

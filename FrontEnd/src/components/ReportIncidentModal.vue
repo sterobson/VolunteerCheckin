@@ -504,7 +504,7 @@ const handleClose = () => {
 }
 
 .required {
-  color: #dc3545;
+  color: var(--danger);
 }
 
 .form-input {
@@ -537,10 +537,10 @@ const handleClose = () => {
   font-weight: 500;
 }
 
-#severity option[value="low"] { color: #3d5afe; }
-#severity option[value="medium"] { color: #856404; }
-#severity option[value="high"] { color: #e65100; }
-#severity option[value="critical"] { color: #721c24; }
+#severity option[value="low"] { color: var(--severity-low-text); }
+#severity option[value="medium"] { color: var(--severity-medium-text); }
+#severity option[value="high"] { color: var(--status-acknowledged); }
+#severity option[value="critical"] { color: var(--danger-text); }
 
 .form-textarea {
   resize: vertical;
@@ -654,7 +654,7 @@ const handleClose = () => {
 }
 
 .location-error {
-  color: #dc3545;
+  color: var(--danger);
 }
 
 .map-picker-container {
@@ -678,8 +678,8 @@ const handleClose = () => {
 
 .error-message {
   padding: 0.25rem 0.5rem;
-  background: #f8d7da;
-  color: #721c24;
+  background: var(--danger-bg);
+  color: var(--danger-text);
   border-radius: 4px;
   font-size: 0.75rem;
 }
@@ -706,7 +706,7 @@ const handleClose = () => {
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #0056b3;
+  background: var(--accent-primary-hover);
 }
 
 .btn-primary:disabled {

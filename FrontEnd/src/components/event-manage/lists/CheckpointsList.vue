@@ -240,7 +240,7 @@ h3 {
 }
 
 .btn-primary:hover {
-  background: #0056b3;
+  background: var(--accent-primary-hover);
 }
 
 .btn-secondary {

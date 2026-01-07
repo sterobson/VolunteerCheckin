@@ -43,7 +43,7 @@
 .home {
   min-height: 100vh;
   padding: 2rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--brand-gradient);
   color: white;
 }
 
@@ -79,7 +79,7 @@ h1 {
 
 .btn-primary {
   background: white;
-  color: #667eea;
+  color: var(--brand-primary);
   font-weight: 600;
 }
 

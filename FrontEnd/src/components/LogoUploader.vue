@@ -177,7 +177,7 @@ async function removeLogo() {
 .uploader-label {
   display: block;
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 0.5rem;
 }
 
@@ -186,9 +186,9 @@ async function removeLogo() {
   align-items: center;
   gap: 1rem;
   padding: 0.75rem;
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   border-radius: 8px;
-  border: 1px solid #e9ecef;
+  border: 1px solid var(--border-color);
 }
 
 .logo-image {
@@ -201,17 +201,17 @@ async function removeLogo() {
 .remove-btn {
   padding: 0.4rem 0.75rem;
   font-size: 0.85rem;
-  color: #dc3545;
-  background: white;
-  border: 1px solid #dc3545;
+  color: var(--danger);
+  background: var(--card-bg);
+  border: 1px solid var(--danger);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .remove-btn:hover:not(:disabled) {
-  background: #dc3545;
-  color: white;
+  background: var(--danger);
+  color: var(--card-bg);
 }
 
 .remove-btn:disabled {
@@ -220,23 +220,23 @@ async function removeLogo() {
 }
 
 .upload-area {
-  border: 2px dashed #ccc;
+  border: 2px dashed var(--border-dark);
   border-radius: 8px;
   padding: 2rem;
   text-align: center;
   cursor: pointer;
   transition: all 0.2s;
-  background: #fafafa;
+  background: var(--bg-lighter);
 }
 
 .upload-area:hover {
-  border-color: #667eea;
-  background: #f0f4ff;
+  border-color: var(--brand-primary);
+  background: var(--brand-primary-light);
 }
 
 .upload-area.drag-over {
-  border-color: #667eea;
-  background: #e8edff;
+  border-color: var(--brand-primary);
+  background: var(--brand-primary-bg);
   border-style: solid;
 }
 
@@ -260,23 +260,23 @@ async function removeLogo() {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: #e9ecef;
+  background: var(--bg-tertiary);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.5rem;
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 0.5rem;
 }
 
 .upload-text {
   font-size: 0.95rem;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .upload-hint {
   font-size: 0.8rem;
-  color: #888;
+  color: var(--text-light);
 }
 
 .upload-progress {
@@ -289,8 +289,8 @@ async function removeLogo() {
 .spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid #e9ecef;
-  border-top-color: #667eea;
+  border: 3px solid var(--bg-tertiary);
+  border-top-color: var(--brand-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -304,10 +304,10 @@ async function removeLogo() {
 .error-message {
   margin-top: 0.5rem;
   padding: 0.5rem 0.75rem;
-  background: #fff5f5;
-  border: 1px solid #feb2b2;
+  background: var(--danger-bg-lighter);
+  border: 1px solid var(--danger-border);
   border-radius: 4px;
-  color: #c53030;
+  color: var(--danger-text);
   font-size: 0.85rem;
 }
 </style>

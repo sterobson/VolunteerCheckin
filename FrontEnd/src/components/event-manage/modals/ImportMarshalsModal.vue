@@ -114,13 +114,13 @@ const handleClose = () => {
 
 <style scoped>
 .instruction {
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 1rem;
   font-size: 0.9rem;
 }
 
 .csv-example {
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   padding: 1rem;
   border-radius: 4px;
   margin-bottom: 1.5rem;
@@ -129,7 +129,7 @@ const handleClose = () => {
 .csv-example strong {
   display: block;
   margin-bottom: 0.5rem;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .csv-example pre {
@@ -146,38 +146,38 @@ const handleClose = () => {
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 500;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .form-input {
   width: 100%;
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-medium);
   border-radius: 4px;
   font-size: 0.9rem;
   box-sizing: border-box;
 }
 
 .error {
-  color: #dc3545;
+  color: var(--danger);
   padding: 0.75rem;
-  background: #f8d7da;
-  border: 1px solid #f5c6cb;
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
   border-radius: 4px;
   margin-bottom: 1rem;
 }
 
 .import-result {
   padding: 0.75rem;
-  background: #d4edda;
-  border: 1px solid #c3e6cb;
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
   border-radius: 4px;
   margin-bottom: 1rem;
 }
 
 .import-result p {
   margin: 0 0 0.5rem 0;
-  color: #155724;
+  color: var(--success-text);
   font-weight: 500;
 }
 
@@ -186,7 +186,7 @@ const handleClose = () => {
 }
 
 .import-errors strong {
-  color: #721c24;
+  color: var(--danger-text);
   display: block;
   margin-bottom: 0.25rem;
 }
@@ -194,7 +194,7 @@ const handleClose = () => {
 .import-errors ul {
   margin: 0;
   padding-left: 1.5rem;
-  color: #721c24;
+  color: var(--danger-text);
 }
 
 .btn {
@@ -207,12 +207,12 @@ const handleClose = () => {
 }
 
 .btn-primary {
-  background: #007bff;
-  color: white;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #0056b3;
+  background: var(--btn-primary-hover);
 }
 
 .btn-primary:disabled {
@@ -221,11 +221,11 @@ const handleClose = () => {
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--btn-secondary-hover);
 }
 </style>

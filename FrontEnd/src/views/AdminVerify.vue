@@ -69,15 +69,15 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--brand-gradient);
   padding: 2rem;
 }
 
 .verify-card {
-  background: white;
+  background: var(--card-bg);
   padding: 3rem;
   border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-xl);
   max-width: 400px;
   width: 100%;
   text-align: center;
@@ -85,27 +85,27 @@ onMounted(async () => {
 
 .status h2 {
   margin-bottom: 1rem;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .status p {
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 1.5rem;
 }
 
 .status.error h2 {
-  color: #c33;
+  color: var(--danger);
 }
 
 .status.success h2 {
-  color: #28a745;
+  color: var(--success);
 }
 
 .spinner {
   width: 50px;
   height: 50px;
-  border: 4px solid #e0e0e0;
-  border-top-color: #667eea;
+  border: 4px solid var(--border-light);
+  border-top-color: var(--brand-primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto 1.5rem;
@@ -130,11 +130,11 @@ onMounted(async () => {
 }
 
 .btn-primary {
-  background: #667eea;
+  background: var(--brand-primary);
   color: white;
 }
 
 .btn-primary:hover {
-  background: #5568d3;
+  background: var(--brand-primary-hover);
 }
 </style>

@@ -426,7 +426,7 @@ const handleDelete = () => {
 .tab-headers {
   display: flex;
   gap: 0;
-  border-bottom: 2px solid #e0e0e0;
+  border-bottom: 2px solid var(--border-light);
   margin-bottom: 1.5rem;
 }
 
@@ -438,19 +438,19 @@ const handleDelete = () => {
   cursor: pointer;
   font-size: 0.95rem;
   font-weight: 500;
-  color: #666;
+  color: var(--text-secondary);
   transition: all 0.2s;
   margin-bottom: -2px;
 }
 
 .tab-header:hover {
-  color: #333;
-  background: #f8f9fa;
+  color: var(--text-dark);
+  background: var(--bg-secondary);
 }
 
 .tab-header.active {
-  color: #007bff;
-  border-bottom-color: #007bff;
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
   background: transparent;
 }
 
@@ -481,7 +481,7 @@ const handleDelete = () => {
 
 label {
   font-weight: 500;
-  color: #333;
+  color: var(--text-dark);
   font-size: 0.9rem;
 }
 
@@ -492,16 +492,18 @@ input[type="number"],
 textarea,
 select {
   padding: 0.6rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-medium);
   border-radius: 4px;
   font-size: 0.9rem;
   font-family: inherit;
+  background: var(--input-bg);
+  color: var(--text-primary);
 }
 
 input.input-disabled,
 input:disabled {
-  background-color: #f5f5f5;
-  color: #666;
+  background-color: var(--input-disabled-bg);
+  color: var(--text-secondary);
   cursor: not-allowed;
 }
 
@@ -511,7 +513,7 @@ textarea {
 }
 
 select {
-  background: white;
+  background: var(--input-bg);
   cursor: pointer;
 }
 
@@ -527,24 +529,24 @@ select {
 
 .toggle-custom-btn {
   padding: 0.5rem 0.75rem;
-  background: #f0f0f0;
-  border: 1px solid #ddd;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-medium);
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.8rem;
-  color: #666;
+  color: var(--text-secondary);
   white-space: nowrap;
   transition: all 0.2s;
 }
 
 .toggle-custom-btn:hover {
-  background: #e0e0e0;
-  color: #333;
+  background: var(--bg-hover);
+  color: var(--text-dark);
 }
 
 .help-text {
   font-size: 0.8rem;
-  color: #666;
+  color: var(--text-secondary);
   font-style: italic;
 }
 
@@ -586,21 +588,21 @@ select {
 }
 
 .btn-primary {
-  background: #007bff;
-  color: white;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
 }
 
 .btn-primary:hover {
-  background: #0056b3;
+  background: var(--btn-primary-hover);
 }
 
 .btn-danger {
-  background: #dc3545;
-  color: white;
+  background: var(--danger);
+  color: var(--btn-primary-text);
 }
 
 .btn-danger:hover {
-  background: #c82333;
+  background: var(--danger-hover);
 }
 
 @media (max-width: 768px) {

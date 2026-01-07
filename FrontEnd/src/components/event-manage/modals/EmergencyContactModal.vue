@@ -134,10 +134,10 @@ const formatRoleName = (role) => {
 <style scoped>
 .section-header {
   font-size: 1rem;
-  color: #333;
+  color: var(--text-dark);
   margin: 0 0 1rem 0;
   padding-bottom: 0.5rem;
-  border-bottom: 2px solid #dc3545;
+  border-bottom: 2px solid var(--danger);
 }
 
 .emergency-notes-section {
@@ -152,14 +152,14 @@ const formatRoleName = (role) => {
 
 .emergency-note-item {
   padding: 1rem;
-  background: #fff3cd;
-  border: 1px solid #ffc107;
+  background: var(--warning-bg);
+  border: 1px solid var(--warning);
   border-radius: 8px;
 }
 
 .emergency-note-item.is-emergency {
-  background: #f8d7da;
-  border-color: #dc3545;
+  background: var(--danger-bg);
+  border-color: var(--danger);
 }
 
 .emergency-note-item .note-header {
@@ -173,7 +173,7 @@ const formatRoleName = (role) => {
 .emergency-note-item h3 {
   margin: 0;
   font-size: 1rem;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .priority-badge {
@@ -185,18 +185,18 @@ const formatRoleName = (role) => {
 }
 
 .priority-badge.emergency {
-  background: #dc3545;
-  color: white;
+  background: var(--danger);
+  color: var(--card-bg);
 }
 
 .priority-badge.urgent {
-  background: #ffc107;
-  color: #856404;
+  background: var(--warning);
+  color: var(--warning-text);
 }
 
 .note-content {
   font-size: 0.9rem;
-  color: #333;
+  color: var(--text-dark);
   line-height: 1.5;
   white-space: pre-wrap;
 }
@@ -213,9 +213,9 @@ const formatRoleName = (role) => {
 
 .emergency-contact-item {
   padding: 1.5rem;
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   border-radius: 8px;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--border-color);
 }
 
 .contact-header {
@@ -229,14 +229,14 @@ const formatRoleName = (role) => {
 
 .emergency-contact-item h3 {
   margin: 0;
-  color: #333;
+  color: var(--text-dark);
   font-size: 1.1rem;
 }
 
 .role-badge {
   padding: 0.25rem 0.6rem;
-  background: #dc3545;
-  color: white;
+  background: var(--danger);
+  color: var(--card-bg);
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 500;
@@ -253,18 +253,18 @@ const formatRoleName = (role) => {
 .info-section label {
   display: block;
   font-weight: 500;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.9rem;
   margin-bottom: 0.25rem;
 }
 
 .info-section p {
   margin: 0;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .phone-link {
-  color: #007bff;
+  color: var(--link-color);
   text-decoration: none;
   font-weight: 500;
   font-size: 1.1rem;
@@ -275,7 +275,7 @@ const formatRoleName = (role) => {
 }
 
 .email-link {
-  color: #007bff;
+  color: var(--link-color);
   text-decoration: none;
   font-size: 0.95rem;
 }
@@ -287,7 +287,7 @@ const formatRoleName = (role) => {
 .no-contacts {
   text-align: center;
   padding: 2rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .no-contacts p {
@@ -307,12 +307,12 @@ const formatRoleName = (role) => {
 }
 
 .btn-danger {
-  background: #dc3545;
-  color: white;
+  background: var(--danger);
+  color: var(--card-bg);
 }
 
 .btn-danger:hover {
-  background: #c82333;
+  background: var(--danger-hover);
 }
 
 .btn-full {
@@ -320,11 +320,11 @@ const formatRoleName = (role) => {
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--btn-secondary-hover);
 }
 </style>

@@ -211,7 +211,7 @@ h3 {
 
 .default-badge {
   padding: 0.2rem 0.5rem;
-  background: #ffc107;
+  background: var(--warning);
   border-radius: 4px;
   font-size: 0.7rem;
   font-weight: 600;

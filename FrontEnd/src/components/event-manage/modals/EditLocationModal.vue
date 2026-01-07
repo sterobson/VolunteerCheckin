@@ -117,21 +117,6 @@
       @change="handleInput"
     />
 
-    <!-- Incidents Tab (only when there are incidents) -->
-    <div v-if="activeTab === 'incidents'" class="tab-content incidents-tab">
-      <div v-if="incidents && incidents.length > 0" class="incidents-list">
-        <IncidentCard
-          v-for="incident in incidents"
-          :key="incident.incidentId"
-          :incident="incident"
-          @click="$emit('select-incident', incident)"
-        />
-      </div>
-      <div v-else class="empty-state">
-        No incidents for this {{ effectiveCheckpointTermSingularLower }}.
-      </div>
-    </div>
-
     <!-- Appearance Tab -->
     <div v-if="activeTab === 'appearance'" class="tab-content appearance-tab">
       <!-- Marker style accordion -->
@@ -254,6 +239,18 @@
 
       </div>
 
+    <!-- Incidents Tab (only shown if there are incidents) -->
+    <div v-if="activeTab === 'incidents'" class="tab-content incidents-tab">
+      <div class="incidents-list">
+        <IncidentCard
+          v-for="incident in incidents"
+          :key="incident.incidentId"
+          :incident="incident"
+          @select="$emit('select-incident', $event)"
+        />
+      </div>
+    </div>
+
     <!-- Custom footer with left and right aligned buttons -->
     <template #footer>
       <div class="custom-footer">
@@ -283,10 +280,10 @@ import LocationCoordinatesTab from '../tabs/LocationCoordinatesTab.vue';
 import LocationAssignmentsTab from '../tabs/LocationAssignmentsTab.vue';
 import CheckpointChecklistView from '../../CheckpointChecklistView.vue';
 import NotesView from '../../NotesView.vue';
-import IncidentCard from '../../IncidentCard.vue';
 import ChecklistPreviewForLocation from '../../ChecklistPreviewForLocation.vue';
 import NotesPreviewForLocation from '../../NotesPreviewForLocation.vue';
 import CheckpointStylePicker from '../../CheckpointStylePicker.vue';
+import IncidentCard from '../../IncidentCard.vue';
 import { generateCheckpointSvg } from '../../../constants/checkpointIcons';
 import { formatDateForInput } from '../../../utils/dateFormatters';
 import { useTerminology, terminologyOptions, getSingularTerm, getPluralTerm } from '../../../composables/useTerminology';
@@ -338,10 +335,6 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
-  incidents: {
-    type: Array,
-    default: () => [],
-  },
   eventDefaultStyleType: {
     type: String,
     default: 'default',
@@ -381,6 +374,10 @@ const props = defineProps({
   zIndex: {
     type: Number,
     default: 1000,
+  },
+  incidents: {
+    type: Array,
+    default: () => [],
   },
 });
 
@@ -569,12 +566,12 @@ const availableTabs = computed(() => {
     { value: 'marshals', label: effectivePeopleTerm.value, icon: 'marshal' },
     { value: 'checklists', label: terms.value.checklists, icon: 'checklist' },
     { value: 'notes', label: 'Notes', icon: 'notes' },
+    { value: 'appearance', label: 'Appearance', icon: 'appearance' },
   ];
-  // Only show incidents tab if there are incidents for this checkpoint
+  // Only show incidents tab if there are incidents
   if (props.incidents && props.incidents.length > 0) {
     tabs.push({ value: 'incidents', label: 'Incidents', icon: 'incidents' });
   }
-  tabs.push({ value: 'appearance', label: 'Appearance', icon: 'appearance' });
   return tabs;
 });
 
@@ -938,21 +935,21 @@ const handleStyleInput = (field, value) => {
 }
 
 .btn-primary {
-  background: #007bff;
-  color: white;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
 }
 
 .btn-primary:hover {
-  background: #0056b3;
+  background: var(--btn-primary-hover);
 }
 
 .btn-danger {
-  background: #dc3545;
-  color: white;
+  background: var(--danger);
+  color: var(--btn-primary-text);
 }
 
 .btn-danger:hover {
-  background: #c82333;
+  background: var(--danger-hover);
 }
 
 .placeholder-message {
@@ -960,7 +957,7 @@ const handleStyleInput = (field, value) => {
   align-items: center;
   justify-content: center;
   min-height: 150px;
-  color: #666;
+  color: var(--text-secondary);
   font-style: italic;
   text-align: center;
   padding: 2rem;
@@ -978,7 +975,7 @@ const handleStyleInput = (field, value) => {
 }
 
 .section-description {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.9rem;
   margin: 0 0 1rem 0;
 }
@@ -991,21 +988,23 @@ const handleStyleInput = (field, value) => {
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 500;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .form-input {
   width: 100%;
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-medium);
   border-radius: 4px;
   font-size: 0.9rem;
   box-sizing: border-box;
+  background: var(--input-bg);
+  color: var(--text-primary);
 }
 
 /* Accordion styles */
 .accordion-item {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -1016,7 +1015,7 @@ const handleStyleInput = (field, value) => {
   gap: 0.75rem;
   width: 100%;
   padding: 0.875rem 1rem;
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   border: none;
   cursor: pointer;
   text-align: left;
@@ -1024,12 +1023,12 @@ const handleStyleInput = (field, value) => {
 }
 
 .accordion-header:hover {
-  background: #e9ecef;
+  background: var(--bg-hover);
 }
 
 .accordion-header.expanded {
-  background: #e7f3ff;
-  border-bottom: 1px solid #e2e8f0;
+  background: var(--bg-active);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .accordion-icon {
@@ -1043,28 +1042,28 @@ const handleStyleInput = (field, value) => {
 
 .accordion-title {
   font-weight: 500;
-  color: #333;
+  color: var(--text-dark);
   font-size: 0.95rem;
 }
 
 .accordion-preview {
   flex: 1;
   text-align: right;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.85rem;
   font-weight: normal;
   margin-right: 0.5rem;
 }
 
 .accordion-arrow {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.75rem;
   flex-shrink: 0;
 }
 
 .accordion-content {
   padding: 1rem;
-  background: white;
+  background: var(--card-bg);
 }
 
 .checkbox-label {
@@ -1109,7 +1108,7 @@ const handleStyleInput = (field, value) => {
 
 .terminology-field label {
   font-weight: 500;
-  color: #333;
+  color: var(--text-dark);
   font-size: 0.9rem;
 }
 
@@ -1120,7 +1119,7 @@ const handleStyleInput = (field, value) => {
   gap: 0.5rem;
   margin: 0;
   padding-right: 3rem;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .modal-title-icon {
@@ -1130,7 +1129,6 @@ const handleStyleInput = (field, value) => {
   flex-shrink: 0;
 }
 
-/* Incidents tab */
 .incidents-tab {
   padding-top: 0.5rem;
 }
@@ -1139,16 +1137,5 @@ const handleStyleInput = (field, value) => {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-}
-
-.empty-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 150px;
-  color: var(--text-muted, #666);
-  font-style: italic;
-  text-align: center;
-  padding: 2rem;
 }
 </style>

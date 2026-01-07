@@ -258,14 +258,14 @@ const handleClose = () => {
 
 <style scoped>
 .instruction {
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 1rem;
 }
 
 .location-set-notice {
-  background: #d4edda;
-  border: 1px solid #c3e6cb;
-  color: #155724;
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
+  color: var(--success-text);
   padding: 0.75rem;
   border-radius: 4px;
   margin-bottom: 1.5rem;
@@ -281,21 +281,23 @@ const handleClose = () => {
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 500;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .form-input {
   width: 100%;
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-medium);
   border-radius: 4px;
   font-size: 0.9rem;
   box-sizing: border-box;
+  background: var(--input-bg);
+  color: var(--text-primary);
 }
 
 .form-error {
   display: block;
-  color: #dc3545;
+  color: var(--danger);
   font-size: 0.85rem;
   margin-top: 0.25rem;
 }
@@ -328,7 +330,7 @@ const handleClose = () => {
 
 .form-help {
   display: block;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.85rem;
   margin-top: 0.25rem;
   font-weight: normal;
@@ -337,8 +339,8 @@ const handleClose = () => {
 .custom-times-section {
   margin-left: 1.5rem;
   padding-left: 1rem;
-  border-left: 3px solid #007bff;
-  background: #f8f9fa;
+  border-left: 3px solid var(--brand-primary);
+  background: var(--bg-secondary);
   padding: 1rem;
   border-radius: 4px;
   margin-top: 0.5rem;
@@ -360,20 +362,20 @@ const handleClose = () => {
 }
 
 .btn-primary {
-  background: #007bff;
-  color: white;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
 }
 
 .btn-primary:hover {
-  background: #0056b3;
+  background: var(--btn-primary-hover);
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--btn-secondary-hover);
 }
 </style>

@@ -8,53 +8,260 @@
  */
 
 :root {
-  /* Backgrounds */
+  /* ========================================
+   * BACKGROUNDS
+   * ======================================== */
   --bg-primary: light-dark(#ffffff, #121220);
   --bg-secondary: light-dark(#f8f9fa, #1a1a2e);
   --bg-tertiary: light-dark(#e9ecef, #252542);
-  --bg-hover: light-dark(#e2e6ea, #2a2a4a);
+  --bg-hover: light-dark(#f0f0f0, #2a2a4a);
   --bg-active: light-dark(#e7f1ff, #1e3a5f);
+  --bg-light: light-dark(#f8f9fa, #1a1a2e);
+  --bg-lighter: light-dark(#fafafa, #151525);
+  --bg-muted: light-dark(#f5f5f5, #202035);
 
-  /* Text */
+  /* ========================================
+   * TEXT COLORS
+   * ======================================== */
   --text-primary: light-dark(#212529, #e8e8e8);
-  --text-secondary: light-dark(#6c757d, #a0a0a0);
-  --text-muted: light-dark(#868e96, #707070);
+  --text-secondary: light-dark(#666666, #a0a0a0);
+  --text-muted: light-dark(#999999, #707070);
+  --text-light: light-dark(#888888, #808080);
+  --text-dark: light-dark(#333333, #e0e0e0);
+  --text-darker: light-dark(#555555, #c0c0c0);
 
-  /* Borders */
+  /* ========================================
+   * BORDERS
+   * ======================================== */
   --border-color: light-dark(#dee2e6, #2a2a4a);
-  --border-color-light: light-dark(#e9ecef, #1f1f3a);
+  --border-light: light-dark(#e0e0e0, #2a2a4a);
+  --border-lighter: light-dark(#eee, #252542);
+  --border-medium: light-dark(#ddd, #3a3a5a);
+  --border-dark: light-dark(#ccc, #4a4a6a);
 
-  /* Inputs */
+  /* ========================================
+   * INPUTS
+   * ======================================== */
   --input-bg: light-dark(#ffffff, #1a1a2e);
   --input-border: light-dark(#ced4da, #3a3a5a);
   --input-focus-border: light-dark(#86b7fe, #4a7cff);
+  --input-disabled-bg: light-dark(#f5f5f5, #252542);
 
-  /* Shadows */
-  --shadow-sm: light-dark(0 1px 2px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.3));
-  --shadow-md: light-dark(0 4px 6px rgba(0,0,0,0.1), 0 4px 6px rgba(0,0,0,0.4));
+  /* ========================================
+   * SHADOWS (rgba values for compositing)
+   * ======================================== */
+  --shadow-color: light-dark(rgba(0,0,0,0.1), rgba(0,0,0,0.4));
+  --shadow-xs: light-dark(0 1px 2px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.2));
+  --shadow-sm: light-dark(0 2px 4px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.3));
+  --shadow-md: light-dark(0 4px 8px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.4));
   --shadow-lg: light-dark(0 10px 25px rgba(0,0,0,0.15), 0 10px 25px rgba(0,0,0,0.5));
+  --shadow-xl: light-dark(0 20px 40px rgba(0,0,0,0.2), 0 20px 40px rgba(0,0,0,0.6));
 
-  /* Cards & Panels */
+  /* Raw shadow opacity values for custom shadows */
+  --shadow-opacity-xs: light-dark(0.05, 0.2);
+  --shadow-opacity-sm: light-dark(0.1, 0.3);
+  --shadow-opacity-md: light-dark(0.15, 0.4);
+  --shadow-opacity-lg: light-dark(0.2, 0.5);
+  --shadow-opacity-xl: light-dark(0.3, 0.6);
+  --shadow-overlay: light-dark(rgba(0,0,0,0.5), rgba(0,0,0,0.7));
+
+  /* ========================================
+   * CARDS & PANELS
+   * ======================================== */
   --card-bg: light-dark(#ffffff, #1a1a2e);
   --card-border: light-dark(#e0e0e0, #2a2a4a);
 
-  /* Tables */
+  /* ========================================
+   * TABLES
+   * ======================================== */
   --table-header-bg: light-dark(#f8f9fa, #252542);
   --table-row-hover: light-dark(#f5f5f5, #2a2a4a);
   --table-border: light-dark(#e0e0e0, #2a2a4a);
 
-  /* Modals */
+  /* ========================================
+   * MODALS
+   * ======================================== */
   --modal-bg: light-dark(#ffffff, #1a1a2e);
   --modal-overlay: light-dark(rgba(0,0,0,0.5), rgba(0,0,0,0.7));
 
-  /* Accent colors - same in both themes */
-  --accent-primary: #007bff;
-  --accent-success: #28a745;
-  --accent-warning: #ffc107;
-  --accent-danger: #dc3545;
+  /* ========================================
+   * BRAND COLORS
+   * ======================================== */
+  --brand-primary: #667eea;
+  --brand-primary-hover: #5568d3;
+  --brand-primary-light: #f0f4ff;
+  --brand-primary-bg: light-dark(#e3e9ff, #1a1a3a);
+  --brand-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --brand-shadow: rgba(102, 126, 234, 0.2);
+  --brand-shadow-md: rgba(102, 126, 234, 0.3);
+  --brand-shadow-lg: rgba(102, 126, 234, 0.4);
 
-  /* Status colors */
-  --status-success-bg: light-dark(#d4edda, #1a3d2a);
-  --status-warning-bg: light-dark(#fff3cd, #3d3a1a);
-  --status-danger-bg: light-dark(#f8d7da, #3d1a1a);
+  /* ========================================
+   * ACCENT / ACTION COLORS (same in both themes)
+   * ======================================== */
+  --accent-primary: #007bff;
+  --accent-primary-hover: #0056b3;
+  --accent-primary-light: light-dark(#e7f3ff, #1a2a4a);
+
+  /* ========================================
+   * SEMANTIC: SUCCESS
+   * ======================================== */
+  --success: #28a745;
+  --success-hover: #218838;
+  --success-light: #4caf50;
+  --success-dark: #2e7d32;
+  --success-bg: light-dark(#d4edda, #1a3d2a);
+  --success-bg-light: light-dark(#e8f5e9, #1a3025);
+  --success-bg-lighter: light-dark(#f1f8f4, #152a20);
+  --success-text: light-dark(#155724, #8bc34a);
+  --success-border: light-dark(#c3e6cb, #2a4a3a);
+
+  /* ========================================
+   * SEMANTIC: DANGER / ERROR
+   * ======================================== */
+  --danger: #dc3545;
+  --danger-hover: #c82333;
+  --danger-light: #ef4444;
+  --danger-dark: #c62828;
+  --danger-bg: light-dark(#f8d7da, #3d1a1a);
+  --danger-bg-light: light-dark(#ffebee, #351515);
+  --danger-bg-lighter: light-dark(#fff5f5, #2d1010);
+  --danger-text: light-dark(#721c24, #ff6b6b);
+  --danger-border: light-dark(#f5c6cb, #5a2a2a);
+
+  /* ========================================
+   * SEMANTIC: WARNING
+   * ======================================== */
+  --warning: #ffc107;
+  --warning-hover: #e0a800;
+  --warning-dark: #f57c00;
+  --warning-orange: #fd7e14;
+  --warning-bg: light-dark(#fff3cd, #3d3a1a);
+  --warning-bg-light: light-dark(#fff8e6, #35321a);
+  --warning-bg-lighter: light-dark(#fffbf0, #2d2a15);
+  --warning-text: light-dark(#856404, #ffd54f);
+  --warning-border: light-dark(#ffc107, #5a5020);
+
+  /* ========================================
+   * SEMANTIC: INFO
+   * ======================================== */
+  --info: #17a2b8;
+  --info-blue: #1976d2;
+  --info-bg: light-dark(#e3f2fd, #1a2a3d);
+  --info-bg-light: light-dark(#f0f7ff, #152535);
+  --info-text: light-dark(#1565c0, #64b5f6);
+
+  /* ========================================
+   * BUTTONS: PRIMARY
+   * ======================================== */
+  --btn-primary-bg: #007bff;
+  --btn-primary-hover: #0056b3;
+  --btn-primary-disabled: #6c9bd1;
+  --btn-primary-text: #ffffff;
+
+  /* ========================================
+   * BUTTONS: SECONDARY
+   * ======================================== */
+  --btn-secondary-bg: #6c757d;
+  --btn-secondary-hover: #545b62;
+  --btn-secondary-text: #ffffff;
+
+  /* ========================================
+   * BUTTONS: CANCEL / NEUTRAL
+   * ======================================== */
+  --btn-cancel-bg: light-dark(#e0e0e0, #3a3a5a);
+  --btn-cancel-hover: light-dark(#d0d0d0, #4a4a6a);
+  --btn-cancel-text: light-dark(#333333, #e0e0e0);
+
+  /* ========================================
+   * STATUS COLORS (for incidents, workflows)
+   * ======================================== */
+  --status-open: #1565c0;
+  --status-open-bg: light-dark(#e3f2fd, #1a2a3d);
+  --status-acknowledged: #e65100;
+  --status-acknowledged-bg: light-dark(#fff3e0, #3d2a1a);
+  --status-in-progress: #7b1fa2;
+  --status-in-progress-bg: light-dark(#f3e5f5, #2d1a3d);
+  --status-resolved: #2e7d32;
+  --status-resolved-bg: light-dark(#e8f5e9, #1a3025);
+  --status-closed: #616161;
+  --status-closed-bg: light-dark(#f5f5f5, #2a2a3a);
+
+  /* ========================================
+   * SEVERITY COLORS
+   * ======================================== */
+  --severity-critical: #dc3545;
+  --severity-critical-bg: light-dark(#f8d7da, #3d1a1a);
+  --severity-critical-text: light-dark(#721c24, #ff6b6b);
+  --severity-high: #fd7e14;
+  --severity-high-bg: light-dark(#fff3cd, #3d3a1a);
+  --severity-high-text: light-dark(#856404, #ffd54f);
+  --severity-medium: #ffc107;
+  --severity-medium-bg: light-dark(#fff9e6, #35321a);
+  --severity-medium-text: light-dark(#856404, #ffd54f);
+  --severity-low: #667eea;
+  --severity-low-bg: light-dark(#e8edff, #1a1a3a);
+  --severity-low-text: light-dark(#3d5afe, #8c9eff);
+
+  /* ========================================
+   * PRIORITY COLORS (for notes)
+   * ======================================== */
+  --priority-urgent: #dc3545;
+  --priority-urgent-bg: light-dark(#f8d7da, #3d1a1a);
+  --priority-urgent-text: light-dark(#721c24, #ff6b6b);
+  --priority-high: #fd7e14;
+  --priority-high-bg: light-dark(#fff3cd, #3d3a1a);
+  --priority-high-text: light-dark(#856404, #ffd54f);
+  --priority-normal: #28a745;
+  --priority-normal-bg: light-dark(#d4edda, #1a3d2a);
+  --priority-normal-text: light-dark(#155724, #8bc34a);
+  --priority-low: #6c757d;
+  --priority-low-bg: light-dark(#e2e3e5, #2a2a3a);
+  --priority-low-text: light-dark(#383d41, #a0a0a0);
+
+  /* ========================================
+   * GLASS EFFECTS (for overlays)
+   * ======================================== */
+  --glass-bg: rgba(255, 255, 255, 0.15);
+  --glass-bg-light: rgba(255, 255, 255, 0.1);
+  --glass-bg-medium: rgba(255, 255, 255, 0.2);
+  --glass-bg-strong: rgba(255, 255, 255, 0.25);
+  --glass-border: rgba(255, 255, 255, 0.25);
+  --glass-border-light: rgba(255, 255, 255, 0.15);
+  --glass-border-strong: rgba(255, 255, 255, 0.5);
+  --glass-hover: rgba(255, 255, 255, 0.3);
+  --glass-text-muted: rgba(255, 255, 255, 0.5);
+  --glass-text-light: rgba(255, 255, 255, 0.7);
+  --glass-text-strong: rgba(255, 255, 255, 0.8);
+
+  /* ========================================
+   * CHECKED-IN STATUS
+   * ======================================== */
+  --checked-in-bg: light-dark(#f1f8f4, #1a3025);
+  --checked-in-border: light-dark(#c8e6c9, #2a4a3a);
+  --checked-in-text: #4caf50;
+
+  /* ========================================
+   * MISCELLANEOUS
+   * ======================================== */
+  --link-color: light-dark(#007bff, #64b5f6);
+  --link-hover: light-dark(#0056b3, #90caf9);
+  --divider: light-dark(#e0e0e0, #2a2a4a);
+  --placeholder: light-dark(#999999, #606060);
+  --disabled-bg: light-dark(#f5f5f5, #252542);
+  --disabled-text: light-dark(#999999, #606060);
+  --selection-highlight: light-dark(rgba(66, 133, 244, 0.2), rgba(66, 133, 244, 0.3));
+
+  /* Phone mockup frame */
+  --mockup-frame: #1a1a1a;
+
+  /* Default area/checkpoint color */
+  --default-marker-color: #667eea;
+  --default-marker-border: #ffffff;
+  --default-marker-icon: #ffffff;
+
+  /* Emergency button */
+  --emergency-bg: #ff4444;
+  --emergency-hover: #cc0000;
+  --emergency-border: #ff4444;
 }

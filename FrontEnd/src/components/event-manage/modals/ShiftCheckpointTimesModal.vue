@@ -150,35 +150,35 @@ const handleCancel = () => {
 }
 
 .info-text {
-  color: #333;
+  color: var(--text-dark);
   line-height: 1.5;
   margin: 0;
 }
 
 .time-delta-info {
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   padding: 1rem;
   border-radius: 8px;
-  border-left: 4px solid #007bff;
+  border-left: 4px solid var(--accent-primary);
 }
 
 .delta-detail {
-  color: #666;
+  color: var(--text-secondary);
   margin: 0.25rem 0;
 }
 
 .delta-summary {
   margin-top: 0.5rem;
-  color: #007bff;
+  color: var(--accent-primary);
   font-weight: 600;
 }
 
 .affected-checkpoints {
-  color: #333;
+  color: var(--text-dark);
   margin: 0;
   padding: 0.75rem;
-  background: #fff3cd;
-  border: 1px solid #ffc107;
+  background: var(--warning-bg);
+  border: 1px solid var(--warning);
   border-radius: 4px;
 }
 
@@ -193,15 +193,15 @@ const handleCancel = () => {
   align-items: flex-start;
   gap: 0.75rem;
   padding: 1rem;
-  border: 2px solid #dee2e6;
+  border: 2px solid var(--border-color);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .radio-option:hover {
-  border-color: #007bff;
-  background: #f8f9fa;
+  border-color: var(--accent-primary);
+  background: var(--bg-secondary);
 }
 
 .radio-option input[type="radio"] {
@@ -217,13 +217,13 @@ const handleCancel = () => {
 
 .radio-option strong {
   display: block;
-  color: #333;
+  color: var(--text-dark);
   margin-bottom: 0.25rem;
 }
 
 .radio-option small {
   display: block;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.85rem;
 }
 
@@ -238,20 +238,20 @@ const handleCancel = () => {
 }
 
 .btn-primary {
-  background: #007bff;
-  color: white;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
 }
 
 .btn-primary:hover {
-  background: #0056b3;
+  background: var(--btn-primary-hover);
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--btn-secondary-hover);
 }
 </style>

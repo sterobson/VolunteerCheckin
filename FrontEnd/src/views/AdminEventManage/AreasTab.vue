@@ -136,7 +136,7 @@ const emit = defineEmits([
 }
 
 .btn-danger:hover {
-  background: #c82333;
+  background: var(--danger-hover);
 }
 
 /* Mobile responsive adjustments */

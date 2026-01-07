@@ -43,7 +43,7 @@ defineEmits(['add-admin', 'remove-admin']);
 <style scoped>
 h3 {
   margin: 0 0 1rem 0;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .btn {
@@ -61,21 +61,21 @@ h3 {
 }
 
 .btn-primary {
-  background: #007bff;
-  color: white;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
 }
 
 .btn-primary:hover {
-  background: #0056b3;
+  background: var(--btn-primary-hover);
 }
 
 .btn-danger {
-  background: #dc3545;
-  color: white;
+  background: var(--danger);
+  color: var(--btn-primary-text);
 }
 
 .btn-danger:hover {
-  background: #c82333;
+  background: var(--danger-hover);
 }
 
 .admins-list {
@@ -87,11 +87,12 @@ h3 {
 
 .admin-item {
   padding: 1rem;
-  border: 2px solid #e0e0e0;
+  border: 2px solid var(--border-light);
   border-radius: 6px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background: var(--card-bg);
 }
 
 .admin-info {
@@ -102,7 +103,7 @@ h3 {
 
 .admin-role {
   font-size: 0.75rem;
-  color: #667eea;
+  color: var(--brand-primary);
   font-weight: 600;
 }
 </style>

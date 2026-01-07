@@ -84,26 +84,26 @@ const resetForm = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--brand-gradient);
   padding: 2rem;
 }
 
 .login-card {
-  background: white;
+  background: var(--card-bg);
   padding: 3rem;
   border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-xl);
   max-width: 400px;
   width: 100%;
 }
 
 h2 {
   margin-bottom: 1rem;
-  color: #333;
+  color: var(--text-dark);
 }
 
 .instruction {
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 2rem;
 }
 
@@ -115,15 +115,17 @@ h2 {
   width: 100%;
   padding: 0.875rem;
   font-size: 1rem;
-  border: 2px solid #e0e0e0;
+  border: 2px solid var(--border-light);
   border-radius: 8px;
   transition: border-color 0.3s;
   box-sizing: border-box;
+  background: var(--input-bg);
+  color: var(--text-primary);
 }
 
 .form-input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--brand-primary);
 }
 
 .btn {
@@ -138,14 +140,14 @@ h2 {
 }
 
 .btn-primary {
-  background: #667eea;
+  background: var(--brand-primary);
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #5568d3;
+  background: var(--brand-primary-hover);
   transform: translateY(-2px);
-  box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 10px 20px var(--brand-shadow-md);
 }
 
 .btn:disabled {
@@ -156,8 +158,8 @@ h2 {
 .error {
   margin-top: 1rem;
   padding: 0.75rem;
-  background: #fee;
-  color: #c33;
+  background: var(--danger-bg-lighter);
+  color: var(--danger);
   border-radius: 6px;
   font-size: 0.875rem;
 }
@@ -166,7 +168,7 @@ h2 {
   display: block;
   margin-top: 2rem;
   text-align: center;
-  color: #667eea;
+  color: var(--brand-primary);
   text-decoration: none;
   font-weight: 500;
 }
@@ -180,26 +182,26 @@ h2 {
 }
 
 .email-sent h3 {
-  color: #28a745;
+  color: var(--success);
   margin-bottom: 1rem;
 }
 
 .email-sent p {
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 0.5rem;
 }
 
 .email-sent .hint {
   font-size: 0.875rem;
-  color: #999;
+  color: var(--text-muted);
   margin-bottom: 1.5rem;
 }
 
 .check-icon {
   width: 60px;
   height: 60px;
-  background: #d4edda;
-  color: #28a745;
+  background: var(--success-bg);
+  color: var(--success);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -209,11 +211,11 @@ h2 {
 }
 
 .btn-secondary {
-  background: #e0e0e0;
-  color: #333;
+  background: var(--btn-cancel-bg);
+  color: var(--btn-cancel-text);
 }
 
 .btn-secondary:hover {
-  background: #d0d0d0;
+  background: var(--btn-cancel-hover);
 }
 </style>

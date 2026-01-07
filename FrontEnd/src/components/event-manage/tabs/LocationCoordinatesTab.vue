@@ -233,16 +233,18 @@ const isValidWhat3Words = (value) => {
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .form-input {
   width: 100%;
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   font-size: 0.9rem;
   box-sizing: border-box;
+  background: var(--input-bg);
+  color: var(--text-primary);
 }
 
 .form-error {
@@ -268,12 +270,12 @@ const isValidWhat3Words = (value) => {
 }
 
 .btn-primary {
-  background: #007bff;
+  background: var(--accent-primary);
   color: white;
 }
 
 .btn-primary:hover {
-  background: #0056b3;
+  background: var(--accent-primary-hover);
 }
 
 .btn-secondary {
@@ -299,7 +301,7 @@ const isValidWhat3Words = (value) => {
 
 /* Accordion styles */
 .accordion-item {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   overflow: hidden;
   margin-top: 1.5rem;
@@ -311,7 +313,7 @@ const isValidWhat3Words = (value) => {
   gap: 0.75rem;
   width: 100%;
   padding: 0.875rem 1rem;
-  background: #f8f9fa;
+  background: var(--bg-tertiary);
   border: none;
   cursor: pointer;
   text-align: left;
@@ -319,12 +321,12 @@ const isValidWhat3Words = (value) => {
 }
 
 .accordion-header:hover {
-  background: #e9ecef;
+  background: var(--bg-secondary);
 }
 
 .accordion-header.expanded {
-  background: #e7f3ff;
-  border-bottom: 1px solid #e2e8f0;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .accordion-icon {
@@ -338,32 +340,32 @@ const isValidWhat3Words = (value) => {
 
 .accordion-title {
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
   font-size: 0.95rem;
 }
 
 .accordion-preview {
   flex: 1;
   text-align: right;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.85rem;
   font-weight: normal;
   margin-right: 0.5rem;
 }
 
 .accordion-arrow {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.75rem;
   flex-shrink: 0;
 }
 
 .accordion-content {
   padding: 1rem;
-  background: white;
+  background: var(--card-bg);
 }
 
 .section-description {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.9rem;
   margin: 0 0 1rem 0;
 }
@@ -410,6 +412,6 @@ const isValidWhat3Words = (value) => {
 .dynamic-settings {
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--border-color);
 }
 </style>

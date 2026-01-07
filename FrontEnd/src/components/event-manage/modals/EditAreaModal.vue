@@ -1130,27 +1130,29 @@ const getCheckpointIconSvg = (checkpoint) => {
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .form-input {
   width: 100%;
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--input-border);
   border-radius: 4px;
   font-size: 0.9rem;
   box-sizing: border-box;
   resize: vertical;
+  background: var(--input-bg);
+  color: var(--text-primary);
 }
 
 .form-input:disabled {
-  background-color: #f5f5f5;
+  background-color: var(--bg-tertiary);
   cursor: not-allowed;
 }
 
 .form-help {
   display: block;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.85rem;
   margin-top: 0.25rem;
   font-weight: normal;
@@ -1162,7 +1164,7 @@ const getCheckpointIconSvg = (checkpoint) => {
   gap: 0.5rem;
   cursor: pointer;
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -1184,7 +1186,7 @@ const getCheckpointIconSvg = (checkpoint) => {
   cursor: pointer;
   border: 3px solid transparent;
   transition: all 0.2s;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-sm);
 }
 
 .color-swatch:hover {
@@ -1192,14 +1194,14 @@ const getCheckpointIconSvg = (checkpoint) => {
 }
 
 .color-swatch.selected {
-  border-color: #333;
-  box-shadow: 0 0 0 2px white, 0 0 0 4px #333;
+  border-color: var(--text-primary);
+  box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--text-primary);
 }
 
 .section-title {
   margin: 0 0 1rem 0;
   font-size: 1rem;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .checkpoints-list,
@@ -1216,10 +1218,18 @@ const getCheckpointIconSvg = (checkpoint) => {
   justify-content: space-between;
   align-items: center;
   padding: 1rem;
-  background: #f8f9fa;
+  background: var(--card-bg);
   border-radius: 8px;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--border-color);
   gap: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.checkpoint-item:hover,
+.contact-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-primary);
 }
 
 .checkpoint-info,
@@ -1232,12 +1242,12 @@ const getCheckpointIconSvg = (checkpoint) => {
 
 .checkpoint-description {
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .checkpoint-meta {
   font-size: 0.8rem;
-  color: #999;
+  color: var(--text-muted);
 }
 
 .contact-role {
@@ -1250,15 +1260,17 @@ const getCheckpointIconSvg = (checkpoint) => {
 .contact-role label {
   font-size: 0.85rem;
   font-weight: normal;
-  color: #666;
+  color: var(--text-secondary);
   margin: 0;
 }
 
 .role-select {
   padding: 0.25rem 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--input-border);
   border-radius: 4px;
   font-size: 0.85rem;
+  background: var(--input-bg);
+  color: var(--text-primary);
 }
 
 .boundary-section {
@@ -1268,10 +1280,10 @@ const getCheckpointIconSvg = (checkpoint) => {
 }
 
 .instructions-card {
-  background: #e7f3ff;
+  background: var(--bg-active);
   padding: 1rem;
   border-radius: 8px;
-  color: #0056b3;
+  color: var(--accent-primary);
 }
 
 .instructions-card p {
@@ -1288,18 +1300,18 @@ const getCheckpointIconSvg = (checkpoint) => {
 }
 
 .boundary-info {
-  background: #d4edda;
+  background: var(--status-success-bg);
   padding: 0.75rem;
   border-radius: 6px;
-  border: 1px solid #c3e6cb;
-  color: #155724;
+  border: 1px solid var(--accent-success);
+  color: var(--accent-success);
   font-size: 0.9rem;
 }
 
 .empty-state {
   text-align: center;
   padding: 2rem;
-  color: #999;
+  color: var(--text-muted);
 }
 
 .empty-state p {
@@ -1308,9 +1320,9 @@ const getCheckpointIconSvg = (checkpoint) => {
 }
 
 .auto-assign-notice {
-  background: #d4edda;
-  border: 1px solid #c3e6cb;
-  color: #155724;
+  background: var(--status-success-bg);
+  border: 1px solid var(--accent-success);
+  color: var(--accent-success);
   padding: 0.75rem 1rem;
   border-radius: 4px;
   margin-bottom: 1rem;
@@ -1372,17 +1384,17 @@ const getCheckpointIconSvg = (checkpoint) => {
 
 .checkpoint-card {
   padding: 1rem;
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .checkpoint-card:hover {
-  background: #e9ecef;
-  border-color: #adb5bd;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background: var(--bg-hover);
+  border-color: var(--accent-primary);
+  box-shadow: var(--shadow-sm);
 }
 
 .checkpoint-header {
@@ -1414,13 +1426,13 @@ const getCheckpointIconSvg = (checkpoint) => {
 .checkpoint-name-section h4 {
   margin: 0;
   font-size: 1rem;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .checkpoint-description {
   font-weight: normal;
   font-size: 0.9rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .checkpoint-stats {
@@ -1437,18 +1449,18 @@ const getCheckpointIconSvg = (checkpoint) => {
 }
 
 .stat-badge.status-complete {
-  background: #d4edda;
-  color: #155724;
+  background: var(--status-success-bg);
+  color: var(--accent-success);
 }
 
 .stat-badge.status-partial {
-  background: #fff3cd;
-  color: #856404;
+  background: var(--status-warning-bg);
+  color: var(--accent-warning);
 }
 
 .stat-badge.status-none {
-  background: #f8d7da;
-  color: #721c24;
+  background: var(--status-danger-bg);
+  color: var(--accent-danger);
 }
 
 .checkpoint-details {
@@ -1472,8 +1484,8 @@ const getCheckpointIconSvg = (checkpoint) => {
 .marshal-pill {
   display: inline-block;
   padding: 0.2rem 0.5rem;
-  background: #e9ecef;
-  color: #495057;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 500;
@@ -1481,8 +1493,8 @@ const getCheckpointIconSvg = (checkpoint) => {
 }
 
 .marshal-pill.checked-in {
-  background: #d4edda;
-  color: #155724;
+  background: var(--status-success-bg);
+  color: var(--accent-success);
 }
 
 .detail-row {
@@ -1493,36 +1505,36 @@ const getCheckpointIconSvg = (checkpoint) => {
 }
 
 .detail-label {
-  color: #666;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
 .detail-value {
-  color: #333;
+  color: var(--text-primary);
 }
 
 .detail-value.status-complete {
-  color: #28a745;
+  color: var(--accent-success);
   font-weight: 500;
 }
 
 .detail-value.status-partial {
-  color: #ffc107;
+  color: var(--accent-warning);
   font-weight: 500;
 }
 
 .detail-value.status-none {
-  color: #dc3545;
+  color: var(--accent-danger);
   font-weight: 500;
 }
 
 .detail-value.loading-text {
-  color: #999;
+  color: var(--text-muted);
   font-style: italic;
 }
 
 .warning-text {
-  color: #dc3545;
+  color: var(--accent-danger);
   font-weight: 500;
 }
 
@@ -1540,7 +1552,7 @@ const getCheckpointIconSvg = (checkpoint) => {
 .area-contacts-list h4 {
   margin: 0 0 0.75rem 0;
   font-size: 0.9rem;
-  color: #333;
+  color: var(--text-secondary, #333);
 }
 
 .contact-item {
@@ -1548,17 +1560,17 @@ const getCheckpointIconSvg = (checkpoint) => {
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1rem;
-  background: #f8f9fa;
+  background: var(--card-bg);
   border-radius: 8px;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--border-color);
   margin-bottom: 0.5rem;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .contact-item:hover {
-  background: #e9ecef;
-  border-color: #adb5bd;
+  background: var(--bg-hover);
+  border-color: var(--accent-primary);
 }
 
 .contact-info {
@@ -1574,8 +1586,8 @@ const getCheckpointIconSvg = (checkpoint) => {
 .contact-role-badge {
   display: inline-block;
   padding: 0.15rem 0.5rem;
-  background: #e9ecef;
-  color: #495057;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 500;
@@ -1586,7 +1598,7 @@ const getCheckpointIconSvg = (checkpoint) => {
   display: flex;
   gap: 1rem;
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .placeholder-message {
@@ -1594,7 +1606,7 @@ const getCheckpointIconSvg = (checkpoint) => {
   align-items: center;
   justify-content: center;
   min-height: 150px;
-  color: #666;
+  color: var(--text-secondary);
   font-style: italic;
   text-align: center;
   padding: 2rem;
@@ -1612,14 +1624,14 @@ const getCheckpointIconSvg = (checkpoint) => {
 }
 
 .section-description {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.9rem;
   margin: 0 0 1rem 0;
 }
 
 /* Accordion styles */
 .accordion-item {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -1630,7 +1642,7 @@ const getCheckpointIconSvg = (checkpoint) => {
   gap: 0.75rem;
   width: 100%;
   padding: 0.875rem 1rem;
-  background: #f8f9fa;
+  background: var(--bg-tertiary);
   border: none;
   cursor: pointer;
   text-align: left;
@@ -1638,12 +1650,12 @@ const getCheckpointIconSvg = (checkpoint) => {
 }
 
 .accordion-header:hover {
-  background: #e9ecef;
+  background: var(--bg-hover);
 }
 
 .accordion-header.expanded {
-  background: #e7f3ff;
-  border-bottom: 1px solid #e2e8f0;
+  background: var(--bg-active);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .accordion-icon {
@@ -1657,14 +1669,14 @@ const getCheckpointIconSvg = (checkpoint) => {
 
 .accordion-title {
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
   font-size: 0.95rem;
 }
 
 .accordion-preview {
   flex: 1;
   text-align: right;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.85rem;
   font-weight: normal;
   margin-right: 0.5rem;

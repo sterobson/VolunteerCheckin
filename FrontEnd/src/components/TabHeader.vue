@@ -165,7 +165,7 @@ watch(() => props.tabs, () => {
   padding: 0.5rem 1rem;
   border: none;
   background: transparent;
-  color: #666;
+  color: var(--text-secondary);
   cursor: pointer;
   font-size: 0.9rem;
   border-bottom: 2px solid transparent;
@@ -175,12 +175,12 @@ watch(() => props.tabs, () => {
 }
 
 .tab-button:hover {
-  color: #333;
+  color: var(--text-primary);
 }
 
 .tab-button.active {
-  color: #007bff;
-  border-bottom-color: #007bff;
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary, #007bff);
   font-weight: 500;
 }
 
@@ -207,25 +207,25 @@ watch(() => props.tabs, () => {
   gap: 0.5rem;
   width: 100%;
   padding: 0.75rem 1rem;
-  border: 1px solid #ddd;
-  background: white;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.95rem;
-  color: #333;
+  color: var(--text-primary);
   transition: all 0.2s;
 }
 
 .hamburger-button:hover {
-  background: #f8f9fa;
-  border-color: #007bff;
+  background: var(--bg-tertiary);
+  border-color: var(--accent-primary);
 }
 
 .current-tab-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #667eea;
+  color: var(--accent-primary);
 }
 
 .current-tab-icon :deep(svg) {
@@ -241,7 +241,7 @@ watch(() => props.tabs, () => {
 
 .hamburger-chevron {
   font-size: 0.7rem;
-  color: #666;
+  color: var(--text-secondary);
   margin-left: auto;
 }
 
@@ -250,10 +250,10 @@ watch(() => props.tabs, () => {
   top: 100%;
   left: 0;
   right: 0;
-  background: white;
-  border: 1px solid #ddd;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-md);
   z-index: 100;
   margin-top: 0.25rem;
   overflow: hidden;
@@ -268,21 +268,21 @@ watch(() => props.tabs, () => {
   width: 100%;
   padding: 0.75rem 1rem;
   border: none;
-  background: white;
+  background: var(--card-bg);
   text-align: left;
   cursor: pointer;
   font-size: 0.9rem;
-  color: #333;
+  color: var(--text-primary);
   transition: background-color 0.15s;
 }
 
 .menu-item:hover {
-  background: #f5f5f5;
+  background: var(--bg-tertiary);
 }
 
 .menu-item.active {
-  background: #e3f2fd;
-  color: #007bff;
+  background: var(--bg-secondary);
+  color: var(--accent-primary);
   font-weight: 500;
 }
 

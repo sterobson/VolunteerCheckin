@@ -435,7 +435,7 @@ watch(() => props.styleMapRotation, (newVal) => {
 
 .form-group label {
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
   font-size: 0.9rem;
 }
 
@@ -450,22 +450,22 @@ watch(() => props.styleMapRotation, (newVal) => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
-  border: 2px solid #e2e8f0;
+  border: 2px solid var(--border-color);
   border-radius: 8px;
-  background: white;
+  background: var(--card-bg);
   cursor: pointer;
   transition: all 0.2s;
   min-width: 80px;
 }
 
 .style-option-button:hover {
-  border-color: #cbd5e0;
-  background: #f7fafc;
+  border-color: var(--border-color);
+  background: var(--bg-tertiary);
 }
 
 .style-option-button.selected {
-  border-color: #007bff;
-  background: #e7f3ff;
+  border-color: var(--accent-primary);
+  background: var(--bg-active);
 }
 
 .option-preview {
@@ -478,11 +478,11 @@ watch(() => props.styleMapRotation, (newVal) => {
 
 .option-label {
   font-size: 0.8rem;
-  color: #666;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
 .style-option-button.selected .option-label {
-  color: #007bff;
+  color: var(--accent-primary);
 }
 </style>

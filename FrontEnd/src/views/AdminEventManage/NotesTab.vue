@@ -320,7 +320,7 @@ const formatRelativeTime = (dateString) => {
 .notes-tab-header h2 {
   margin: 0;
   font-size: 1.5rem;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .button-group {
@@ -333,7 +333,7 @@ const formatRelativeTime = (dateString) => {
   flex-wrap: wrap;
   gap: 1.5rem;
   padding: 1rem;
-  background: #f8f9fa;
+  background: var(--bg-tertiary);
   border-radius: 8px;
   align-items: flex-start;
 }
@@ -349,7 +349,7 @@ const formatRelativeTime = (dateString) => {
   margin: 0;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .priority-filters {
@@ -364,7 +364,7 @@ const formatRelativeTime = (dateString) => {
   gap: 0.5rem;
   font-size: 0.9rem;
   cursor: pointer;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .filter-checkbox input[type="checkbox"] {
@@ -406,7 +406,7 @@ const formatRelativeTime = (dateString) => {
   gap: 0.5rem;
   font-size: 0.9rem;
   cursor: pointer;
-  color: #333;
+  color: var(--text-primary);
   padding: 0.25rem 0;
 }
 
@@ -428,7 +428,7 @@ const formatRelativeTime = (dateString) => {
 .empty-state {
   text-align: center;
   padding: 3rem 1rem;
-  color: #999;
+  color: var(--text-muted);
   font-style: italic;
 }
 
@@ -440,21 +440,21 @@ const formatRelativeTime = (dateString) => {
 
 .note-card {
   padding: 1rem 1.25rem;
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .note-card:hover {
-  border-color: #667eea;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+  border-color: var(--accent-primary);
+  box-shadow: var(--shadow-md);
 }
 
 .note-card.pinned {
-  border-left: 4px solid #667eea;
-  background: #fafbff;
+  border-left: 4px solid var(--accent-primary);
+  background: var(--bg-secondary);
 }
 
 .note-header {
@@ -489,7 +489,7 @@ const formatRelativeTime = (dateString) => {
 
 .note-title-row strong {
   font-size: 1rem;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .note-meta {
@@ -501,8 +501,8 @@ const formatRelativeTime = (dateString) => {
 
 .category-badge {
   padding: 0.2rem 0.6rem;
-  background: #e9ecef;
-  color: #495057;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 500;
@@ -510,12 +510,12 @@ const formatRelativeTime = (dateString) => {
 
 .created-info {
   font-size: 0.8rem;
-  color: #999;
+  color: var(--text-muted);
 }
 
 .note-preview {
   font-size: 0.9rem;
-  color: #666;
+  color: var(--text-secondary);
   line-height: 1.4;
   margin-bottom: 0.75rem;
 }
@@ -528,7 +528,7 @@ const formatRelativeTime = (dateString) => {
 
 .scope-badge {
   padding: 0.2rem 0.6rem;
-  background: #667eea;
+  background: var(--accent-primary);
   color: white;
   border-radius: 12px;
   font-size: 0.7rem;
@@ -551,12 +551,12 @@ const formatRelativeTime = (dateString) => {
 }
 
 .btn-primary {
-  background: #007bff;
+  background: var(--accent-primary);
   color: white;
 }
 
 .btn-primary:hover {
-  background: #0056b3;
+  background: var(--accent-primary-hover);
 }
 
 .btn-secondary {

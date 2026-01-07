@@ -265,7 +265,7 @@ const truncateContent = (content) => {
 .contacts-tab-header h2 {
   margin: 0;
   font-size: 1.5rem;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .button-group {
@@ -278,7 +278,7 @@ const truncateContent = (content) => {
   flex-wrap: wrap;
   gap: 1.5rem;
   padding: 1rem;
-  background: #f8f9fa;
+  background: var(--bg-tertiary);
   border-radius: 8px;
   align-items: flex-start;
 }
@@ -294,7 +294,7 @@ const truncateContent = (content) => {
   margin: 0;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .filter-checkbox {
@@ -303,7 +303,7 @@ const truncateContent = (content) => {
   gap: 0.5rem;
   font-size: 0.9rem;
   cursor: pointer;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .filter-checkbox input[type="checkbox"] {
@@ -334,7 +334,7 @@ const truncateContent = (content) => {
   gap: 0.5rem;
   font-size: 0.9rem;
   cursor: pointer;
-  color: #333;
+  color: var(--text-primary);
   padding: 0.25rem 0;
 }
 
@@ -348,7 +348,7 @@ const truncateContent = (content) => {
 .empty-state {
   text-align: center;
   padding: 3rem 1rem;
-  color: #999;
+  color: var(--text-muted);
   font-style: italic;
 }
 
@@ -360,21 +360,21 @@ const truncateContent = (content) => {
 
 .contact-card {
   padding: 1rem 1.25rem;
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .contact-card:hover {
-  border-color: #667eea;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+  border-color: var(--accent-primary);
+  box-shadow: var(--shadow-md);
 }
 
 .contact-card.primary {
-  border-left: 4px solid #ffc107;
-  background: #fffef5;
+  border-left: 4px solid var(--accent-warning);
+  background: var(--status-warning-bg);
 }
 
 .contact-header {
@@ -392,19 +392,19 @@ const truncateContent = (content) => {
 }
 
 .primary-badge {
-  color: #ffc107;
+  color: var(--accent-warning);
   font-size: 1rem;
 }
 
 .contact-title-row strong {
   font-size: 1rem;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .role-badge {
   padding: 0.2rem 0.6rem;
-  background: #e9ecef;
-  color: #495057;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 500;
@@ -415,7 +415,7 @@ const truncateContent = (content) => {
   gap: 1rem;
   flex-wrap: wrap;
   font-size: 0.9rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .contact-phone::before {
@@ -428,7 +428,7 @@ const truncateContent = (content) => {
 
 .contact-notes {
   font-size: 0.9rem;
-  color: #666;
+  color: var(--text-secondary);
   line-height: 1.4;
   margin-bottom: 0.75rem;
 }
@@ -441,7 +441,7 @@ const truncateContent = (content) => {
 
 .scope-badge {
   padding: 0.2rem 0.6rem;
-  background: #667eea;
+  background: var(--accent-primary);
   color: white;
   border-radius: 12px;
   font-size: 0.7rem;
@@ -464,7 +464,7 @@ const truncateContent = (content) => {
 }
 
 .btn-primary {
-  background: #007bff;
+  background: var(--accent-primary);
   color: white;
 }
 
@@ -473,12 +473,12 @@ const truncateContent = (content) => {
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--bg-hover);
 }
 
 @media (max-width: 768px) {

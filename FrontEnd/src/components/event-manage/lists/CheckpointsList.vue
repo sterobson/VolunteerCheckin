@@ -211,7 +211,7 @@ const getCheckpointIconSvg = (location) => {
 <style scoped>
 h3 {
   margin: 0 0 1rem 0;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .button-group {
@@ -235,7 +235,7 @@ h3 {
 }
 
 .btn-primary {
-  background: #007bff;
+  background: var(--accent-primary);
   color: white;
 }
 
@@ -244,12 +244,12 @@ h3 {
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--bg-hover);
 }
 
 .add-menu-wrapper {
@@ -260,9 +260,9 @@ h3 {
   position: absolute;
   top: 100%;
   left: 0;
-  background: white;
+  background: var(--bg-primary);
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
   z-index: 100;
   min-width: 180px;
   margin-top: 0.25rem;
@@ -274,16 +274,16 @@ h3 {
   width: 100%;
   padding: 0.75rem 1rem;
   border: none;
-  background: white;
+  background: var(--bg-primary);
   text-align: left;
   cursor: pointer;
   font-size: 0.9rem;
-  color: #333;
+  color: var(--text-primary);
   transition: background-color 0.15s;
 }
 
 .dropdown-item:hover {
-  background: #f5f5f5;
+  background: var(--bg-tertiary);
 }
 
 .dropdown-item:first-child {
@@ -303,24 +303,25 @@ h3 {
 
 .location-item {
   padding: 1rem;
-  border: 2px solid #e0e0e0;
+  border: 2px solid var(--border-color);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.3s;
+  background: var(--card-bg);
 }
 
 .location-item:hover {
-  border-color: #667eea;
+  border-color: var(--accent-primary);
 }
 
 .location-item.location-full {
-  border-color: #4caf50;
-  background: #f1f8f4;
+  border-color: var(--accent-success);
+  background: var(--status-success-bg);
 }
 
 .location-item.location-missing {
-  border-color: #ff4444;
-  background: #fff1f1;
+  border-color: var(--accent-danger);
+  background: var(--status-danger-bg);
 }
 
 .location-info {
@@ -337,12 +338,12 @@ h3 {
 
 .location-description {
   font-weight: 400;
-  color: #888;
+  color: var(--text-muted);
 }
 
 .location-status {
   font-weight: 600;
-  color: #667eea;
+  color: var(--accent-primary);
   white-space: nowrap;
   margin-left: auto;
 }
@@ -355,14 +356,14 @@ h3 {
 
 .assignment-badge {
   padding: 0.25rem 0.75rem;
-  background: #e0e0e0;
+  background: var(--bg-tertiary);
   border-radius: 12px;
   font-size: 0.75rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .assignment-badge.checked-in {
-  background: #4caf50;
+  background: var(--accent-success);
   color: white;
 }
 
@@ -372,7 +373,7 @@ h3 {
   gap: 0.75rem;
   margin: 1rem 0;
   padding: 1rem;
-  background: #f8f9fa;
+  background: var(--bg-tertiary);
   border-radius: 4px;
 }
 
@@ -380,7 +381,7 @@ h3 {
   margin: 0 0 0.5rem 0;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -391,7 +392,7 @@ h3 {
   gap: 0.5rem;
   font-size: 0.9rem;
   cursor: pointer;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .filter-checkbox input[type="checkbox"] {

@@ -173,16 +173,18 @@ const handleCustomTimesToggle = (checked) => {
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .form-input {
   width: 100%;
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   font-size: 0.9rem;
   box-sizing: border-box;
+  background: var(--input-bg);
+  color: var(--text-primary);
 }
 
 .checkbox-group {
@@ -213,7 +215,7 @@ const handleCustomTimesToggle = (checked) => {
 
 .form-help {
   display: block;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.85rem;
   margin-top: 0.25rem;
   font-weight: normal;
@@ -222,8 +224,8 @@ const handleCustomTimesToggle = (checked) => {
 .custom-times-section {
   margin-left: 1.5rem;
   padding-left: 1rem;
-  border-left: 3px solid #007bff;
-  background: #f8f9fa;
+  border-left: 3px solid var(--accent-primary);
+  background: var(--bg-tertiary);
   padding: 1rem;
   border-radius: 4px;
   margin-top: 0.5rem;
@@ -246,7 +248,7 @@ const handleCustomTimesToggle = (checked) => {
 }
 
 .no-area {
-  color: #999;
+  color: var(--text-muted);
   font-style: italic;
   font-size: 0.9rem;
 }

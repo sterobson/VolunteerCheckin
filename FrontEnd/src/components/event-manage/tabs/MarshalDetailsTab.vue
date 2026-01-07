@@ -195,17 +195,19 @@ watch(() => props.marshalId, (newVal) => {
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .form-input {
   width: 100%;
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   font-size: 0.9rem;
   box-sizing: border-box;
   font-family: inherit;
+  background: var(--input-bg);
+  color: var(--text-primary);
 }
 
 textarea.form-input {
@@ -216,24 +218,24 @@ textarea.form-input {
 .magic-link-section {
   margin-top: 2rem;
   padding-top: 1.5rem;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border-color);
 }
 
 .magic-link-section label {
   display: block;
   margin-bottom: 0.25rem;
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .help-text {
   margin: 0 0 1rem 0;
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .loading-text {
-  color: #666;
+  color: var(--text-secondary);
   font-style: italic;
 }
 
@@ -252,7 +254,7 @@ textarea.form-input {
 .magic-link-input {
   flex: 1;
   min-width: 0;
-  background-color: #f8f9fa;
+  background-color: var(--bg-tertiary);
   font-family: monospace;
   font-size: 0.85rem;
 }
@@ -278,12 +280,12 @@ textarea.form-input {
 }
 
 .btn-primary {
-  background: #007bff;
+  background: var(--accent-primary);
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #0056b3;
+  background: var(--accent-primary-hover);
 }
 
 .btn-primary:disabled {

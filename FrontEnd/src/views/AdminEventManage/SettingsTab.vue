@@ -334,9 +334,9 @@ const handleSubmit = () => {
 }
 
 .accordion-section {
-  background: white;
+  background: var(--card-bg);
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
   overflow: hidden;
 }
 
@@ -346,23 +346,23 @@ const handleSubmit = () => {
   justify-content: space-between;
   align-items: center;
   padding: 1.25rem 1.5rem;
-  background: white;
+  background: var(--card-bg);
   border: none;
   cursor: pointer;
   text-align: left;
   font-size: 1.1rem;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
   transition: background 0.2s;
 }
 
 .accordion-header:hover {
-  background: #f8f9fa;
+  background: var(--bg-tertiary);
 }
 
 .accordion-header.active {
-  background: #f0f4ff;
-  color: #667eea;
+  background: var(--bg-active);
+  color: var(--accent-primary);
 }
 
 .accordion-title {
@@ -374,22 +374,22 @@ const handleSubmit = () => {
 .accordion-icon {
   font-size: 1.5rem;
   font-weight: 300;
-  color: #667eea;
+  color: var(--accent-primary);
 }
 
 .accordion-content {
   padding: 1.5rem;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border-color);
 }
 
 .form-actions {
   margin-top: 1.5rem;
   padding-top: 1rem;
-  border-top: 1px solid #dee2e6;
+  border-top: 1px solid var(--border-color);
 }
 
 .section-description {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.9rem;
   margin: 0 0 1.5rem 0;
 }
@@ -408,17 +408,19 @@ const handleSubmit = () => {
 
 .term-group label {
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
   font-size: 0.9rem;
 }
 
 .form-input {
   width: 100%;
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--input-border);
   border-radius: 4px;
   font-size: 0.9rem;
   box-sizing: border-box;
+  background: var(--input-bg);
+  color: var(--text-primary);
 }
 
 .btn {
@@ -431,7 +433,7 @@ const handleSubmit = () => {
 }
 
 .btn-primary {
-  background: #007bff;
+  background: var(--accent-primary);
   color: white;
 }
 
@@ -440,18 +442,18 @@ const handleSubmit = () => {
 }
 
 .btn-primary:disabled {
-  background: #ccc;
+  background: var(--text-muted);
   cursor: not-allowed;
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
   margin-left: 0.5rem;
 }
 
 .btn-secondary:hover {
-  background: #5a6268;
+  background: var(--bg-hover);
 }
 
 @media (max-width: 600px) {

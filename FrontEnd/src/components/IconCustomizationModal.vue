@@ -1085,7 +1085,7 @@ const apply = () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--modal-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1093,13 +1093,13 @@ const apply = () => {
 }
 
 .modal-content {
-  background: white;
+  background: var(--card-bg);
   border-radius: 12px;
   width: 90%;
   max-width: 400px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-lg);
 }
 
 .modal-header {
@@ -1107,13 +1107,13 @@ const apply = () => {
   justify-content: space-between;
   align-items: center;
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .modal-header h3 {
   margin: 0;
   font-size: 1.1rem;
-  color: #1a202c;
+  color: var(--text-primary);
   font-weight: 600;
 }
 
@@ -1121,14 +1121,14 @@ const apply = () => {
   background: none;
   border: none;
   font-size: 1.5rem;
-  color: #718096;
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 0;
   line-height: 1;
 }
 
 .close-btn:hover {
-  color: #1a202c;
+  color: var(--text-primary);
 }
 
 .modal-body {
@@ -1199,28 +1199,28 @@ const apply = () => {
   justify-content: space-between;
   align-items: center;
   padding: 0.5rem 0.625rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  background: white;
+  background: var(--card-bg);
   cursor: pointer;
   transition: all 0.15s;
   min-height: 48px;
 }
 
 .option-button:hover:not(.disabled) {
-  border-color: #cbd5e0;
-  background: #f8fafc;
+  border-color: var(--border-color);
+  background: var(--bg-tertiary);
 }
 
 .option-button.active {
-  border-color: #3182ce;
-  background: #ebf8ff;
+  border-color: var(--accent-primary);
+  background: var(--bg-active);
 }
 
 .option-button.disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  background: #f7fafc;
+  background: var(--bg-tertiary);
 }
 
 .option-button-content {
@@ -1234,7 +1234,7 @@ const apply = () => {
 
 .option-button-label {
   font-size: 0.65rem;
-  color: #718096;
+  color: var(--text-secondary);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.025em;
@@ -1242,7 +1242,7 @@ const apply = () => {
 
 .option-button-value {
   font-size: 0.8rem;
-  color: #1a202c;
+  color: var(--text-primary);
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -1260,17 +1260,17 @@ const apply = () => {
   width: 14px;
   height: 14px;
   border-radius: 3px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
   flex-shrink: 0;
 }
 
 .color-swatch.no-border {
   background: repeating-linear-gradient(
     45deg,
-    #f0f0f0,
-    #f0f0f0 2px,
-    white 2px,
-    white 4px
+    var(--bg-tertiary),
+    var(--bg-tertiary) 2px,
+    var(--card-bg) 2px,
+    var(--card-bg) 4px
   );
 }
 
@@ -1285,7 +1285,7 @@ const apply = () => {
 
 .option-button-arrow {
   font-size: 0.65rem;
-  color: #a0aec0;
+  color: var(--text-secondary);
   margin-left: 0.25rem;
 }
 
@@ -1296,10 +1296,10 @@ const apply = () => {
   left: 0.5rem;
   right: 0.5rem;
   bottom: 0.5rem;
-  background: white;
-  border: 1px solid #e2e8f0;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-lg);
   z-index: 20;
   display: flex;
   flex-direction: column;
@@ -1310,24 +1310,24 @@ const apply = () => {
   justify-content: space-between;
   align-items: center;
   padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border-color);
   font-size: 0.8rem;
   font-weight: 500;
-  color: #4a5568;
+  color: var(--text-secondary);
 }
 
 .popup-close {
   background: none;
   border: none;
   font-size: 1.25rem;
-  color: #a0aec0;
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 0;
   line-height: 1;
 }
 
 .popup-close:hover {
-  color: #4a5568;
+  color: var(--text-primary);
 }
 
 /* Shape/Size Grid */
@@ -1349,23 +1349,23 @@ const apply = () => {
   padding: 0.5rem 0.25rem;
   border: 2px solid transparent;
   border-radius: 6px;
-  background: white;
+  background: var(--card-bg);
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .popup-grid-item:hover {
-  background: #f7fafc;
+  background: var(--bg-tertiary);
 }
 
 .popup-grid-item.selected {
-  border-color: #3182ce;
-  background: #ebf8ff;
+  border-color: var(--accent-primary);
+  background: var(--bg-active);
 }
 
 .popup-grid-item span {
   font-size: 0.65rem;
-  color: #4a5568;
+  color: var(--text-secondary);
   text-align: center;
 }
 
@@ -1392,7 +1392,7 @@ const apply = () => {
   width: 36px;
   height: 36px;
   border-radius: 6px;
-  border: 2px solid #e2e8f0;
+  border: 2px solid var(--border-color);
   cursor: pointer;
   transition: all 0.15s;
   display: flex;
@@ -1402,22 +1402,22 @@ const apply = () => {
 
 .color-option:hover {
   transform: scale(1.1);
-  border-color: #cbd5e0;
+  border-color: var(--border-color);
 }
 
 .color-option.selected {
-  border-color: #3182ce;
-  box-shadow: 0 0 0 2px #bee3f8;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--bg-active);
 }
 
 .color-option.none-option {
-  background: white;
+  background: var(--card-bg);
 }
 
 .none-icon {
   width: 16px;
   height: 16px;
-  border: 2px dashed #cbd5e0;
+  border: 2px dashed var(--border-color);
   border-radius: 3px;
   position: relative;
 }
@@ -1436,7 +1436,7 @@ const apply = () => {
 .default-indicator {
   font-size: 0.7rem;
   font-weight: 600;
-  color: #718096;
+  color: var(--text-secondary);
 }
 
 /* Icon Popup - Larger overlay */
@@ -1472,18 +1472,18 @@ const apply = () => {
   padding: 0.375rem;
   border: 2px solid transparent;
   border-radius: 6px;
-  background: white;
+  background: var(--card-bg);
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .icon-grid-item:hover {
-  background: #f7fafc;
+  background: var(--bg-tertiary);
 }
 
 .icon-grid-item.selected {
-  border-color: #3182ce;
-  background: #ebf8ff;
+  border-color: var(--accent-primary);
+  background: var(--bg-active);
 }
 
 .icon-grid-preview {
@@ -1496,7 +1496,7 @@ const apply = () => {
 
 .icon-grid-label {
   font-size: 0.6rem;
-  color: #4a5568;
+  color: var(--text-secondary);
   text-align: center;
   line-height: 1.1;
   max-width: 100%;
@@ -1524,23 +1524,23 @@ const apply = () => {
   padding: 0.5rem;
   border: 2px solid transparent;
   border-radius: 6px;
-  background: white;
+  background: var(--card-bg);
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .size-grid-item:hover {
-  background: #f7fafc;
+  background: var(--bg-tertiary);
 }
 
 .size-grid-item.selected {
-  border-color: #3182ce;
-  background: #ebf8ff;
+  border-color: var(--accent-primary);
+  background: var(--bg-active);
 }
 
 .size-grid-item span {
   font-size: 0.7rem;
-  color: #4a5568;
+  color: var(--text-secondary);
   text-align: center;
 }
 
@@ -1557,38 +1557,38 @@ const apply = () => {
   justify-content: flex-end;
   gap: 0.75rem;
   padding: 1rem 1.25rem;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--border-color);
 }
 
 .btn-cancel {
   padding: 0.5rem 1rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
   border-radius: 6px;
-  background: white;
-  color: #4a5568;
+  background: var(--card-bg);
+  color: var(--text-secondary);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .btn-cancel:hover {
-  background: #f7fafc;
-  border-color: #cbd5e0;
+  background: var(--bg-tertiary);
+  border-color: var(--border-color);
 }
 
 .btn-apply {
   padding: 0.5rem 1.5rem;
   border: none;
   border-radius: 6px;
-  background: #3182ce;
-  color: white;
+  background: var(--accent-primary);
+  color: var(--bg-primary);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .btn-apply:hover {
-  background: #2c5282;
+  opacity: 0.9;
 }
 
 /* Full-width button for map rotation */
@@ -1609,20 +1609,20 @@ const apply = () => {
   justify-content: center;
   align-items: center;
   padding: 0.5rem;
-  background: #f7fafc;
+  background: var(--bg-tertiary);
   border-radius: 8px;
   min-height: 60px;
 }
 
 .rotation-preview-icon {
   transition: transform 0.15s ease-out;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  filter: drop-shadow(0 2px 4px var(--shadow-color));
 }
 
 .rotation-description {
   margin: 0;
   font-size: 0.8rem;
-  color: #718096;
+  color: var(--text-secondary);
   text-align: center;
 }
 
@@ -1634,26 +1634,26 @@ const apply = () => {
 
 .rotation-preset {
   padding: 0.5rem 1rem;
-  border: 2px solid #e2e8f0;
+  border: 2px solid var(--border-color);
   border-radius: 6px;
-  background: white;
+  background: var(--card-bg);
   cursor: pointer;
   font-size: 0.85rem;
   font-weight: 500;
-  color: #4a5568;
+  color: var(--text-secondary);
   transition: all 0.15s;
   white-space: nowrap;
 }
 
 .rotation-preset:hover {
-  background: #f7fafc;
-  border-color: #cbd5e0;
+  background: var(--bg-tertiary);
+  border-color: var(--border-color);
 }
 
 .rotation-preset.selected {
-  border-color: #3182ce;
-  background: #ebf8ff;
-  color: #2c5282;
+  border-color: var(--accent-primary);
+  background: var(--bg-active);
+  color: var(--accent-primary);
 }
 
 .rotation-slider-container {
@@ -1668,7 +1668,7 @@ const apply = () => {
   height: 6px;
   -webkit-appearance: none;
   appearance: none;
-  background: linear-gradient(to right, #e2e8f0 0%, #3182ce 50%, #e2e8f0 100%);
+  background: linear-gradient(to right, var(--border-color) 0%, var(--accent-primary) 50%, var(--border-color) 100%);
   border-radius: 3px;
   cursor: pointer;
 }
@@ -1678,27 +1678,27 @@ const apply = () => {
   appearance: none;
   width: 18px;
   height: 18px;
-  background: #3182ce;
+  background: var(--accent-primary);
   border-radius: 50%;
   cursor: pointer;
-  border: 2px solid white;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  border: 2px solid var(--card-bg);
+  box-shadow: var(--shadow-md);
 }
 
 .rotation-slider::-moz-range-thumb {
   width: 18px;
   height: 18px;
-  background: #3182ce;
+  background: var(--accent-primary);
   border-radius: 50%;
   cursor: pointer;
-  border: 2px solid white;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  border: 2px solid var(--card-bg);
+  box-shadow: var(--shadow-md);
 }
 
 .rotation-value {
   font-size: 0.9rem;
   font-weight: 600;
-  color: #2d3748;
+  color: var(--text-primary);
   min-width: 45px;
   text-align: right;
 }
@@ -1712,23 +1712,23 @@ const apply = () => {
 
 .rotation-preset-btn {
   padding: 0.375rem 0.75rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
   border-radius: 4px;
-  background: white;
+  background: var(--card-bg);
   cursor: pointer;
   font-size: 0.75rem;
-  color: #4a5568;
+  color: var(--text-secondary);
   transition: all 0.15s;
 }
 
 .rotation-preset-btn:hover {
-  background: #f7fafc;
-  border-color: #cbd5e0;
+  background: var(--bg-tertiary);
+  border-color: var(--border-color);
 }
 
 .rotation-preset-btn.selected {
-  border-color: #3182ce;
-  background: #ebf8ff;
-  color: #2c5282;
+  border-color: var(--accent-primary);
+  background: var(--bg-active);
+  color: var(--accent-primary);
 }
 </style>

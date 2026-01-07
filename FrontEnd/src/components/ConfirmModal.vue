@@ -55,7 +55,7 @@ const handleCancel = () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--modal-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -63,23 +63,24 @@ const handleCancel = () => {
 }
 
 .confirm-modal {
-  background: white;
+  background: var(--modal-bg);
+  color: var(--text-primary);
   padding: 2rem;
   border-radius: 12px;
   max-width: 500px;
   width: 90%;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-lg);
 }
 
 .confirm-modal h3 {
   margin: 0 0 1rem 0;
-  color: #333;
+  color: var(--text-primary);
   font-size: 1.25rem;
 }
 
 .confirm-modal p {
   margin: 0 0 1.5rem 0;
-  color: #666;
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 
@@ -100,7 +101,7 @@ const handleCancel = () => {
 }
 
 .btn-primary {
-  background: #007bff;
+  background: var(--accent-primary);
   color: white;
 }
 
@@ -109,11 +110,11 @@ const handleCancel = () => {
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--bg-hover);
 }
 </style>

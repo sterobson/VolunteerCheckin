@@ -212,6 +212,11 @@ export function getOfflineMode() {
   return isOfflineMode || !navigator.onLine;
 }
 
+// Health API
+export const healthApi = {
+  check: () => api.head('/health'),
+};
+
 // Auth API
 export const authApi = {
   requestLogin: (email) => api.post('/auth/request-login', { email }),

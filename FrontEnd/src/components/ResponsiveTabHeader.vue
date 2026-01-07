@@ -208,7 +208,7 @@ watch(() => props.tabs, () => {
   padding: 0.75rem 0.6rem;
   border: none;
   background: transparent;
-  color: #666;
+  color: var(--text-secondary);
   cursor: pointer;
   font-size: 0.9rem;
   font-weight: 500;
@@ -231,13 +231,15 @@ watch(() => props.tabs, () => {
 }
 
 .tab-button:hover {
-  color: #333;
-  background: #f8f9fa;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
 }
 
 .tab-button.active {
-  color: #007bff;
-  border-bottom-color: #007bff;
+  color: var(--accent-primary);
+  background: var(--bg-active);
+  border-bottom-color: var(--accent-primary);
+  border-radius: 6px 6px 0 0;
 }
 
 .hamburger-menu {
@@ -248,7 +250,7 @@ watch(() => props.tabs, () => {
   padding: 1rem 1.5rem;
   border: none;
   background: transparent;
-  color: #666;
+  color: var(--text-secondary);
   cursor: pointer;
   font-size: 1rem;
   font-weight: 500;
@@ -262,13 +264,13 @@ watch(() => props.tabs, () => {
 }
 
 .hamburger-button:hover {
-  color: #333;
-  background: #f8f9fa;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
 }
 
 .hamburger-button.active {
-  color: #007bff;
-  background: #e7f3ff;
+  color: var(--accent-primary);
+  background: var(--bg-active);
 }
 
 .hamburger-icon {
@@ -283,10 +285,10 @@ watch(() => props.tabs, () => {
   position: fixed;
   left: 1rem;
   right: 1rem;
-  background: white;
-  border: 1px solid #dee2e6;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
   z-index: 10000;
   max-height: calc(100vh - 150px);
   overflow-y: auto;
@@ -299,8 +301,8 @@ watch(() => props.tabs, () => {
   width: 100%;
   padding: 1rem 1.25rem;
   border: none;
-  background: white;
-  color: #333;
+  background: var(--bg-primary, #ffffff);
+  color: var(--text-primary);
   cursor: pointer;
   font-size: 1rem;
   text-align: left;
@@ -308,12 +310,12 @@ watch(() => props.tabs, () => {
 }
 
 .dropdown-item:hover {
-  background: #f8f9fa;
+  background: var(--bg-tertiary);
 }
 
 .dropdown-item.active {
-  color: #007bff;
-  background: #e7f3ff;
+  color: var(--accent-primary);
+  background: var(--bg-active);
   font-weight: 500;
 }
 

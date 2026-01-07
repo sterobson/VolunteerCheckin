@@ -301,11 +301,11 @@ watch(() => [props.eventId, props.marshalId], () => {
 .empty-state {
   text-align: center;
   padding: 3rem 1rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .error-state {
-  color: #dc3545;
+  color: var(--accent-danger);
 }
 
 .error-state p {
@@ -322,25 +322,25 @@ watch(() => [props.eventId, props.marshalId], () => {
   display: flex;
   gap: 0.75rem;
   padding: 0.75rem;
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   transition: all 0.2s;
 }
 
 .checklist-item:hover {
-  border-color: #ddd;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  border-color: var(--border-color);
+  box-shadow: var(--shadow-sm);
 }
 
 .checklist-item.item-completed {
-  background: #f8f9fa;
+  background: var(--bg-tertiary);
   opacity: 0.8;
 }
 
 .checklist-item.item-modified {
-  border-color: #ffc107;
-  background: #fffbf0;
+  border-color: var(--accent-warning);
+  background: var(--status-warning-bg);
 }
 
 .item-checkbox {
@@ -387,13 +387,13 @@ watch(() => [props.eventId, props.marshalId], () => {
 
 .item-text {
   font-size: 0.95rem;
-  color: #333;
+  color: var(--text-primary);
   word-wrap: break-word;
 }
 
 .item-context {
   font-size: 0.85rem;
-  color: #667eea;
+  color: var(--accent-primary);
   font-weight: 500;
 }
 
@@ -405,8 +405,8 @@ watch(() => [props.eventId, props.marshalId], () => {
 .scope-pill {
   display: inline-block;
   padding: 0.25rem 0.65rem;
-  background: #e3f2fd;
-  color: #1976d2;
+  background: var(--bg-active);
+  color: var(--accent-primary);
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 500;
@@ -418,7 +418,7 @@ watch(() => [props.eventId, props.marshalId], () => {
   flex-direction: column;
   gap: 0.25rem;
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .completion-text {
@@ -427,25 +427,25 @@ watch(() => [props.eventId, props.marshalId], () => {
 
 .completion-time {
   font-size: 0.8rem;
-  color: #999;
+  color: var(--text-muted);
 }
 
 .disabled-reason {
   font-size: 0.85rem;
-  color: #dc3545;
+  color: var(--accent-danger);
   font-style: italic;
 }
 
 .pending-text {
   font-size: 0.85rem;
-  color: #ff9800;
+  color: var(--accent-warning);
   font-weight: 500;
   font-style: italic;
 }
 
 .uncomplete-info {
   font-size: 0.85rem;
-  color: #dc3545;
+  color: var(--accent-danger);
 }
 
 .btn {
@@ -459,12 +459,12 @@ watch(() => [props.eventId, props.marshalId], () => {
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: var(--bg-hover);
 }
 
 .btn-small {

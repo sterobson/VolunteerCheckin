@@ -9,7 +9,7 @@ import {
   getCachedEventData,
   cacheEventData
 } from '../services/offlineDb';
-import { checkInApi, checklistApi } from '../services/api';
+import { checkInApi, checklistApi, healthApi } from '../services/api';
 
 // Singleton state - shared across all components using this composable
 const isOnline = ref(navigator.onLine);
@@ -80,29 +80,16 @@ async function checkServerHealth() {
 
   try {
     // Use a lightweight endpoint to check server health
-    // Try to fetch the events list with a short timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-    const response = await fetch('/api/health', {
-      method: 'HEAD',
-      signal: controller.signal
-    }).catch(() => null);
-
-    clearTimeout(timeoutId);
-
-    // If health endpoint doesn't exist, try a simple API call
-    if (!response || response.status === 404) {
-      // Fallback: just check if we can reach the API at all
+    await healthApi.check();
+    isServerHealthy.value = true;
+    return true;
+  } catch (error) {
+    // If health endpoint doesn't exist (404), assume server is healthy
+    if (error.response?.status === 404) {
       isServerHealthy.value = true;
       return true;
     }
-
-    const healthy = response.ok;
-    isServerHealthy.value = healthy;
-    return healthy;
-  } catch (error) {
-    if (error.name === 'AbortError') {
+    if (error.code === 'ECONNABORTED') {
       console.warn('Server health check timed out');
     }
     isServerHealthy.value = false;

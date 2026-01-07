@@ -142,7 +142,7 @@ const handleConfirmCloseCancel = () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--modal-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -150,9 +150,10 @@ const handleConfirmCloseCancel = () => {
 
 /* Modal Container - Flexbox Layout */
 .base-modal {
-  background: white;
+  background: var(--modal-bg);
+  color: var(--text-primary);
   border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
   max-height: 90vh;
@@ -197,13 +198,13 @@ const handleConfirmCloseCancel = () => {
   flex-shrink: 0;
   padding: 2rem 2rem 1rem 2rem;
   position: relative;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .base-modal-title {
   margin: 0;
   padding-right: 3rem; /* Space for close button */
-  color: #333;
+  color: var(--text-primary);
   font-size: 1.25rem;
   font-weight: 600;
 }
@@ -216,7 +217,7 @@ const handleConfirmCloseCancel = () => {
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #666;
+  color: var(--text-secondary);
   width: 32px;
   height: 32px;
   display: flex;
@@ -227,15 +228,15 @@ const handleConfirmCloseCancel = () => {
 }
 
 .base-modal-close:hover {
-  background: #f0f0f0;
-  color: #333;
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 /* Optional Tab Header (below title, above body) */
 .base-modal-tab-header {
   flex-shrink: 0;
   padding: 0 2rem;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 /* Scrollable Body */
@@ -250,8 +251,8 @@ const handleConfirmCloseCancel = () => {
 .base-modal-footer {
   flex-shrink: 0;
   padding: 1.5rem 2rem 2rem 2rem;
-  border-top: 1px solid #e0e0e0;
-  background: white;
+  border-top: 1px solid var(--border-color);
+  background: var(--modal-bg);
 }
 
 .base-modal-actions {

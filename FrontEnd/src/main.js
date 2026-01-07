@@ -3,6 +3,7 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import './styles/common.css'
+import './styles/themes.css'
 import { initDb } from './services/offlineDb'
 
 // Initialize IndexedDB for offline support

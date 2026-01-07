@@ -105,9 +105,9 @@ const handleSubmit = () => {
 }
 
 .event-info-card {
-  background: white;
+  background: var(--card-bg);
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
   padding: 1.5rem;
 }
 
@@ -131,17 +131,19 @@ const handleSubmit = () => {
 
 .form-group label {
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
   font-size: 0.9rem;
 }
 
 .form-input {
   width: 100%;
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--input-border);
   border-radius: 4px;
   font-size: 0.9rem;
   box-sizing: border-box;
+  background: var(--input-bg);
+  color: var(--text-primary);
 }
 
 textarea.form-input {
@@ -151,7 +153,7 @@ textarea.form-input {
 .form-actions {
   margin-top: 0.5rem;
   padding-top: 1rem;
-  border-top: 1px solid #dee2e6;
+  border-top: 1px solid var(--border-color);
 }
 
 .btn {
@@ -164,7 +166,7 @@ textarea.form-input {
 }
 
 .btn-primary {
-  background: #007bff;
+  background: var(--accent-primary);
   color: white;
 }
 
@@ -173,7 +175,7 @@ textarea.form-input {
 }
 
 .btn-primary:disabled {
-  background: #ccc;
+  background: var(--text-muted);
   cursor: not-allowed;
 }
 

@@ -523,7 +523,7 @@ const getIncompleteDetails = (item) => {
 .checklists-tab-header h2 {
   margin: 0;
   font-size: 1.5rem;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .button-group {
@@ -536,7 +536,7 @@ const getIncompleteDetails = (item) => {
   flex-wrap: wrap;
   gap: 1.5rem;
   padding: 1rem;
-  background: #f8f9fa;
+  background: var(--bg-tertiary);
   border-radius: 8px;
   align-items: flex-start;
 }
@@ -552,7 +552,7 @@ const getIncompleteDetails = (item) => {
   margin: 0;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .filter-checkbox {
@@ -561,7 +561,7 @@ const getIncompleteDetails = (item) => {
   gap: 0.5rem;
   font-size: 0.9rem;
   cursor: pointer;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .filter-checkbox input[type="checkbox"] {
@@ -582,23 +582,23 @@ const getIncompleteDetails = (item) => {
   display: flex;
   justify-content: flex-start;
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .toggle-all-btn {
   padding: 0.4rem 0.75rem;
-  background: #f0f0f0;
-  border: 1px solid #ddd;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.8rem;
-  color: #333;
+  color: var(--text-primary);
   transition: background-color 0.2s;
   font-weight: 500;
 }
 
 .toggle-all-btn:hover {
-  background: #e0e0e0;
+  background: var(--bg-secondary);
 }
 
 .checkbox-list {
@@ -634,7 +634,7 @@ const getIncompleteDetails = (item) => {
   gap: 0.5rem;
   font-size: 0.9rem;
   cursor: pointer;
-  color: #333;
+  color: var(--text-primary);
   padding: 0.25rem 0;
 }
 
@@ -656,7 +656,7 @@ const getIncompleteDetails = (item) => {
 .empty-state {
   text-align: center;
   padding: 3rem 1rem;
-  color: #999;
+  color: var(--text-muted);
   font-style: italic;
 }
 
@@ -668,8 +668,8 @@ const getIncompleteDetails = (item) => {
 
 .checklist-item-card {
   padding: 0.75rem 1rem;
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   transition: all 0.2s;
 }
@@ -689,12 +689,12 @@ const getIncompleteDetails = (item) => {
 }
 
 .checklist-item-title:hover strong {
-  color: #667eea;
+  color: var(--accent-primary);
 }
 
 .checklist-item-title strong {
   font-size: 0.95rem;
-  color: #333;
+  color: var(--text-primary);
   word-wrap: break-word;
 }
 
@@ -709,7 +709,7 @@ const getIncompleteDetails = (item) => {
 
 .scope-badge {
   padding: 0.25rem 0.7rem;
-  background: #667eea;
+  background: var(--accent-primary);
   color: white;
   border-radius: 12px;
   font-size: 0.75rem;
@@ -720,7 +720,7 @@ const getIncompleteDetails = (item) => {
 }
 
 .scope-badge:hover {
-  background: #5568d3;
+  background: var(--accent-primary-hover);
 }
 
 .btn {
@@ -739,12 +739,12 @@ const getIncompleteDetails = (item) => {
 }
 
 .btn-primary {
-  background: #007bff;
+  background: var(--accent-primary);
   color: white;
 }
 
 .btn-primary:hover {
-  background: #0056b3;
+  background: var(--accent-primary-hover);
 }
 
 .btn-secondary {

@@ -138,7 +138,7 @@ const formatAreaCheckpointCount = (area) => {
 <style scoped>
 h3 {
   margin: 0 0 1rem 0;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .button-group {
@@ -162,12 +162,12 @@ h3 {
 }
 
 .btn-primary {
-  background: #007bff;
+  background: var(--accent-primary);
   color: white;
 }
 
 .btn-primary:hover {
-  background: #0056b3;
+  background: var(--accent-primary-hover);
 }
 
 .areas-list {
@@ -179,17 +179,17 @@ h3 {
 
 .area-item {
   padding: 1rem;
-  border: 2px solid #e0e0e0;
-  border-left: 4px solid #667eea;
+  border: 2px solid var(--border-color);
+  border-left: 4px solid var(--accent-primary);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.3s;
-  background: white;
+  background: var(--card-bg);
 }
 
 .area-item:hover {
-  border-color: #667eea;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+  border-color: var(--accent-primary);
+  box-shadow: var(--shadow-md);
 }
 
 .area-info {
@@ -206,7 +206,7 @@ h3 {
 
 .area-header strong {
   font-size: 1rem;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .default-badge {
@@ -215,13 +215,13 @@ h3 {
   border-radius: 4px;
   font-size: 0.7rem;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
   text-transform: uppercase;
 }
 
 .area-description {
   margin: 0;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.9rem;
 }
 
@@ -233,17 +233,17 @@ h3 {
 
 .stat-badge {
   padding: 0.25rem 0.75rem;
-  background: #f0f0f0;
+  background: var(--bg-tertiary);
   border-radius: 12px;
   font-size: 0.75rem;
-  color: #666;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
 .empty-state {
   text-align: center;
   padding: 2rem;
-  color: #999;
+  color: var(--text-muted);
 }
 
 .empty-state p {

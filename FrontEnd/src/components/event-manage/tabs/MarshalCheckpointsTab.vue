@@ -166,23 +166,25 @@ defineExpose({
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .form-input {
   width: 100%;
   padding: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   font-size: 0.9rem;
   box-sizing: border-box;
   font-family: inherit;
+  background: var(--input-bg);
+  color: var(--text-primary);
 }
 
 .section-title {
   margin: 0 0 1rem 0;
   font-size: 1rem;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .assignments-list {
@@ -196,9 +198,9 @@ defineExpose({
   justify-content: space-between;
   align-items: center;
   padding: 1rem;
-  background: #f8f9fa;
+  background: var(--bg-tertiary);
   border-radius: 8px;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--border-color);
   gap: 1rem;
 }
 
@@ -243,11 +245,11 @@ defineExpose({
 
 .check-in-info {
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .check-in-method {
-  color: #999;
+  color: var(--text-muted);
 }
 
 .pending-badge {

@@ -229,7 +229,7 @@ const getStatusClass = (assignment) => {
 .marshals-tab-header h2 {
   margin: 0;
   font-size: 1.5rem;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .button-group {
@@ -238,9 +238,9 @@ const getStatusClass = (assignment) => {
 }
 
 .marshals-grid {
-  background: white;
+  background: var(--card-bg);
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
   overflow-x: auto;
 }
 
@@ -253,13 +253,13 @@ const getStatusClass = (assignment) => {
 .marshals-table td {
   padding: 1rem;
   text-align: left;
-  border-bottom: 1px solid #dee2e6;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .marshals-table th {
-  background: #f8f9fa;
+  background: var(--table-header-bg);
   font-weight: 600;
-  color: #495057;
+  color: var(--text-secondary);
   font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -275,12 +275,12 @@ const getStatusClass = (assignment) => {
 }
 
 .marshals-table th.sortable:hover {
-  background: #e9ecef;
+  background: var(--bg-hover);
 }
 
 .sort-indicator {
   margin-left: 0.5rem;
-  color: #007bff;
+  color: var(--accent-primary);
 }
 
 .marshal-row {
@@ -289,24 +289,26 @@ const getStatusClass = (assignment) => {
 }
 
 .marshal-row:hover {
-  background: #f8f9fa;
+  background: var(--table-row-hover);
 }
 
 .status-select {
   padding: 0.25rem 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--input-border);
   border-radius: 4px;
   font-size: 0.85rem;
   cursor: pointer;
+  background: var(--input-bg);
+  color: var(--text-primary);
 }
 
 .status-select.status-checked-in {
-  color: #28a745;
-  border-color: #28a745;
+  color: var(--accent-success);
+  border-color: var(--accent-success);
 }
 
 .status-select.status-not-checked-in {
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .status-icon {
@@ -318,11 +320,11 @@ const getStatusClass = (assignment) => {
 }
 
 .last-active-text {
-  color: #495057;
+  color: var(--text-secondary);
 }
 
 .last-active-never {
-  color: #999;
+  color: var(--text-muted);
   font-style: italic;
 }
 

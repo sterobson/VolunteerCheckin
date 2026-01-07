@@ -1,8 +1,9 @@
 <template>
-  <div class="admin-dashboard">
+  <div class="admin-dashboard" :style="{ colorScheme }">
     <header class="header">
       <h1>Admin dashboard</h1>
       <div class="header-actions">
+        <ThemeToggle />
         <span class="user-email">{{ authStore.adminEmail }}</span>
         <button @click="goToProfile" class="btn btn-secondary">Profile</button>
         <button @click="handleLogout" class="btn btn-secondary">Logout</button>
@@ -78,8 +79,11 @@ import { useAuthStore } from '../stores/auth';
 import { useEventsStore } from '../stores/events';
 import ConfirmModal from '../components/ConfirmModal.vue';
 import EventFormModal from '../components/event-manage/modals/EventFormModal.vue';
+import ThemeToggle from '../components/ThemeToggle.vue';
+import { useAdminTheme } from '../composables/useAdminTheme';
 
 const router = useRouter();
+const { colorScheme } = useAdminTheme();
 const authStore = useAuthStore();
 const eventsStore = useEventsStore();
 
@@ -230,13 +234,14 @@ onMounted(() => {
 <style scoped>
 .admin-dashboard {
   min-height: 100vh;
-  background: #f5f7fa;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .header {
-  background: white;
+  background: var(--bg-primary);
   padding: 1.5rem 2rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -244,7 +249,7 @@ onMounted(() => {
 
 .header h1 {
   margin: 0;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .header-actions {
@@ -254,7 +259,7 @@ onMounted(() => {
 }
 
 .user-email {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.875rem;
 }
 
@@ -265,10 +270,10 @@ onMounted(() => {
 }
 
 .section {
-  background: white;
+  background: var(--card-bg);
   padding: 2rem;
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
 }
 
 .section-header {
@@ -280,14 +285,14 @@ onMounted(() => {
 
 .section-header h2 {
   margin: 0;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .loading,
 .empty {
   text-align: center;
   padding: 3rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .events-grid {
@@ -297,7 +302,8 @@ onMounted(() => {
 }
 
 .event-card {
-  border: 2px solid #e0e0e0;
+  background: var(--bg-primary);
+  border: 2px solid var(--border-color);
   border-radius: 8px;
   padding: 1.5rem;
   cursor: pointer;
@@ -305,25 +311,25 @@ onMounted(() => {
 }
 
 .event-card:hover {
-  border-color: #667eea;
+  border-color: var(--accent-primary);
   transform: translateY(-4px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+  box-shadow: var(--shadow-lg);
 }
 
 .event-card h3 {
   margin: 0 0 0.5rem 0;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .event-date {
-  color: #667eea;
+  color: var(--accent-primary);
   font-size: 0.875rem;
   margin: 0 0 0.5rem 0;
   font-weight: 600;
 }
 
 .event-desc {
-  color: #666;
+  color: var(--text-secondary);
   margin: 0 0 1rem 0;
   font-size: 0.875rem;
 }
@@ -348,7 +354,7 @@ onMounted(() => {
 }
 
 .btn-primary {
-  background: #667eea;
+  background: var(--accent-primary);
   color: white;
 }
 
@@ -357,16 +363,16 @@ onMounted(() => {
 }
 
 .btn-secondary {
-  background: #e0e0e0;
-  color: #333;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .btn-secondary:hover {
-  background: #d0d0d0;
+  background: var(--bg-hover);
 }
 
 .btn-danger {
-  background: #ff4444;
+  background: var(--accent-danger);
   color: white;
 }
 

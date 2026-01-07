@@ -1,5 +1,5 @@
 <template>
-  <div class="admin-event-manage">
+  <div class="admin-event-manage" :style="{ colorScheme }">
     <header class="header">
       <div class="header-left">
         <button @click="goBack" class="btn-back" title="Back to Dashboard">← Dashboard</button>
@@ -9,6 +9,7 @@
         </div>
       </div>
       <div class="header-actions">
+        <ThemeToggle />
         <button v-if="canSwitchToMarshal" @click="switchToMarshalMode" class="btn btn-marshal-mode">
           Switch to Marshal
         </button>
@@ -418,6 +419,7 @@ import { useAdminNoteManagement } from '../composables/useAdminNoteManagement';
 import { useAdminContactManagement } from '../composables/useAdminContactManagement';
 import { useEventAdmins } from '../composables/useEventAdmins';
 import { useImportExport } from '../composables/useImportExport';
+import { useAdminTheme } from '../composables/useAdminTheme';
 
 // Utilities
 import { formatDate as formatEventDate, formatDateForInput } from '../utils/dateFormatters';
@@ -458,6 +460,7 @@ import InfoModal from '../components/InfoModal.vue';
 import ConfirmModal from '../components/ConfirmModal.vue';
 import FullscreenMapOverlay from '../components/FullscreenMapOverlay.vue';
 import AddLocationModal from '../components/event-manage/modals/AddLocationModal.vue';
+import ThemeToggle from '../components/ThemeToggle.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -488,6 +491,9 @@ const importExport = useImportExport(eventId);
 
 // Event admins composable
 const eventAdminsComposable = useEventAdmins(eventId);
+
+// Theme composable
+const { colorScheme } = useAdminTheme();
 
 // Computed tabs with dynamic labels from terminology
 // Order: Details, Course, Zones, Locations, Volunteers, Notes, Tasks, Contacts
@@ -2566,14 +2572,15 @@ onUnmounted(() => {
 /* Preserved styles from original file */
 .admin-event-manage {
   min-height: 100vh;
-  background: #f5f7fa;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
   overflow: visible;
 }
 
 .header {
-  background: white;
+  background: var(--bg-primary);
   padding: 1.5rem 2rem;
-  border-bottom: 1px solid #dee2e6;
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -2588,7 +2595,7 @@ onUnmounted(() => {
 .btn-back {
   background: none;
   border: none;
-  color: #007bff;
+  color: var(--accent-primary);
   cursor: pointer;
   font-size: 1rem;
   padding: 0.5rem 1rem;
@@ -2597,18 +2604,18 @@ onUnmounted(() => {
 }
 
 .btn-back:hover {
-  background: #e7f3ff;
+  background: var(--bg-active);
 }
 
 .header h1 {
   margin: 0;
   font-size: 1.75rem;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .event-date {
   margin: 0.25rem 0 0 0;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.9rem;
 }
 
@@ -2644,7 +2651,7 @@ onUnmounted(() => {
   display: flex;
   gap: 0.5rem;
   margin-bottom: 2rem;
-  border-bottom: 2px solid #dee2e6;
+  border-bottom: 2px solid var(--border-color);
   overflow-y: visible;
   position: relative;
 }
@@ -2653,7 +2660,7 @@ onUnmounted(() => {
   padding: 1rem 1.5rem;
   border: none;
   background: transparent;
-  color: #666;
+  color: var(--text-secondary);
   cursor: pointer;
   font-size: 1rem;
   font-weight: 500;
@@ -2664,13 +2671,13 @@ onUnmounted(() => {
 }
 
 .tab-button:hover {
-  color: #333;
-  background: #f8f9fa;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
 }
 
 .tab-button.active {
-  color: #007bff;
-  border-bottom-color: #007bff;
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
 }
 
 .tab-content-wrapper {
@@ -2678,10 +2685,10 @@ onUnmounted(() => {
 }
 
 .tab-panel {
-  background: white;
+  background: var(--card-bg);
   border-radius: 8px;
   padding: 1.5rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
 }
 
 @keyframes fadeIn {

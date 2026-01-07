@@ -57,6 +57,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  contacts: {
+    type: Array,
+    default: () => [],
+  },
   eventPeopleTerm: {
     type: String,
     default: 'Marshals',
@@ -90,12 +94,21 @@ const getCheckpointCount = (area) => {
 };
 
 const getContactCount = (area) => {
-  if (!area.contacts) return 0;
-  // Parse ContactsJson if it's a string
-  const contacts = typeof area.contacts === 'string'
-    ? JSON.parse(area.contacts)
-    : area.contacts;
-  return Array.isArray(contacts) ? contacts.length : 0;
+  // Count contacts from EventContacts that are scoped to this area
+  return props.contacts.filter(contact => {
+    if (!contact.scopeConfigurations) return false;
+
+    return contact.scopeConfigurations.some(config => {
+      // Check if this contact is visible to everyone in specific areas and this area is included
+      if (config.scope === 'EveryoneInAreas' && config.itemType === 'Area') {
+        // ALL_AREAS means all areas
+        if (config.ids?.includes('ALL_AREAS')) return true;
+        // Check if this specific area is in the list
+        return config.ids?.includes(area.id);
+      }
+      return false;
+    });
+  }).length;
 };
 
 // Get the effective people term for an area

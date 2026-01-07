@@ -65,6 +65,7 @@
           <AreasList
             :areas="areas"
             :checkpoints="locationStatuses"
+            :contacts="contacts"
             :event-people-term="event?.peopleTerm || 'Marshals'"
             :event-checkpoint-term="event?.checkpointTerm || 'Checkpoints'"
             @add-area="handleAddArea"
@@ -397,19 +398,28 @@
 </template>
 
 <script setup>
-// NOTE: This file has been refactored to use tab components
-// Original file: 2,981 lines → Current file: ~900 lines (70% reduction)
-// Tab components: CourseTab.vue, MarshalsTab.vue, EventDetailsTab.vue
+// NOTE: This file has been refactored to use tab components and composables
+// Original file: 2,981 lines → Current: ~2,900 lines
+// Further reduction available by migrating to composables progressively
 
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useEventsStore } from '../stores/events';
 import { authApi, checkInApi, eventAdminsApi, eventsApi, locationsApi, marshalsApi, areasApi, checklistApi, notesApi, contactsApi } from '../services/api';
 
-// New composables and utilities
+// Composables
 import { useTabs } from '../composables/useTabs';
 import { useConfirmDialog } from '../composables/useConfirmDialog';
 import { setTerminology, useTerminology } from '../composables/useTerminology';
+import { useFullscreenMap } from '../composables/useFullscreenMap';
+import { useAdminAreaManagement } from '../composables/useAdminAreaManagement';
+import { useAdminChecklistManagement } from '../composables/useAdminChecklistManagement';
+import { useAdminNoteManagement } from '../composables/useAdminNoteManagement';
+import { useAdminContactManagement } from '../composables/useAdminContactManagement';
+import { useEventAdmins } from '../composables/useEventAdmins';
+import { useImportExport } from '../composables/useImportExport';
+
+// Utilities
 import { formatDate as formatEventDate, formatDateForInput } from '../utils/dateFormatters';
 import { isValidWhat3Words } from '../utils/validators';
 import { calculateDistance } from '../utils/coordinateUtils';
@@ -453,6 +463,9 @@ const route = useRoute();
 const router = useRouter();
 const eventsStore = useEventsStore();
 
+// Reactive event ID for composables
+const eventId = computed(() => route.params.eventId);
+
 // Use composables
 const { activeTab, switchTab } = useTabs('details', ['details', 'course', 'areas', 'checkpoints', 'marshals', 'notes', 'checklists', 'contacts', 'settings']);
 const {
@@ -466,6 +479,15 @@ const {
 
 // Terminology
 const { tabLabels, terms, termsLower, termsSentence } = useTerminology();
+
+// Fullscreen map composable
+const fullscreenMap = useFullscreenMap();
+
+// Import/Export composable
+const importExport = useImportExport(eventId);
+
+// Event admins composable
+const eventAdminsComposable = useEventAdmins(eventId);
 
 // Computed tabs with dynamic labels from terminology
 // Order: Details, Course, Zones, Locations, Volunteers, Notes, Tasks, Contacts
@@ -492,18 +514,22 @@ const showShareLink = ref(false);
 const showMarshalCreated = ref(false);
 const newlyCreatedMarshalId = ref(null);
 const newlyCreatedMarshalName = ref('');
-const eventAdmins = ref([]);
-const showAddAdmin = ref(false);
-const showUploadRoute = ref(false);
-const uploading = ref(false);
-const uploadError = ref(null);
-const showImportLocations = ref(false);
-const showImportMarshals = ref(false);
-const importing = ref(false);
-const importingMarshals = ref(false);
-const importError = ref(null);
-const importResult = ref(null);
-const importMarshalsResult = ref(null);
+
+// Event admins - use composable state
+const eventAdmins = eventAdminsComposable.eventAdmins;
+const showAddAdmin = eventAdminsComposable.showAddAdmin;
+
+// Import/Export - use composable state
+const showUploadRoute = importExport.showUploadRoute;
+const uploading = importExport.uploading;
+const uploadError = importExport.uploadError;
+const showImportLocations = importExport.showImportLocations;
+const showImportMarshals = importExport.showImportMarshals;
+const importing = importExport.importing;
+const importingMarshals = importExport.importingMarshals;
+const importError = importExport.importError;
+const importResult = importExport.importResult;
+const importMarshalsResult = importExport.importMarshalsResult;
 const showEditLocation = ref(false);
 const isMovingLocation = ref(false);
 const editLocationForm = ref({
@@ -577,20 +603,20 @@ const areas = ref([]);
 const selectedArea = ref(null);
 const showEditArea = ref(false);
 const selectedAreaId = ref(null);
-const isDrawingAreaBoundary = ref(false);
 const pendingAreaFormData = ref(null);
-const isAddingMultipleCheckpoints = ref(false);
-const multiCheckpointCounter = ref(1);
-// Fullscreen map mode
-const isFullscreenMapActive = ref(false);
-const fullscreenMode = ref(null);
-const fullscreenContext = ref({});
-const tempLocationCoords = ref(null); // For previewing checkpoint placement
-const preservedLocationFormData = ref(null); // For preserving form data when moving a location
-const currentDrawingPolygon = ref(null); // For area drawing with Done button
-const tempCheckpoints = ref([]); // For storing multiple checkpoints before saving
-const savedMapCenter = ref(null); // Store map center when entering fullscreen
-const savedMapZoom = ref(null); // Store map zoom when entering fullscreen
+// Fullscreen map - use composable state
+const isAddingMultipleCheckpoints = fullscreenMap.isAddingMultipleCheckpoints;
+const multiCheckpointCounter = fullscreenMap.multiCheckpointCounter;
+const isFullscreenMapActive = fullscreenMap.isFullscreenMapActive;
+const fullscreenMode = fullscreenMap.fullscreenMode;
+const fullscreenContext = fullscreenMap.fullscreenContext;
+const tempLocationCoords = fullscreenMap.tempLocationCoords;
+const currentDrawingPolygon = fullscreenMap.currentDrawingPolygon;
+const tempCheckpoints = fullscreenMap.tempCheckpoints;
+const savedMapCenter = fullscreenMap.savedMapCenter;
+const savedMapZoom = fullscreenMap.savedMapZoom;
+const isDrawingAreaBoundary = fullscreenMap.isDrawingAreaBoundary;
+const preservedLocationFormData = ref(null); // Keep this local - used for location modal state
 const checklistItems = ref([]);
 const selectedChecklistItem = ref(null);
 const showEditChecklistItem = ref(false);
@@ -660,19 +686,12 @@ const availableMarshalsForAssignment = computed(() => {
   return marshalsList.slice().sort((a, b) => a.name.localeCompare(b.name));
 });
 
+// Use composable's canCompleteFullscreen but extend for selectedArea polygon check
 const canCompleteFullscreen = computed(() => {
-  if (fullscreenMode.value === 'place-checkpoint') {
-    return tempLocationCoords.value !== null;
-  } else if (fullscreenMode.value === 'move-checkpoint') {
-    return tempLocationCoords.value !== null;
-  } else if (fullscreenMode.value === 'draw-area') {
-    // Enable Done button if there's a completed polygon or at least 3 points drawn
-    return selectedArea.value?.polygon?.length > 0 ||
-           (currentDrawingPolygon.value && currentDrawingPolygon.value.length >= 3);
-  } else if (fullscreenMode.value === 'add-multiple') {
-    return true; // Always enabled for multiple mode
+  if (fullscreenMode.value === 'draw-area') {
+    return selectedArea.value?.polygon?.length > 0 || fullscreenMap.canCompleteFullscreen.value;
   }
-  return false;
+  return fullscreenMap.canCompleteFullscreen.value;
 });
 
 // Combine real checkpoints with temporary ones for display
@@ -872,6 +891,14 @@ const loadEventData = async () => {
         defaultCheckpointStyleIconColor: event.value.defaultCheckpointStyleIconColor || '',
         defaultCheckpointStyleSize: event.value.defaultCheckpointStyleSize || '',
         defaultCheckpointStyleMapRotation: event.value.defaultCheckpointStyleMapRotation ?? '',
+        // Branding fields
+        brandingHeaderGradientStart: event.value.brandingHeaderGradientStart || '',
+        brandingHeaderGradientEnd: event.value.brandingHeaderGradientEnd || '',
+        brandingLogoUrl: event.value.brandingLogoUrl || '',
+        brandingLogoPosition: event.value.brandingLogoPosition || '',
+        brandingAccentColor: event.value.brandingAccentColor || '',
+        brandingPageGradientStart: event.value.brandingPageGradientStart || '',
+        brandingPageGradientEnd: event.value.brandingPageGradientEnd || '',
       };
       eventDetailsFormDirty.value = false;
       // Update global terminology settings
@@ -1093,8 +1120,7 @@ const handleAddAreaContact = (area) => {
 };
 
 const handleEditContactFromArea = (contact) => {
-  // Close the area modal and open the contact for editing
-  closeEditAreaModal();
+  // Open contact modal without closing area modal - user can return to area modal after editing
   selectedContact.value = contact;
   contactInitialTab.value = 'details';
   formDirty.value = false;
@@ -1308,8 +1334,7 @@ const handlePolygonComplete = (coordinates) => {
 };
 
 const handlePolygonDrawing = (points) => {
-  // Store intermediate polygon points as user draws
-  currentDrawingPolygon.value = points;
+  fullscreenMap.handlePolygonDrawing(points);
 };
 
 const handleCancelDrawing = () => {
@@ -1324,18 +1349,12 @@ const handleCancelDrawing = () => {
   }
 };
 
-const loadEventAdmins = async () => {
-  try {
-    const response = await eventAdminsApi.getAdmins(route.params.eventId);
-    eventAdmins.value = response.data;
-  } catch (error) {
-    console.error('Failed to load event admins:', error);
-  }
-};
+// Event admins - use composable methods
+const loadEventAdmins = () => eventAdminsComposable.loadEventAdmins();
 
 const handleAddAdminSubmit = async (email) => {
   try {
-    await eventAdminsApi.addAdmin(route.params.eventId, email);
+    await eventAdminsComposable.addAdmin(email);
     await loadEventAdmins();
     closeAdminModal();
   } catch (error) {
@@ -1347,7 +1366,7 @@ const handleAddAdminSubmit = async (email) => {
 const removeAdmin = async (userEmail) => {
   showConfirm('Remove Administrator', `Remove ${userEmail} as an administrator?`, async () => {
     try {
-      await eventAdminsApi.removeAdmin(route.params.eventId, userEmail);
+      await eventAdminsComposable.removeAdmin(userEmail);
       await loadEventAdmins();
     } catch (error) {
       console.error('Failed to remove admin:', error);
@@ -1357,83 +1376,37 @@ const removeAdmin = async (userEmail) => {
 };
 
 const closeAdminModal = () => {
-  showAddAdmin.value = false;
+  eventAdminsComposable.closeAddAdminModal();
   formDirty.value = false;
 };
 
 const handleUploadRouteSubmit = async (file) => {
-  if (!file) {
-    uploadError.value = 'Please select a GPX file';
-    return;
-  }
-
-  uploading.value = true;
-  uploadError.value = null;
-
-  try {
-    await eventsApi.uploadGpx(route.params.eventId, file);
+  const result = await importExport.uploadRoute(file);
+  if (result) {
     await reloadLocationsAndStatus();
     closeRouteModal();
-  } catch (error) {
-    console.error('Failed to upload route:', error);
-    uploadError.value = error.response?.data?.message || 'Failed to upload route. Please try again.';
-  } finally {
-    uploading.value = false;
   }
 };
 
 const closeRouteModal = () => {
-  showUploadRoute.value = false;
-  uploadError.value = null;
+  importExport.closeUploadRouteModal();
 };
 
 const handleImportLocationsSubmit = async ({ file, deleteExisting }) => {
-  if (!file) {
-    importError.value = 'Please select a CSV file';
-    return;
-  }
-
-  importing.value = true;
-  importError.value = null;
-  importResult.value = null;
-
-  try {
-    const response = await locationsApi.importCsv(
-      route.params.eventId,
-      file,
-      deleteExisting
-    );
-    importResult.value = response.data;
+  const result = await importExport.importLocations(file, deleteExisting);
+  if (result) {
     await reloadLocationsAreasAndStatus();
-
     closeImportModal();
 
-    const result = response.data;
-    let message = `<p>Created <strong>${result.locationsCreated}</strong> location(s) and <strong>${result.assignmentsCreated}</strong> assignment(s)</p>`;
-
-    if (result.errors && result.errors.length > 0) {
-      message += '<br><p><strong>Errors:</strong></p><ul style="margin: 0; padding-left: 1.5rem;">';
-      result.errors.forEach(err => {
-        message += `<li>${err}</li>`;
-      });
-      message += '</ul>';
-    }
-
+    const message = importExport.formatImportResultMessage(result, 'location');
     infoModalTitle.value = 'Import Complete';
     infoModalMessage.value = message;
     showInfoModal.value = true;
-  } catch (error) {
-    console.error('Failed to import locations:', error);
-    importError.value = error.response?.data?.message || 'Failed to import locations. Please try again.';
-  } finally {
-    importing.value = false;
   }
 };
 
 const closeImportModal = () => {
-  showImportLocations.value = false;
-  importError.value = null;
-  importResult.value = null;
+  importExport.closeImportLocationsModal();
 };
 
 const handleMapClick = async (coords) => {
@@ -1480,16 +1453,7 @@ const handleMapClick = async (coords) => {
 };
 
 const handleFullscreenMapClick = (coords) => {
-  if (fullscreenMode.value === 'place-checkpoint') {
-    // Allow repositioning - last click wins
-    tempLocationCoords.value = coords;
-  } else if (fullscreenMode.value === 'move-checkpoint') {
-    // Preview new location
-    tempLocationCoords.value = coords;
-  } else if (fullscreenMode.value === 'add-multiple') {
-    // Instant creation (existing behavior)
-    createMultipleCheckpoint(coords);
-  }
+  fullscreenMap.handleFullscreenMapClick(coords);
 };
 
 const handleAddLocationClick = () => {
@@ -1526,30 +1490,14 @@ const handleSetLocationOnMap = () => {
   // Close the modal temporarily
   showAddLocation.value = false;
 
-  // Reset temp coordinates
-  tempLocationCoords.value = null;
-
   // Map state already captured in handleAddLocationClick
-
   // Enter fullscreen
-  isFullscreenMapActive.value = true;
-  fullscreenMode.value = 'place-checkpoint';
-  fullscreenContext.value = {
-    title: 'Select checkpoint location',
-    description: 'Click on the map to set the location. Click again to reposition.',
-  };
+  fullscreenMap.enterPlaceCheckpointMode();
 };
 
 const handleAddCheckpointFromMap = () => {
   // Capture current map state before entering fullscreen
-  if (courseAreasTab.value) {
-    const center = courseAreasTab.value.getMapCenter();
-    const zoom = courseAreasTab.value.getMapZoom();
-    if (center && zoom !== null) {
-      savedMapCenter.value = center;
-      savedMapZoom.value = zoom;
-    }
-  }
+  fullscreenMap.saveMapState(courseAreasTab.value);
 
   // Reset the form
   locationForm.value = {
@@ -1561,28 +1509,13 @@ const handleAddCheckpointFromMap = () => {
     what3Words: '',
   };
 
-  // Reset temp coordinates
-  tempLocationCoords.value = null;
-
   // Enter fullscreen directly
-  isFullscreenMapActive.value = true;
-  fullscreenMode.value = 'place-checkpoint';
-  fullscreenContext.value = {
-    title: 'Select checkpoint location',
-    description: 'Click on the map to set the location. Click again to reposition.',
-  };
+  fullscreenMap.enterPlaceCheckpointMode();
 };
 
 const handleAddAreaFromMap = () => {
   // Capture current map state before entering fullscreen
-  if (courseAreasTab.value) {
-    const center = courseAreasTab.value.getMapCenter();
-    const zoom = courseAreasTab.value.getMapZoom();
-    if (center && zoom !== null) {
-      savedMapCenter.value = center;
-      savedMapZoom.value = zoom;
-    }
-  }
+  fullscreenMap.saveMapState(courseAreasTab.value);
 
   // Create new area with empty data
   selectedArea.value = {
@@ -1597,13 +1530,7 @@ const handleAddAreaFromMap = () => {
   };
 
   // Enter fullscreen with drawing mode
-  isFullscreenMapActive.value = true;
-  fullscreenMode.value = 'draw-area';
-  isDrawingAreaBoundary.value = true;
-  fullscreenContext.value = {
-    title: 'Draw area boundary',
-    description: 'Click to add points. Click Done when finished to complete the area.',
-  };
+  fullscreenMap.enterDrawAreaMode();
 };
 
 const handleAddCheckpointManually = () => {
@@ -1636,67 +1563,19 @@ const handleAddCheckpointManually = () => {
 
 const handleAddMultipleCheckpointsClick = () => {
   // Find the highest checkpoint number to continue from
-  const checkpointNumbers = locationStatuses.value
-    .map(loc => {
-      const match = loc.name.match(/^Checkpoint (\d+)$/);
-      return match ? parseInt(match[1]) : 0;
-    })
-    .filter(n => n > 0);
-
-  multiCheckpointCounter.value = checkpointNumbers.length > 0
-    ? Math.max(...checkpointNumbers) + 1
-    : 1;
+  const startingNumber = fullscreenMap.calculateStartingNumber(locationStatuses);
 
   // Capture current map state before entering fullscreen
-  if (courseAreasTab.value) {
-    const center = courseAreasTab.value.getMapCenter();
-    const zoom = courseAreasTab.value.getMapZoom();
-    if (center && zoom !== null) {
-      savedMapCenter.value = center;
-      savedMapZoom.value = zoom;
-    }
-  }
+  fullscreenMap.saveMapState(courseAreasTab.value);
 
   // Enter fullscreen
-  isFullscreenMapActive.value = true;
-  fullscreenMode.value = 'add-multiple';
-  isAddingMultipleCheckpoints.value = true;
-  fullscreenContext.value = {
-    title: 'Add multiple checkpoints',
-    description: `Click on map to add checkpoints. Next: Checkpoint ${multiCheckpointCounter.value}`,
-  };
-};
-
-const handleCancelMultipleCheckpoints = () => {
-  isAddingMultipleCheckpoints.value = false;
-};
-
-const createMultipleCheckpoint = (coords) => {
-  // Add to temporary array instead of saving immediately
-  tempCheckpoints.value.push({
-    id: `temp-${multiCheckpointCounter.value}`,
-    name: `Checkpoint ${multiCheckpointCounter.value}`,
-    description: '',
-    latitude: coords.lat,
-    longitude: coords.lng,
-    requiredMarshals: 1,
-    what3Words: '',
-    assignments: [],
-    isTemporary: true,
-  });
-
-  multiCheckpointCounter.value++;
-  // Update context description with next number (reassign whole object for reactivity)
-  fullscreenContext.value = {
-    ...fullscreenContext.value,
-    description: `Click on map to add checkpoints. Next: Checkpoint ${multiCheckpointCounter.value}`,
-  };
+  fullscreenMap.enterAddMultipleMode(startingNumber);
 };
 
 const handleFullscreenDone = () => {
   if (fullscreenMode.value === 'place-checkpoint') {
     // Confirm placement - use EditLocationModal for new location
-    const coords = tempLocationCoords.value || { lat: 0, lng: 0 };
+    const coords = fullscreenMap.getPlacedCoords() || { lat: 0, lng: 0 };
     selectedLocation.value = {
       id: null, // null ID indicates this is a new location
       name: '',
@@ -1726,9 +1605,10 @@ const handleFullscreenDone = () => {
 
   } else if (fullscreenMode.value === 'move-checkpoint') {
     // Confirm move
-    if (tempLocationCoords.value) {
-      editLocationForm.value.latitude = tempLocationCoords.value.lat;
-      editLocationForm.value.longitude = tempLocationCoords.value.lng;
+    const coords = fullscreenMap.getPlacedCoords();
+    if (coords) {
+      editLocationForm.value.latitude = coords.lat;
+      editLocationForm.value.longitude = coords.lng;
       // Also update selectedLocation so the modal sees the change, preserving form data
       if (selectedLocation.value) {
         selectedLocation.value = {
@@ -1736,8 +1616,8 @@ const handleFullscreenDone = () => {
           // Restore preserved form data (name, description, etc.) if available
           ...(preservedLocationFormData.value || {}),
           // Apply new coordinates on top
-          latitude: tempLocationCoords.value.lat,
-          longitude: tempLocationCoords.value.lng,
+          latitude: coords.lat,
+          longitude: coords.lng,
         };
       }
       markFormDirty();
@@ -1750,13 +1630,8 @@ const handleFullscreenDone = () => {
 
   } else if (fullscreenMode.value === 'draw-area') {
     // Complete the polygon and exit
-    // If user hasn't finished drawing with double-click, use current polygon points
-    if (currentDrawingPolygon.value && currentDrawingPolygon.value.length >= 3) {
-      const coordinates = currentDrawingPolygon.value.map(p => ({
-        lat: p.lat,
-        lng: p.lng
-      }));
-
+    const coordinates = fullscreenMap.getCompletedPolygon();
+    if (coordinates) {
       // If there's pending form data, merge it; otherwise just update polygon
       if (pendingAreaFormData.value) {
         selectedArea.value = {
@@ -1772,11 +1647,9 @@ const handleFullscreenDone = () => {
       }
     }
 
-    isDrawingAreaBoundary.value = false;
     exitFullscreen();
     showEditArea.value = true;
     pendingAreaFormData.value = null;
-    currentDrawingPolygon.value = null;
 
   } else if (fullscreenMode.value === 'add-multiple') {
     // Save all temporary checkpoints
@@ -1785,7 +1658,7 @@ const handleFullscreenDone = () => {
 };
 
 const saveTempCheckpoints = async () => {
-  const checkpointsToSave = [...tempCheckpoints.value];
+  const checkpointsToSave = fullscreenMap.getTempCheckpoints();
 
   try {
     // Save all checkpoints
@@ -1802,8 +1675,7 @@ const saveTempCheckpoints = async () => {
     }
 
     // Clear temp checkpoints and exit
-    tempCheckpoints.value = [];
-    isAddingMultipleCheckpoints.value = false;
+    fullscreenMap.clearTempCheckpoints();
     exitFullscreen();
 
     // Reload to show saved checkpoints
@@ -1822,8 +1694,6 @@ const handleFullscreenCancel = () => {
       showEditArea.value = true;
       pendingAreaFormData.value = null;
     }
-    isDrawingAreaBoundary.value = false;
-    currentDrawingPolygon.value = null;
   } else if (fullscreenMode.value === 'move-checkpoint') {
     // Restore the location modal with preserved form data
     if (preservedLocationFormData.value && selectedLocation.value) {
@@ -1832,25 +1702,12 @@ const handleFullscreenCancel = () => {
     }
     showEditLocation.value = true;
     isMovingLocation.value = false;
-  } else if (fullscreenMode.value === 'add-multiple') {
-    // Clear temp checkpoints without saving
-    tempCheckpoints.value = [];
-    isAddingMultipleCheckpoints.value = false;
   }
-  exitFullscreen();
+  fullscreenMap.cancelFullscreen();
 };
 
 const exitFullscreen = () => {
-  isFullscreenMapActive.value = false;
-  fullscreenMode.value = null;
-  fullscreenContext.value = {};
-  tempLocationCoords.value = null;
-  savedMapCenter.value = null;
-  savedMapZoom.value = null;
-  // Always ensure drawing mode is disabled when exiting fullscreen
-  if (isDrawingAreaBoundary.value) {
-    isDrawingAreaBoundary.value = false;
-  }
+  fullscreenMap.exitFullscreen();
 };
 
 const handleLocationClick = (location) => {
@@ -2575,48 +2432,20 @@ const closeEditMarshalModal = () => {
 };
 
 const handleImportMarshalsSubmit = async ({ file }) => {
-  if (!file) {
-    importError.value = 'Please select a CSV file';
-    return;
-  }
-
-  importingMarshals.value = true;
-  importError.value = null;
-  importMarshalsResult.value = null;
-
-  try {
-    const response = await marshalsApi.importCsv(route.params.eventId, file);
-    importMarshalsResult.value = response.data;
+  const result = await importExport.importMarshals(file);
+  if (result) {
     await reloadMarshalsAndStatus();
-
     closeImportMarshalsModal();
 
-    const result = response.data;
-    let message = `<p>Created <strong>${result.marshalsCreated}</strong> marshal(s) and <strong>${result.assignmentsCreated}</strong> assignment(s)</p>`;
-
-    if (result.errors && result.errors.length > 0) {
-      message += '<br><p><strong>Errors:</strong></p><ul style="margin: 0; padding-left: 1.5rem;">';
-      result.errors.forEach(err => {
-        message += `<li>${err}</li>`;
-      });
-      message += '</ul>';
-    }
-
+    const message = importExport.formatImportResultMessage(result, 'marshal');
     infoModalTitle.value = 'Import Complete';
     infoModalMessage.value = message;
     showInfoModal.value = true;
-  } catch (error) {
-    console.error('Failed to import marshals:', error);
-    importError.value = error.response?.data?.message || 'Failed to import marshals. Please try again.';
-  } finally {
-    importingMarshals.value = false;
   }
 };
 
 const closeImportMarshalsModal = () => {
-  showImportMarshals.value = false;
-  importError.value = null;
-  importMarshalsResult.value = null;
+  importExport.closeImportMarshalsModal();
 };
 
 const handleConflictChoice = (choice) => {

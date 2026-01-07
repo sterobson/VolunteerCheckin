@@ -113,7 +113,7 @@ function handleAuthError() {
     // Use hash check since app uses hash-based routing
     const currentHash = window.location.hash || '';
     if (!currentHash.includes('/login') && !currentHash.includes('/verify')) {
-      window.location.href = '/#/admin/login';
+      window.location.href = `${import.meta.env.BASE_URL}#/admin/login`;
     }
   }
 }
@@ -316,7 +316,6 @@ export const areasApi = {
   delete: (eventId, areaId) => api.delete(`/areas/${eventId}/${areaId}`),
   recalculate: (eventId) => api.post(`/areas/recalculate/${eventId}`),
   getCheckpoints: (eventId, areaId) => api.get(`/areas/${eventId}/${areaId}/locations`),
-  getAreaLeads: (eventId, areaId) => api.get(`/areas/${eventId}/${areaId}/leads`),
   getAreaLeadDashboard: (eventId) => api.get(`/events/${eventId}/area-lead-dashboard`),
 };
 

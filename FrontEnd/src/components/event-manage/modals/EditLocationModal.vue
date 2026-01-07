@@ -119,7 +119,7 @@
 
     <!-- Appearance Tab -->
     <div v-if="activeTab === 'appearance'" class="tab-content appearance-tab">
-      <!-- Icon style accordion -->
+      <!-- Marker style accordion -->
       <div class="accordion-item">
         <button
           type="button"
@@ -128,7 +128,7 @@
           @click="toggleSection('iconStyle')"
         >
           <div class="accordion-icon" v-html="accordionIconPreview"></div>
-          <span class="accordion-title">{{ effectiveCheckpointTermSingular }} icon style</span>
+          <span class="accordion-title">{{ effectiveCheckpointTermSingular }} marker style</span>
           <span class="accordion-arrow">{{ expandedSections.iconStyle ? '▲' : '▼' }}</span>
         </button>
         <div v-if="expandedSections.iconStyle" class="accordion-content">
@@ -153,7 +153,7 @@
             :inherited-size="inheritedStyle.size || ''"
             :inherited-map-rotation="inheritedStyle.mapRotation ?? ''"
             :default-label="defaultStyleLabel"
-            icon-label="Icon style"
+            icon-label="Marker style"
             level="checkpoint"
             :show-preview="true"
             @update:style-type="handleStyleInput('styleType', $event)"

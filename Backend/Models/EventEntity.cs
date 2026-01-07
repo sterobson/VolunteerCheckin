@@ -38,4 +38,19 @@ public class EventEntity : ITableEntity
     public string DefaultCheckpointStyleIconColor { get; set; } = string.Empty; // Hex color for icon content (empty = white)
     public string DefaultCheckpointStyleSize { get; set; } = string.Empty; // 33, 66, 100, 150 (percentage)
     public string DefaultCheckpointStyleMapRotation { get; set; } = string.Empty; // Rotation in degrees (-180 to 180)
+
+    // Marshal mode branding - header gradient
+    public string BrandingHeaderGradientStart { get; set; } = string.Empty; // Hex color, default #667eea
+    public string BrandingHeaderGradientEnd { get; set; } = string.Empty;   // Hex color, default #764ba2
+
+    // Marshal mode branding - logo
+    public string BrandingLogoUrl { get; set; } = string.Empty; // URL to uploaded logo image
+    public string BrandingLogoPosition { get; set; } = string.Empty; // "left", "right", or "cover" (empty = left)
+
+    // Marshal mode branding - accent color for primary buttons (GPS Check-In, etc.)
+    public string BrandingAccentColor { get; set; } = string.Empty; // Hex color, default #667eea
+
+    // Marshal mode branding - page background gradient
+    public string BrandingPageGradientStart { get; set; } = string.Empty; // Hex color, default #667eea
+    public string BrandingPageGradientEnd { get; set; } = string.Empty;   // Hex color, default #764ba2
 }

@@ -13,15 +13,21 @@ public class ChecklistContextHelper
     private readonly IAssignmentRepository _assignmentRepository;
     private readonly ILocationRepository _locationRepository;
     private readonly IAreaRepository _areaRepository;
+    private readonly IEventRoleRepository _eventRoleRepository;
+    private readonly IMarshalRepository _marshalRepository;
 
     public ChecklistContextHelper(
         IAssignmentRepository assignmentRepository,
         ILocationRepository locationRepository,
-        IAreaRepository areaRepository)
+        IAreaRepository areaRepository,
+        IEventRoleRepository eventRoleRepository,
+        IMarshalRepository marshalRepository)
     {
         _assignmentRepository = assignmentRepository;
         _locationRepository = locationRepository;
         _areaRepository = areaRepository;
+        _eventRoleRepository = eventRoleRepository;
+        _marshalRepository = marshalRepository;
     }
 
     /// <summary>
@@ -31,7 +37,8 @@ public class ChecklistContextHelper
     public record PreloadedEventData(
         Dictionary<string, List<AssignmentEntity>> AssignmentsByMarshal,
         Dictionary<string, LocationEntity> LocationsById,
-        List<AreaEntity> Areas
+        List<AreaEntity> Areas,
+        Dictionary<string, List<string>> AreaLeadsByMarshalId
     );
 
     /// <summary>
@@ -51,16 +58,22 @@ public class ChecklistContextHelper
             .Distinct()
             .ToList();
 
-        // Get areas to check if marshal is an area lead
-        IEnumerable<AreaEntity> areas = await _areaRepository.GetByEventAsync(eventId);
-        List<string> areaLeadForAreaIds = areas
-            .Where(a =>
+        // Get area lead status from EventRoles
+        // First get the marshal to find their PersonId
+        MarshalEntity? marshal = await _marshalRepository.GetAsync(eventId, marshalId);
+        List<string> areaLeadForAreaIds = [];
+
+        if (marshal != null && !string.IsNullOrEmpty(marshal.PersonId))
+        {
+            // Get EventAreaLead roles for this person in this event
+            IEnumerable<EventRoleEntity> roles = await _eventRoleRepository.GetByPersonAndEventAsync(marshal.PersonId, eventId);
+            EventRoleEntity? areaLeadRole = roles.FirstOrDefault(r => r.Role == Constants.RoleEventAreaLead);
+
+            if (areaLeadRole != null)
             {
-                List<string> areaLeadIds = JsonSerializer.Deserialize<List<string>>(a.AreaLeadMarshalIdsJson) ?? [];
-                return areaLeadIds.Contains(marshalId);
-            })
-            .Select(a => a.RowKey)
-            .ToList();
+                areaLeadForAreaIds = JsonSerializer.Deserialize<List<string>>(areaLeadRole.AreaIdsJson) ?? [];
+            }
+        }
 
         return new ChecklistScopeHelper.MarshalContext(
             marshalId,
@@ -89,7 +102,22 @@ public class ChecklistContextHelper
         // Load all areas for event (single DB call)
         List<AreaEntity> areas = (await _areaRepository.GetByEventAsync(eventId)).ToList();
 
-        return new PreloadedEventData(assignmentsByMarshal, locationsById, areas);
+        // Load all marshals to build PersonId -> MarshalId lookup
+        IEnumerable<MarshalEntity> allMarshals = await _marshalRepository.GetByEventAsync(eventId);
+        Dictionary<string, string> marshalIdByPersonId = allMarshals
+            .Where(m => !string.IsNullOrEmpty(m.PersonId))
+            .ToDictionary(m => m.PersonId, m => m.MarshalId);
+
+        // Load EventAreaLead roles and build MarshalId -> AreaIds lookup
+        IEnumerable<EventRoleEntity> allRoles = await _eventRoleRepository.GetByEventAsync(eventId);
+        Dictionary<string, List<string>> areaLeadsByMarshalId = allRoles
+            .Where(r => r.Role == Constants.RoleEventAreaLead && marshalIdByPersonId.ContainsKey(r.PersonId))
+            .ToDictionary(
+                r => marshalIdByPersonId[r.PersonId],
+                r => JsonSerializer.Deserialize<List<string>>(r.AreaIdsJson) ?? []
+            );
+
+        return new PreloadedEventData(assignmentsByMarshal, locationsById, areas, areaLeadsByMarshalId);
     }
 
     /// <summary>
@@ -114,15 +142,8 @@ public class ChecklistContextHelper
             .Distinct()
             .ToList();
 
-        // Check if marshal is area lead for any areas
-        List<string> areaLeadForAreaIds = preloaded.Areas
-            .Where(a =>
-            {
-                List<string> areaLeadIds = JsonSerializer.Deserialize<List<string>>(a.AreaLeadMarshalIdsJson) ?? [];
-                return areaLeadIds.Contains(marshalId);
-            })
-            .Select(a => a.RowKey)
-            .ToList();
+        // Get area lead status from preloaded EventRoles data
+        List<string> areaLeadForAreaIds = preloaded.AreaLeadsByMarshalId.GetValueOrDefault(marshalId, []);
 
         return new ChecklistScopeHelper.MarshalContext(
             marshalId,
@@ -199,6 +220,7 @@ public class ChecklistContextHelper
         bool isCompleted;
         string? actorName = null;
         string? actorType = null;
+        string? actorId = null;
         DateTime? completedAt = null;
 
         if (ChecklistScopeHelper.IsPersonalScope(matchedScope))
@@ -211,6 +233,7 @@ public class ChecklistContextHelper
             isCompleted = completion != null;
             actorName = completion?.ActorName;
             actorType = completion?.ActorType;
+            actorId = completion?.ActorId;
             completedAt = completion?.CompletedAt;
         }
         else
@@ -225,6 +248,7 @@ public class ChecklistContextHelper
             isCompleted = completion != null;
             actorName = completion?.ActorName;
             actorType = completion?.ActorType;
+            actorId = completion?.ActorId;
             completedAt = completion?.CompletedAt;
         }
 
@@ -244,6 +268,7 @@ public class ChecklistContextHelper
             canComplete,
             actorName,
             actorType,
+            actorId,
             completedAt,
             contextType,
             contextId,

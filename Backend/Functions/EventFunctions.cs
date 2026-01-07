@@ -216,6 +216,14 @@ public class EventFunctions
             if (request.DefaultCheckpointStyleIconColor != null) eventEntity.DefaultCheckpointStyleIconColor = request.DefaultCheckpointStyleIconColor;
             if (request.DefaultCheckpointStyleSize != null) eventEntity.DefaultCheckpointStyleSize = request.DefaultCheckpointStyleSize;
             if (request.DefaultCheckpointStyleMapRotation != null) eventEntity.DefaultCheckpointStyleMapRotation = request.DefaultCheckpointStyleMapRotation;
+            // Marshal mode branding
+            if (request.BrandingHeaderGradientStart != null) eventEntity.BrandingHeaderGradientStart = request.BrandingHeaderGradientStart;
+            if (request.BrandingHeaderGradientEnd != null) eventEntity.BrandingHeaderGradientEnd = request.BrandingHeaderGradientEnd;
+            if (request.BrandingLogoUrl != null) eventEntity.BrandingLogoUrl = request.BrandingLogoUrl;
+            if (request.BrandingLogoPosition != null) eventEntity.BrandingLogoPosition = request.BrandingLogoPosition;
+            if (request.BrandingAccentColor != null) eventEntity.BrandingAccentColor = request.BrandingAccentColor;
+            if (request.BrandingPageGradientStart != null) eventEntity.BrandingPageGradientStart = request.BrandingPageGradientStart;
+            if (request.BrandingPageGradientEnd != null) eventEntity.BrandingPageGradientEnd = request.BrandingPageGradientEnd;
 
             await _eventRepository.UpdateAsync(eventEntity);
 

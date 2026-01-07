@@ -1,22 +1,39 @@
 <template>
-  <div class="marshal-view">
+  <div class="marshal-view" :style="pageBackgroundStyle">
     <!-- Offline Indicator -->
     <OfflineIndicator />
 
-    <header class="header">
-      <div class="header-title">
-        <h1 v-if="event">{{ event.name }}</h1>
-        <div v-if="event?.eventDate" class="header-event-date">
-          {{ formatEventDate(event.eventDate) }}
+    <header class="header" :class="`logo-${brandingLogoPosition}`" :style="headerStyle">
+      <!-- Cover logo background -->
+      <div v-if="brandingLogoUrl && brandingLogoPosition === 'cover'" class="header-logo-cover">
+        <img :src="brandingLogoUrl" alt="Event logo" class="header-logo-cover-img" />
+      </div>
+
+      <!-- Left logo -->
+      <div v-if="brandingLogoUrl && brandingLogoPosition === 'left'" class="header-logo header-logo-left">
+        <img :src="brandingLogoUrl" alt="Event logo" class="header-logo-img" />
+      </div>
+
+      <div class="header-center">
+        <div class="header-title" :style="{ color: headerTextColor }">
+          <h1 v-if="event">{{ event.name }}</h1>
+          <div v-if="event?.eventDate" class="header-event-date">
+            {{ formatEventDate(event.eventDate) }}
+          </div>
+        </div>
+        <div class="header-actions">
+          <button v-if="isAuthenticated" @click="showEmergency = true" class="btn-emergency">
+            Emergency Info
+          </button>
+          <button v-if="isAuthenticated" @click="handleLogout" class="btn-logout" :style="{ color: headerTextColor }">
+            Logout {{ currentPerson?.name || '' }}
+          </button>
         </div>
       </div>
-      <div class="header-actions">
-        <button v-if="isAuthenticated" @click="showEmergency = true" class="btn-emergency">
-          Emergency Info
-        </button>
-        <button v-if="isAuthenticated" @click="handleLogout" class="btn-logout">
-          Logout {{ currentPerson?.name || '' }}
-        </button>
+
+      <!-- Right logo -->
+      <div v-if="brandingLogoUrl && brandingLogoPosition === 'right'" class="header-logo header-logo-right">
+        <img :src="brandingLogoUrl" alt="Event logo" class="header-logo-img" />
       </div>
     </header>
 
@@ -82,19 +99,26 @@
                 <span>Click on the map to set the new location for <strong>{{ updatingLocationFor?.location?.name }}</strong></span>
                 <button @click="cancelMapLocationSelect" class="btn btn-secondary btn-sm">Cancel</button>
               </div>
-              <MapView
-                :locations="allLocations"
-                :route="eventRoute"
-                :center="mapCenter"
-                :zoom="15"
-                :user-location="userLocation"
-                :highlight-location-ids="assignmentLocationIds"
-                :marshal-mode="true"
-                :clickable="selectingLocationOnMap || hasDynamicAssignment"
-                :class="{ 'selecting-location': selectingLocationOnMap }"
-                @map-click="handleMapClick"
-                @location-click="handleLocationClick"
-              />
+              <div class="map-wrapper">
+                <MapView
+                  :locations="allLocations"
+                  :route="eventRoute"
+                  :center="mapCenter"
+                  :zoom="15"
+                  :user-location="userLocation"
+                  :highlight-location-ids="assignmentLocationIds"
+                  :marshal-mode="true"
+                  :clickable="selectingLocationOnMap || hasDynamicAssignment"
+                  :class="{ 'selecting-location': selectingLocationOnMap }"
+                  @map-click="handleMapClick"
+                  @location-click="handleLocationClick"
+                />
+                <button class="fullscreen-btn" @click="openFullscreenMap('course')" title="Full screen">
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                    <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -119,13 +143,13 @@
                 <div v-for="assign in assignmentsWithDetails" :key="assign.id" class="checkpoint-accordion-section">
                   <button
                     class="checkpoint-accordion-header"
-                    :class="{ active: expandedCheckpoint === assign.id, 'checked-in': assign.isCheckedIn }"
+                    :class="{ active: expandedCheckpoint === assign.id, 'checked-in': assign.effectiveIsCheckedIn }"
                     @click="toggleCheckpoint(assign.id)"
                   >
                     <div class="checkpoint-header-content">
                       <div class="checkpoint-title-row">
                         <span class="checkpoint-icon" v-html="getCheckpointIconSvg(assign.location)"></span>
-                        <span v-if="assign.isCheckedIn" class="checkpoint-check-icon">✓</span>
+                        <span v-if="assign.effectiveIsCheckedIn" class="checkpoint-check-icon">✓</span>
                         <span class="checkpoint-name">{{ assign.location?.name || assign.locationName }}</span>
                         <span v-if="assign.areaName" class="area-badge">{{ assign.areaName }}</span>
                         <span v-if="assign.location?.startTime || assign.location?.endTime" class="checkpoint-time-badge">
@@ -154,6 +178,11 @@
                         @map-click="handleMapClick"
                         @location-click="handleLocationClick"
                       />
+                      <button class="fullscreen-btn" @click="openFullscreenMap(assign.id, assign)" title="Full screen">
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+                          <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                        </svg>
+                      </button>
                     </div>
 
                     <!-- Marshals on this checkpoint -->
@@ -164,10 +193,10 @@
                           v-for="m in assign.allMarshals"
                           :key="m.marshalId"
                           class="marshal-tag"
-                          :class="{ 'is-you': m.marshalId === currentMarshalId, 'checked-in': m.isCheckedIn }"
+                          :class="{ 'is-you': m.marshalId === currentMarshalId, 'checked-in': m.effectiveIsCheckedIn }"
                         >
                           {{ m.marshalName }}{{ m.marshalId === currentMarshalId ? ' (you)' : '' }}
-                          <span v-if="m.isCheckedIn" class="check-badge">✓</span>
+                          <span v-if="m.effectiveIsCheckedIn" class="check-badge">✓</span>
                         </span>
                       </div>
                     </div>
@@ -208,7 +237,7 @@
                     </div>
 
                     <!-- Check-in status and actions -->
-                    <div v-if="assign.isCheckedIn" class="checked-in-status">
+                    <div v-if="assign.effectiveIsCheckedIn" class="checked-in-status">
                       <span class="check-icon">✓</span>
                       <div>
                         <strong>Checked In</strong>
@@ -220,6 +249,7 @@
                         @click="handleCheckIn(assign)"
                         class="btn btn-primary"
                         :disabled="checkingIn === assign.id"
+                        :style="accentButtonStyle"
                       >
                         {{ checkingIn === assign.id ? 'Checking in...' : 'GPS Check-In' }}
                       </button>
@@ -293,7 +323,7 @@
               <div v-else class="checklist-items">
                 <div
                   v-for="item in visibleChecklistItems"
-                  :key="item.itemId"
+                  :key="`${item.itemId}_${item.completionContextType}_${item.completionContextId}`"
                   class="checklist-item"
                   :class="{ 'item-completed': item.isCompleted }"
                 >
@@ -484,6 +514,38 @@
       @cancel="handleConfirmModalCancel"
     />
 
+    <!-- Check-in Reminder Modal -->
+    <div v-if="showCheckInReminderModal && checkInReminderCheckpoint" class="modal-overlay" @click.self="dismissCheckInReminder(checkInReminderCheckpoint.id)">
+      <div class="modal-content check-in-reminder-modal">
+        <div class="modal-header warning">
+          <h3>Check-in reminder</h3>
+          <button class="modal-close" @click="dismissCheckInReminder(checkInReminderCheckpoint.id)">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="reminder-icon">⚠️</div>
+          <p class="reminder-message">
+            You have not checked in yet to {{ terms.checkpoint.toLowerCase() }}
+            <strong>{{ checkInReminderCheckpoint.location?.name }}</strong><span v-if="checkInReminderCheckpoint.location?.description"> - {{ checkInReminderCheckpoint.location.description }}</span>.
+          </p>
+          <p class="reminder-hint">
+            Please check in when you arrive at your {{ terms.checkpoint.toLowerCase() }}.
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button @click="dismissCheckInReminder(checkInReminderCheckpoint.id)" class="btn btn-secondary">
+            Dismiss
+          </button>
+          <button
+            @click="dismissCheckInReminder(checkInReminderCheckpoint.id); expandedSection = 'assignments'; expandedCheckpoint = checkInReminderCheckpoint.id"
+            class="btn btn-primary"
+            :style="accentButtonStyle"
+          >
+            Go to {{ terms.checkpoint }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Location Update Modal -->
     <div v-if="showLocationUpdateModal" class="modal-overlay" @click.self="closeLocationUpdateModal">
       <div class="modal-content location-update-modal">
@@ -520,6 +582,7 @@
                 @click="updateLocationWithGps"
                 class="btn btn-primary btn-full"
                 :disabled="updatingLocation"
+                :style="accentButtonStyle"
               >
                 <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
@@ -585,6 +648,85 @@
         </div>
       </div>
     </div>
+
+    <!-- Fullscreen Map Overlay -->
+    <div v-if="fullscreenMap" class="fullscreen-map-overlay">
+      <div class="fullscreen-map-header" :style="headerStyle">
+        <div class="fullscreen-map-title" :style="{ color: headerTextColor }">
+          <template v-if="fullscreenMap === 'course'">
+            {{ terms.course }}
+          </template>
+          <template v-else-if="fullscreenMapAssignment">
+            {{ fullscreenMapAssignment.location?.name }}
+          </template>
+        </div>
+        <button class="fullscreen-close-btn" :style="{ color: headerTextColor }" @click="closeFullscreenMap">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Map selection mode banner (in fullscreen) -->
+      <div v-if="selectingLocationOnMap" class="fullscreen-map-banner">
+        <span>Click on the map to set the new location for <strong>{{ updatingLocationFor?.location?.name }}</strong></span>
+        <button @click="cancelMapLocationSelect" class="btn btn-secondary btn-sm">Cancel</button>
+      </div>
+
+      <!-- Course Map Fullscreen -->
+      <div v-if="fullscreenMap === 'course'" class="fullscreen-map-container">
+        <MapView
+          :locations="allLocations"
+          :route="eventRoute"
+          :center="mapCenter"
+          :zoom="15"
+          :user-location="userLocation"
+          :highlight-location-ids="assignmentLocationIds"
+          :marshal-mode="true"
+          :clickable="selectingLocationOnMap || hasDynamicAssignment"
+          :class="{ 'selecting-location': selectingLocationOnMap }"
+          @map-click="handleMapClick"
+          @location-click="handleLocationClick"
+        />
+      </div>
+
+      <!-- Checkpoint Map Fullscreen -->
+      <div v-else-if="fullscreenMapAssignment?.location" class="fullscreen-map-container">
+        <MapView
+          :locations="allLocations"
+          :route="eventRoute"
+          :center="{ lat: fullscreenMapAssignment.location.latitude, lng: fullscreenMapAssignment.location.longitude }"
+          :zoom="16"
+          :user-location="userLocation"
+          :highlight-location-id="fullscreenMapAssignment.locationId"
+          :marshal-mode="true"
+          :simplify-non-highlighted="true"
+          :clickable="hasDynamicAssignment"
+          @map-click="handleMapClick"
+          @location-click="handleLocationClick"
+        />
+      </div>
+
+      <!-- Update Location Button (if applicable) -->
+      <div v-if="fullscreenMapAssignment?.location?.isDynamic || (fullscreenMap === 'course' && hasDynamicAssignment)" class="fullscreen-map-actions">
+        <button
+          v-if="fullscreenMapAssignment"
+          class="btn btn-primary"
+          :style="accentButtonStyle"
+          @click="openLocationUpdateModal(fullscreenMapAssignment)"
+        >
+          Update Location
+        </button>
+        <button
+          v-else-if="firstDynamicAssignment"
+          class="btn btn-primary"
+          :style="accentButtonStyle"
+          @click="openLocationUpdateModal(firstDynamicAssignment)"
+        >
+          Update {{ firstDynamicAssignment.location?.name }} Location
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -600,6 +742,7 @@ import NotesView from '../components/NotesView.vue';
 import OfflineIndicator from '../components/OfflineIndicator.vue';
 import { setTerminology, useTerminology } from '../composables/useTerminology';
 import { getIcon } from '../utils/icons';
+import { getContrastTextColor, getGradientContrastTextColor, DEFAULT_COLORS } from '../utils/colorContrast';
 import { generateCheckpointSvg } from '../constants/checkpointIcons';
 import { useOffline } from '../composables/useOffline';
 import { cacheEventData, getCachedEventData, updateCachedField } from '../services/offlineDb';
@@ -661,6 +804,41 @@ const assignments = ref([]);
 const areas = ref([]);
 const loading = ref(true);
 
+// Branding styles computed from event data
+const pageBackgroundStyle = computed(() => {
+  const start = event.value?.brandingPageGradientStart || DEFAULT_COLORS.pageGradientStart;
+  const end = event.value?.brandingPageGradientEnd || DEFAULT_COLORS.pageGradientEnd;
+  return { background: `linear-gradient(135deg, ${start} 0%, ${end} 100%)` };
+});
+
+const headerStyle = computed(() => {
+  const start = event.value?.brandingHeaderGradientStart || DEFAULT_COLORS.headerGradientStart;
+  const end = event.value?.brandingHeaderGradientEnd || DEFAULT_COLORS.headerGradientEnd;
+  return { background: `linear-gradient(135deg, ${start} 0%, ${end} 100%)` };
+});
+
+const headerTextColor = computed(() => {
+  const start = event.value?.brandingHeaderGradientStart || DEFAULT_COLORS.headerGradientStart;
+  const end = event.value?.brandingHeaderGradientEnd || DEFAULT_COLORS.headerGradientEnd;
+  return getGradientContrastTextColor(start, end);
+});
+
+const accentColor = computed(() => {
+  return event.value?.brandingAccentColor || DEFAULT_COLORS.accentColor;
+});
+
+const accentTextColor = computed(() => {
+  return getContrastTextColor(accentColor.value);
+});
+
+const accentButtonStyle = computed(() => ({
+  background: accentColor.value,
+  color: accentTextColor.value,
+}));
+
+const brandingLogoUrl = computed(() => event.value?.brandingLogoUrl || '');
+const brandingLogoPosition = computed(() => event.value?.brandingLogoPosition || 'left');
+
 // Accordion state
 const expandedSection = ref('assignments');
 
@@ -697,6 +875,24 @@ const showConfirmModal = ref(false);
 const confirmModalTitle = ref('');
 const confirmModalMessage = ref('');
 const confirmModalCallback = ref(null);
+
+// Check-in reminder modal state
+const showCheckInReminderModal = ref(false);
+const checkInReminderCheckpoint = ref(null);
+const dismissedCheckInReminders = ref(new Set());
+
+// Fullscreen map state
+const fullscreenMap = ref(null); // 'course' or assignment id
+const fullscreenMapAssignment = ref(null); // The assignment for checkpoint fullscreen
+
+// Helper to check if a check-in is stale (more than 24 hours old)
+const isCheckInStale = (checkInTime) => {
+  if (!checkInTime) return true;
+  const checkInDate = new Date(checkInTime);
+  const now = new Date();
+  const hoursDiff = (now - checkInDate) / (1000 * 60 * 60);
+  return hoursDiff > 24;
+};
 
 // GPS tracking
 const userLocation = ref(null);
@@ -735,13 +931,20 @@ const assignmentsWithDetails = computed(() => {
       areaName = area?.name;
     }
 
-    // Get all marshals assigned to this checkpoint
-    const allMarshals = location?.assignments || [];
+    // Get all marshals assigned to this checkpoint, with effective check-in status
+    const rawMarshals = location?.assignments || [];
+    const allMarshals = rawMarshals.map(m => ({
+      ...m,
+      effectiveIsCheckedIn: m.isCheckedIn && !isCheckInStale(m.checkInTime),
+    }));
 
     // Get area contacts for this checkpoint's areas
     const areaContacts = areaContactsRaw.value.filter(contact =>
       areaIds.includes(contact.areaId)
     );
+
+    // Effective check-in status (reset if checked in more than 24 hours ago)
+    const effectiveIsCheckedIn = assign.isCheckedIn && !isCheckInStale(assign.checkInTime);
 
     return {
       ...assign,
@@ -751,6 +954,7 @@ const assignmentsWithDetails = computed(() => {
       allMarshals,
       areaContacts,
       locationName: location?.name || 'Unknown Location',
+      effectiveIsCheckedIn,
     };
   });
 });
@@ -775,6 +979,73 @@ const firstDynamicAssignment = computed(() => {
   return assignmentsWithDetails.value.find(a => a.location?.isDynamic || a.location?.IsDynamic);
 });
 
+// Find checkpoints that are overdue for check-in and haven't been dismissed
+const overdueCheckpoints = computed(() => {
+  if (!event.value || !assignmentsWithDetails.value.length) return [];
+
+  const now = new Date();
+  const eventStartTime = event.value.eventDate ? new Date(event.value.eventDate) : null;
+
+  return assignmentsWithDetails.value.filter(assign => {
+    // Skip if already effectively checked in
+    if (assign.effectiveIsCheckedIn) return false;
+
+    // Skip if already dismissed
+    if (dismissedCheckInReminders.value.has(assign.id)) return false;
+
+    const location = assign.location;
+    if (!location) return false;
+
+    // Determine start time: checkpoint start time, or event start time
+    const checkpointStartTime = location.startTime ? new Date(location.startTime) : eventStartTime;
+    if (!checkpointStartTime) return false;
+
+    // Determine end time: checkpoint end time, or event start + 2 hours
+    let checkpointEndTime;
+    if (location.endTime) {
+      checkpointEndTime = new Date(location.endTime);
+    } else if (eventStartTime) {
+      checkpointEndTime = new Date(eventStartTime.getTime() + 2 * 60 * 60 * 1000);
+    } else {
+      // No end time can be determined, skip
+      return false;
+    }
+
+    // Check if current time is within the reminder window
+    return now >= checkpointStartTime && now < checkpointEndTime;
+  });
+});
+
+// Watch for overdue checkpoints and show reminder modal
+watch(overdueCheckpoints, (overdue) => {
+  if (overdue.length > 0 && !showCheckInReminderModal.value) {
+    checkInReminderCheckpoint.value = overdue[0];
+    showCheckInReminderModal.value = true;
+  }
+}, { immediate: true });
+
+// Dismiss check-in reminder for a checkpoint
+const dismissCheckInReminder = (assignmentId) => {
+  dismissedCheckInReminders.value.add(assignmentId);
+  showCheckInReminderModal.value = false;
+  checkInReminderCheckpoint.value = null;
+};
+
+// Fullscreen map functions
+const openFullscreenMap = (type, assignment = null) => {
+  fullscreenMap.value = type;
+  fullscreenMapAssignment.value = assignment;
+  // Prevent body scroll
+  document.body.style.overflow = 'hidden';
+};
+
+const closeFullscreenMap = () => {
+  fullscreenMap.value = null;
+  fullscreenMapAssignment.value = null;
+  // Restore body scroll
+  document.body.style.overflow = '';
+};
+
 // Event route for map display
 const eventRoute = computed(() => {
   if (!event.value?.route) return [];
@@ -798,10 +1069,11 @@ const visibleChecklistItems = computed(() => {
     if (!item.isCompleted) return true;
 
     // Hide completed shared tasks (OnePerCheckpoint, OnePerArea, OneLeadPerArea)
-    // These are tasks where "anyone" could complete them, so once done, no need to show
+    // unless this marshal completed it (so they can uncomplete it)
     const sharedScopes = ['OnePerCheckpoint', 'OnePerArea', 'OneLeadPerArea'];
     if (sharedScopes.includes(item.matchedScope)) {
-      return false;
+      // Show if this marshal completed it
+      return item.completedByActorId === currentMarshalId.value;
     }
 
     // Show all other completed tasks (personal tasks, everyone tasks, etc.)
@@ -2109,19 +2381,39 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* Z-index layering - modals should always be above fullscreen map */
 .marshal-view {
+  --z-fullscreen-map: 2000;
+  --z-modal: calc(var(--z-fullscreen-map) + 1000);
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
 .header {
-  background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
   padding: 1.5rem 2rem;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  color: white;
+  position: relative;
+}
+
+.header.logo-left,
+.header.logo-right {
+  flex-direction: row;
+}
+
+.header.logo-cover {
+  flex-direction: column;
+}
+
+.header-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  position: relative;
+  z-index: 1;
 }
 
 .header h1 {
@@ -2131,6 +2423,7 @@ onUnmounted(() => {
 .header-title {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 0.25rem;
 }
 
@@ -2140,9 +2433,47 @@ onUnmounted(() => {
   font-weight: 400;
 }
 
+.header-logo {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.header-logo-left {
+  margin-right: 1rem;
+}
+
+.header-logo-right {
+  margin-left: 1rem;
+}
+
+.header-logo-img {
+  max-height: 56px;
+  max-width: 140px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+/* Cover logo background */
+.header-logo-cover {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.header-logo-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.25;
+}
+
 .header-actions {
   display: flex;
   gap: 0.75rem;
+  position: relative;
+  z-index: 1;
 }
 
 .btn-emergency {
@@ -2666,14 +2997,60 @@ onUnmounted(() => {
   border-top: 1px solid #e0e0e0;
 }
 
-.map-content {
-  padding-bottom: 0;
+.accordion-content.map-content {
+  padding: 0 !important;
+  margin: 0;
+  border: none;
+  box-sizing: border-box;
+}
+
+.map-wrapper {
+  position: relative;
+  width: 100%;
+  display: block;
+  box-sizing: border-box;
 }
 
 .map-content :deep(.map-container) {
-  height: 350px;
+  width: 100% !important;
+  height: calc(100vh - 350px);
+  min-height: 300px;
+  max-height: 500px;
+  border-radius: 0 0 12px 12px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: block;
+  box-sizing: border-box;
+}
+
+.map-content :deep(.leaflet-container) {
   border-radius: 0 0 12px 12px;
-  margin: 0 -1.5rem -1.5rem;
+}
+
+/* Fullscreen button */
+.fullscreen-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 400;
+  transition: background 0.2s;
+}
+
+.fullscreen-btn:hover {
+  background: #f0f0f0;
+}
+
+.fullscreen-btn svg {
+  display: block;
 }
 
 /* Nested checkpoint accordion styles */
@@ -2999,11 +3376,18 @@ onUnmounted(() => {
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid #e0e0e0;
+  position: relative;
 }
 
 .checkpoint-mini-map :deep(.map-container) {
   height: 200px;
   min-height: 200px;
+}
+
+.checkpoint-mini-map .fullscreen-btn {
+  top: 8px;
+  right: 8px;
+  padding: 6px;
 }
 
 /* Dynamic location section */
@@ -3101,7 +3485,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal, 3000);
   padding: 1rem;
 }
 
@@ -3113,6 +3497,56 @@ onUnmounted(() => {
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+/* Check-in Reminder Modal */
+.check-in-reminder-modal .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.check-in-reminder-modal .modal-header.warning {
+  background: #fff3cd;
+  border-bottom: 1px solid #ffc107;
+}
+
+.check-in-reminder-modal .modal-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #856404;
+}
+
+.check-in-reminder-modal .modal-body {
+  text-align: center;
+  padding: 2rem 1.5rem;
+}
+
+.check-in-reminder-modal .reminder-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.check-in-reminder-modal .reminder-message {
+  font-size: 1.1rem;
+  color: #333;
+  margin-bottom: 0.75rem;
+}
+
+.check-in-reminder-modal .reminder-hint {
+  font-size: 0.9rem;
+  color: #666;
+  margin: 0;
+}
+
+.check-in-reminder-modal .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #e0e0e0;
 }
 
 .location-update-modal .modal-header {
@@ -3259,10 +3693,11 @@ onUnmounted(() => {
 /* Map selection mode */
 .map-selection-banner {
   background: #e3f2fd;
-  border: 1px solid #2196f3;
-  border-radius: 8px;
-  padding: 1rem;
-  margin-bottom: 0.5rem;
+  border: none;
+  border-bottom: 1px solid #2196f3;
+  border-radius: 0;
+  padding: 0.75rem 1rem;
+  margin: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -3392,5 +3827,82 @@ onUnmounted(() => {
   .btn-update-location {
     flex: 1;
   }
+}
+
+/* Fullscreen Map Overlay */
+.fullscreen-map-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-fullscreen-map, 2000);
+  display: flex;
+  flex-direction: column;
+  background: #f5f5f5;
+}
+
+.fullscreen-map-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  flex-shrink: 0;
+}
+
+.fullscreen-map-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.fullscreen-close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 50%;
+  padding: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.fullscreen-close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.fullscreen-map-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: #fff3cd;
+  border-bottom: 1px solid #ffc107;
+  flex-shrink: 0;
+}
+
+.fullscreen-map-container {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+}
+
+.fullscreen-map-container :deep(.map-container) {
+  height: 100% !important;
+  border-radius: 0;
+}
+
+.fullscreen-map-actions {
+  padding: 1rem;
+  background: white;
+  border-top: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.fullscreen-map-actions .btn {
+  min-width: 200px;
 }
 </style>

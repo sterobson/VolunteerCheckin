@@ -54,9 +54,10 @@ namespace VolunteerCheckin.Functions.Tests
             );
             _mockContactPermissionService = new Mock<ContactPermissionService>(
                 MockBehavior.Loose,
-                new Mock<IAreaRepository>().Object,
                 new Mock<ILocationRepository>().Object,
-                new Mock<IAssignmentRepository>().Object
+                new Mock<IAssignmentRepository>().Object,
+                new Mock<IEventRoleRepository>().Object,
+                new Mock<IMarshalRepository>().Object
             );
 
             // Create admin claims for tests

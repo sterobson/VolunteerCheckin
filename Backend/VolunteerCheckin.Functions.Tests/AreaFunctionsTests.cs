@@ -29,7 +29,6 @@ namespace VolunteerCheckin.Functions.Tests
         private Mock<IChecklistItemRepository> _mockChecklistItemRepository = null!;
         private Mock<IChecklistCompletionRepository> _mockChecklistCompletionRepository = null!;
         private Mock<ClaimsService> _mockClaimsService = null!;
-        private Mock<ContactPermissionService> _mockContactPermissionService = null!;
         private AreaFunctions _areaFunctions = null!;
 
         [TestInitialize]
@@ -50,12 +49,6 @@ namespace VolunteerCheckin.Functions.Tests
                 new Mock<IMarshalRepository>().Object,
                 new Mock<IUserEventMappingRepository>().Object
             );
-            _mockContactPermissionService = new Mock<ContactPermissionService>(
-                MockBehavior.Loose,
-                new Mock<IAreaRepository>().Object,
-                new Mock<ILocationRepository>().Object,
-                new Mock<IAssignmentRepository>().Object
-            );
 
             _areaFunctions = new AreaFunctions(
                 _mockLogger.Object,
@@ -65,8 +58,7 @@ namespace VolunteerCheckin.Functions.Tests
                 _mockAssignmentRepository.Object,
                 _mockChecklistItemRepository.Object,
                 _mockChecklistCompletionRepository.Object,
-                _mockClaimsService.Object,
-                _mockContactPermissionService.Object
+                _mockClaimsService.Object
             );
         }
 

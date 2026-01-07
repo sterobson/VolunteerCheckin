@@ -24,6 +24,7 @@ public class ChecklistQueryFunctionsTests
     private Mock<IAssignmentRepository> _mockAssignmentRepository = null!;
     private Mock<IAreaRepository> _mockAreaRepository = null!;
     private Mock<ILocationRepository> _mockLocationRepository = null!;
+    private Mock<IEventRoleRepository> _mockEventRoleRepository = null!;
     private ChecklistQueryFunctions _functions = null!;
 
     private const string EventId = "event123";
@@ -42,6 +43,7 @@ public class ChecklistQueryFunctionsTests
         _mockAssignmentRepository = new Mock<IAssignmentRepository>();
         _mockAreaRepository = new Mock<IAreaRepository>();
         _mockLocationRepository = new Mock<ILocationRepository>();
+        _mockEventRoleRepository = new Mock<IEventRoleRepository>();
 
         _functions = new ChecklistQueryFunctions(
             _mockLogger.Object,
@@ -50,7 +52,8 @@ public class ChecklistQueryFunctionsTests
             _mockMarshalRepository.Object,
             _mockLocationRepository.Object,
             _mockAssignmentRepository.Object,
-            _mockAreaRepository.Object
+            _mockAreaRepository.Object,
+            _mockEventRoleRepository.Object
         );
     }
 
@@ -81,7 +84,7 @@ public class ChecklistQueryFunctionsTests
         // Setup areas
         _mockAreaRepository
             .Setup(r => r.GetByEventAsync(EventId))
-            .ReturnsAsync([new AreaEntity { RowKey = AreaId, AreaLeadMarshalIdsJson = "[]" }]);
+            .ReturnsAsync([new AreaEntity { RowKey = AreaId }]);
 
         // Setup checklist items
         ChecklistItemEntity item = new()
@@ -178,7 +181,7 @@ public class ChecklistQueryFunctionsTests
 
         _mockAreaRepository
             .Setup(r => r.GetByEventAsync(EventId))
-            .ReturnsAsync([new AreaEntity { RowKey = AreaId, AreaLeadMarshalIdsJson = "[]" }]);
+            .ReturnsAsync([new AreaEntity { RowKey = AreaId }]);
 
         _mockMarshalRepository
             .Setup(r => r.GetByEventAsync(EventId))
@@ -256,7 +259,7 @@ public class ChecklistQueryFunctionsTests
 
         _mockAreaRepository
             .Setup(r => r.GetByEventAsync(EventId))
-            .ReturnsAsync([new AreaEntity { RowKey = AreaId, AreaLeadMarshalIdsJson = "[]" }]);
+            .ReturnsAsync([new AreaEntity { RowKey = AreaId }]);
 
         _mockMarshalRepository
             .Setup(r => r.GetByEventAsync(EventId))

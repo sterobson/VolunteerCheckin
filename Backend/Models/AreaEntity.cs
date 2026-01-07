@@ -20,12 +20,6 @@ public class AreaEntity : ITableEntity
     public int DisplayOrder { get; set; } = 0;
     public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
 
-    /// <summary>
-    /// JSON array of marshal IDs who are area leads for this area.
-    /// Area leads have special permissions for checklist items in their area.
-    /// </summary>
-    public string AreaLeadMarshalIdsJson { get; set; } = "[]";
-
     // Default checkpoint style for checkpoints in this area (overrides event default)
     // Type: default, circle, square, triangle, diamond, star, hexagon, pentagon, water, food, medical, photo, music, start, finish, arrows, etc.
     public string CheckpointStyleType { get; set; } = "default";

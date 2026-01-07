@@ -79,6 +79,8 @@ public class ImportOptimizationTests
             .Setup(r => r.AddAsync(It.IsAny<AssignmentEntity>()))
             .ReturnsAsync((AssignmentEntity a) => a);
 
+        Mock<IEventRoleRepository> mockEventRoleRepo = new();
+
         LocationFunctions functions = new(
             mockLogger.Object,
             mockLocationRepo.Object,
@@ -87,6 +89,7 @@ public class ImportOptimizationTests
             mockChecklistItemRepo.Object,
             mockNoteRepo.Object,
             mockAreaRepo.Object,
+            mockEventRoleRepo.Object,
             mockClaimsService.Object);
 
         // Create CSV with two locations, both referencing the same marshal
@@ -152,6 +155,8 @@ public class ImportOptimizationTests
             .Setup(r => r.AddAsync(It.IsAny<AssignmentEntity>()))
             .ReturnsAsync((AssignmentEntity a) => a);
 
+        Mock<IEventRoleRepository> mockEventRoleRepo = new();
+
         LocationFunctions functions = new(
             mockLogger.Object,
             mockLocationRepo.Object,
@@ -160,6 +165,7 @@ public class ImportOptimizationTests
             mockChecklistItemRepo.Object,
             mockNoteRepo.Object,
             mockAreaRepo.Object,
+            mockEventRoleRepo.Object,
             mockClaimsService.Object);
 
         // Create CSV with three locations, two referencing "New Marshal"
@@ -209,9 +215,10 @@ public class ImportOptimizationTests
 
         Mock<ContactPermissionService> mockContactPermission = new(
             MockBehavior.Loose,
-            new Mock<IAreaRepository>().Object,
             new Mock<ILocationRepository>().Object,
-            new Mock<IAssignmentRepository>().Object);
+            new Mock<IAssignmentRepository>().Object,
+            new Mock<IEventRoleRepository>().Object,
+            new Mock<IMarshalRepository>().Object);
 
         // Setup existing location that should be found via cache
         LocationEntity existingLocation = new()
@@ -308,9 +315,10 @@ public class ImportOptimizationTests
 
         Mock<ContactPermissionService> mockContactPermission = new(
             MockBehavior.Loose,
-            new Mock<IAreaRepository>().Object,
             new Mock<ILocationRepository>().Object,
-            new Mock<IAssignmentRepository>().Object);
+            new Mock<IAssignmentRepository>().Object,
+            new Mock<IEventRoleRepository>().Object,
+            new Mock<IMarshalRepository>().Object);
 
         // No locations exist
         mockMarshalRepo

@@ -27,6 +27,7 @@ namespace VolunteerCheckin.Functions.Tests
     private Mock<IChecklistItemRepository> _mockChecklistItemRepository = null!;
     private Mock<INoteRepository> _mockNoteRepository = null!;
     private Mock<IAreaRepository> _mockAreaRepository = null!;
+    private Mock<IEventRoleRepository> _mockEventRoleRepository = null!;
     private Mock<ClaimsService> _mockClaimsService = null!;
     private LocationFunctions _locationFunctions = null!;
 
@@ -40,6 +41,7 @@ namespace VolunteerCheckin.Functions.Tests
         _mockChecklistItemRepository = new Mock<IChecklistItemRepository>();
         _mockNoteRepository = new Mock<INoteRepository>();
         _mockAreaRepository = new Mock<IAreaRepository>();
+        _mockEventRoleRepository = new Mock<IEventRoleRepository>();
         _mockClaimsService = new Mock<ClaimsService>(
             MockBehavior.Loose,
             new Mock<IAuthSessionRepository>().Object,
@@ -57,6 +59,7 @@ namespace VolunteerCheckin.Functions.Tests
             _mockChecklistItemRepository.Object,
             _mockNoteRepository.Object,
             _mockAreaRepository.Object,
+            _mockEventRoleRepository.Object,
             _mockClaimsService.Object
         );
     }

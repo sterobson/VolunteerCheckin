@@ -18,18 +18,21 @@ namespace VolunteerCheckin.Functions.Services;
 /// </summary>
 public class ContactPermissionService
 {
-    private readonly IAreaRepository _areaRepository;
     private readonly ILocationRepository _locationRepository;
     private readonly IAssignmentRepository _assignmentRepository;
+    private readonly IEventRoleRepository _eventRoleRepository;
+    private readonly IMarshalRepository _marshalRepository;
 
     public ContactPermissionService(
-        IAreaRepository areaRepository,
         ILocationRepository locationRepository,
-        IAssignmentRepository assignmentRepository)
+        IAssignmentRepository assignmentRepository,
+        IEventRoleRepository eventRoleRepository,
+        IMarshalRepository marshalRepository)
     {
-        _areaRepository = areaRepository;
         _locationRepository = locationRepository;
         _assignmentRepository = assignmentRepository;
+        _eventRoleRepository = eventRoleRepository;
+        _marshalRepository = marshalRepository;
     }
 
     /// <summary>
@@ -71,8 +74,7 @@ public class ContactPermissionService
             modifiableMarshalIds.Add(claims.MarshalId);
         }
 
-        // Get all areas and locations for this event
-        IEnumerable<AreaEntity> areas = await _areaRepository.GetByEventAsync(eventId);
+        // Get all locations and assignments for this event
         IEnumerable<LocationEntity> locations = await _locationRepository.GetByEventAsync(eventId);
         IEnumerable<AssignmentEntity> allAssignments = await _assignmentRepository.GetByEventAsync(eventId);
 
@@ -84,12 +86,28 @@ public class ContactPermissionService
             locationToAreas[location.RowKey] = areaIds;
         }
 
-        // Build lookup: areaId -> list of area lead marshal IDs
+        // Build lookup: areaId -> list of area lead marshal IDs (from EventRoles)
+        IEnumerable<MarshalEntity> allMarshals = await _marshalRepository.GetByEventAsync(eventId);
+        Dictionary<string, string> marshalIdByPersonId = allMarshals
+            .Where(m => !string.IsNullOrEmpty(m.PersonId))
+            .ToDictionary(m => m.PersonId, m => m.MarshalId);
+
+        IEnumerable<EventRoleEntity> eventRoles = await _eventRoleRepository.GetByEventAsync(eventId);
         Dictionary<string, List<string>> areaLeadsByArea = new();
-        foreach (AreaEntity area in areas)
+        foreach (EventRoleEntity role in eventRoles.Where(r => r.Role == Constants.RoleEventAreaLead))
         {
-            List<string> leadIds = JsonSerializer.Deserialize<List<string>>(area.AreaLeadMarshalIdsJson) ?? new List<string>();
-            areaLeadsByArea[area.RowKey] = leadIds;
+            if (marshalIdByPersonId.TryGetValue(role.PersonId, out string? marshalId))
+            {
+                List<string> leadAreaIds = JsonSerializer.Deserialize<List<string>>(role.AreaIdsJson) ?? new List<string>();
+                foreach (string areaId in leadAreaIds)
+                {
+                    if (!areaLeadsByArea.ContainsKey(areaId))
+                    {
+                        areaLeadsByArea[areaId] = new List<string>();
+                    }
+                    areaLeadsByArea[areaId].Add(marshalId);
+                }
+            }
         }
 
         // If user is a marshal, find which areas they're assigned to and add those area leads
@@ -122,7 +140,7 @@ public class ContactPermissionService
             }
         }
 
-        // Check if user is an area lead or area admin for any area
+        // Check if user is an area lead or area admin for any area (from EventRoles in claims)
         List<string> userLeadAreaIds = new();
         foreach (EventRoleInfo role in claims.EventRoles)
         {
@@ -139,19 +157,6 @@ public class ContactPermissionService
                     );
                 }
                 userLeadAreaIds.AddRange(role.AreaIds);
-            }
-        }
-
-        // Also check if marshal is designated as area lead via AreaLeadMarshalIdsJson
-        if (claims.MarshalId != null)
-        {
-            foreach (AreaEntity area in areas)
-            {
-                List<string> leadIds = JsonSerializer.Deserialize<List<string>>(area.AreaLeadMarshalIdsJson) ?? new List<string>();
-                if (leadIds.Contains(claims.MarshalId))
-                {
-                    userLeadAreaIds.Add(area.RowKey);
-                }
             }
         }
 

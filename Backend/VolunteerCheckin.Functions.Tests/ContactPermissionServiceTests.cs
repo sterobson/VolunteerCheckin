@@ -13,22 +13,25 @@ namespace VolunteerCheckin.Functions.Tests
     [TestClass]
     public class ContactPermissionServiceTests
     {
-        private Mock<IAreaRepository> _mockAreaRepository = null!;
         private Mock<ILocationRepository> _mockLocationRepository = null!;
         private Mock<IAssignmentRepository> _mockAssignmentRepository = null!;
+        private Mock<IEventRoleRepository> _mockEventRoleRepository = null!;
+        private Mock<IMarshalRepository> _mockMarshalRepository = null!;
         private ContactPermissionService _service = null!;
 
         [TestInitialize]
         public void Setup()
         {
-            _mockAreaRepository = new Mock<IAreaRepository>();
             _mockLocationRepository = new Mock<ILocationRepository>();
             _mockAssignmentRepository = new Mock<IAssignmentRepository>();
+            _mockEventRoleRepository = new Mock<IEventRoleRepository>();
+            _mockMarshalRepository = new Mock<IMarshalRepository>();
 
             _service = new ContactPermissionService(
-                _mockAreaRepository.Object,
                 _mockLocationRepository.Object,
-                _mockAssignmentRepository.Object
+                _mockAssignmentRepository.Object,
+                _mockEventRoleRepository.Object,
+                _mockMarshalRepository.Object
             );
         }
 
@@ -101,10 +104,6 @@ namespace VolunteerCheckin.Functions.Tests
                 EventRoles: new List<EventRoleInfo>()
             );
 
-            _mockAreaRepository
-                .Setup(r => r.GetByEventAsync(eventId))
-                .ReturnsAsync(new List<AreaEntity>());
-
             _mockLocationRepository
                 .Setup(r => r.GetByEventAsync(eventId))
                 .ReturnsAsync(new List<LocationEntity>());
@@ -112,6 +111,14 @@ namespace VolunteerCheckin.Functions.Tests
             _mockAssignmentRepository
                 .Setup(r => r.GetByEventAsync(eventId))
                 .ReturnsAsync(new List<AssignmentEntity>());
+
+            _mockMarshalRepository
+                .Setup(r => r.GetByEventAsync(eventId))
+                .ReturnsAsync(new List<MarshalEntity>());
+
+            _mockEventRoleRepository
+                .Setup(r => r.GetByEventAsync(eventId))
+                .ReturnsAsync(new List<EventRoleEntity>());
 
             // Act
             ContactPermissions permissions = await _service.GetContactPermissionsAsync(claims, eventId);
@@ -130,6 +137,7 @@ namespace VolunteerCheckin.Functions.Tests
             string eventId = "event-123";
             string marshalId = "marshal-456";
             string areaLeadMarshalId = "marshal-lead-789";
+            string areaLeadPersonId = "person-lead-789";
             string areaId = "area-1";
             string locationId = "loc-1";
 
@@ -145,19 +153,6 @@ namespace VolunteerCheckin.Functions.Tests
             );
 
             // Marshal is assigned to a location in area-1
-            List<AreaEntity> areas = new()
-            {
-                new AreaEntity
-                {
-                    RowKey = areaId,
-                    EventId = eventId,
-                    Name = "Area 1",
-                    AreaLeadMarshalIdsJson = JsonSerializer.Serialize(new List<string> { areaLeadMarshalId }),
-                    ContactsJson = "[]",
-                    PolygonJson = "[]"
-                }
-            };
-
             List<LocationEntity> locations = new()
             {
                 new LocationEntity
@@ -179,9 +174,22 @@ namespace VolunteerCheckin.Functions.Tests
                 }
             };
 
-            _mockAreaRepository
-                .Setup(r => r.GetByEventAsync(eventId))
-                .ReturnsAsync(areas);
+            // Area lead is defined via EventRole
+            List<MarshalEntity> marshals = new()
+            {
+                new MarshalEntity { RowKey = areaLeadMarshalId, MarshalId = areaLeadMarshalId, PersonId = areaLeadPersonId, EventId = eventId }
+            };
+
+            List<EventRoleEntity> eventRoles = new()
+            {
+                new EventRoleEntity
+                {
+                    PersonId = areaLeadPersonId,
+                    EventId = eventId,
+                    Role = Constants.RoleEventAreaLead,
+                    AreaIdsJson = JsonSerializer.Serialize(new List<string> { areaId })
+                }
+            };
 
             _mockLocationRepository
                 .Setup(r => r.GetByEventAsync(eventId))
@@ -190,6 +198,14 @@ namespace VolunteerCheckin.Functions.Tests
             _mockAssignmentRepository
                 .Setup(r => r.GetByEventAsync(eventId))
                 .ReturnsAsync(assignments);
+
+            _mockMarshalRepository
+                .Setup(r => r.GetByEventAsync(eventId))
+                .ReturnsAsync(marshals);
+
+            _mockEventRoleRepository
+                .Setup(r => r.GetByEventAsync(eventId))
+                .ReturnsAsync(eventRoles);
 
             // Act
             ContactPermissions permissions = await _service.GetContactPermissionsAsync(claims, eventId);
@@ -210,6 +226,7 @@ namespace VolunteerCheckin.Functions.Tests
             string areaId = "area-1";
             string locationId = "loc-1";
 
+            // Area lead has EventAreaLead role via EventRoles in claims
             UserClaims claims = new(
                 PersonId: "person-1",
                 PersonName: "Area Lead",
@@ -218,22 +235,11 @@ namespace VolunteerCheckin.Functions.Tests
                 EventId: eventId,
                 AuthMethod: Constants.AuthMethodMarshalMagicCode,
                 MarshalId: areaLeadMarshalId,
-                EventRoles: new List<EventRoleInfo>()
-            );
-
-            // Area lead is designated via AreaLeadMarshalIdsJson
-            List<AreaEntity> areas = new()
-            {
-                new AreaEntity
+                EventRoles: new List<EventRoleInfo>
                 {
-                    RowKey = areaId,
-                    EventId = eventId,
-                    Name = "Area 1",
-                    AreaLeadMarshalIdsJson = JsonSerializer.Serialize(new List<string> { areaLeadMarshalId }),
-                    ContactsJson = "[]",
-                    PolygonJson = "[]"
+                    new EventRoleInfo(Constants.RoleEventAreaLead, new List<string> { areaId })
                 }
-            };
+            );
 
             List<LocationEntity> locations = new()
             {
@@ -256,10 +262,6 @@ namespace VolunteerCheckin.Functions.Tests
                 }
             };
 
-            _mockAreaRepository
-                .Setup(r => r.GetByEventAsync(eventId))
-                .ReturnsAsync(areas);
-
             _mockLocationRepository
                 .Setup(r => r.GetByEventAsync(eventId))
                 .ReturnsAsync(locations);
@@ -267,6 +269,14 @@ namespace VolunteerCheckin.Functions.Tests
             _mockAssignmentRepository
                 .Setup(r => r.GetByEventAsync(eventId))
                 .ReturnsAsync(assignments);
+
+            _mockMarshalRepository
+                .Setup(r => r.GetByEventAsync(eventId))
+                .ReturnsAsync(new List<MarshalEntity>());
+
+            _mockEventRoleRepository
+                .Setup(r => r.GetByEventAsync(eventId))
+                .ReturnsAsync(new List<EventRoleEntity>());
 
             // Act
             ContactPermissions permissions = await _service.GetContactPermissionsAsync(claims, eventId);

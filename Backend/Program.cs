@@ -59,6 +59,16 @@ builder.Services.AddSingleton(sp =>
     return new EmailService(smtpHost, smtpPort, smtpUsername, smtpPassword, fromEmail, senderName);
 });
 
+builder.Services.AddSingleton(sp =>
+{
+    string? connectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        throw new InvalidOperationException("AzureWebJobsStorage environment variable is required for blob storage.");
+    }
+    return new BlobStorageService(connectionString);
+});
+
 builder.Services.AddSingleton<GpsService>();
 builder.Services.AddSingleton<AuthService>();
 builder.Services.AddSingleton<ClaimsService>();

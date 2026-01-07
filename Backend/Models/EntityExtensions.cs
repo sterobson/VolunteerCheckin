@@ -32,7 +32,14 @@ public static class EntityExtensions
             entity.DefaultCheckpointStyleBorderColor,
             entity.DefaultCheckpointStyleIconColor,
             entity.DefaultCheckpointStyleSize,
-            entity.DefaultCheckpointStyleMapRotation
+            entity.DefaultCheckpointStyleMapRotation,
+            entity.BrandingHeaderGradientStart,
+            entity.BrandingHeaderGradientEnd,
+            entity.BrandingLogoUrl,
+            entity.BrandingLogoPosition,
+            entity.BrandingAccentColor,
+            entity.BrandingPageGradientStart,
+            entity.BrandingPageGradientEnd
         );
     }
 
@@ -213,7 +220,7 @@ public static class EntityExtensions
     /// <summary>
     /// Resolved checkpoint style containing all style properties
     /// </summary>
-    private record CheckpointStyleResolution(
+    private sealed record CheckpointStyleResolution(
         string Type,
         string Color,
         string BackgroundShape,
@@ -223,6 +230,72 @@ public static class EntityExtensions
         string Size,
         string MapRotation
     );
+
+    /// <summary>
+    /// Checks if a style type represents a valid icon type (not default or custom).
+    /// </summary>
+    private static bool IsValidIconType(string? styleType) =>
+        !string.IsNullOrEmpty(styleType) && styleType != "default" && styleType != "custom";
+
+    /// <summary>
+    /// Gets matched areas sorted by checkpoint count for consistent style resolution.
+    /// </summary>
+    private static List<AreaEntity>? GetSortedMatchedAreas(
+        List<string> areaIds,
+        IEnumerable<AreaEntity>? areas,
+        Dictionary<string, int>? areaCheckpointCounts)
+    {
+        if (areas == null || areaIds.Count == 0) return null;
+
+        IEnumerable<AreaEntity> matchedAreas = areas.Where(a => areaIds.Contains(a.RowKey));
+        if (areaCheckpointCounts != null)
+        {
+            matchedAreas = matchedAreas.OrderBy(a =>
+                areaCheckpointCounts.TryGetValue(a.RowKey, out int count) ? count : int.MaxValue);
+        }
+        return matchedAreas.ToList();
+    }
+
+    /// <summary>
+    /// Resolves a style property through the hierarchy: checkpoint -> area -> event.
+    /// </summary>
+    private static string ResolveStyleProperty(
+        string? checkpointValue,
+        List<AreaEntity>? sortedMatchedAreas,
+        Func<AreaEntity, string?> areaGetter,
+        string? eventValue)
+    {
+        if (!string.IsNullOrEmpty(checkpointValue)) return checkpointValue;
+        if (sortedMatchedAreas != null)
+        {
+            AreaEntity? area = sortedMatchedAreas.FirstOrDefault(a => !string.IsNullOrEmpty(areaGetter(a)));
+            if (area != null) return areaGetter(area)!;
+        }
+        if (!string.IsNullOrEmpty(eventValue)) return eventValue;
+        return string.Empty;
+    }
+
+    /// <summary>
+    /// Resolves the style type through the hierarchy: checkpoint -> area -> event.
+    /// </summary>
+    private static string ResolveStyleType(
+        LocationEntity location,
+        List<AreaEntity>? sortedMatchedAreas,
+        EventEntity? eventEntity)
+    {
+        if (IsValidIconType(location.StyleType)) return location.StyleType;
+
+        if (sortedMatchedAreas != null)
+        {
+            AreaEntity? styledArea = sortedMatchedAreas.FirstOrDefault(a => IsValidIconType(a.CheckpointStyleType));
+            if (styledArea != null) return styledArea.CheckpointStyleType;
+        }
+
+        if (eventEntity != null && IsValidIconType(eventEntity.DefaultCheckpointStyleType))
+            return eventEntity.DefaultCheckpointStyleType;
+
+        return "default";
+    }
 
     /// <summary>
     /// Resolves the effective checkpoint style from the hierarchy:
@@ -239,108 +312,33 @@ public static class EntityExtensions
         IEnumerable<AreaEntity>? areas,
         Dictionary<string, int>? areaCheckpointCounts)
     {
-        // Start with defaults
-        string type = "default";
-        string color = string.Empty;
-        string backgroundShape = string.Empty;
-        string backgroundColor = string.Empty;
-        string borderColor = string.Empty;
-        string iconColor = string.Empty;
-        string size = string.Empty;
-        string mapRotation = string.Empty;
+        List<AreaEntity>? sortedMatchedAreas = GetSortedMatchedAreas(areaIds, areas, areaCheckpointCounts);
+        string type = ResolveStyleType(location, sortedMatchedAreas, eventEntity);
 
-        // Get matched areas sorted by checkpoint count for consistent resolution
-        List<AreaEntity>? sortedMatchedAreas = null;
-        if (areas != null && areaIds.Count > 0)
-        {
-            IEnumerable<AreaEntity> matchedAreas = areas.Where(a => areaIds.Contains(a.RowKey));
-            if (areaCheckpointCounts != null)
-            {
-                matchedAreas = matchedAreas.OrderBy(a =>
-                    areaCheckpointCounts.TryGetValue(a.RowKey, out int count) ? count : int.MaxValue);
-            }
-            sortedMatchedAreas = matchedAreas.ToList();
-        }
-
-        // Resolve Type: checkpoint -> area -> event
-        // 'custom' means "has custom properties but inherit icon type" - treat like 'default'
-        bool IsValidIconType(string? styleType) =>
-            !string.IsNullOrEmpty(styleType) && styleType != "default" && styleType != "custom";
-
-        if (IsValidIconType(location.StyleType))
-        {
-            type = location.StyleType;
-        }
-        else if (sortedMatchedAreas != null)
-        {
-            AreaEntity? styledArea = sortedMatchedAreas.FirstOrDefault(a =>
-                IsValidIconType(a.CheckpointStyleType));
-            if (styledArea != null)
-            {
-                type = styledArea.CheckpointStyleType;
-            }
-            else if (eventEntity != null && IsValidIconType(eventEntity.DefaultCheckpointStyleType))
-            {
-                type = eventEntity.DefaultCheckpointStyleType;
-            }
-        }
-        else if (eventEntity != null && IsValidIconType(eventEntity.DefaultCheckpointStyleType))
-        {
-            type = eventEntity.DefaultCheckpointStyleType;
-        }
-
-        // Helper to resolve a string property through hierarchy
-        string ResolveProperty(
-            string? checkpointValue,
-            Func<AreaEntity, string?> areaGetter,
-            string? eventValue)
-        {
-            if (!string.IsNullOrEmpty(checkpointValue)) return checkpointValue;
-            if (sortedMatchedAreas != null)
-            {
-                AreaEntity? area = sortedMatchedAreas.FirstOrDefault(a => !string.IsNullOrEmpty(areaGetter(a)));
-                if (area != null) return areaGetter(area)!;
-            }
-            if (!string.IsNullOrEmpty(eventValue)) return eventValue;
-            return string.Empty;
-        }
-
-        // Resolve each property through the hierarchy
         // Color - use StyleColor for backward compatibility, then StyleBackgroundColor
-        color = ResolveProperty(
+        string color = ResolveStyleProperty(
             !string.IsNullOrEmpty(location.StyleBackgroundColor) ? location.StyleBackgroundColor : location.StyleColor,
+            sortedMatchedAreas,
             a => !string.IsNullOrEmpty(a.CheckpointStyleBackgroundColor) ? a.CheckpointStyleBackgroundColor : a.CheckpointStyleColor,
             !string.IsNullOrEmpty(eventEntity?.DefaultCheckpointStyleBackgroundColor) ? eventEntity.DefaultCheckpointStyleBackgroundColor : eventEntity?.DefaultCheckpointStyleColor);
 
-        backgroundShape = ResolveProperty(
-            location.StyleBackgroundShape,
-            a => a.CheckpointStyleBackgroundShape,
-            eventEntity?.DefaultCheckpointStyleBackgroundShape);
+        string backgroundShape = ResolveStyleProperty(location.StyleBackgroundShape, sortedMatchedAreas,
+            a => a.CheckpointStyleBackgroundShape, eventEntity?.DefaultCheckpointStyleBackgroundShape);
 
-        backgroundColor = ResolveProperty(
-            location.StyleBackgroundColor,
-            a => a.CheckpointStyleBackgroundColor,
-            eventEntity?.DefaultCheckpointStyleBackgroundColor);
+        string backgroundColor = ResolveStyleProperty(location.StyleBackgroundColor, sortedMatchedAreas,
+            a => a.CheckpointStyleBackgroundColor, eventEntity?.DefaultCheckpointStyleBackgroundColor);
 
-        borderColor = ResolveProperty(
-            location.StyleBorderColor,
-            a => a.CheckpointStyleBorderColor,
-            eventEntity?.DefaultCheckpointStyleBorderColor);
+        string borderColor = ResolveStyleProperty(location.StyleBorderColor, sortedMatchedAreas,
+            a => a.CheckpointStyleBorderColor, eventEntity?.DefaultCheckpointStyleBorderColor);
 
-        iconColor = ResolveProperty(
-            location.StyleIconColor,
-            a => a.CheckpointStyleIconColor,
-            eventEntity?.DefaultCheckpointStyleIconColor);
+        string iconColor = ResolveStyleProperty(location.StyleIconColor, sortedMatchedAreas,
+            a => a.CheckpointStyleIconColor, eventEntity?.DefaultCheckpointStyleIconColor);
 
-        size = ResolveProperty(
-            location.StyleSize,
-            a => a.CheckpointStyleSize,
-            eventEntity?.DefaultCheckpointStyleSize);
+        string size = ResolveStyleProperty(location.StyleSize, sortedMatchedAreas,
+            a => a.CheckpointStyleSize, eventEntity?.DefaultCheckpointStyleSize);
 
-        mapRotation = ResolveProperty(
-            location.StyleMapRotation,
-            a => a.CheckpointStyleMapRotation,
-            eventEntity?.DefaultCheckpointStyleMapRotation);
+        string mapRotation = ResolveStyleProperty(location.StyleMapRotation, sortedMatchedAreas,
+            a => a.CheckpointStyleMapRotation, eventEntity?.DefaultCheckpointStyleMapRotation);
 
         return new CheckpointStyleResolution(type, color, backgroundShape, backgroundColor, borderColor, iconColor, size, mapRotation);
     }

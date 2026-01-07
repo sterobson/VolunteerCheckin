@@ -31,7 +31,8 @@ public class ChecklistCompletionFunctions
         ILocationRepository locationRepository,
         IAdminUserRepository adminUserRepository,
         IAssignmentRepository assignmentRepository,
-        IAreaRepository areaRepository)
+        IAreaRepository areaRepository,
+        IEventRoleRepository eventRoleRepository)
     {
         _logger = logger;
         _checklistItemRepository = checklistItemRepository;
@@ -39,7 +40,7 @@ public class ChecklistCompletionFunctions
         _marshalRepository = marshalRepository;
         _locationRepository = locationRepository;
         _adminUserRepository = adminUserRepository;
-        _contextHelper = new ChecklistContextHelper(assignmentRepository, locationRepository, areaRepository);
+        _contextHelper = new ChecklistContextHelper(assignmentRepository, locationRepository, areaRepository, eventRoleRepository, marshalRepository);
     }
 
     [Function("CompleteChecklistItem")]

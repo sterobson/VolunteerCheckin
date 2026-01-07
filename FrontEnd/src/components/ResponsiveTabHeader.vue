@@ -1,7 +1,7 @@
 <template>
   <div class="responsive-tabs">
-    <!-- Regular tabs - hidden on small screens -->
-    <div class="visible-tabs">
+    <!-- Regular tabs - hidden when overflowing -->
+    <div ref="visibleTabsRef" class="visible-tabs" :class="{ 'is-hidden': useHamburger }">
       <button
         v-for="tab in tabs"
         :key="tab.value"
@@ -15,8 +15,8 @@
       </button>
     </div>
 
-    <!-- Hamburger menu - shown only on small screens -->
-    <div class="hamburger-only">
+    <!-- Hamburger menu - shown when tabs overflow -->
+    <div class="hamburger-only" :class="{ 'is-visible': useHamburger }">
       <div class="hamburger-menu" ref="hamburgerMenu">
         <button
           ref="hamburgerButton"
@@ -49,7 +49,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { getIcon } from '../utils/icons';
 
 const props = defineProps({
@@ -68,8 +68,10 @@ const emit = defineEmits(['update:modelValue']);
 
 const hamburgerMenu = ref(null);
 const hamburgerButton = ref(null);
+const visibleTabsRef = ref(null);
 const menuOpen = ref(false);
 const dropdownStyle = ref({});
+const useHamburger = ref(false);
 
 const activeTab = computed(() => {
   return props.tabs.find(t => t.value === props.modelValue);
@@ -107,13 +109,66 @@ const handleClickOutside = (event) => {
   }
 };
 
+// Check if tabs are overflowing and switch to hamburger if needed
+const checkOverflow = () => {
+  if (!visibleTabsRef.value) return;
+
+  const container = visibleTabsRef.value;
+
+  // Temporarily show tabs to measure them accurately
+  const wasHidden = useHamburger.value;
+  if (wasHidden) {
+    container.style.visibility = 'visible';
+    container.style.position = 'static';
+  }
+
+  // Check if content overflows the container
+  const isOverflowing = container.scrollWidth > container.clientWidth;
+
+  // Restore hidden state if it was hidden
+  if (wasHidden) {
+    container.style.visibility = '';
+    container.style.position = '';
+  }
+
+  useHamburger.value = isOverflowing;
+};
+
+let resizeObserver = null;
+
 onMounted(() => {
   document.addEventListener('click', handleClickOutside);
+
+  // Check overflow on mount
+  nextTick(() => {
+    checkOverflow();
+  });
+
+  // Use ResizeObserver on the parent container to detect size changes
+  nextTick(() => {
+    const parent = visibleTabsRef.value?.parentElement;
+    if (parent) {
+      resizeObserver = new ResizeObserver(() => {
+        checkOverflow();
+      });
+      resizeObserver.observe(parent);
+    }
+  });
 });
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside);
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+  }
 });
+
+// Re-check overflow when tabs change (e.g., terminology changes)
+watch(() => props.tabs, () => {
+  nextTick(() => {
+    checkOverflow();
+  });
+}, { deep: true });
 </script>
 
 <style scoped>
@@ -124,24 +179,38 @@ onUnmounted(() => {
 /* By default, show tabs and hide hamburger */
 .visible-tabs {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.25rem;
   align-items: center;
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+}
+
+.visible-tabs.is-hidden {
+  visibility: hidden;
+  position: absolute;
+  pointer-events: none;
 }
 
 .hamburger-only {
   display: none;
 }
 
+.hamburger-only.is-visible {
+  display: flex;
+  align-items: center;
+}
+
 .tab-button {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 1rem 1rem;
+  gap: 0.25rem;
+  padding: 0.75rem 0.6rem;
   border: none;
   background: transparent;
   color: #666;
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 500;
   border-bottom: 3px solid transparent;
   transition: all 0.2s;
@@ -256,15 +325,4 @@ onUnmounted(() => {
   border-radius: 0 0 8px 8px;
 }
 
-/* On smaller screens, hide tabs and show hamburger */
-@media (max-width: 900px) {
-  .visible-tabs {
-    display: none;
-  }
-
-  .hamburger-only {
-    display: flex;
-    align-items: center;
-  }
-}
 </style>

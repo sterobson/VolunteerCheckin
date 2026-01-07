@@ -155,6 +155,41 @@
           </div>
         </div>
       </div>
+
+      <!-- Marshal Mode Branding Section -->
+      <div class="accordion-section">
+        <button
+          class="accordion-header"
+          :class="{ active: expandedSection === 'branding' }"
+          @click="toggleSection('branding')"
+        >
+          <span class="accordion-title">{{ terms.person }} branding</span>
+          <span class="accordion-icon">{{ expandedSection === 'branding' ? '-' : '+' }}</span>
+        </button>
+        <div v-if="expandedSection === 'branding'" class="accordion-content">
+          <p class="section-description">
+            Customise the appearance of the {{ termsLower.person }} view to match your organisation's branding.
+          </p>
+
+          <MarshalModeMockup
+            :branding="brandingData"
+            :event-name="localForm.name"
+            :event-date="formatEventDate(localForm.eventDate)"
+            :event-id="eventId"
+            :admin-email="adminEmail"
+            @update:branding="handleBrandingChange"
+          />
+
+          <div class="form-actions">
+            <button @click="handleSubmit" class="btn btn-primary" :disabled="!formDirty">
+              Save Changes
+            </button>
+            <button @click="resetBranding" class="btn btn-secondary">
+              Reset to Default
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -162,10 +197,16 @@
 <script setup>
 import { ref, watch, computed, onMounted, defineProps, defineEmits } from 'vue';
 import { terminologyOptions, getCheckpointOptionLabel, useTerminology } from '../../composables/useTerminology';
+import { useAuthStore } from '../../stores/auth';
+import { formatDate as formatEventDate } from '../../utils/dateFormatters';
 import AdminsList from '../../components/event-manage/lists/AdminsList.vue';
 import CheckpointStylePicker from '../../components/CheckpointStylePicker.vue';
+import MarshalModeMockup from '../../components/MarshalModeMockup.vue';
+import { getDefaultBranding } from '../../constants/brandingPresets';
 
 const { terms, termsLower } = useTerminology();
+const authStore = useAuthStore();
+const adminEmail = computed(() => authStore.adminEmail || '');
 
 const props = defineProps({
   eventData: {
@@ -239,6 +280,40 @@ const emitFormChange = () => {
 
 const handleStyleChange = (field, value) => {
   localForm.value[field] = value;
+  emitFormChange();
+};
+
+// Branding data computed from form fields
+const brandingData = computed(() => ({
+  headerGradientStart: localForm.value.brandingHeaderGradientStart || '',
+  headerGradientEnd: localForm.value.brandingHeaderGradientEnd || '',
+  logoUrl: localForm.value.brandingLogoUrl || '',
+  logoPosition: localForm.value.brandingLogoPosition || '',
+  accentColor: localForm.value.brandingAccentColor || '',
+  pageGradientStart: localForm.value.brandingPageGradientStart || '',
+  pageGradientEnd: localForm.value.brandingPageGradientEnd || '',
+}));
+
+const handleBrandingChange = (branding) => {
+  localForm.value.brandingHeaderGradientStart = branding.headerGradientStart;
+  localForm.value.brandingHeaderGradientEnd = branding.headerGradientEnd;
+  localForm.value.brandingLogoUrl = branding.logoUrl;
+  localForm.value.brandingLogoPosition = branding.logoPosition;
+  localForm.value.brandingAccentColor = branding.accentColor;
+  localForm.value.brandingPageGradientStart = branding.pageGradientStart;
+  localForm.value.brandingPageGradientEnd = branding.pageGradientEnd;
+  emitFormChange();
+};
+
+const resetBranding = () => {
+  const defaults = getDefaultBranding();
+  localForm.value.brandingHeaderGradientStart = '';
+  localForm.value.brandingHeaderGradientEnd = '';
+  localForm.value.brandingLogoUrl = '';
+  localForm.value.brandingLogoPosition = '';
+  localForm.value.brandingAccentColor = '';
+  localForm.value.brandingPageGradientStart = '';
+  localForm.value.brandingPageGradientEnd = '';
   emitFormChange();
 };
 
@@ -367,6 +442,16 @@ const handleSubmit = () => {
 .btn-primary:disabled {
   background: #ccc;
   cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: white;
+  margin-left: 0.5rem;
+}
+
+.btn-secondary:hover {
+  background: #5a6268;
 }
 
 @media (max-width: 600px) {

@@ -26,6 +26,7 @@ public class ChecklistCompletionFunctionsTests
     private Mock<IAreaRepository> _mockAreaRepository = null!;
     private Mock<ILocationRepository> _mockLocationRepository = null!;
     private Mock<IAdminUserRepository> _mockAdminUserRepository = null!;
+    private Mock<IEventRoleRepository> _mockEventRoleRepository = null!;
     private ChecklistCompletionFunctions _functions = null!;
 
     private const string EventId = "event123";
@@ -46,6 +47,7 @@ public class ChecklistCompletionFunctionsTests
         _mockAreaRepository = new Mock<IAreaRepository>();
         _mockLocationRepository = new Mock<ILocationRepository>();
         _mockAdminUserRepository = new Mock<IAdminUserRepository>();
+        _mockEventRoleRepository = new Mock<IEventRoleRepository>();
 
         _functions = new ChecklistCompletionFunctions(
             _mockLogger.Object,
@@ -55,7 +57,8 @@ public class ChecklistCompletionFunctionsTests
             _mockLocationRepository.Object,
             _mockAdminUserRepository.Object,
             _mockAssignmentRepository.Object,
-            _mockAreaRepository.Object
+            _mockAreaRepository.Object,
+            _mockEventRoleRepository.Object
         );
     }
 
@@ -77,7 +80,15 @@ public class ChecklistCompletionFunctionsTests
 
         _mockAreaRepository
             .Setup(r => r.GetByEventAsync(EventId))
-            .ReturnsAsync([new AreaEntity { RowKey = AreaId, AreaLeadMarshalIdsJson = "[]" }]);
+            .ReturnsAsync([new AreaEntity { RowKey = AreaId }]);
+
+        _mockMarshalRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync(new List<MarshalEntity>());
+
+        _mockEventRoleRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync(new List<EventRoleEntity>());
     }
 
     #region CompleteChecklistItem Tests

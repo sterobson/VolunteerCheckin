@@ -65,7 +65,7 @@ const props = defineProps({
   styleIconColor: { type: String, default: '' },
   styleSize: { type: String, default: '' },
   styleMapRotation: { type: [String, Number], default: '' },
-  iconLabel: { type: String, default: 'Icon style' },
+  iconLabel: { type: String, default: 'Marker style' },
   showPreview: { type: Boolean, default: true },
   // Inherited style from parent (area for checkpoints, event for areas)
   inheritedStyleType: { type: String, default: 'default' },
@@ -127,7 +127,7 @@ const isCustomizationModalOpen = ref(false);
 // This includes 'custom' (style without content icon) or any content icon value
 const isCustom = computed(() => {
   if (localStyleType.value && localStyleType.value !== 'default') return true;
-  // Also check if any individual property is customized
+  // Also check if any individual property is customised
   // 'default' means inherit from parent, which should not count as custom
   if (localBackgroundShape.value && localBackgroundShape.value !== 'default' && localBackgroundShape.value !== 'circle') return true;
   if (localBackgroundColor.value) return true;

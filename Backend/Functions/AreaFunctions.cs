@@ -20,7 +20,6 @@ public class AreaFunctions
     private readonly IChecklistItemRepository _checklistItemRepository;
     private readonly IChecklistCompletionRepository _checklistCompletionRepository;
     private readonly ClaimsService _claimsService;
-    private readonly ContactPermissionService _contactPermissionService;
 
     public AreaFunctions(
         ILogger<AreaFunctions> logger,
@@ -30,8 +29,7 @@ public class AreaFunctions
         IAssignmentRepository assignmentRepository,
         IChecklistItemRepository checklistItemRepository,
         IChecklistCompletionRepository checklistCompletionRepository,
-        ClaimsService claimsService,
-        ContactPermissionService contactPermissionService)
+        ClaimsService claimsService)
     {
         _logger = logger;
         _areaRepository = areaRepository;
@@ -41,7 +39,6 @@ public class AreaFunctions
         _checklistItemRepository = checklistItemRepository;
         _checklistCompletionRepository = checklistCompletionRepository;
         _claimsService = claimsService;
-        _contactPermissionService = contactPermissionService;
     }
 
     [Function("CreateArea")]
@@ -444,204 +441,6 @@ public class AreaFunctions
         await Task.WhenAll(updateTasks);
 
         _logger.LogInformation($"Recalculated area assignments for {checkpoints.Count()} checkpoints in event {eventId}");
-    }
-
-    [Function("AddAreaLead")]
-    public async Task<IActionResult> AddAreaLead(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "areas/{eventId}/{areaId}/leads")] HttpRequest req,
-        string eventId,
-        string areaId)
-    {
-        try
-        {
-            // Require authentication
-            string? sessionToken = FunctionHelpers.GetSessionToken(req);
-            if (string.IsNullOrWhiteSpace(sessionToken))
-            {
-                return new UnauthorizedObjectResult(new { message = "Authentication required" });
-            }
-
-            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
-            if (claims == null)
-            {
-                return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
-            }
-
-            // Only event admins can add area leads
-            if (!claims.IsEventAdmin && !claims.IsSystemAdmin)
-            {
-                return new ForbidResult();
-            }
-
-            string body = await new StreamReader(req.Body).ReadToEndAsync();
-            AddAreaLeadRequest? request = JsonSerializer.Deserialize<AddAreaLeadRequest>(body,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-            if (request == null || string.IsNullOrWhiteSpace(request.MarshalId))
-            {
-                return new BadRequestObjectResult(new { message = Constants.ErrorInvalidRequest });
-            }
-
-            AreaEntity? area = await _areaRepository.GetAsync(eventId, areaId);
-            if (area == null)
-            {
-                return new NotFoundObjectResult(new { message = Constants.ErrorAreaNotFound });
-            }
-
-            // Verify marshal exists
-            MarshalEntity? marshal = await _marshalRepository.GetAsync(eventId, request.MarshalId);
-            if (marshal == null)
-            {
-                return new NotFoundObjectResult(new { message = Constants.ErrorMarshalNotFound });
-            }
-
-            // Get current area leads
-            List<string> areaLeadIds = JsonSerializer.Deserialize<List<string>>(area.AreaLeadMarshalIdsJson) ?? [];
-
-            // Check if already an area lead
-            if (areaLeadIds.Contains(request.MarshalId))
-            {
-                return new BadRequestObjectResult(new { message = "Marshal is already an area lead for this area" });
-            }
-
-            // Add to area leads
-            areaLeadIds.Add(request.MarshalId);
-            area.AreaLeadMarshalIdsJson = JsonSerializer.Serialize(areaLeadIds);
-
-            await _areaRepository.UpdateAsync(area);
-
-            _logger.LogInformation($"Added marshal {request.MarshalId} as area lead for area {areaId}");
-
-            // Event admins can see contact details
-            return new OkObjectResult(new AreaLeadResponse(
-                marshal.MarshalId,
-                marshal.Name,
-                marshal.Email
-            ));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error adding area lead");
-            return new StatusCodeResult(500);
-        }
-    }
-
-    [Function("RemoveAreaLead")]
-    public async Task<IActionResult> RemoveAreaLead(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "areas/{eventId}/{areaId}/leads/{marshalId}")] HttpRequest req,
-        string eventId,
-        string areaId,
-        string marshalId)
-    {
-        try
-        {
-            // Require authentication
-            string? sessionToken = FunctionHelpers.GetSessionToken(req);
-            if (string.IsNullOrWhiteSpace(sessionToken))
-            {
-                return new UnauthorizedObjectResult(new { message = "Authentication required" });
-            }
-
-            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
-            if (claims == null)
-            {
-                return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
-            }
-
-            // Only event admins can remove area leads
-            if (!claims.IsEventAdmin && !claims.IsSystemAdmin)
-            {
-                return new ForbidResult();
-            }
-
-            AreaEntity? area = await _areaRepository.GetAsync(eventId, areaId);
-            if (area == null)
-            {
-                return new NotFoundObjectResult(new { message = Constants.ErrorAreaNotFound });
-            }
-
-            // Get current area leads
-            List<string> areaLeadIds = JsonSerializer.Deserialize<List<string>>(area.AreaLeadMarshalIdsJson) ?? [];
-
-            // Check if marshal is an area lead
-            if (!areaLeadIds.Contains(marshalId))
-            {
-                return new NotFoundObjectResult(new { message = "Marshal is not an area lead for this area" });
-            }
-
-            // Remove from area leads
-            areaLeadIds.Remove(marshalId);
-            area.AreaLeadMarshalIdsJson = JsonSerializer.Serialize(areaLeadIds);
-
-            await _areaRepository.UpdateAsync(area);
-
-            _logger.LogInformation($"Removed marshal {marshalId} as area lead from area {areaId}");
-
-            return new NoContentResult();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error removing area lead");
-            return new StatusCodeResult(500);
-        }
-    }
-
-    [Function("GetAreaLeads")]
-    public async Task<IActionResult> GetAreaLeads(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "areas/{eventId}/{areaId}/leads")] HttpRequest req,
-        string eventId,
-        string areaId)
-    {
-        try
-        {
-            // Require authentication
-            string? sessionToken = FunctionHelpers.GetSessionToken(req);
-            if (string.IsNullOrWhiteSpace(sessionToken))
-            {
-                return new UnauthorizedObjectResult(new { message = "Authentication required" });
-            }
-
-            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
-            if (claims == null)
-            {
-                return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
-            }
-
-            AreaEntity? area = await _areaRepository.GetAsync(eventId, areaId);
-            if (area == null)
-            {
-                return new NotFoundObjectResult(new { message = Constants.ErrorAreaNotFound });
-            }
-
-            // Get area lead IDs
-            List<string> areaLeadIds = JsonSerializer.Deserialize<List<string>>(area.AreaLeadMarshalIdsJson) ?? [];
-
-            if (areaLeadIds.Count == 0)
-            {
-                return new OkObjectResult(Array.Empty<AreaLeadResponse>());
-            }
-
-            // Get contact permissions for this user
-            ContactPermissions permissions = await _contactPermissionService.GetContactPermissionsAsync(claims, eventId);
-
-            // Get marshal details for each area lead
-            IEnumerable<MarshalEntity> allMarshals = await _marshalRepository.GetByEventAsync(eventId);
-            List<AreaLeadResponse> areaLeads = allMarshals
-                .Where(m => areaLeadIds.Contains(m.MarshalId))
-                .Select(m => new AreaLeadResponse(
-                    m.MarshalId,
-                    m.Name,
-                    _contactPermissionService.CanViewContactDetails(permissions, m.MarshalId) ? m.Email : string.Empty
-                ))
-                .ToList();
-
-            return new OkObjectResult(areaLeads);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting area leads");
-            return new StatusCodeResult(500);
-        }
     }
 
     /// <summary>

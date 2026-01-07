@@ -27,7 +27,15 @@ public record CreateEventRequest(
     string? DefaultCheckpointStyleBorderColor = null,
     string? DefaultCheckpointStyleIconColor = null,
     string? DefaultCheckpointStyleSize = null,
-    string? DefaultCheckpointStyleMapRotation = null
+    string? DefaultCheckpointStyleMapRotation = null,
+    // Marshal mode branding (optional)
+    string? BrandingHeaderGradientStart = null,
+    string? BrandingHeaderGradientEnd = null,
+    string? BrandingLogoUrl = null,
+    string? BrandingLogoPosition = null,
+    string? BrandingAccentColor = null,
+    string? BrandingPageGradientStart = null,
+    string? BrandingPageGradientEnd = null
 );
 
 public record UpdateEventRequest(
@@ -49,7 +57,15 @@ public record UpdateEventRequest(
     string? DefaultCheckpointStyleBorderColor = null,
     string? DefaultCheckpointStyleIconColor = null,
     string? DefaultCheckpointStyleSize = null,
-    string? DefaultCheckpointStyleMapRotation = null
+    string? DefaultCheckpointStyleMapRotation = null,
+    // Marshal mode branding (optional, keeps existing values if not provided)
+    string? BrandingHeaderGradientStart = null,
+    string? BrandingHeaderGradientEnd = null,
+    string? BrandingLogoUrl = null,
+    string? BrandingLogoPosition = null,
+    string? BrandingAccentColor = null,
+    string? BrandingPageGradientStart = null,
+    string? BrandingPageGradientEnd = null
 );
 
 public record RoutePoint(
@@ -82,7 +98,15 @@ public record EventResponse(
     string DefaultCheckpointStyleBorderColor,
     string DefaultCheckpointStyleIconColor,
     string DefaultCheckpointStyleSize,
-    string DefaultCheckpointStyleMapRotation
+    string DefaultCheckpointStyleMapRotation,
+    // Marshal mode branding
+    string BrandingHeaderGradientStart,
+    string BrandingHeaderGradientEnd,
+    string BrandingLogoUrl,
+    string BrandingLogoPosition,
+    string BrandingAccentColor,
+    string BrandingPageGradientStart,
+    string BrandingPageGradientEnd
 );
 
 public record CreateLocationRequest(
@@ -490,6 +514,7 @@ public record ChecklistItemWithStatus(
     bool CanBeCompletedByMe,
     string? CompletedByActorName,
     string? CompletedByActorType,
+    string? CompletedByActorId,
     DateTime? CompletedAt,
     string CompletionContextType,
     string CompletionContextId,
@@ -517,16 +542,6 @@ public record ChecklistCompletionResponse(
     string ActorName,
     DateTime CompletedAt,
     bool IsDeleted
-);
-
-public record AddAreaLeadRequest(
-    string MarshalId
-);
-
-public record AreaLeadResponse(
-    string MarshalId,
-    string MarshalName,
-    string Email
 );
 
 // Authentication and Claims DTOs

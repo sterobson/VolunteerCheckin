@@ -2,7 +2,7 @@
   <div v-if="isOpen" class="modal-overlay" @click.self="cancel">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>Customise icon style</h3>
+        <h3>Customise marker style</h3>
         <button class="close-btn" @click="cancel">&times;</button>
       </div>
 

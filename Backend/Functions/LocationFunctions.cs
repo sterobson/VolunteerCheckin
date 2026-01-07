@@ -22,6 +22,7 @@ public class LocationFunctions
     private readonly IChecklistItemRepository _checklistItemRepository;
     private readonly INoteRepository _noteRepository;
     private readonly IAreaRepository _areaRepository;
+    private readonly IEventRoleRepository _eventRoleRepository;
     private readonly ClaimsService _claimsService;
 
     public LocationFunctions(
@@ -32,6 +33,7 @@ public class LocationFunctions
         IChecklistItemRepository checklistItemRepository,
         INoteRepository noteRepository,
         IAreaRepository areaRepository,
+        IEventRoleRepository eventRoleRepository,
         ClaimsService claimsService)
     {
         _logger = logger;
@@ -41,6 +43,7 @@ public class LocationFunctions
         _checklistItemRepository = checklistItemRepository;
         _noteRepository = noteRepository;
         _areaRepository = areaRepository;
+        _eventRoleRepository = eventRoleRepository;
         _claimsService = claimsService;
     }
 
@@ -897,16 +900,18 @@ public class LocationFunctions
             }
         }
 
-        // Get areas where this marshal is a lead
-        IEnumerable<AreaEntity> areas = await _areaRepository.GetByEventAsync(eventId);
-        List<string> areaLeadForAreaIds = areas
-            .Where(a =>
+        // Get areas where this marshal is a lead (from EventRoles)
+        // Note: marshal is already fetched above (line 879)
+        List<string> areaLeadForAreaIds = [];
+        if (marshal != null && !string.IsNullOrEmpty(marshal.PersonId))
+        {
+            IEnumerable<EventRoleEntity> roles = await _eventRoleRepository.GetByPersonAndEventAsync(marshal.PersonId, eventId);
+            EventRoleEntity? areaLeadRole = roles.FirstOrDefault(r => r.Role == Constants.RoleEventAreaLead);
+            if (areaLeadRole != null)
             {
-                List<string> leadIds = JsonSerializer.Deserialize<List<string>>(a.AreaLeadMarshalIdsJson ?? "[]") ?? [];
-                return leadIds.Contains(claims.MarshalId);
-            })
-            .Select(a => a.RowKey)
-            .ToList();
+                areaLeadForAreaIds = JsonSerializer.Deserialize<List<string>>(areaLeadRole.AreaIdsJson) ?? [];
+            }
+        }
 
         // Create marshal context for scope evaluation
         ScopeEvaluator.MarshalContext marshalContext = new(

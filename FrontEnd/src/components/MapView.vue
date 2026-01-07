@@ -323,8 +323,13 @@ const initMap = () => {
   }
 
   // Listen for zoom and move events to update label visibility
+  // Also process any pending marker updates that were deferred during zoom
   map.on('zoomend moveend', () => {
-    checkVisibleMarkersAndUpdate();
+    if (pendingMarkerUpdate) {
+      updateMarkers();
+    } else {
+      checkVisibleMarkersAndUpdate();
+    }
   });
 
   updateMarkers();
@@ -591,13 +596,25 @@ const initDrawingMode = () => {
   updatePolygonPreview();
 };
 
+// Track if marker update was requested during zoom
+let pendingMarkerUpdate = false;
+
 const updateMarkers = () => {
   // Don't update markers during map animations to prevent positioning bugs
   if (map && map._animatingZoom) {
+    pendingMarkerUpdate = true;
     return;
   }
 
-  markers.value.forEach((marker) => marker.remove());
+  pendingMarkerUpdate = false;
+
+  // Safely remove markers - clear event listeners first to prevent animation errors
+  markers.value.forEach((marker) => {
+    if (marker._map) {
+      marker.off(); // Remove all event listeners
+      marker.remove();
+    }
+  });
   markers.value = [];
 
   if (!map) return;

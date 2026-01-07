@@ -245,7 +245,7 @@
         </div>
       </div>
 
-      <!-- Checkpoint icon style accordion -->
+      <!-- Checkpoint marker style accordion -->
       <div class="accordion-item">
         <button
           type="button"
@@ -254,7 +254,7 @@
           @click="toggleSection('iconStyle')"
         >
           <div class="accordion-icon" v-html="iconStylePreviewSvg"></div>
-          <span class="accordion-title">{{ getAreaCheckpointTerm(false) }} icon style</span>
+          <span class="accordion-title">{{ getAreaCheckpointTerm(false) }} marker style</span>
           <span class="accordion-arrow">{{ expandedSections.iconStyle ? '▲' : '▼' }}</span>
         </button>
         <div v-if="expandedSections.iconStyle" class="accordion-content">
@@ -280,7 +280,7 @@
             :inherited-size="eventDefaultStyleSize || ''"
             :inherited-map-rotation="eventDefaultStyleMapRotation ?? ''"
             default-label="Event default"
-            icon-label="Icon style"
+            icon-label="Marker style"
             level="area"
             :show-preview="true"
             @update:style-type="handleStyleInput('checkpointStyleType', $event)"
@@ -626,7 +626,7 @@ const polygonPreviewSvg = computed(() => {
   </svg>`;
 });
 
-// Generate icon style preview SVG - each property inherits independently from event
+// Generate marker style preview SVG - each property inherits independently from event
 const iconStylePreviewSvg = computed(() => {
   // Check if this area has any custom style set
   const hasAreaStyle = form.value.checkpointStyleType !== 'default'

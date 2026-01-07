@@ -744,12 +744,16 @@ if ($Environment -eq "testing" -and $Backend) {
 # ============================================================================
 # Summary
 # ============================================================================
+$completionTime = Get-Date -Format "HH:mm:ss on dd MMM yyyy"
+
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 if ($deploymentSuccess) {
     Write-Success "  Deployment Complete!"
+    Write-Host "  $completionTime" -ForegroundColor Gray
 } else {
     Write-ErrorMessage "  Deployment Failed!"
+    Write-Host "  $completionTime" -ForegroundColor Gray
 }
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""

@@ -29,14 +29,15 @@ public class ChecklistQueryFunctions
         IMarshalRepository marshalRepository,
         ILocationRepository locationRepository,
         IAssignmentRepository assignmentRepository,
-        IAreaRepository areaRepository)
+        IAreaRepository areaRepository,
+        IEventRoleRepository eventRoleRepository)
     {
         _logger = logger;
         _checklistItemRepository = checklistItemRepository;
         _checklistCompletionRepository = checklistCompletionRepository;
         _marshalRepository = marshalRepository;
         _locationRepository = locationRepository;
-        _contextHelper = new ChecklistContextHelper(assignmentRepository, locationRepository, areaRepository);
+        _contextHelper = new ChecklistContextHelper(assignmentRepository, locationRepository, areaRepository, eventRoleRepository, marshalRepository);
     }
 
     [Function("GetMarshalChecklist")]
@@ -122,10 +123,10 @@ public class ChecklistQueryFunctions
             List<ChecklistCompletionEntity> allCompletions =
                 (await _checklistCompletionRepository.GetByEventAsync(eventId)).ToList();
 
-            // Get area leads for checkpoint's areas (from preloaded data)
-            List<string> areaLeadIds = preloaded.Areas
-                .Where(a => locationAreaIds.Contains(a.RowKey))
-                .SelectMany(a => JsonSerializer.Deserialize<List<string>>(a.AreaLeadMarshalIdsJson) ?? [])
+            // Get area leads for checkpoint's areas (from preloaded EventRoles data)
+            List<string> areaLeadIds = preloaded.AreaLeadsByMarshalId
+                .Where(kvp => kvp.Value.Any(areaId => locationAreaIds.Contains(areaId)))
+                .Select(kvp => kvp.Key)
                 .Distinct()
                 .ToList();
 
@@ -254,8 +255,11 @@ public class ChecklistQueryFunctions
             List<ChecklistCompletionEntity> allCompletions =
                 (await _checklistCompletionRepository.GetByEventAsync(eventId)).ToList();
 
-            // Get area leads for this area
-            List<string> areaLeadIds = JsonSerializer.Deserialize<List<string>>(area.AreaLeadMarshalIdsJson) ?? [];
+            // Get area leads for this area (from preloaded EventRoles data)
+            List<string> areaLeadIds = preloaded.AreaLeadsByMarshalId
+                .Where(kvp => kvp.Value.Contains(areaId))
+                .Select(kvp => kvp.Key)
+                .ToList();
 
             // Build set of all relevant marshal IDs (assigned + area leads)
             HashSet<string> relevantMarshalIds = [.. assignedMarshalIds, .. areaLeadIds];

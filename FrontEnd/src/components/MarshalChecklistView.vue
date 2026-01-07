@@ -18,7 +18,7 @@
     <div v-else class="checklist-items">
       <div
         v-for="item in itemsWithLocalState"
-        :key="item.itemId"
+        :key="`${item.itemId}_${item.completionContextType}_${item.completionContextId}`"
         class="checklist-item"
         :class="{
           'item-completed': item.localIsCompleted,

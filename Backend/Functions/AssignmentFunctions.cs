@@ -421,7 +421,7 @@ public class AssignmentFunctions
     /// <summary>
     /// Resolved checkpoint style containing all style properties
     /// </summary>
-    private record ResolvedCheckpointStyle(
+    private sealed record ResolvedCheckpointStyle(
         string Type,
         string Color,
         string BackgroundShape,

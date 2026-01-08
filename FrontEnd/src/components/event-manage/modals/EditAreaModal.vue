@@ -1577,7 +1577,7 @@ const getCheckpointIconSvg = (checkpoint) => {
 .area-contacts-list h4 {
   margin: 0 0 0.75rem 0;
   font-size: 0.9rem;
-  color: var(--text-secondary, #333);
+  color: var(--text-secondary);
 }
 
 .contact-item {

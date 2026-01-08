@@ -47,6 +47,7 @@ public class NoteFunctions
     /// Create a new note for an event.
     /// Only event admins and area leads can create notes.
     /// </summary>
+#pragma warning disable MA0051
     [Function("CreateNote")]
     public async Task<IActionResult> CreateNote(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "events/{eventId}/notes")] HttpRequest req,
@@ -63,7 +64,7 @@ public class NoteFunctions
 
             // Parse request
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-            CreateNoteRequest? request = JsonSerializer.Deserialize<CreateNoteRequest>(requestBody, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            CreateNoteRequest? request = JsonSerializer.Deserialize<CreateNoteRequest>(requestBody, FunctionHelpers.JsonOptions);
 
             if (request == null || string.IsNullOrWhiteSpace(request.Title))
             {
@@ -119,6 +120,7 @@ public class NoteFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     /// <summary>
     /// Get all notes for an event (admin view with full details).
@@ -146,7 +148,7 @@ public class NoteFunctions
                 .Where(m => !string.IsNullOrEmpty(m.PersonId))
                 .ToDictionary(m => m.PersonId, m => m.Name);
 
-            List<NoteResponse> responses = notes.Select(n => ToNoteResponse(n, personNameLookup)).ToList();
+            List<NoteResponse> responses = [.. notes.Select(n => ToNoteResponse(n, personNameLookup))];
 
             return new OkObjectResult(responses);
         }
@@ -201,6 +203,7 @@ public class NoteFunctions
     /// Update an existing note.
     /// Only event admins and area leads can update notes.
     /// </summary>
+#pragma warning disable MA0051
     [Function("UpdateNote")]
     public async Task<IActionResult> UpdateNote(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "events/{eventId}/notes/{noteId}")] HttpRequest req,
@@ -224,7 +227,7 @@ public class NoteFunctions
 
             // Parse request
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-            UpdateNoteRequest? request = JsonSerializer.Deserialize<UpdateNoteRequest>(requestBody, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            UpdateNoteRequest? request = JsonSerializer.Deserialize<UpdateNoteRequest>(requestBody, FunctionHelpers.JsonOptions);
 
             if (request == null || string.IsNullOrWhiteSpace(request.Title))
             {
@@ -270,6 +273,7 @@ public class NoteFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     /// <summary>
     /// Delete a note.
@@ -313,6 +317,7 @@ public class NoteFunctions
     /// Get notes relevant to a specific marshal.
     /// Uses scope evaluation to filter notes based on marshal's assignments.
     /// </summary>
+#pragma warning disable MA0051
     [Function("GetNotesForMarshal")]
     public async Task<IActionResult> GetNotesForMarshal(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/{eventId}/marshals/{marshalId}/notes")] HttpRequest req,
@@ -370,12 +375,11 @@ public class NoteFunctions
             }
 
             // Sort: pinned first, then by priority (Urgent > High > Normal > Low), then by display order
-            relevantNotes = relevantNotes
+            relevantNotes = [.. relevantNotes
                 .OrderByDescending(n => n.IsPinned)
                 .ThenBy(n => GetPrioritySortOrder(n.Priority))
                 .ThenBy(n => allNotes.First(note => note.NoteId == n.NoteId).DisplayOrder)
-                .ThenByDescending(n => n.CreatedAt)
-                .ToList();
+                .ThenByDescending(n => n.CreatedAt)];
 
             return new OkObjectResult(relevantNotes);
         }
@@ -385,10 +389,12 @@ public class NoteFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     /// <summary>
     /// Get notes for the current authenticated marshal.
     /// </summary>
+#pragma warning disable MA0051
     [Function("GetMyNotes")]
     public async Task<IActionResult> GetMyNotes(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/{eventId}/my-notes")] HttpRequest req,
@@ -417,7 +423,7 @@ public class NoteFunctions
                         .Where(m => !string.IsNullOrEmpty(m.PersonId))
                         .ToDictionary(m => m.PersonId, m => m.Name);
 
-                    List<NoteForMarshalResponse> allNotesResponse = allNotes.Select(n =>
+                    List<NoteForMarshalResponse> allNotesResponse = [.. allNotes.Select(n =>
                     {
                         // Look up current name
                         string createdByName = n.CreatedByName;
@@ -440,7 +446,7 @@ public class NoteFunctions
                             CreatedByName: createdByName,
                             MatchedScope: "Admin"
                         );
-                    }).ToList();
+                    })];
                     return new OkObjectResult(allNotesResponse);
                 }
 
@@ -456,12 +462,13 @@ public class NoteFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     #region Helper Methods
 
     private async Task<UserClaims?> GetClaimsAsync(HttpRequest req, string eventId)
     {
-        string? sessionToken = req.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "");
+        string? sessionToken = req.Headers.Authorization.FirstOrDefault()?.Replace("Bearer ", "", StringComparison.OrdinalIgnoreCase);
         if (string.IsNullOrWhiteSpace(sessionToken))
         {
             sessionToken = req.Cookies["session_token"];
@@ -506,7 +513,7 @@ public class NoteFunctions
 
         // Get marshal's assignments
         IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByMarshalAsync(eventId, marshalId);
-        List<string> assignedLocationIds = assignments.Select(a => a.LocationId).ToList();
+        List<string> assignedLocationIds = [.. assignments.Select(a => a.LocationId)];
 
         // Get checkpoints ONCE (will be reused for both context building and scope evaluation)
         IEnumerable<LocationEntity> checkpoints = await _locationRepository.GetByEventAsync(eventId);

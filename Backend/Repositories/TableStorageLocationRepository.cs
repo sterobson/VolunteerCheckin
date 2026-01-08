@@ -51,7 +51,7 @@ public class TableStorageLocationRepository : ILocationRepository
         {
             // Parse the area IDs JSON and check if this checkpoint belongs to the specified area
             List<string>? areaIds = System.Text.Json.JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson);
-            if (areaIds != null && areaIds.Contains(areaId))
+            if (areaIds?.Contains(areaId, StringComparer.Ordinal) == true)
             {
                 locations.Add(location);
             }
@@ -67,7 +67,7 @@ public class TableStorageLocationRepository : ILocationRepository
         {
             // Parse the area IDs JSON and check if this checkpoint belongs to the specified area
             List<string>? areaIds = System.Text.Json.JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson);
-            if (areaIds != null && areaIds.Contains(areaId))
+            if (areaIds?.Contains(areaId, StringComparer.Ordinal) == true)
             {
                 count++;
             }

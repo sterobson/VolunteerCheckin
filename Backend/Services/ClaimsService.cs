@@ -49,7 +49,7 @@ public class ClaimsService
 
         // Look up the session
         AuthSessionEntity? session = await _sessionRepository.GetBySessionTokenHashAsync(tokenHash);
-        if (session == null || !session.IsValid())
+        if (session?.IsValid() != true)
         {
             return null;
         }
@@ -104,7 +104,7 @@ public class ClaimsService
                 try
                 {
                     UserEventMappingEntity? legacyMapping = await _userEventMappingRepository.GetAsync(effectiveEventId, person.Email);
-                    if (legacyMapping != null && legacyMapping.Role == "Admin")
+                    if (legacyMapping?.Role == "Admin")
                     {
                         // Migrate to new EventRoles table
                         string roleId = Guid.NewGuid().ToString();

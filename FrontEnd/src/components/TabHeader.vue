@@ -180,7 +180,7 @@ watch(() => props.tabs, () => {
 
 .tab-button.active {
   color: var(--accent-primary);
-  border-bottom-color: var(--accent-primary, #007bff);
+  border-bottom-color: var(--accent-primary);
   font-weight: 500;
 }
 

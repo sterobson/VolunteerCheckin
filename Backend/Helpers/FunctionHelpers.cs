@@ -7,7 +7,7 @@ namespace VolunteerCheckin.Functions.Helpers;
 
 public static class FunctionHelpers
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+    public static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     /// <summary>
     /// Extracts the session token from either the session cookie or Authorization header.
@@ -21,10 +21,10 @@ public static class FunctionHelpers
         // Fall back to Authorization header (API clients)
         if (string.IsNullOrEmpty(sessionToken))
         {
-            string? authHeader = req.Headers["Authorization"].FirstOrDefault();
+            string? authHeader = req.Headers.Authorization.FirstOrDefault();
             if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
             {
-                sessionToken = authHeader.Substring(7); // Length of "Bearer "
+                sessionToken = authHeader["Bearer ".Length..];
             }
         }
 

@@ -40,6 +40,7 @@ public class AuthFunctions
     /// POST /api/auth/request-login
     /// Body: { "Email": "user@example.com" }
     /// </summary>
+#pragma warning disable MA0051
     [Function("RequestLogin")]
     public async Task<IActionResult> RequestLogin(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/request-login")] HttpRequest req)
@@ -47,10 +48,7 @@ public class AuthFunctions
         try
         {
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-            RequestLoginRequest? request = JsonSerializer.Deserialize<RequestLoginRequest>(requestBody, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
+            RequestLoginRequest? request = JsonSerializer.Deserialize<RequestLoginRequest>(requestBody, FunctionHelpers.JsonOptions);
 
             if (request == null || string.IsNullOrWhiteSpace(request.Email))
             {
@@ -63,7 +61,7 @@ public class AuthFunctions
             // Rate limit check
             if (!_rateLimitService.IsAllowedMagicLinkRequest(request.Email))
             {
-                _logger.LogWarning($"Rate limit exceeded for magic link request: {request.Email}");
+                _logger.LogWarning("Rate limit exceeded for magic link request: {Email}", request.Email);
                 return new ObjectResult(new RequestLoginResponse(
                     Success: false,
                     Message: "Too many login requests. Please try again later."
@@ -108,6 +106,7 @@ public class AuthFunctions
             };
         }
     }
+#pragma warning restore MA0051
 
     /// <summary>
     /// Verify a magic link token and create a session.
@@ -115,6 +114,7 @@ public class AuthFunctions
     /// Body: { "Token": "..." }
     /// Returns: { "Success": true, "SessionToken": "...", "Person": {...} }
     /// </summary>
+#pragma warning disable MA0051
     [Function("VerifyToken")]
     public async Task<IActionResult> VerifyToken(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/verify-token")] HttpRequest req)
@@ -122,10 +122,7 @@ public class AuthFunctions
         try
         {
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-            VerifyTokenRequest? request = JsonSerializer.Deserialize<VerifyTokenRequest>(requestBody, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
+            VerifyTokenRequest? request = JsonSerializer.Deserialize<VerifyTokenRequest>(requestBody, FunctionHelpers.JsonOptions);
 
             if (request == null || string.IsNullOrWhiteSpace(request.Token))
             {
@@ -185,6 +182,7 @@ public class AuthFunctions
             };
         }
     }
+#pragma warning restore MA0051
 
     /// <summary>
     /// Authenticate as a marshal using a magic code.
@@ -192,6 +190,7 @@ public class AuthFunctions
     /// Body: { "EventId": "...", "MagicCode": "ABC123" }
     /// Returns: { "Success": true, "SessionToken": "...", "Person": {...}, "MarshalId": "..." }
     /// </summary>
+#pragma warning disable MA0051
     [Function("MarshalLogin")]
     public async Task<IActionResult> MarshalLogin(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/marshal-login")] HttpRequest req)
@@ -199,10 +198,7 @@ public class AuthFunctions
         try
         {
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-            MarshalLoginRequest? request = JsonSerializer.Deserialize<MarshalLoginRequest>(requestBody, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
+            MarshalLoginRequest? request = JsonSerializer.Deserialize<MarshalLoginRequest>(requestBody, FunctionHelpers.JsonOptions);
 
             if (request == null || string.IsNullOrWhiteSpace(request.EventId) || string.IsNullOrWhiteSpace(request.MagicCode))
             {
@@ -221,7 +217,7 @@ public class AuthFunctions
             // Rate limit check - per IP
             if (!_rateLimitService.IsAllowedMarshalCodeAttempt(ipAddress))
             {
-                _logger.LogWarning($"Rate limit exceeded for marshal code attempt from IP: {ipAddress}");
+                _logger.LogWarning("Rate limit exceeded for marshal code attempt from IP: {IpAddress}", ipAddress);
                 return new ObjectResult(new MarshalLoginResponse(
                     Success: false,
                     SessionToken: null,
@@ -237,7 +233,7 @@ public class AuthFunctions
             // Rate limit check - per event
             if (!_rateLimitService.IsAllowedMarshalCodeAttemptForEvent(request.EventId))
             {
-                _logger.LogWarning($"Rate limit exceeded for marshal code attempts for event: {request.EventId}");
+                _logger.LogWarning("Rate limit exceeded for marshal code attempts for event: {EventId}", request.EventId);
                 return new ObjectResult(new MarshalLoginResponse(
                     Success: false,
                     SessionToken: null,
@@ -298,6 +294,7 @@ public class AuthFunctions
             };
         }
     }
+#pragma warning restore MA0051
 
     /// <summary>
     /// Logout (revoke session).
@@ -389,6 +386,7 @@ public class AuthFunctions
     /// Body: { "Email": "user@example.com" }
     /// WARNING: Only use in development! No email verification!
     /// </summary>
+#pragma warning disable MA0051
     [Function("InstantLogin")]
     public async Task<IActionResult> InstantLogin(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/instant-login")] HttpRequest req)
@@ -396,10 +394,7 @@ public class AuthFunctions
         try
         {
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-            InstantLoginRequest? request = JsonSerializer.Deserialize<InstantLoginRequest>(requestBody, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
+            InstantLoginRequest? request = JsonSerializer.Deserialize<InstantLoginRequest>(requestBody, FunctionHelpers.JsonOptions);
 
             if (request == null || string.IsNullOrWhiteSpace(request.Email))
             {
@@ -459,6 +454,7 @@ public class AuthFunctions
             };
         }
     }
+#pragma warning restore MA0051
 
     /// <summary>
     /// Get current user's profile.
@@ -517,6 +513,7 @@ public class AuthFunctions
     /// PUT /api/auth/profile
     /// Body: { "Name": "John Doe", "Phone": "555-1234" }
     /// </summary>
+#pragma warning disable MA0051
     [Function("UpdateProfile")]
     public async Task<IActionResult> UpdateProfile(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "auth/profile")] HttpRequest req)
@@ -540,10 +537,7 @@ public class AuthFunctions
 
             // Parse request
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-            UpdateProfileRequest? request = JsonSerializer.Deserialize<UpdateProfileRequest>(requestBody, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
+            UpdateProfileRequest? request = JsonSerializer.Deserialize<UpdateProfileRequest>(requestBody, FunctionHelpers.JsonOptions);
 
             if (request == null)
             {
@@ -595,7 +589,7 @@ public class AuthFunctions
                 person.IsSystemAdmin
             );
 
-            _logger.LogInformation($"Profile updated for person {person.PersonId}");
+            _logger.LogInformation("Profile updated for person {PersonId}", person.PersonId);
 
             return new OkObjectResult(personInfo);
         }
@@ -608,4 +602,5 @@ public class AuthFunctions
             };
         }
     }
+#pragma warning restore MA0051
 }

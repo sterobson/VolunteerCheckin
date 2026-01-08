@@ -40,7 +40,7 @@ public class TableStorageChecklistItemRepository : IChecklistItemRepository
         {
             items.Add(item);
         }
-        return items.OrderBy(i => i.DisplayOrder).ThenBy(i => i.Text);
+        return items.OrderBy(i => i.DisplayOrder).ThenBy(i => i.Text, StringComparer.Ordinal);
     }
 
     public async Task UpdateAsync(ChecklistItemEntity item)

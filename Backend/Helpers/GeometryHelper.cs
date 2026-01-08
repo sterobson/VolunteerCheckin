@@ -26,7 +26,7 @@ public static class GeometryHelper
             RoutePoint pj = polygon[j];
 
             if ((pi.Lng > point.Lng) != (pj.Lng > point.Lng) &&
-                point.Lat < (pj.Lat - pi.Lat) * (point.Lng - pi.Lng) / (pj.Lng - pi.Lng) + pi.Lat)
+                point.Lat < (((pj.Lat - pi.Lat) * (point.Lng - pi.Lng)) / (pj.Lng - pi.Lng)) + pi.Lat)
             {
                 inside = !inside;
             }

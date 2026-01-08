@@ -70,8 +70,8 @@ public static partial class Validators
         }
 
         // Ensure consistent separator (all dots or all slashes)
-        bool hasDots = what3Words.Contains('.');
-        bool hasSlashes = what3Words.Contains('/');
+        bool hasDots = what3Words.Contains('.', StringComparison.Ordinal);
+        bool hasSlashes = what3Words.Contains('/', StringComparison.Ordinal);
         return hasDots != hasSlashes; // XOR - can't have both
     }
 

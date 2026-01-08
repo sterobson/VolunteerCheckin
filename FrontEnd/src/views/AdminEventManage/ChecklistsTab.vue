@@ -1,7 +1,6 @@
 <template>
   <div class="checklists-tab">
     <div class="checklists-tab-header">
-      <h2>{{ terms.checklists }}</h2>
       <div class="button-group">
         <button @click="$emit('add-checklist-item')" class="btn btn-primary">
           Add {{ termsLower.checklist }}
@@ -11,115 +10,20 @@
 
     <!-- Filters -->
     <div class="filters-section">
-      <div class="filter-group">
-        <h4>Filter by {{ termsLower.area }}:</h4>
-        <label class="filter-checkbox">
-          <input
-            type="checkbox"
-            :checked="showAllAreas"
-            @change="toggleAllAreas"
-          />
-          All {{ termsLower.areas }}
-        </label>
-        <div v-if="!showAllAreas" class="checkbox-dropdown">
-          <div class="checkbox-dropdown-header">
-            <button @click="toggleAllAreasSelection" class="toggle-all-btn">
-              {{ allAreasSelected ? 'Deselect all' : 'Select all' }}
-            </button>
-          </div>
-          <div class="checkbox-list">
-            <label
-              v-for="area in sortedAreas"
-              :key="area.id"
-              class="checkbox-item"
-            >
-              <input
-                type="checkbox"
-                :checked="filterAreaIds.includes(area.id)"
-                @change="toggleArea(area.id)"
-              />
-              <span class="area-color-dot" :style="{ backgroundColor: area.color || '#667eea' }"></span>
-              {{ area.name }}
-            </label>
-          </div>
-        </div>
+      <div class="search-group">
+        <input
+          v-model="searchQuery"
+          type="text"
+          class="search-input"
+          :placeholder="`Search ${termsLower.checklists}...`"
+        />
       </div>
-
-      <div class="filter-group">
-        <h4>Filter by {{ termsLower.checkpoint }}:</h4>
-        <label class="filter-checkbox">
-          <input
-            type="checkbox"
-            :checked="showAllCheckpoints"
-            @change="toggleAllCheckpoints"
-          />
-          All {{ termsLower.checkpoints }}
-        </label>
-        <div v-if="!showAllCheckpoints" class="checkbox-dropdown">
-          <div class="checkbox-dropdown-header">
-            <button @click="toggleAllCheckpointsSelection" class="toggle-all-btn">
-              {{ allCheckpointsSelected ? 'Deselect all' : 'Select all' }}
-            </button>
-          </div>
-          <div class="checkbox-list">
-            <label
-              v-for="location in sortedLocations"
-              :key="location.id"
-              class="checkbox-item"
-            >
-              <input
-                type="checkbox"
-                :checked="filterLocationIds.includes(location.id)"
-                @change="toggleCheckpoint(location.id)"
-              />
-              {{ location.name }}
-            </label>
-          </div>
-        </div>
-      </div>
-
-      <div class="filter-group">
-        <h4>Filter by {{ termsLower.person }}:</h4>
-        <label class="filter-checkbox">
-          <input
-            type="checkbox"
-            :checked="showAllPeople"
-            @change="toggleAllPeople"
-          />
-          All {{ termsLower.people }}
-        </label>
-        <div v-if="!showAllPeople" class="checkbox-dropdown">
-          <div class="checkbox-dropdown-header">
-            <button @click="toggleAllPeopleSelection" class="toggle-all-btn">
-              {{ allPeopleSelected ? 'Deselect all' : 'Select all' }}
-            </button>
-          </div>
-          <div class="checkbox-list">
-            <label
-              v-for="marshal in sortedMarshals"
-              :key="marshal.id"
-              class="checkbox-item"
-            >
-              <input
-                type="checkbox"
-                :checked="filterMarshalIds.includes(marshal.id)"
-                @change="togglePerson(marshal.id)"
-              />
-              {{ marshal.name }}
-            </label>
-          </div>
-        </div>
-      </div>
-
-      <button v-if="hasActiveFilters" @click="clearFilters" class="btn btn-secondary btn-small">
-        Clear filters
-      </button>
     </div>
 
     <!-- Checklist Items List -->
     <div class="checklist-items-list">
       <div v-if="filteredItems.length === 0" class="empty-state">
-        <p>{{ hasActiveFilters ? 'No checklist items match the selected filters.' : 'No checklist items yet. Create one to get started!' }}</p>
+        <p>{{ searchQuery ? `No ${termsLower.checklists} match your search.` : `No ${termsLower.checklists} yet. Create one to get started!` }}</p>
       </div>
 
       <div
@@ -179,230 +83,22 @@ const props = defineProps({
 
 const emit = defineEmits(['add-checklist-item', 'select-checklist-item']);
 
-const showAllAreas = ref(true);
-const showAllCheckpoints = ref(true);
-const showAllPeople = ref(true);
-const filterAreaIds = ref([]);
-const filterLocationIds = ref([]);
-const filterMarshalIds = ref([]);
+const searchQuery = ref('');
 
-const sortedAreas = computed(() => {
-  return [...props.areas].sort((a, b) => {
-    if (a.displayOrder !== b.displayOrder) {
-      return a.displayOrder - b.displayOrder;
-    }
-    return alphanumericCompare(a.name, b.name);
-  });
-});
-
-const sortedLocations = computed(() => {
-  return [...props.locations].sort((a, b) => alphanumericCompare(a.name, b.name));
-});
-
-const sortedMarshals = computed(() => {
-  return [...props.marshals].sort((a, b) => alphanumericCompare(a.name, b.name));
-});
-
-const allAreasSelected = computed(() => {
-  return props.areas.length > 0 && filterAreaIds.value.length === props.areas.length;
-});
-
-const allCheckpointsSelected = computed(() => {
-  return props.locations.length > 0 && filterLocationIds.value.length === props.locations.length;
-});
-
-const allPeopleSelected = computed(() => {
-  return props.marshals.length > 0 && filterMarshalIds.value.length === props.marshals.length;
-});
-
-const hasActiveFilters = computed(() => {
-  return !showAllAreas.value || !showAllCheckpoints.value || !showAllPeople.value;
-});
-
-const toggleAllAreas = () => {
-  showAllAreas.value = !showAllAreas.value;
-  if (!showAllAreas.value && filterAreaIds.value.length === 0) {
-    filterAreaIds.value = props.areas.map(a => a.id);
-  }
-};
-
-const toggleAllCheckpoints = () => {
-  showAllCheckpoints.value = !showAllCheckpoints.value;
-  if (!showAllCheckpoints.value && filterLocationIds.value.length === 0) {
-    filterLocationIds.value = props.locations.map(l => l.id);
-  }
-};
-
-const toggleAllPeople = () => {
-  showAllPeople.value = !showAllPeople.value;
-  if (!showAllPeople.value && filterMarshalIds.value.length === 0) {
-    filterMarshalIds.value = props.marshals.map(m => m.id);
-  }
-};
-
-const toggleArea = (areaId) => {
-  const index = filterAreaIds.value.indexOf(areaId);
-  if (index >= 0) {
-    filterAreaIds.value.splice(index, 1);
-  } else {
-    filterAreaIds.value.push(areaId);
-  }
-};
-
-const toggleCheckpoint = (locationId) => {
-  const index = filterLocationIds.value.indexOf(locationId);
-  if (index >= 0) {
-    filterLocationIds.value.splice(index, 1);
-  } else {
-    filterLocationIds.value.push(locationId);
-  }
-};
-
-const togglePerson = (marshalId) => {
-  const index = filterMarshalIds.value.indexOf(marshalId);
-  if (index >= 0) {
-    filterMarshalIds.value.splice(index, 1);
-  } else {
-    filterMarshalIds.value.push(marshalId);
-  }
-};
-
-const toggleAllAreasSelection = () => {
-  if (allAreasSelected.value) {
-    filterAreaIds.value = [];
-  } else {
-    filterAreaIds.value = props.areas.map(a => a.id);
-  }
-};
-
-const toggleAllCheckpointsSelection = () => {
-  if (allCheckpointsSelected.value) {
-    filterLocationIds.value = [];
-  } else {
-    filterLocationIds.value = props.locations.map(l => l.id);
-  }
-};
-
-const toggleAllPeopleSelection = () => {
-  if (allPeopleSelected.value) {
-    filterMarshalIds.value = [];
-  } else {
-    filterMarshalIds.value = props.marshals.map(m => m.id);
-  }
-};
-
-const clearFilters = () => {
-  showAllAreas.value = true;
-  showAllCheckpoints.value = true;
-  showAllPeople.value = true;
-  filterAreaIds.value = [];
-  filterLocationIds.value = [];
-  filterMarshalIds.value = [];
-};
-
-// Helper to get checkpoints for a marshal
-const getMarshalCheckpoints = (marshalId) => {
-  const marshal = props.marshals.find(m => m.id === marshalId);
-  if (!marshal || !marshal.assignments) return [];
-  return marshal.assignments.map(a => a.locationId);
-};
-
-// Helper to get areas for checkpoints
-const getAreasForCheckpoints = (checkpointIds) => {
-  const areaSet = new Set();
-  checkpointIds.forEach(checkpointId => {
-    const location = props.locations.find(l => l.id === checkpointId);
-    if (location && location.areaIds) {
-      location.areaIds.forEach(areaId => areaSet.add(areaId));
-    }
-  });
-  return Array.from(areaSet);
-};
-
-// Helper to check if a marshal matches a scope configuration
-const marshalMatchesScope = (marshalId, config) => {
-  if (!config) return false;
-
-  const checkpointIds = getMarshalCheckpoints(marshalId);
-  const areaIds = getAreasForCheckpoints(checkpointIds);
-
-  // SpecificPeople
-  if (config.scope === 'SpecificPeople' && config.itemType === 'Marshal') {
-    return config.ids.includes(marshalId) || config.ids.includes('ALL_MARSHALS');
-  }
-
-  // EveryoneAtCheckpoints
-  if (config.scope === 'EveryoneAtCheckpoints' && config.itemType === 'Checkpoint') {
-    return config.ids.includes('ALL_CHECKPOINTS') ||
-           checkpointIds.some(id => config.ids.includes(id));
-  }
-
-  // OnePerCheckpoint
-  if (config.scope === 'OnePerCheckpoint' && config.itemType === 'Checkpoint') {
-    return config.ids.includes('ALL_CHECKPOINTS') ||
-           checkpointIds.some(id => config.ids.includes(id));
-  }
-
-  // OnePerCheckpoint filtered by areas
-  if (config.scope === 'OnePerCheckpoint' && config.itemType === 'Area') {
-    return config.ids.includes('ALL_AREAS') ||
-           areaIds.some(id => config.ids.includes(id));
-  }
-
-  // EveryoneInAreas
-  if (config.scope === 'EveryoneInAreas' && config.itemType === 'Area') {
-    return config.ids.includes('ALL_AREAS') ||
-           areaIds.some(id => config.ids.includes(id));
-  }
-
-  // OnePerArea
-  if (config.scope === 'OnePerArea' && config.itemType === 'Area') {
-    return config.ids.includes('ALL_AREAS') ||
-           areaIds.some(id => config.ids.includes(id));
-  }
-
-  // EveryAreaLead and OneLeadPerArea - would need area lead data
-  // For now, just check if areas match (assuming we don't have area lead info here)
-  if ((config.scope === 'EveryAreaLead' || config.scope === 'OneLeadPerArea') && config.itemType === 'Area') {
-    return config.ids.includes('ALL_AREAS') ||
-           areaIds.some(id => config.ids.includes(id));
-  }
-
-  return false;
-};
-
+// Search filtering - searches item text
 const filteredItems = computed(() => {
-  let items = props.checklistItems;
-
-  if (!showAllAreas.value && filterAreaIds.value.length > 0) {
-    items = items.filter(item => {
-      if (!item.scopeConfigurations) return false;
-      return item.scopeConfigurations.some(config =>
-        config.itemType === 'Area' && filterAreaIds.value.some(areaId => config.ids.includes(areaId))
-      );
-    });
+  if (!searchQuery.value.trim()) {
+    return props.checklistItems;
   }
 
-  if (!showAllCheckpoints.value && filterLocationIds.value.length > 0) {
-    items = items.filter(item => {
-      if (!item.scopeConfigurations) return false;
-      return item.scopeConfigurations.some(config =>
-        config.itemType === 'Checkpoint' && filterLocationIds.value.some(locationId => config.ids.includes(locationId))
-      );
-    });
-  }
+  const searchTerms = searchQuery.value.toLowerCase().trim().split(/\s+/);
 
-  if (!showAllPeople.value && filterMarshalIds.value.length > 0) {
-    items = items.filter(item => {
-      if (!item.scopeConfigurations) return false;
-      // Item matches if ANY of the selected marshals would see it
-      return filterMarshalIds.value.some(marshalId =>
-        item.scopeConfigurations.some(config => marshalMatchesScope(marshalId, config))
-      );
-    });
-  }
+  return props.checklistItems.filter(item => {
+    const searchableText = (item.text || '').toLowerCase();
 
-  return items;
+    // All search terms must match
+    return searchTerms.every(term => searchableText.includes(term));
+  });
 });
 
 const sortedItems = computed(() => {
@@ -532,125 +228,36 @@ const getIncompleteDetails = (item) => {
 }
 
 .filters-section {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.5rem;
-  padding: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
   background: var(--bg-tertiary);
   border-radius: 8px;
-  align-items: flex-start;
 }
 
-.filter-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  min-width: 200px;
-}
-
-.filter-group h4 {
-  margin: 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.filter-checkbox {
+.search-group {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.9rem;
-  cursor: pointer;
-  color: var(--text-primary);
 }
 
-.filter-checkbox input[type="checkbox"] {
-  cursor: pointer;
-  width: 1rem;
-  height: 1rem;
-  flex-shrink: 0;
-}
-
-.checkbox-dropdown {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-left: 1.5rem;
-}
-
-.checkbox-dropdown-header {
-  display: flex;
-  justify-content: flex-start;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.toggle-all-btn {
-  padding: 0.4rem 0.75rem;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
+.search-input {
+  flex: 1;
+  max-width: 400px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--input-border);
   border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  color: var(--text-primary);
-  transition: background-color 0.2s;
-  font-weight: 500;
-}
-
-.toggle-all-btn:hover {
-  background: var(--bg-secondary);
-}
-
-.checkbox-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  max-height: 300px;
-  overflow-y: auto;
-  padding-right: 0.5rem;
-}
-
-.checkbox-list::-webkit-scrollbar {
-  width: 6px;
-}
-
-.checkbox-list::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
-  border-radius: 3px;
-}
-
-.checkbox-list::-webkit-scrollbar-thumb {
-  background: var(--text-light);
-  border-radius: 3px;
-}
-
-.checkbox-list::-webkit-scrollbar-thumb:hover {
-  background: var(--text-darker);
-}
-
-.checkbox-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
   font-size: 0.9rem;
-  cursor: pointer;
+  background: var(--input-bg);
   color: var(--text-primary);
-  padding: 0.25rem 0;
 }
 
-.checkbox-item input[type="checkbox"] {
-  cursor: pointer;
-  width: 1rem;
-  height: 1rem;
-  flex-shrink: 0;
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
 }
 
-.area-color-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  display: inline-block;
-  flex-shrink: 0;
+.search-input::placeholder {
+  color: var(--text-muted);
 }
 
 .empty-state {
@@ -733,11 +340,6 @@ const getIncompleteDetails = (item) => {
   transition: background-color 0.2s;
 }
 
-.btn-small {
-  padding: 0.4rem 0.8rem;
-  font-size: 0.85rem;
-}
-
 .btn-primary {
   background: var(--accent-primary);
   color: white;
@@ -754,19 +356,5 @@ const getIncompleteDetails = (item) => {
 
 .btn-secondary:hover {
   background: var(--btn-secondary-hover);
-}
-
-@media (max-width: 768px) {
-  .filters-section {
-    flex-direction: column;
-  }
-
-  .filter-group {
-    width: 100%;
-  }
-
-  .checkbox-list {
-    max-height: 200px;
-  }
 }
 </style>

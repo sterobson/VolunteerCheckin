@@ -1,7 +1,6 @@
 <template>
   <div class="notes-tab">
     <div class="notes-tab-header">
-      <h2>Notes</h2>
       <div class="button-group">
         <button @click="$emit('add-note')" class="btn btn-primary">
           Add note
@@ -11,63 +10,20 @@
 
     <!-- Filters -->
     <div class="filters-section">
-      <div class="filter-group">
-        <h4>Filter by priority:</h4>
-        <div class="priority-filters">
-          <label
-            v-for="priority in priorities"
-            :key="priority.value"
-            class="filter-checkbox"
-          >
-            <input
-              type="checkbox"
-              :checked="filterPriorities.includes(priority.value)"
-              @change="togglePriority(priority.value)"
-            />
-            <span class="priority-dot" :class="priority.value.toLowerCase()"></span>
-            {{ priority.label }}
-          </label>
-        </div>
+      <div class="search-group">
+        <input
+          v-model="searchQuery"
+          type="text"
+          class="search-input"
+          placeholder="Search by title, content, or priority..."
+        />
       </div>
-
-      <div class="filter-group">
-        <h4>Filter by area:</h4>
-        <label class="filter-checkbox">
-          <input
-            type="checkbox"
-            :checked="showAllAreas"
-            @change="toggleAllAreas"
-          />
-          All areas
-        </label>
-        <div v-if="!showAllAreas" class="checkbox-dropdown">
-          <div class="checkbox-list">
-            <label
-              v-for="area in sortedAreas"
-              :key="area.id"
-              class="checkbox-item"
-            >
-              <input
-                type="checkbox"
-                :checked="filterAreaIds.includes(area.id)"
-                @change="toggleArea(area.id)"
-              />
-              <span class="area-color-dot" :style="{ backgroundColor: area.color || '#667eea' }"></span>
-              {{ area.name }}
-            </label>
-          </div>
-        </div>
-      </div>
-
-      <button v-if="hasActiveFilters" @click="clearFilters" class="btn btn-secondary btn-small">
-        Clear filters
-      </button>
     </div>
 
     <!-- Notes List -->
     <div class="notes-list">
       <div v-if="filteredNotes.length === 0" class="empty-state">
-        <p>{{ hasActiveFilters ? 'No notes match the selected filters.' : 'No notes yet. Create one to get started!' }}</p>
+        <p>{{ searchQuery ? 'No notes match your search.' : 'No notes yet. Create one to get started!' }}</p>
       </div>
 
       <div
@@ -110,7 +66,7 @@ import { ref, computed, defineProps, defineEmits } from 'vue';
 import { alphanumericCompare } from '../../utils/sortUtils';
 import { useTerminology } from '../../composables/useTerminology';
 
-const { terms, termsLower } = useTerminology();
+const { termsLower } = useTerminology();
 
 const props = defineProps({
   notes: {
@@ -133,80 +89,22 @@ const props = defineProps({
 
 const emit = defineEmits(['add-note', 'select-note']);
 
-const priorities = [
-  { value: 'Urgent', label: 'Urgent' },
-  { value: 'High', label: 'High' },
-  { value: 'Normal', label: 'Normal' },
-  { value: 'Low', label: 'Low' },
-];
+const searchQuery = ref('');
 
-const showAllAreas = ref(true);
-const filterAreaIds = ref([]);
-const filterPriorities = ref(['Urgent', 'High', 'Normal', 'Low']);
-
-const sortedAreas = computed(() => {
-  return [...props.areas].sort((a, b) => {
-    if (a.displayOrder !== b.displayOrder) {
-      return a.displayOrder - b.displayOrder;
-    }
-    return alphanumericCompare(a.name, b.name);
-  });
-});
-
-const hasActiveFilters = computed(() => {
-  return !showAllAreas.value || filterPriorities.value.length < 4;
-});
-
-const toggleAllAreas = () => {
-  showAllAreas.value = !showAllAreas.value;
-  if (!showAllAreas.value && filterAreaIds.value.length === 0) {
-    filterAreaIds.value = props.areas.map(a => a.id);
-  }
-};
-
-const toggleArea = (areaId) => {
-  const index = filterAreaIds.value.indexOf(areaId);
-  if (index >= 0) {
-    filterAreaIds.value.splice(index, 1);
-  } else {
-    filterAreaIds.value.push(areaId);
-  }
-};
-
-const togglePriority = (priority) => {
-  const index = filterPriorities.value.indexOf(priority);
-  if (index >= 0) {
-    filterPriorities.value.splice(index, 1);
-  } else {
-    filterPriorities.value.push(priority);
-  }
-};
-
-const clearFilters = () => {
-  showAllAreas.value = true;
-  filterAreaIds.value = [];
-  filterPriorities.value = ['Urgent', 'High', 'Normal', 'Low'];
-};
-
+// Search filtering - searches title + content + priority
 const filteredNotes = computed(() => {
-  let notes = props.notes;
-
-  // Filter by priority
-  if (filterPriorities.value.length < 4) {
-    notes = notes.filter(note => filterPriorities.value.includes(note.priority || 'Normal'));
+  if (!searchQuery.value.trim()) {
+    return props.notes;
   }
 
-  // Filter by area
-  if (!showAllAreas.value && filterAreaIds.value.length > 0) {
-    notes = notes.filter(note => {
-      if (!note.scopeConfigurations) return false;
-      return note.scopeConfigurations.some(config =>
-        config.itemType === 'Area' && filterAreaIds.value.some(areaId => config.ids.includes(areaId))
-      );
-    });
-  }
+  const searchTerms = searchQuery.value.toLowerCase().trim().split(/\s+/);
 
-  return notes;
+  return props.notes.filter(note => {
+    const searchableText = `${note.title || ''} ${note.content || ''} ${note.priority || ''}`.toLowerCase();
+
+    // All search terms must match
+    return searchTerms.every(term => searchableText.includes(term));
+  });
 });
 
 const sortedNotes = computed(() => {
@@ -329,100 +227,36 @@ const formatRelativeTime = (dateString) => {
 }
 
 .filters-section {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.5rem;
-  padding: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
   background: var(--bg-tertiary);
   border-radius: 8px;
-  align-items: flex-start;
 }
 
-.filter-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  min-width: 200px;
-}
-
-.filter-group h4 {
-  margin: 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.priority-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.filter-checkbox {
+.search-group {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.search-input {
+  flex: 1;
+  max-width: 400px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
   font-size: 0.9rem;
-  cursor: pointer;
+  background: var(--input-bg);
   color: var(--text-primary);
 }
 
-.filter-checkbox input[type="checkbox"] {
-  cursor: pointer;
-  width: 1rem;
-  height: 1rem;
-  flex-shrink: 0;
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
 }
 
-.priority-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
-.priority-dot.urgent { background: var(--priority-urgent); }
-.priority-dot.high { background: var(--priority-high); }
-.priority-dot.normal { background: var(--priority-normal); }
-.priority-dot.low { background: var(--priority-low); }
-
-.checkbox-dropdown {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-left: 1.5rem;
-}
-
-.checkbox-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.checkbox-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-  cursor: pointer;
-  color: var(--text-primary);
-  padding: 0.25rem 0;
-}
-
-.checkbox-item input[type="checkbox"] {
-  cursor: pointer;
-  width: 1rem;
-  height: 1rem;
-  flex-shrink: 0;
-}
-
-.area-color-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  display: inline-block;
-  flex-shrink: 0;
+.search-input::placeholder {
+  color: var(--text-muted);
 }
 
 .empty-state {
@@ -545,11 +379,6 @@ const formatRelativeTime = (dateString) => {
   transition: background-color 0.2s;
 }
 
-.btn-small {
-  padding: 0.4rem 0.8rem;
-  font-size: 0.85rem;
-}
-
 .btn-primary {
   background: var(--accent-primary);
   color: white;
@@ -559,24 +388,7 @@ const formatRelativeTime = (dateString) => {
   background: var(--accent-primary-hover);
 }
 
-.btn-secondary {
-  background: var(--btn-secondary-bg);
-  color: white;
-}
-
-.btn-secondary:hover {
-  background: var(--btn-secondary-hover);
-}
-
 @media (max-width: 768px) {
-  .filters-section {
-    flex-direction: column;
-  }
-
-  .filter-group {
-    width: 100%;
-  }
-
   .note-header {
     flex-direction: column;
     gap: 0.5rem;

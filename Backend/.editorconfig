@@ -48,6 +48,68 @@ dotnet_diagnostic.MA0011.severity = suggestion
 # Sometimes explicit loops are clearer
 dotnet_diagnostic.S3267.severity = suggestion
 
-# HTTP handler functions are often long by nature
-[Functions/*Functions.cs]
-dotnet_diagnostic.MA0051.severity = suggestion
+# Suppress MA0007: Add comma after the last value
+# Trailing commas are a style preference, not a requirement
+dotnet_diagnostic.MA0007.severity = none
+
+# Suppress CA1873: Logging argument evaluation
+# Structured logging still evaluates arguments; this is acceptable overhead
+dotnet_diagnostic.CA1873.severity = suggestion
+
+# Suppress CA1869: Cache JsonSerializerOptions
+# Low-frequency endpoints don't benefit significantly from caching
+dotnet_diagnostic.CA1869.severity = suggestion
+
+# Suppress MA0040: Use CancellationToken
+# Azure Functions manages request lifecycle; explicit tokens not always needed
+dotnet_diagnostic.MA0040.severity = suggestion
+
+# Suppress MA0042: Use await instead of .Result
+# Sometimes .Result is used intentionally for parallel task coordination
+dotnet_diagnostic.MA0042.severity = suggestion
+
+# Suppress MA0071: Avoid redundant else
+# Explicit else blocks can improve readability in some cases
+dotnet_diagnostic.MA0071.severity = suggestion
+
+# Suppress RCS1163: Unused parameter
+# HTTP request parameters are required for Azure Functions binding signature
+dotnet_diagnostic.RCS1163.severity = suggestion
+
+# Suppress RCS1077: Optimize LINQ method call
+# Minor optimizations that reduce readability
+dotnet_diagnostic.RCS1077.severity = suggestion
+
+# Suppress RCS1146: Use conditional access
+# Sometimes explicit null checks are clearer
+dotnet_diagnostic.RCS1146.severity = suggestion
+
+# Suppress MA0003: Name the parameter
+# Lambda parameter naming is a style preference
+dotnet_diagnostic.MA0003.severity = suggestion
+
+# Suppress MA0020: Use Exists instead of Any
+# Any() is more commonly understood and equally performant for most cases
+dotnet_diagnostic.MA0020.severity = suggestion
+
+# IDE rules (Visual Studio specific)
+# IDE0090: Simplify new expression - enforce using 'new()' instead of 'new Type()'
+dotnet_diagnostic.IDE0090.severity = suggestion
+
+# IDE0305: Collection initialization can be simplified - enforce using collection expressions
+dotnet_diagnostic.IDE0305.severity = suggestion
+
+# IDE0290: Use primary constructor - this is a style preference, not required
+dotnet_diagnostic.IDE0290.severity = none
+
+# CA1862: Use StringComparison for case-insensitive comparisons
+dotnet_diagnostic.CA1862.severity = warning
+
+# RCS1226: Add paragraph to documentation comment - style preference
+dotnet_diagnostic.RCS1226.severity = none
+
+# ASP0015: Use typed Authorization header property
+dotnet_diagnostic.ASP0015.severity = suggestion
+
+# MA0001: StringComparison should be specified - already using explicit comparisons where needed
+dotnet_diagnostic.MA0001.severity = suggestion

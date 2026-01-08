@@ -1,7 +1,7 @@
 <template>
   <div class="marshals-tab">
-    <div class="marshals-tab-header">
-      <h2>{{ terms.people }} management</h2>
+    <!-- Row 1: Action buttons + status pills -->
+    <div class="tab-header">
       <div class="button-group">
         <button @click="$emit('add-marshal')" class="btn btn-primary">
           Add {{ terms.person.toLowerCase() }}
@@ -10,8 +10,54 @@
           Import CSV
         </button>
       </div>
+      <div class="status-pills" v-if="marshals.length > 0">
+        <StatusPill
+          variant="neutral"
+          :active="activeFilter === 'all'"
+          @click="setFilter('all')"
+        >
+          {{ marshals.length }} total
+        </StatusPill>
+        <StatusPill
+          v-if="unassignedCount > 0"
+          variant="warning"
+          :active="activeFilter === 'unassigned'"
+          @click="setFilter('unassigned')"
+        >
+          {{ unassignedCount }} unassigned
+        </StatusPill>
+        <StatusPill
+          v-if="checkedInCount > 0"
+          variant="success"
+          :active="activeFilter === 'checked-in'"
+          @click="setFilter('checked-in')"
+        >
+          {{ checkedInCount }} checked in
+        </StatusPill>
+        <StatusPill
+          v-if="notCheckedInCount > 0"
+          variant="danger"
+          :active="activeFilter === 'not-checked-in'"
+          @click="setFilter('not-checked-in')"
+        >
+          {{ notCheckedInCount }} not checked in
+        </StatusPill>
+      </div>
     </div>
 
+    <!-- Row 2: Filters -->
+    <div class="filters-section">
+      <div class="search-group">
+        <input
+          v-model="searchQuery"
+          type="text"
+          class="search-input"
+          placeholder="Search by name, checkpoint, or description..."
+        />
+      </div>
+    </div>
+
+    <!-- Row 3: Content -->
     <div class="marshals-grid">
       <table class="marshals-table">
         <thead>
@@ -54,7 +100,12 @@
                 <td v-if="index === 0" :rowspan="getMarshalAssignments(marshal.id).length">
                   {{ marshal.name }}
                 </td>
-                <td>{{ getLocationName(assignment.locationId) }}</td>
+                <td class="checkpoint-cell">
+                  <div class="checkpoint-name">{{ getLocationName(assignment.locationId) }}</div>
+                  <div v-if="getLocationDescription(assignment.locationId)" class="checkpoint-description">
+                    {{ getLocationDescription(assignment.locationId) }}
+                  </div>
+                </td>
                 <td @click.stop>
                   <select
                     :value="getAssignmentStatusValue(assignment)"
@@ -105,6 +156,7 @@ import { ref, computed, defineProps, defineEmits } from 'vue';
 import { sortAlphanumeric } from '../../utils/sortingHelpers';
 import { getStatusIcon } from '../../utils/statusHelpers';
 import { useTerminology } from '../../composables/useTerminology';
+import StatusPill from '../../components/StatusPill.vue';
 
 const { terms } = useTerminology();
 
@@ -133,6 +185,12 @@ const emit = defineEmits([
 
 const sortBy = ref('name');
 const sortOrder = ref('asc');
+const searchQuery = ref('');
+const activeFilter = ref('all');
+
+const setFilter = (filter) => {
+  activeFilter.value = filter;
+};
 
 const changeSortColumn = (column) => {
   if (sortBy.value === column) {
@@ -147,9 +205,44 @@ const getMarshalAssignments = (marshalId) => {
   return props.assignments.filter(a => a.marshalId === marshalId);
 };
 
+// Status pill counts
+const checkedInMarshalIds = computed(() => {
+  return new Set(
+    props.assignments.filter(a => a.isCheckedIn).map(a => a.marshalId)
+  );
+});
+
+const assignedMarshalIds = computed(() => {
+  return new Set(props.assignments.map(a => a.marshalId));
+});
+
+const checkedInCount = computed(() => {
+  return checkedInMarshalIds.value.size;
+});
+
+const unassignedCount = computed(() => {
+  return props.marshals.filter(m => !assignedMarshalIds.value.has(m.id)).length;
+});
+
+const notCheckedInCount = computed(() => {
+  // Marshals who are assigned but not checked in
+  return props.marshals.filter(m =>
+    assignedMarshalIds.value.has(m.id) && !checkedInMarshalIds.value.has(m.id)
+  ).length;
+});
+
+const getLocation = (locationId) => {
+  return props.locations.find(l => l.id === locationId);
+};
+
 const getLocationName = (locationId) => {
-  const location = props.locations.find(l => l.id === locationId);
+  const location = getLocation(locationId);
   return location ? location.name : 'Unknown';
+};
+
+const getLocationDescription = (locationId) => {
+  const location = getLocation(locationId);
+  return location ? location.description : '';
 };
 
 const formatRelativeTime = (dateString) => {
@@ -169,8 +262,46 @@ const formatRelativeTime = (dateString) => {
   return date.toLocaleDateString();
 };
 
+// Filtering - by status pill and search query
+const filteredMarshals = computed(() => {
+  let result = props.marshals;
+
+  // Filter by status pill
+  if (activeFilter.value === 'unassigned') {
+    result = result.filter(m => !assignedMarshalIds.value.has(m.id));
+  } else if (activeFilter.value === 'checked-in') {
+    result = result.filter(m => checkedInMarshalIds.value.has(m.id));
+  } else if (activeFilter.value === 'not-checked-in') {
+    result = result.filter(m =>
+      assignedMarshalIds.value.has(m.id) && !checkedInMarshalIds.value.has(m.id)
+    );
+  }
+
+  // Filter by search query
+  if (searchQuery.value.trim()) {
+    const searchTerms = searchQuery.value.toLowerCase().trim().split(/\s+/);
+
+    result = result.filter(marshal => {
+      // Build searchable text: marshal name + all checkpoint names + descriptions
+      const assignments = getMarshalAssignments(marshal.id);
+      const checkpointTexts = assignments.map(a => {
+        const location = getLocation(a.locationId);
+        if (!location) return '';
+        return `${location.name || ''} ${location.description || ''}`;
+      }).join(' ');
+
+      const searchableText = `${marshal.name} ${checkpointTexts}`.toLowerCase();
+
+      // All search terms must match
+      return searchTerms.every(term => searchableText.includes(term));
+    });
+  }
+
+  return result;
+});
+
 const sortedMarshals = computed(() => {
-  const sorted = [...props.marshals];
+  const sorted = [...filteredMarshals.value];
 
   sorted.sort((a, b) => {
     let compareValue = 0;
@@ -224,22 +355,84 @@ const getStatusClass = (assignment) => {
   font-style: italic;
 }
 
-.marshals-tab-header {
+.tab-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
-}
-
-.marshals-tab-header h2 {
-  margin: 0;
-  font-size: 1.5rem;
-  color: var(--text-primary);
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
 .button-group {
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
+}
+
+.btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+}
+
+.btn-primary {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--accent-primary-hover);
+}
+
+.btn-secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-hover);
+}
+
+.status-pills {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.filters-section {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+}
+
+.search-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.search-input {
+  flex: 1;
+  max-width: 400px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  background: var(--input-bg);
+  color: var(--text-primary);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.search-input::placeholder {
+  color: var(--text-muted);
 }
 
 .marshals-grid {
@@ -295,6 +488,24 @@ const getStatusClass = (assignment) => {
 
 .marshal-row:hover {
   background: var(--table-row-hover);
+}
+
+.checkpoint-cell {
+  max-width: 300px;
+}
+
+.checkpoint-name {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.checkpoint-description {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .status-select {

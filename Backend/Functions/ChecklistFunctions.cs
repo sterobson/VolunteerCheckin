@@ -34,7 +34,6 @@ public class ChecklistFunctions
     /// Creates one or more checklist items for an event.
     /// </summary>
     /// <param name="eventId">The event ID</param>
-    /// <param name="request">The checklist item(s) to create</param>
     /// <returns>
     /// If CreateSeparateItems is false: Returns a single ChecklistItemResponse
     /// If CreateSeparateItems is true: Returns { items: ChecklistItemResponse[], count: number }
@@ -44,6 +43,7 @@ public class ChecklistFunctions
     /// non-empty line creates a separate checklist item with the same scope, areas, checkpoints,
     /// marshals, and other settings. DisplayOrder is incremented for each item created.
     /// </remarks>
+#pragma warning disable MA0051
     [Function("CreateChecklistItem")]
     public async Task<IActionResult> CreateChecklistItem(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "events/{eventId}/checklist-items")] HttpRequest req,
@@ -53,7 +53,7 @@ public class ChecklistFunctions
         {
             string body = await new StreamReader(req.Body).ReadToEndAsync();
             CreateChecklistItemRequest? request = JsonSerializer.Deserialize<CreateChecklistItemRequest>(body,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                FunctionHelpers.JsonOptions);
 
             if (request == null || string.IsNullOrWhiteSpace(request.Text))
             {
@@ -81,11 +81,10 @@ public class ChecklistFunctions
             // Check if we should create separate items for each line
             if (request.CreateSeparateItems)
             {
-                List<string> lines = sanitizedText
+                List<string> lines = [.. sanitizedText
                     .Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries)
                     .Select(line => line.Trim())
-                    .Where(line => !string.IsNullOrWhiteSpace(line))
-                    .ToList();
+                    .Where(line => !string.IsNullOrWhiteSpace(line))];
 
                 if (lines.Count == 0)
                 {
@@ -118,7 +117,7 @@ public class ChecklistFunctions
                     await _checklistItemRepository.AddAsync(entity);
                     createdItems.Add(entity.ToResponse());
 
-                    _logger.LogInformation($"Checklist item created: {itemId} by {adminEmail}");
+                    _logger.LogInformation("Checklist item created: {ItemId} by {AdminEmail}", itemId, adminEmail);
                 }
 
                 return new OkObjectResult(new { items = createdItems, count = createdItems.Count });
@@ -146,7 +145,7 @@ public class ChecklistFunctions
 
                 await _checklistItemRepository.AddAsync(entity);
 
-                _logger.LogInformation($"Checklist item created: {itemId} by {adminEmail}");
+                _logger.LogInformation("Checklist item created: {ItemId} by {AdminEmail}", itemId, adminEmail);
 
                 return new OkObjectResult(entity.ToResponse());
             }
@@ -157,6 +156,7 @@ public class ChecklistFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     [Function("GetChecklistItems")]
     public async Task<IActionResult> GetChecklistItems(
@@ -166,7 +166,7 @@ public class ChecklistFunctions
         try
         {
             IEnumerable<ChecklistItemEntity> items = await _checklistItemRepository.GetByEventAsync(eventId);
-            List<ChecklistItemResponse> responses = items.Select(i => i.ToResponse()).ToList();
+            List<ChecklistItemResponse> responses = [.. items.Select(i => i.ToResponse())];
 
             return new OkObjectResult(responses);
         }
@@ -201,6 +201,7 @@ public class ChecklistFunctions
         }
     }
 
+#pragma warning disable MA0051
     [Function("UpdateChecklistItem")]
     public async Task<IActionResult> UpdateChecklistItem(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "checklist-items/{eventId}/{itemId}")] HttpRequest req,
@@ -211,7 +212,7 @@ public class ChecklistFunctions
         {
             string body = await new StreamReader(req.Body).ReadToEndAsync();
             UpdateChecklistItemRequest? request = JsonSerializer.Deserialize<UpdateChecklistItemRequest>(body,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                FunctionHelpers.JsonOptions);
 
             if (request == null)
             {
@@ -253,7 +254,7 @@ public class ChecklistFunctions
 
             await _checklistItemRepository.UpdateAsync(item);
 
-            _logger.LogInformation($"Checklist item updated: {itemId} by {adminEmail}");
+            _logger.LogInformation("Checklist item updated: {ItemId} by {AdminEmail}", itemId, adminEmail);
 
             return new OkObjectResult(item.ToResponse());
         }
@@ -263,6 +264,7 @@ public class ChecklistFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     [Function("DeleteChecklistItem")]
     public async Task<IActionResult> DeleteChecklistItem(
@@ -285,7 +287,7 @@ public class ChecklistFunctions
             // Delete the item
             await _checklistItemRepository.DeleteAsync(eventId, itemId);
 
-            _logger.LogInformation($"Checklist item deleted: {itemId}");
+            _logger.LogInformation("Checklist item deleted: {ItemId}", itemId);
 
             return new NoContentResult();
         }

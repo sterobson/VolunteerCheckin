@@ -27,7 +27,7 @@ public class EventContactFunctions
     private readonly ClaimsService _claimsService;
 
     // Built-in contact roles
-    private static readonly List<string> BuiltInRoles =
+    private static readonly List<string> _builtInRoles =
     [
         Constants.ContactRoleEmergency,
         Constants.ContactRoleEventDirector,
@@ -61,6 +61,7 @@ public class EventContactFunctions
     /// Create a new contact for an event.
     /// Only event admins can create contacts.
     /// </summary>
+#pragma warning disable MA0051
     [Function("CreateEventContact")]
     public async Task<IActionResult> CreateContact(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "events/{eventId}/contacts")] HttpRequest req,
@@ -77,7 +78,7 @@ public class EventContactFunctions
 
             // Parse request
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-            CreateEventContactRequest? request = JsonSerializer.Deserialize<CreateEventContactRequest>(requestBody, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            CreateEventContactRequest? request = JsonSerializer.Deserialize<CreateEventContactRequest>(requestBody, FunctionHelpers.JsonOptions);
 
             if (request == null || string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.Role))
             {
@@ -153,6 +154,7 @@ public class EventContactFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     /// <summary>
     /// Get all contacts for an event (admin view with full details).
@@ -178,9 +180,9 @@ public class EventContactFunctions
             IEnumerable<MarshalEntity> marshals = await _marshalRepository.GetByEventAsync(eventId);
             Dictionary<string, string> marshalNameLookup = marshals.ToDictionary(m => m.MarshalId, m => m.Name);
 
-            List<EventContactResponse> responses = contacts.Select(c =>
+            List<EventContactResponse> responses = [.. contacts.Select(c =>
                 ToContactResponse(c, c.MarshalId != null && marshalNameLookup.TryGetValue(c.MarshalId, out string? name) ? name : null)
-            ).ToList();
+            )];
 
             return new OkObjectResult(responses);
         }
@@ -237,6 +239,7 @@ public class EventContactFunctions
     /// Update an existing contact.
     /// Only event admins can update contacts.
     /// </summary>
+#pragma warning disable MA0051
     [Function("UpdateEventContact")]
     public async Task<IActionResult> UpdateContact(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "events/{eventId}/contacts/{contactId}")] HttpRequest req,
@@ -264,7 +267,7 @@ public class EventContactFunctions
 
             // Parse request
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-            UpdateEventContactRequest? request = JsonSerializer.Deserialize<UpdateEventContactRequest>(requestBody, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            UpdateEventContactRequest? request = JsonSerializer.Deserialize<UpdateEventContactRequest>(requestBody, FunctionHelpers.JsonOptions);
 
             if (request == null || string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.Role))
             {
@@ -332,6 +335,7 @@ public class EventContactFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     /// <summary>
     /// Delete a contact.
@@ -427,11 +431,10 @@ public class EventContactFunctions
             }
 
             // Sort: primary first, then by role, then by display order
-            relevantContacts = relevantContacts
+            relevantContacts = [.. relevantContacts
                 .OrderByDescending(c => c.IsPrimary)
                 .ThenBy(c => c.Role)
-                .ThenBy(c => allContacts.First(contact => contact.ContactId == c.ContactId).DisplayOrder)
-                .ToList();
+                .ThenBy(c => allContacts.First(contact => contact.ContactId == c.ContactId).DisplayOrder)];
 
             return new OkObjectResult(relevantContacts);
         }
@@ -466,7 +469,7 @@ public class EventContactFunctions
                 if (claims.IsEventAdmin)
                 {
                     IEnumerable<EventContactEntity> allContacts = await _contactRepository.GetByEventAsync(eventId);
-                    List<EventContactForMarshalResponse> allContactsResponse = allContacts.Select(c =>
+                    List<EventContactForMarshalResponse> allContactsResponse = [.. allContacts.Select(c =>
                         new EventContactForMarshalResponse(
                             ContactId: c.ContactId,
                             Role: c.Role,
@@ -477,7 +480,7 @@ public class EventContactFunctions
                             IsPrimary: c.IsPrimary,
                             MatchedScope: "Admin"
                         )
-                    ).ToList();
+                    )];
                     return new OkObjectResult(allContactsResponse);
                 }
 
@@ -513,14 +516,13 @@ public class EventContactFunctions
 
             // Get all contacts for the event to find custom roles
             IEnumerable<EventContactEntity> contacts = await _contactRepository.GetByEventAsync(eventId);
-            List<string> customRoles = contacts
+            List<string> customRoles = [.. contacts
                 .Select(c => c.Role)
-                .Where(r => !BuiltInRoles.Contains(r))
+                .Where(r => !_builtInRoles.Contains(r))
                 .Distinct()
-                .OrderBy(r => r)
-                .ToList();
+                .OrderBy(r => r)];
 
-            return new OkObjectResult(new ContactRolesResponse(BuiltInRoles, customRoles));
+            return new OkObjectResult(new ContactRolesResponse(_builtInRoles, customRoles));
         }
         catch (Exception ex)
         {
@@ -533,7 +535,7 @@ public class EventContactFunctions
 
     private async Task<UserClaims?> GetClaimsAsync(HttpRequest req, string eventId)
     {
-        string? sessionToken = req.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "");
+        string? sessionToken = req.Headers.Authorization.FirstOrDefault()?.Replace("Bearer ", "", StringComparison.OrdinalIgnoreCase);
         if (string.IsNullOrWhiteSpace(sessionToken))
         {
             sessionToken = req.Cookies["session_token"];
@@ -560,7 +562,7 @@ public class EventContactFunctions
 
         // Get marshal's assignments
         IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByMarshalAsync(eventId, marshalId);
-        List<string> assignedLocationIds = assignments.Select(a => a.LocationId).ToList();
+        List<string> assignedLocationIds = [.. assignments.Select(a => a.LocationId)];
 
         // Get checkpoints ONCE (will be reused for both context building and scope evaluation)
         IEnumerable<LocationEntity> checkpoints = await _locationRepository.GetByEventAsync(eventId);
@@ -594,7 +596,7 @@ public class EventContactFunctions
 
         ScopeEvaluator.MarshalContext context = new(
             MarshalId: marshalId,
-            AssignedAreaIds: assignedAreaIds.ToList(),
+            AssignedAreaIds: [.. assignedAreaIds],
             AssignedLocationIds: assignedLocationIds,
             AreaLeadForAreaIds: areaLeadForAreaIds
         );
@@ -630,6 +632,7 @@ public class EventContactFunctions
     /// If the contact has the AreaLead role and is linked to a marshal, the marshal gets promoted.
     /// If the contact role changes or is deleted, the marshal is demoted.
     /// </summary>
+#pragma warning disable MA0051
     private async Task SyncAreaLeadRoleAsync(
         string eventId,
         string? marshalId,
@@ -677,7 +680,7 @@ public class EventContactFunctions
             }
 
             // Remove duplicates
-            areaIds = areaIds.Distinct().ToList();
+            areaIds = [.. areaIds.Distinct()];
 
             if (areaIds.Count == 0)
             {
@@ -727,6 +730,7 @@ public class EventContactFunctions
             }
         }
     }
+#pragma warning restore MA0051
 
     /// <summary>
     /// Removes area lead role when a contact is deleted.

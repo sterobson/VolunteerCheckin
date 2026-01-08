@@ -47,7 +47,7 @@ public class TableStorageAuthTokenRepository : IAuthTokenRepository
         List<AuthTokenEntity> tokens = [];
         await foreach (AuthTokenEntity token in _table.QueryAsync<AuthTokenEntity>(t => t.PartitionKey == "AUTHTOKEN"))
         {
-            if (token.PersonId == personId)
+            if (string.Equals(token.PersonId, personId, StringComparison.Ordinal))
             {
                 tokens.Add(token);
             }

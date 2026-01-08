@@ -144,8 +144,10 @@ public class TableStorageAuthSessionRepository : IAuthSessionRepository
         }
 
         // Delete sessions in parallel for better performance
-        List<Task> deleteTasks = rowKeysToDelete.Select(rowKey =>
-            Task.Run(async () =>
+        List<Task> deleteTasks = [];
+        foreach (string rowKey in rowKeysToDelete)
+        {
+            deleteTasks.Add(Task.Run(async () =>
             {
                 try
                 {
@@ -155,8 +157,8 @@ public class TableStorageAuthSessionRepository : IAuthSessionRepository
                 {
                     // Ignore delete failures (entity may have been deleted by another process)
                 }
-            })
-        ).ToList();
+            }));
+        }
 
         await Task.WhenAll(deleteTasks);
     }

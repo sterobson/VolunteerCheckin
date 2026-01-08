@@ -37,6 +37,7 @@ public class AssignmentFunctions
         _eventRepository = eventRepository;
     }
 
+#pragma warning disable MA0051
     [Function("CreateAssignment")]
     public async Task<IActionResult> CreateAssignment(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "assignments")] HttpRequest req)
@@ -44,7 +45,7 @@ public class AssignmentFunctions
         try
         {
             string body = await new StreamReader(req.Body).ReadToEndAsync();
-            CreateAssignmentRequest? request = JsonSerializer.Deserialize<CreateAssignmentRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            CreateAssignmentRequest? request = JsonSerializer.Deserialize<CreateAssignmentRequest>(body, FunctionHelpers.JsonOptions);
 
             if (request == null)
             {
@@ -90,7 +91,7 @@ public class AssignmentFunctions
                     };
                     await _marshalRepository.AddAsync(newMarshal);
                     marshalName = request.MarshalName;
-                    _logger.LogInformation($"Created new marshal: {marshalId} - {marshalName}");
+                    _logger.LogInformation("Created new marshal: {MarshalId} - {MarshalName}", marshalId, marshalName);
                 }
             }
             else
@@ -123,7 +124,7 @@ public class AssignmentFunctions
                 assignmentEntity.CheckInMethod
             );
 
-            _logger.LogInformation($"Assignment created: {assignmentEntity.RowKey}");
+            _logger.LogInformation("Assignment created: {AssignmentId}", assignmentEntity.RowKey);
 
             return new OkObjectResult(response);
         }
@@ -133,6 +134,7 @@ public class AssignmentFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     [Function("GetAssignment")]
     public async Task<IActionResult> GetAssignment(
@@ -181,7 +183,7 @@ public class AssignmentFunctions
         {
             IEnumerable<AssignmentEntity> assignmentEntities = await _assignmentRepository.GetByEventAsync(eventId);
 
-            List<AssignmentResponse> assignments = assignmentEntities.Select(a => a.ToResponse()).ToList();
+            List<AssignmentResponse> assignments = [.. assignmentEntities.Select(a => a.ToResponse())];
 
             return new OkObjectResult(assignments);
         }
@@ -202,7 +204,7 @@ public class AssignmentFunctions
         {
             await _assignmentRepository.DeleteAsync(eventId, assignmentId);
 
-            _logger.LogInformation($"Assignment deleted: {assignmentId}");
+            _logger.LogInformation("Assignment deleted: {AssignmentId}", assignmentId);
 
             return new NoContentResult();
         }
@@ -226,22 +228,21 @@ public class AssignmentFunctions
 
             await Task.WhenAll(assignmentsTask, locationsTask);
 
-            List<AssignmentEntity> assignments = assignmentsTask.Result.ToList();
+            List<AssignmentEntity> assignments = [.. assignmentsTask.Result];
             HashSet<string> locationIds = locationsTask.Result.Select(l => l.RowKey).ToHashSet();
 
             // Find orphaned assignments (where location no longer exists)
-            List<AssignmentEntity> orphanedAssignments = assignments
-                .Where(a => !locationIds.Contains(a.LocationId))
-                .ToList();
+            List<AssignmentEntity> orphanedAssignments = [.. assignments
+                .Where(a => !locationIds.Contains(a.LocationId))];
 
             // Delete orphaned assignments
             foreach (AssignmentEntity orphaned in orphanedAssignments)
             {
                 await _assignmentRepository.DeleteAsync(eventId, orphaned.RowKey);
-                _logger.LogInformation($"Deleted orphaned assignment: {orphaned.RowKey} (Marshal: {orphaned.MarshalName}, LocationId: {orphaned.LocationId})");
+                _logger.LogInformation("Deleted orphaned assignment: {AssignmentId} (Marshal: {MarshalName}, LocationId: {LocationId})", orphaned.RowKey, orphaned.MarshalName, orphaned.LocationId);
             }
 
-            _logger.LogInformation($"Cleanup complete. Deleted {orphanedAssignments.Count} orphaned assignments for event {eventId}");
+            _logger.LogInformation("Cleanup complete. Deleted {DeletedCount} orphaned assignments for event {EventId}", orphanedAssignments.Count, eventId);
 
             return new OkObjectResult(new
             {
@@ -263,6 +264,7 @@ public class AssignmentFunctions
         }
     }
 
+#pragma warning disable MA0051
     [Function("GetEventStatus")]
     public async Task<IActionResult> GetEventStatus(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/{eventId}/status")] HttpRequest req,
@@ -278,19 +280,18 @@ public class AssignmentFunctions
 
             await Task.WhenAll(locationsTask, assignmentsTask, eventTask, areasTask);
 
-            List<LocationEntity> locationsList = locationsTask.Result.ToList();
+            List<LocationEntity> locationsList = [.. locationsTask.Result];
             IEnumerable<AssignmentEntity> assignments = assignmentsTask.Result;
             EventEntity? eventEntity = eventTask.Result;
-            List<AreaEntity> areasList = areasTask.Result.ToList();
+            List<AreaEntity> areasList = [.. areasTask.Result];
 
             // Check if any checkpoints are missing area assignments
-            List<LocationEntity> checkpointsNeedingAreas = locationsList
-                .Where(l => string.IsNullOrEmpty(l.AreaIdsJson) || l.AreaIdsJson == "[]")
-                .ToList();
+            List<LocationEntity> checkpointsNeedingAreas = [.. locationsList
+                .Where(l => string.IsNullOrEmpty(l.AreaIdsJson) || l.AreaIdsJson == "[]")];
 
             if (checkpointsNeedingAreas.Count > 0)
             {
-                _logger.LogInformation($"Found {checkpointsNeedingAreas.Count} checkpoints without area assignments. Calculating...");
+                _logger.LogInformation("Found {CheckpointCount} checkpoints without area assignments. Calculating...", checkpointsNeedingAreas.Count);
 
                 // Find or create default area
                 AreaEntity? defaultArea = areasList.FirstOrDefault(a => a.IsDefault);
@@ -330,7 +331,7 @@ public class AssignmentFunctions
                 }
                 await Task.WhenAll(updateTasks);
 
-                _logger.LogInformation($"Automatically assigned areas to {checkpointsNeedingAreas.Count} checkpoints");
+                _logger.LogInformation("Automatically assigned areas to {CheckpointCount} checkpoints", checkpointsNeedingAreas.Count);
             }
 
             // Calculate area checkpoint counts for style resolution tie-breaking
@@ -347,16 +348,15 @@ public class AssignmentFunctions
             // Group assignments by location ID once (O(N) instead of O(N*M))
             Dictionary<string, List<AssignmentEntity>> assignmentsByLocation = assignments
                 .GroupBy(a => a.LocationId)
-                .ToDictionary(g => g.Key, g => g.ToList());
+                .ToDictionary(g => g.Key, g => (List<AssignmentEntity>)[.. g]);
 
             List<LocationStatusResponse> locationStatuses = [];
 
             foreach (LocationEntity location in locationsList)
             {
-                List<AssignmentResponse> locationAssignments = assignmentsByLocation
+                List<AssignmentResponse> locationAssignments = [.. assignmentsByLocation
                     .GetValueOrDefault(location.RowKey, [])
-                    .Select(a => a.ToResponse())
-                    .ToList();
+                    .Select(a => a.ToResponse())];
 
                 int checkedInCount = locationAssignments.Count(a => a.IsCheckedIn);
 
@@ -417,6 +417,7 @@ public class AssignmentFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     /// <summary>
     /// Resolved checkpoint style containing all style properties
@@ -440,6 +441,7 @@ public class AssignmentFunctions
     /// 4. Returns "default" to use status-based colored circles
     /// Each property is resolved independently through the hierarchy.
     /// </summary>
+#pragma warning disable MA0051
     private static ResolvedCheckpointStyle ResolveCheckpointStyle(
         LocationEntity location,
         List<string> areaIds,
@@ -467,7 +469,7 @@ public class AssignmentFunctions
                 matchedAreas = matchedAreas.OrderBy(a =>
                     areaCheckpointCounts.TryGetValue(a.RowKey, out int count) ? count : int.MaxValue);
             }
-            sortedMatchedAreas = matchedAreas.ToList();
+            sortedMatchedAreas = [.. matchedAreas];
         }
 
         // Resolve Type: checkpoint -> area -> event
@@ -552,4 +554,5 @@ public class AssignmentFunctions
 
         return new ResolvedCheckpointStyle(type, color, backgroundShape, backgroundColor, borderColor, iconColor, size, mapRotation);
     }
+#pragma warning restore MA0051
 }

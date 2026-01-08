@@ -31,7 +31,8 @@
       "Bash(dotnet tool install:*)",
       "Bash(reportgenerator:*)",
       "Bash(start \"\" \"TestResults\\\\CoverageReport\\\\index.html\")",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(dotnet format:*)"
     ]
   }
 }

@@ -1,7 +1,6 @@
 <template>
   <div class="contacts-tab">
     <div class="contacts-tab-header">
-      <h2>Contacts</h2>
       <div class="button-group">
         <button @click="$emit('add-contact')" class="btn btn-primary">
           Add contact
@@ -9,45 +8,22 @@
       </div>
     </div>
 
-    <!-- Role Filter -->
+    <!-- Filters -->
     <div class="filters-section">
-      <div class="filter-group">
-        <h4>Filter by role:</h4>
-        <label class="filter-checkbox">
-          <input
-            type="checkbox"
-            :checked="showAllRoles"
-            @change="toggleAllRoles"
-          />
-          All roles
-        </label>
-        <div v-if="!showAllRoles" class="checkbox-dropdown">
-          <div class="checkbox-list">
-            <label
-              v-for="role in allRoles"
-              :key="role"
-              class="checkbox-item"
-            >
-              <input
-                type="checkbox"
-                :checked="filterRoles.includes(role)"
-                @change="toggleRole(role)"
-              />
-              {{ formatRoleName(role) }}
-            </label>
-          </div>
-        </div>
+      <div class="search-group">
+        <input
+          v-model="searchQuery"
+          type="text"
+          class="search-input"
+          placeholder="Search by name or role..."
+        />
       </div>
-
-      <button v-if="hasActiveFilters" @click="clearFilters" class="btn btn-secondary btn-small">
-        Clear filters
-      </button>
     </div>
 
     <!-- Contacts List -->
     <div class="contacts-list">
       <div v-if="filteredContacts.length === 0" class="empty-state">
-        <p>{{ hasActiveFilters ? 'No contacts match the selected filters.' : 'No contacts yet. Create one to get started!' }}</p>
+        <p>{{ searchQuery ? 'No contacts match your search.' : 'No contacts yet. Create one to get started!' }}</p>
       </div>
 
       <div
@@ -117,52 +93,23 @@ const props = defineProps({
 
 const emit = defineEmits(['add-contact', 'select-contact']);
 
-const showAllRoles = ref(true);
-const filterRoles = ref([]);
+const searchQuery = ref('');
 
-// All unique roles from contacts and available roles
-const allRoles = computed(() => {
-  const rolesSet = new Set([
-    ...(props.availableRoles.builtInRoles || []),
-    ...(props.availableRoles.customRoles || []),
-    ...props.contacts.map(c => c.role),
-  ]);
-  return Array.from(rolesSet).sort();
-});
-
-const hasActiveFilters = computed(() => {
-  return !showAllRoles.value;
-});
-
-const toggleAllRoles = () => {
-  showAllRoles.value = !showAllRoles.value;
-  if (!showAllRoles.value && filterRoles.value.length === 0) {
-    filterRoles.value = [...allRoles.value];
-  }
-};
-
-const toggleRole = (role) => {
-  const index = filterRoles.value.indexOf(role);
-  if (index >= 0) {
-    filterRoles.value.splice(index, 1);
-  } else {
-    filterRoles.value.push(role);
-  }
-};
-
-const clearFilters = () => {
-  showAllRoles.value = true;
-  filterRoles.value = [];
-};
-
+// Search filtering - searches name + role
 const filteredContacts = computed(() => {
-  let contacts = props.contacts;
-
-  if (!showAllRoles.value && filterRoles.value.length > 0) {
-    contacts = contacts.filter(contact => filterRoles.value.includes(contact.role));
+  if (!searchQuery.value.trim()) {
+    return props.contacts;
   }
 
-  return contacts;
+  const searchTerms = searchQuery.value.toLowerCase().trim().split(/\s+/);
+
+  return props.contacts.filter(contact => {
+    const roleText = formatRoleName(contact.role);
+    const searchableText = `${contact.name || ''} ${roleText}`.toLowerCase();
+
+    // All search terms must match
+    return searchTerms.every(term => searchableText.includes(term));
+  });
 });
 
 const sortedContacts = computed(() => {
@@ -274,75 +221,36 @@ const truncateContent = (content) => {
 }
 
 .filters-section {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.5rem;
-  padding: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
   background: var(--bg-tertiary);
   border-radius: 8px;
-  align-items: flex-start;
 }
 
-.filter-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  min-width: 200px;
-}
-
-.filter-group h4 {
-  margin: 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.filter-checkbox {
+.search-group {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.search-input {
+  flex: 1;
+  max-width: 400px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
   font-size: 0.9rem;
-  cursor: pointer;
+  background: var(--input-bg);
   color: var(--text-primary);
 }
 
-.filter-checkbox input[type="checkbox"] {
-  cursor: pointer;
-  width: 1rem;
-  height: 1rem;
-  flex-shrink: 0;
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
 }
 
-.checkbox-dropdown {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-left: 1.5rem;
-}
-
-.checkbox-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.checkbox-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-  cursor: pointer;
-  color: var(--text-primary);
-  padding: 0.25rem 0;
-}
-
-.checkbox-item input[type="checkbox"] {
-  cursor: pointer;
-  width: 1rem;
-  height: 1rem;
-  flex-shrink: 0;
+.search-input::placeholder {
+  color: var(--text-muted);
 }
 
 .empty-state {
@@ -458,11 +366,6 @@ const truncateContent = (content) => {
   transition: background-color 0.2s;
 }
 
-.btn-small {
-  padding: 0.4rem 0.8rem;
-  font-size: 0.85rem;
-}
-
 .btn-primary {
   background: var(--accent-primary);
   color: white;
@@ -482,14 +385,6 @@ const truncateContent = (content) => {
 }
 
 @media (max-width: 768px) {
-  .filters-section {
-    flex-direction: column;
-  }
-
-  .filter-group {
-    width: 100%;
-  }
-
   .contact-details {
     flex-direction: column;
     gap: 0.25rem;

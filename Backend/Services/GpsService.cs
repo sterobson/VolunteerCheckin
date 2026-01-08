@@ -1,4 +1,4 @@
-﻿namespace VolunteerCheckin.Functions.Services;
+namespace VolunteerCheckin.Functions.Services;
 
 public class GpsService
 {
@@ -14,9 +14,9 @@ public class GpsService
         double δLatitude = DegreesToRadians(latitude2Degrees - latitude1Degrees);
         double δLongitude = DegreesToRadians(longitude2Degrees - longitude1Degrees);
 
-        double a = Math.Sin(δLatitude / 2) * Math.Sin(δLatitude / 2) +
-                Math.Cos(DegreesToRadians(latitude1Degrees)) * Math.Cos(DegreesToRadians(latitude2Degrees)) *
-                Math.Sin(δLongitude / 2) * Math.Sin(δLongitude / 2);
+        double a = (Math.Sin(δLatitude / 2) * Math.Sin(δLatitude / 2)) +
+                (Math.Cos(DegreesToRadians(latitude1Degrees)) * Math.Cos(DegreesToRadians(latitude2Degrees)) *
+                Math.Sin(δLongitude / 2) * Math.Sin(δLongitude / 2));
 
         double c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
 

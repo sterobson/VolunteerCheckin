@@ -2,7 +2,9 @@
   <div class="admin-event-manage" :style="{ colorScheme }">
     <header class="header">
       <div class="header-left">
-        <button @click="goBack" class="btn-back" title="Back to Dashboard">← Dashboard</button>
+        <button @click="goBack" class="btn-back" title="Back to Dashboard">
+          <AppLogo :size="48" />
+        </button>
         <div v-if="event">
           <h1>{{ event.name }}</h1>
           <p class="event-date">{{ formatEventDate(event.eventDate) }}</p>
@@ -52,27 +54,25 @@
           @add-area-from-map="handleAddAreaFromMap"
         />
 
-        <div v-if="activeTab === 'checkpoints'" class="tab-panel">
-          <CheckpointsList
-            :locations="locationStatuses"
-            :areas="areas"
-            @add-checkpoint-manually="handleAddCheckpointManually"
-            @import-checkpoints="showImportLocations = true"
-            @select-location="selectLocation"
-          />
-        </div>
+        <CheckpointsList
+          v-if="activeTab === 'checkpoints'"
+          :locations="locationStatuses"
+          :areas="areas"
+          @add-checkpoint-manually="handleAddCheckpointManually"
+          @import-checkpoints="showImportLocations = true"
+          @select-location="selectLocation"
+        />
 
-        <div v-if="activeTab === 'areas'" class="tab-panel">
-          <AreasList
-            :areas="areas"
-            :checkpoints="locationStatuses"
-            :contacts="contacts"
-            :event-people-term="event?.peopleTerm || 'Marshals'"
-            :event-checkpoint-term="event?.checkpointTerm || 'Checkpoints'"
-            @add-area="handleAddArea"
-            @select-area="handleSelectArea"
-          />
-        </div>
+        <AreasList
+          v-if="activeTab === 'areas'"
+          :areas="areas"
+          :checkpoints="locationStatuses"
+          :contacts="contacts"
+          :event-people-term="event?.peopleTerm || 'Marshals'"
+          :event-checkpoint-term="event?.checkpointTerm || 'Checkpoints'"
+          @add-area="handleAddArea"
+          @select-area="handleSelectArea"
+        />
 
         <MarshalsTab
           v-if="activeTab === 'marshals'"
@@ -534,6 +534,7 @@ import BaseModal from '../components/BaseModal.vue';
 import FullscreenMapOverlay from '../components/FullscreenMapOverlay.vue';
 import AddLocationModal from '../components/event-manage/modals/AddLocationModal.vue';
 import ThemeToggle from '../components/ThemeToggle.vue';
+import AppLogo from '../components/AppLogo.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -2860,6 +2861,13 @@ onMounted(async () => {
   }
 });
 
+// Update document title when event loads - always "Admin" for admin view
+watch(event, (newEvent) => {
+  if (newEvent) {
+    document.title = 'OnTheDay App - Admin';
+  }
+}, { immediate: true });
+
 onUnmounted(() => {
   stopDynamicCheckpointPolling();
 });
@@ -2921,16 +2929,19 @@ onUnmounted(() => {
 .btn-back {
   background: none;
   border: none;
-  color: var(--accent-primary);
+  color: var(--text-primary);
   cursor: pointer;
-  font-size: 1rem;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  transition: background-color 0.2s;
+  padding: 0.25rem;
+  border-radius: 8px;
+  transition: transform 0.2s, opacity 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-back:hover {
-  background: var(--bg-active);
+  transform: scale(1.05);
+  opacity: 0.9;
 }
 
 .header h1 {

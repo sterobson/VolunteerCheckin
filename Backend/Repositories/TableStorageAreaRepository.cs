@@ -40,7 +40,7 @@ public class TableStorageAreaRepository : IAreaRepository
         {
             areas.Add(area);
         }
-        return areas.OrderBy(a => a.DisplayOrder).ThenBy(a => a.Name);
+        return areas.OrderBy(a => a.DisplayOrder).ThenBy(a => a.Name, StringComparer.Ordinal);
     }
 
     public async Task<AreaEntity?> GetDefaultAreaAsync(string eventId)

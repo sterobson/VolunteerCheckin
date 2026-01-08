@@ -33,6 +33,7 @@ public class PeopleFunctions
     /// Get person details (event admins only).
     /// GET /api/people/{personId}?eventId={eventId}
     /// </summary>
+#pragma warning disable MA0051
     [Function("GetPerson")]
     public async Task<IActionResult> GetPerson(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "people/{personId}")] HttpRequest req,
@@ -77,10 +78,10 @@ public class PeopleFunctions
 
             // Get their roles in this event
             IEnumerable<EventRoleEntity> roles = await _roleRepository.GetByPersonAndEventAsync(personId, eventId);
-            List<EventRoleInfo> eventRoles = roles.Select(r => new EventRoleInfo(
+            List<EventRoleInfo> eventRoles = [.. roles.Select(r => new EventRoleInfo(
                 r.Role,
                 JsonSerializer.Deserialize<List<string>>(r.AreaIdsJson) ?? []
-            )).ToList();
+            ))];
 
             PersonDetailsResponse response = new PersonDetailsResponse(
                 person.PersonId,
@@ -103,12 +104,14 @@ public class PeopleFunctions
             };
         }
     }
+#pragma warning restore MA0051
 
     /// <summary>
     /// Update person details (event admins only).
     /// PUT /api/people/{personId}?eventId={eventId}
     /// Body: { "Name": "John Doe", "Email": "john@example.com", "Phone": "555-1234" }
     /// </summary>
+#pragma warning disable MA0051
     [Function("UpdatePerson")]
     public async Task<IActionResult> UpdatePerson(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "people/{personId}")] HttpRequest req,
@@ -146,10 +149,7 @@ public class PeopleFunctions
 
             // Parse request
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-            UpdatePersonRequest? request = JsonSerializer.Deserialize<UpdatePersonRequest>(requestBody, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
+            UpdatePersonRequest? request = JsonSerializer.Deserialize<UpdatePersonRequest>(requestBody, FunctionHelpers.JsonOptions);
 
             if (request == null)
             {
@@ -200,7 +200,7 @@ public class PeopleFunctions
                 person.IsSystemAdmin
             );
 
-            _logger.LogInformation($"Person updated by admin {claims.PersonId}: {person.PersonId}");
+            _logger.LogInformation("Person updated by admin {AdminPersonId}: {PersonId}", claims.PersonId, person.PersonId);
 
             return new OkObjectResult(personInfo);
         }
@@ -213,4 +213,5 @@ public class PeopleFunctions
             };
         }
     }
+#pragma warning restore MA0051
 }

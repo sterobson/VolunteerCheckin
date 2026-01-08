@@ -60,7 +60,7 @@ public class ChecklistQueryFunctions
 
             // Get all completions for event
             List<ChecklistCompletionEntity> allCompletions =
-                (await _checklistCompletionRepository.GetByEventAsync(eventId)).ToList();
+                [.. await _checklistCompletionRepository.GetByEventAsync(eventId)];
 
             // Build list of items with all their contexts
             List<ChecklistItemWithStatus> relevantItems = [];
@@ -87,6 +87,7 @@ public class ChecklistQueryFunctions
         }
     }
 
+#pragma warning disable MA0051
     [Function("GetCheckpointChecklist")]
     public async Task<IActionResult> GetCheckpointChecklist(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/{eventId}/locations/{locationId}/checklist")] HttpRequest req,
@@ -107,11 +108,10 @@ public class ChecklistQueryFunctions
             List<string> locationAreaIds = JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson) ?? [];
 
             // Get all marshals assigned to this checkpoint (from preloaded data)
-            List<string> assignedMarshalIds = preloaded.AssignmentsByMarshal
+            List<string> assignedMarshalIds = [.. preloaded.AssignmentsByMarshal
                 .Where(kvp => kvp.Value.Any(a => a.LocationId == locationId))
                 .Select(kvp => kvp.Key)
-                .Distinct()
-                .ToList();
+                .Distinct()];
 
             // Build checkpoint lookup dictionary from preloaded data
             Dictionary<string, LocationEntity> checkpointLookup = preloaded.LocationsById;
@@ -121,14 +121,13 @@ public class ChecklistQueryFunctions
 
             // Get all completions for event
             List<ChecklistCompletionEntity> allCompletions =
-                (await _checklistCompletionRepository.GetByEventAsync(eventId)).ToList();
+                [.. await _checklistCompletionRepository.GetByEventAsync(eventId)];
 
             // Get area leads for checkpoint's areas (from preloaded EventRoles data)
-            List<string> areaLeadIds = preloaded.AreaLeadsByMarshalId
+            List<string> areaLeadIds = [.. preloaded.AreaLeadsByMarshalId
                 .Where(kvp => kvp.Value.Any(areaId => locationAreaIds.Contains(areaId)))
                 .Select(kvp => kvp.Key)
-                .Distinct()
-                .ToList();
+                .Distinct()];
 
             // Build set of all relevant marshal IDs (assigned + area leads)
             HashSet<string> relevantMarshalIds = [.. assignedMarshalIds, .. areaLeadIds];
@@ -146,7 +145,7 @@ public class ChecklistQueryFunctions
 
             foreach (ChecklistItemEntity item in allItems.Where(ChecklistContextHelper.IsItemVisible).OrderBy(i => i.DisplayOrder))
             {
-                _logger.LogInformation($"Processing item: {item.Text} ({item.ItemId})");
+                _logger.LogInformation("Processing item: {ItemText} ({ItemId})", item.Text, item.ItemId);
 
                 // For each marshal at this checkpoint, get their view of this item
                 foreach (string marshalId in relevantMarshalIds)
@@ -154,13 +153,13 @@ public class ChecklistQueryFunctions
                     // Get context from prebuilt dictionary (no DB call)
                     ChecklistScopeHelper.MarshalContext marshalContext = marshalContexts[marshalId];
 
-                    _logger.LogInformation($"  Marshal {marshalNames.GetValueOrDefault(marshalId, marshalId)}: Areas={string.Join(",", marshalContext.AssignedAreaIds)}");
+                    _logger.LogInformation("  Marshal {MarshalName}: Areas={AssignedAreaIds}", marshalNames.GetValueOrDefault(marshalId, marshalId), string.Join(",", marshalContext.AssignedAreaIds));
 
                     // Get all contexts where this item is relevant to this marshal
                     List<ChecklistScopeHelper.ScopeMatchResult> contexts =
                         ChecklistScopeHelper.GetAllRelevantContexts(item, marshalContext, checkpointLookup);
 
-                    _logger.LogInformation($"    Found {contexts.Count} context(s)");
+                    _logger.LogInformation("    Found {ContextCount} context(s)", contexts.Count);
 
                     // Only include contexts that are for this checkpoint or its areas
                     foreach (ChecklistScopeHelper.ScopeMatchResult scopeContext in contexts)
@@ -169,7 +168,7 @@ public class ChecklistQueryFunctions
 
                         if (shouldInclude)
                         {
-                            _logger.LogInformation($"        Checking deduplication: ItemId={item.ItemId}, ContextType={scopeContext.ContextType}, ContextId={scopeContext.ContextId}");
+                            _logger.LogInformation("        Checking deduplication: ItemId={ItemId}, ContextType={ContextType}, ContextId={ContextId}", item.ItemId, scopeContext.ContextType, scopeContext.ContextId);
 
                             // Check if we already have this exact item instance
                             bool alreadyAdded = relevantItems.Any(existing =>
@@ -177,7 +176,7 @@ public class ChecklistQueryFunctions
                                 existing.CompletionContextType == scopeContext.ContextType &&
                                 existing.CompletionContextId == scopeContext.ContextId);
 
-                            _logger.LogInformation($"        Already added: {alreadyAdded}");
+                            _logger.LogInformation("        Already added: {AlreadyAdded}", alreadyAdded);
 
                             if (!alreadyAdded)
                             {
@@ -189,12 +188,12 @@ public class ChecklistQueryFunctions
                                     itemStatus = itemStatus with { ContextOwnerName = marshalName };
                                 }
 
-                                _logger.LogInformation($"        ADDED item for {marshalNames.GetValueOrDefault(marshalId, marshalId)}");
+                                _logger.LogInformation("        ADDED item for {MarshalName}", marshalNames.GetValueOrDefault(marshalId, marshalId));
                                 relevantItems.Add(itemStatus);
                             }
                             else
                             {
-                                _logger.LogInformation($"        SKIPPED (duplicate)");
+                                _logger.LogInformation("        SKIPPED (duplicate)");
                             }
                         }
                     }
@@ -209,7 +208,9 @@ public class ChecklistQueryFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
+#pragma warning disable MA0051
     [Function("GetAreaChecklist")]
     public async Task<IActionResult> GetAreaChecklist(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/{eventId}/areas/{areaId}/checklist")] HttpRequest req,
@@ -229,21 +230,20 @@ public class ChecklistQueryFunctions
             }
 
             // Get all checkpoints in this area (from preloaded data)
-            List<LocationEntity> areaCheckpoints = preloaded.LocationsById.Values
-                .Where(l => {
+            List<LocationEntity> areaCheckpoints = [.. preloaded.LocationsById.Values
+                .Where(l =>
+                {
                     List<string> locationAreaIds = JsonSerializer.Deserialize<List<string>>(l.AreaIdsJson) ?? [];
                     return locationAreaIds.Contains(areaId);
-                })
-                .ToList();
+                })];
 
-            List<string> checkpointIds = areaCheckpoints.Select(l => l.RowKey).ToList();
+            List<string> checkpointIds = [.. areaCheckpoints.Select(l => l.RowKey)];
 
             // Get all marshals assigned to checkpoints in this area (from preloaded data, no loop DB calls)
-            List<string> assignedMarshalIds = preloaded.AssignmentsByMarshal
+            List<string> assignedMarshalIds = [.. preloaded.AssignmentsByMarshal
                 .Where(kvp => kvp.Value.Any(a => checkpointIds.Contains(a.LocationId)))
                 .Select(kvp => kvp.Key)
-                .Distinct()
-                .ToList();
+                .Distinct()];
 
             // Build checkpoint lookup dictionary from preloaded data
             Dictionary<string, LocationEntity> checkpointLookup = preloaded.LocationsById;
@@ -253,13 +253,12 @@ public class ChecklistQueryFunctions
 
             // Get all completions for event
             List<ChecklistCompletionEntity> allCompletions =
-                (await _checklistCompletionRepository.GetByEventAsync(eventId)).ToList();
+                [.. await _checklistCompletionRepository.GetByEventAsync(eventId)];
 
             // Get area leads for this area (from preloaded EventRoles data)
-            List<string> areaLeadIds = preloaded.AreaLeadsByMarshalId
+            List<string> areaLeadIds = [.. preloaded.AreaLeadsByMarshalId
                 .Where(kvp => kvp.Value.Contains(areaId))
-                .Select(kvp => kvp.Key)
-                .ToList();
+                .Select(kvp => kvp.Key)];
 
             // Build set of all relevant marshal IDs (assigned + area leads)
             HashSet<string> relevantMarshalIds = [.. assignedMarshalIds, .. areaLeadIds];
@@ -327,6 +326,7 @@ public class ChecklistQueryFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     /// <summary>
     /// Determines if a scope context should be included for a checkpoint view.

@@ -115,7 +115,7 @@ public class TableStoragePersonRepository : IPersonRepository
         await _table.UpdateEntityAsync(person, person.ETag);
 
         // Update email index if email changed
-        if (oldEmail != null && !oldEmail.Equals(person.Email, StringComparison.OrdinalIgnoreCase))
+        if (oldEmail?.Equals(person.Email, StringComparison.OrdinalIgnoreCase) == false)
         {
             // Delete old index
             try

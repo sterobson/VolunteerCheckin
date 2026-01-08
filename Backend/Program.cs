@@ -14,7 +14,7 @@ builder.Services
     .ConfigureFunctionsApplicationInsights();
 
 // Register services
-builder.Services.AddSingleton(sp =>
+builder.Services.AddSingleton(_ =>
 {
     string? connectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
     if (string.IsNullOrWhiteSpace(connectionString))
@@ -26,7 +26,7 @@ builder.Services.AddSingleton(sp =>
     return new TableStorageService(connectionString);
 });
 
-builder.Services.AddSingleton(sp =>
+builder.Services.AddSingleton(_ =>
 {
     string? smtpHost = Environment.GetEnvironmentVariable("SMTP_HOST");
     string? smtpPortStr = Environment.GetEnvironmentVariable("SMTP_PORT");
@@ -59,7 +59,7 @@ builder.Services.AddSingleton(sp =>
     return new EmailService(smtpHost, smtpPort, smtpUsername, smtpPassword, fromEmail, senderName);
 });
 
-builder.Services.AddSingleton(sp =>
+builder.Services.AddSingleton(_ =>
 {
     string? connectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
     if (string.IsNullOrWhiteSpace(connectionString))

@@ -1,61 +1,75 @@
 <template>
-  <div>
-    <h3>{{ terms.checkpoints }} ({{ locations.length }})</h3>
-    <div class="button-group">
-      <div class="add-menu-wrapper" ref="menuWrapperRef">
-        <button
-          ref="addButtonRef"
-          @click="toggleAddMenu"
-          class="btn btn-small btn-primary"
-        >
-          Add...
+  <div class="checkpoints-tab">
+    <!-- Row 1: Action buttons + status pills -->
+    <div class="tab-header">
+      <div class="button-group">
+        <button @click="$emit('add-checkpoint-manually')" class="btn btn-primary">
+          Add {{ termsLower.checkpoint }}
         </button>
-        <div v-if="showAddMenu" class="add-dropdown">
-          <button @click="handleAddManually" class="dropdown-item">
-            Add {{ termsLower.checkpoint }} manually
-          </button>
-          <button @click="handleImport" class="dropdown-item">
-            Import from CSV...
-          </button>
-        </div>
+        <button @click="$emit('import-checkpoints')" class="btn btn-secondary">
+          Import CSV
+        </button>
+      </div>
+      <div class="status-pills" v-if="locations.length > 0">
+        <StatusPill
+          variant="neutral"
+          :active="activeFilter === 'all'"
+          @click="setFilter('all')"
+        >
+          {{ locations.length }} total
+        </StatusPill>
+        <StatusPill
+          v-if="fullCount > 0"
+          variant="success"
+          :active="activeFilter === 'full'"
+          @click="setFilter('full')"
+        >
+          {{ fullCount }} fully staffed
+        </StatusPill>
+        <StatusPill
+          v-if="partialCount > 0"
+          variant="warning"
+          :active="activeFilter === 'partial'"
+          @click="setFilter('partial')"
+        >
+          {{ partialCount }} partial
+        </StatusPill>
+        <StatusPill
+          v-if="missingCount > 0"
+          variant="danger"
+          :active="activeFilter === 'missing'"
+          @click="setFilter('missing')"
+        >
+          {{ missingCount }} unstaffed
+        </StatusPill>
       </div>
     </div>
 
-    <div v-if="areas.length > 0" class="filter-group">
-      <h4>Filter by {{ terms.area.toLowerCase() }}:</h4>
-      <label class="filter-checkbox">
+    <!-- Row 2: Filters -->
+    <div class="filters-section">
+      <div class="search-group">
         <input
-          type="checkbox"
-          :checked="showAllAreas"
-          @change="handleAllAreasToggle"
+          v-model="searchQuery"
+          type="text"
+          class="search-input"
+          :placeholder="`Search by name, description, ${termsLower.area}, or ${termsLower.person}...`"
         />
-        All {{ terms.areas.toLowerCase() }} ({{ locations.length }})
-      </label>
-      <AreasSelection
-        v-if="!showAllAreas"
-        :areas="areas"
-        :selected-area-ids="selectedAreaIds"
-        @update:selected-area-ids="selectedAreaIds = $event"
-      />
+      </div>
     </div>
 
+    <!-- Row 3: Content -->
     <div class="locations-list">
       <div
         v-for="location in sortedLocations"
         :key="location.id"
         class="location-item"
-        :class="{
-          'location-full': location.checkedInCount >= location.requiredMarshals,
-          'location-missing': location.checkedInCount === 0
-        }"
+        :style="{ borderLeftColor: getLocationBorderColor(location) }"
         @click="$emit('select-location', location)"
       >
         <div class="location-info">
           <div class="location-header">
             <span class="checkpoint-icon" v-html="getCheckpointIconSvg(location)"></span>
-            <div class="location-name-desc">
-              <strong>{{ location.name }}</strong><span v-if="location.description" class="location-description"> - {{ location.description }}</span>
-            </div>
+            <strong>{{ location.name }}</strong>
             <span
               v-for="areaId in (location.areaIds || location.AreaIds || [])"
               :key="areaId"
@@ -64,20 +78,23 @@
             >
               {{ getAreaName(areaId) }}
             </span>
-            <span class="location-status">
-              {{ location.checkedInCount }}/{{ location.requiredMarshals }}
+          </div>
+          <p v-if="location.description" class="location-description">
+            {{ location.description }}
+          </p>
+          <div class="location-stats">
+            <span class="stat-badge" :class="getStaffingClass(location)">
+              {{ location.checkedInCount }}/{{ location.requiredMarshals }} staffed
+            </span>
+            <span
+              v-for="assignment in location.assignments"
+              :key="assignment.id"
+              class="stat-badge"
+              :class="{ 'checked-in': assignment.isCheckedIn }"
+            >
+              {{ assignment.marshalName }}
             </span>
           </div>
-        </div>
-        <div class="location-assignments">
-          <span
-            v-for="assignment in location.assignments"
-            :key="assignment.id"
-            class="assignment-badge"
-            :class="{ 'checked-in': assignment.isCheckedIn }"
-          >
-            {{ assignment.marshalName }}
-          </span>
         </div>
       </div>
     </div>
@@ -85,13 +102,13 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits, computed, ref, onMounted, onUnmounted } from 'vue';
+import { defineProps, defineEmits, computed, ref } from 'vue';
 import { alphanumericCompare } from '../../../utils/sortUtils';
-import AreasSelection from '../AreasSelection.vue';
 import { useTerminology } from '../../../composables/useTerminology';
 import { generateCheckpointSvg } from '../../../constants/checkpointIcons';
+import StatusPill from '../../StatusPill.vue';
 
-const { terms, termsLower } = useTerminology();
+const { termsLower } = useTerminology();
 
 const props = defineProps({
   locations: {
@@ -104,63 +121,63 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['add-checkpoint-manually', 'import-checkpoints', 'select-location']);
+defineEmits(['add-checkpoint-manually', 'import-checkpoints', 'select-location']);
 
-const showAllAreas = ref(true);
-const selectedAreaIds = ref([]);
-const addButtonRef = ref(null);
-const menuWrapperRef = ref(null);
-const showAddMenu = ref(false);
+const searchQuery = ref('');
+const activeFilter = ref('all');
 
-const toggleAddMenu = () => {
-  showAddMenu.value = !showAddMenu.value;
+const setFilter = (filter) => {
+  activeFilter.value = filter;
 };
 
-const handleAddManually = () => {
-  showAddMenu.value = false;
-  emit('add-checkpoint-manually');
-};
-
-const handleImport = () => {
-  showAddMenu.value = false;
-  emit('import-checkpoints');
-};
-
-// Close dropdown when clicking outside
-const handleClickOutside = (event) => {
-  if (menuWrapperRef.value && !menuWrapperRef.value.contains(event.target)) {
-    showAddMenu.value = false;
-  }
-};
-
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside);
+// Status pill counts
+const fullCount = computed(() => {
+  return props.locations.filter(loc => loc.checkedInCount >= loc.requiredMarshals && loc.requiredMarshals > 0).length;
 });
 
-onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside);
+const partialCount = computed(() => {
+  return props.locations.filter(loc => loc.checkedInCount > 0 && loc.checkedInCount < loc.requiredMarshals).length;
 });
 
-const handleAllAreasToggle = () => {
-  showAllAreas.value = !showAllAreas.value;
-  if (!showAllAreas.value && selectedAreaIds.value.length === 0) {
-    // Select all areas by default when unchecking "All areas"
-    selectedAreaIds.value = props.areas.map(a => a.id);
+const missingCount = computed(() => {
+  return props.locations.filter(loc => loc.checkedInCount === 0 && loc.requiredMarshals > 0).length;
+});
+
+// Filtering by status pill and search query
+const filteredLocations = computed(() => {
+  let result = props.locations;
+
+  // Filter by status pill
+  if (activeFilter.value === 'full') {
+    result = result.filter(loc => loc.checkedInCount >= loc.requiredMarshals && loc.requiredMarshals > 0);
+  } else if (activeFilter.value === 'partial') {
+    result = result.filter(loc => loc.checkedInCount > 0 && loc.checkedInCount < loc.requiredMarshals);
+  } else if (activeFilter.value === 'missing') {
+    result = result.filter(loc => loc.checkedInCount === 0 && loc.requiredMarshals > 0);
   }
-};
 
-const sortedLocations = computed(() => {
-  let filtered = props.locations;
+  // Filter by search query
+  if (searchQuery.value.trim()) {
+    const searchTerms = searchQuery.value.toLowerCase().trim().split(/\s+/);
 
-  // Filter by area
-  if (!showAllAreas.value && selectedAreaIds.value.length > 0) {
-    filtered = filtered.filter((loc) => {
-      const areaIds = loc.areaIds || loc.AreaIds || [];
-      return areaIds.some(id => selectedAreaIds.value.includes(id));
+    result = result.filter(location => {
+      // Build searchable text
+      const areaIds = location.areaIds || location.AreaIds || [];
+      const areaNames = areaIds.map(id => getAreaName(id) || '').join(' ');
+      const marshalNames = (location.assignments || []).map(a => a.marshalName || '').join(' ');
+
+      const searchableText = `${location.name || ''} ${location.description || ''} ${areaNames} ${marshalNames}`.toLowerCase();
+
+      // All search terms must match
+      return searchTerms.every(term => searchableText.includes(term));
     });
   }
 
-  return [...filtered].sort((a, b) => alphanumericCompare(a.name, b.name));
+  return result;
+});
+
+const sortedLocations = computed(() => {
+  return [...filteredLocations.value].sort((a, b) => alphanumericCompare(a.name, b.name));
 });
 
 const getAreaName = (areaId) => {
@@ -171,6 +188,29 @@ const getAreaName = (areaId) => {
 const getAreaColor = (areaId) => {
   const area = props.areas.find((a) => a.id === areaId);
   return area ? area.color : '#999';
+};
+
+// Get border color based on checkpoint's resolved style or first area color
+const getLocationBorderColor = (location) => {
+  const resolvedBgColor = location.resolvedStyleBackgroundColor || location.ResolvedStyleBackgroundColor || location.resolvedStyleColor || location.ResolvedStyleColor;
+  if (resolvedBgColor) {
+    return resolvedBgColor;
+  }
+
+  const areaIds = location.areaIds || location.AreaIds || [];
+  if (areaIds.length > 0) {
+    return getAreaColor(areaIds[0]);
+  }
+
+  return '#667eea';
+};
+
+// Get staffing status class
+const getStaffingClass = (location) => {
+  if (location.requiredMarshals === 0) return '';
+  if (location.checkedInCount >= location.requiredMarshals) return 'staffed-full';
+  if (location.checkedInCount > 0) return 'staffed-partial';
+  return 'staffed-none';
 };
 
 // Generate checkpoint icon SVG based on resolved style
@@ -209,15 +249,28 @@ const getCheckpointIconSvg = (location) => {
 </script>
 
 <style scoped>
-h3 {
-  margin: 0 0 1rem 0;
-  color: var(--text-primary);
+.checkpoints-tab {
+  width: 100%;
+}
+
+.tab-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
 .button-group {
   display: flex;
+  gap: 0.75rem;
+}
+
+.status-pills {
+  display: flex;
   gap: 0.5rem;
-  margin-bottom: 1rem;
+  flex-wrap: wrap;
 }
 
 .btn {
@@ -227,11 +280,6 @@ h3 {
   cursor: pointer;
   font-size: 0.9rem;
   transition: background-color 0.2s;
-}
-
-.btn-small {
-  padding: 0.4rem 0.8rem;
-  font-size: 0.85rem;
 }
 
 .btn-primary {
@@ -252,50 +300,40 @@ h3 {
   background: var(--bg-hover);
 }
 
-.add-menu-wrapper {
-  position: relative;
-}
-
-.add-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  background: var(--bg-primary);
-  border-radius: 6px;
-  box-shadow: var(--shadow-lg);
-  z-index: 100;
-  min-width: 180px;
-  margin-top: 0.25rem;
-  overflow: hidden;
-}
-
-.dropdown-item {
-  display: block;
-  width: 100%;
+.filters-section {
+  margin-bottom: 1rem;
   padding: 0.75rem 1rem;
-  border: none;
-  background: var(--bg-primary);
-  text-align: left;
-  cursor: pointer;
-  font-size: 0.9rem;
-  color: var(--text-primary);
-  transition: background-color 0.15s;
-}
-
-.dropdown-item:hover {
   background: var(--bg-tertiary);
+  border-radius: 8px;
 }
 
-.dropdown-item:first-child {
-  border-radius: 6px 6px 0 0;
+.search-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-.dropdown-item:last-child {
-  border-radius: 0 0 6px 6px;
+.search-input {
+  flex: 1;
+  max-width: 400px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  background: var(--input-bg);
+  color: var(--text-primary);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.search-input::placeholder {
+  color: var(--text-muted);
 }
 
 .locations-list {
-  margin-top: 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -304,6 +342,7 @@ h3 {
 .location-item {
   padding: 1rem;
   border: 2px solid var(--border-color);
+  border-left: 4px solid var(--accent-primary);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.3s;
@@ -312,100 +351,65 @@ h3 {
 
 .location-item:hover {
   border-color: var(--accent-primary);
-}
-
-.location-item.location-full {
-  border-color: var(--accent-success);
-  background: var(--status-success-bg);
-}
-
-.location-item.location-missing {
-  border-color: var(--accent-danger);
-  background: var(--status-danger-bg);
+  box-shadow: var(--shadow-md);
 }
 
 .location-info {
-  margin-bottom: 0.5rem;
-}
-
-.location-name-desc {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.location-description {
-  font-weight: 400;
-  color: var(--text-muted);
-}
-
-.location-status {
-  font-weight: 600;
-  color: var(--accent-primary);
-  white-space: nowrap;
-  margin-left: auto;
-}
-
-.location-assignments {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.assignment-badge {
-  padding: 0.25rem 0.75rem;
-  background: var(--bg-tertiary);
-  border-radius: 12px;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-}
-
-.assignment-badge.checked-in {
-  background: var(--accent-success);
-  color: white;
-}
-
-.filter-group {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  margin: 1rem 0;
-  padding: 1rem;
-  background: var(--bg-tertiary);
-  border-radius: 4px;
-}
-
-.filter-group h4 {
-  margin: 0 0 0.5rem 0;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.filter-checkbox {
-  display: flex;
-  align-items: center;
   gap: 0.5rem;
-  font-size: 0.9rem;
-  cursor: pointer;
-  color: var(--text-primary);
-}
-
-.filter-checkbox input[type="checkbox"] {
-  cursor: pointer;
-  width: 1rem;
-  height: 1rem;
 }
 
 .location-header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.location-header strong {
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.location-description {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.location-stats {
+  display: flex;
+  gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+.stat-badge {
+  padding: 0.25rem 0.75rem;
+  background: var(--bg-tertiary);
+  border-radius: 12px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.stat-badge.staffed-full {
+  background: var(--status-success-bg);
+  color: var(--accent-success);
+}
+
+.stat-badge.staffed-partial {
+  background: var(--status-warning-bg);
+  color: var(--warning-text, #92400e);
+}
+
+.stat-badge.staffed-none {
+  background: var(--status-danger-bg);
+  color: var(--accent-danger);
+}
+
+.stat-badge.checked-in {
+  background: var(--accent-success);
+  color: white;
 }
 
 .checkpoint-icon {

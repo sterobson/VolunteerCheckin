@@ -34,6 +34,7 @@ public class CheckInFunctions
         _claimsService = claimsService;
     }
 
+#pragma warning disable MA0051
     [Function("CheckIn")]
     public async Task<IActionResult> CheckIn(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "checkin")] HttpRequest req)
@@ -41,7 +42,7 @@ public class CheckInFunctions
         try
         {
             string body = await new StreamReader(req.Body).ReadToEndAsync();
-            CheckInRequest? request = JsonSerializer.Deserialize<CheckInRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            CheckInRequest? request = JsonSerializer.Deserialize<CheckInRequest>(body, FunctionHelpers.JsonOptions);
 
             if (request == null || string.IsNullOrWhiteSpace(request.EventId) || string.IsNullOrWhiteSpace(request.AssignmentId))
             {
@@ -87,7 +88,7 @@ public class CheckInFunctions
 
                 if (distance > Constants.CheckInRadiusMeters)
                 {
-                    _logger.LogWarning($"Check-in rejected: {Math.Round(distance)}m away from location (max {Constants.CheckInRadiusMeters}m) - Assignment: {request.AssignmentId}");
+                    _logger.LogWarning("Check-in rejected: {Distance}m away from location (max {MaxDistance}m) - Assignment: {AssignmentId}", Math.Round(distance), Constants.CheckInRadiusMeters, request.AssignmentId);
                     return new BadRequestObjectResult(new
                     {
                         message = $"You are {Math.Round(distance)}m away from the location. You must be within {Constants.CheckInRadiusMeters}m to check in.",
@@ -147,7 +148,7 @@ public class CheckInFunctions
 
             AssignmentResponse response = assignment.ToResponse();
 
-            _logger.LogInformation($"Check-in successful: {assignment.RowKey} ({checkInMethod})");
+            _logger.LogInformation("Check-in successful: {AssignmentId} ({CheckInMethod})", assignment.RowKey, checkInMethod);
 
             return new OkObjectResult(response);
         }
@@ -157,7 +158,9 @@ public class CheckInFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
+#pragma warning disable MA0051
     [Function("AdminCheckIn")]
     public async Task<IActionResult> AdminCheckIn(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "checkin/admin/{eventId}/{assignmentId}")] HttpRequest req,
@@ -211,10 +214,9 @@ public class CheckInFunctions
             else
             {
                 // Check if user is an area lead for this checkpoint's area
-                List<string> areaLeadAreaIds = claims.EventRoles
+                List<string> areaLeadAreaIds = [.. claims.EventRoles
                     .Where(r => r.Role == Constants.RoleEventAreaLead)
-                    .SelectMany(r => r.AreaIds)
-                    .ToList();
+                    .SelectMany(r => r.AreaIds)];
 
                 if (areaLeadAreaIds.Count > 0 && !string.IsNullOrEmpty(location.AreaIdsJson))
                 {
@@ -294,7 +296,7 @@ public class CheckInFunctions
 
             AssignmentResponse response = assignment.ToResponse();
 
-            _logger.LogInformation($"Admin check-in toggle: {assignment.RowKey} - Now {(assignment.IsCheckedIn ? "checked in" : "checked out")}");
+            _logger.LogInformation("Admin check-in toggle: {AssignmentId} - Now {CheckInStatus}", assignment.RowKey, assignment.IsCheckedIn ? "checked in" : "checked out");
 
             return new OkObjectResult(response);
         }
@@ -304,4 +306,5 @@ public class CheckInFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 }

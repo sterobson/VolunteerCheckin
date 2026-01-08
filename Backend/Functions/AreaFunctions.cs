@@ -91,7 +91,7 @@ public class AreaFunctions
             int checkpointCount = await _locationRepository.CountByAreaAsync(request.EventId, areaEntity.RowKey);
             AreaResponse response = areaEntity.ToResponse(checkpointCount);
 
-            _logger.LogInformation($"Area created: {areaEntity.RowKey}");
+            _logger.LogInformation("Area created: {AreaId}", areaEntity.RowKey);
 
             return new OkObjectResult(response);
         }
@@ -102,6 +102,7 @@ public class AreaFunctions
         }
     }
 
+#pragma warning disable MA0051
     [Function("GetArea")]
     public async Task<IActionResult> GetArea(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "areas/{eventId}/{areaId}")] HttpRequest req,
@@ -126,8 +127,9 @@ public class AreaFunctions
                 IEnumerable<MarshalEntity> marshals = await _marshalRepository.GetByEventAsync(eventId);
                 Dictionary<string, MarshalEntity> marshalLookup = marshals.ToDictionary(m => m.MarshalId);
 
-                List<AreaContact> enrichedContacts = baseResponse.Contacts
-                    .Select(c => {
+                List<AreaContact> enrichedContacts = [.. baseResponse.Contacts
+                    .Select(c =>
+                    {
                         marshalLookup.TryGetValue(c.MarshalId, out MarshalEntity? marshal);
                         return new AreaContact(
                             c.MarshalId,
@@ -136,8 +138,7 @@ public class AreaFunctions
                             marshal?.PhoneNumber,
                             marshal?.Email
                         );
-                    })
-                    .ToList();
+                    })];
 
                 // Create new response with enriched contacts
                 AreaResponse response = new AreaResponse(
@@ -175,6 +176,7 @@ public class AreaFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     [Function("GetAreasByEvent")]
     public async Task<IActionResult> GetAreasByEvent(
@@ -198,9 +200,8 @@ public class AreaFunctions
                 }
             }
 
-            List<AreaResponse> areas = areaEntities
-                .Select(area => area.ToResponse(checkpointCountsByArea.GetValueOrDefault(area.RowKey, 0)))
-                .ToList();
+            List<AreaResponse> areas = [.. areaEntities
+                .Select(area => area.ToResponse(checkpointCountsByArea.GetValueOrDefault(area.RowKey, 0)))];
 
             return new OkObjectResult(areas);
         }
@@ -211,6 +212,7 @@ public class AreaFunctions
         }
     }
 
+#pragma warning disable MA0051
     [Function("UpdateArea")]
     public async Task<IActionResult> UpdateArea(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "areas/{eventId}/{areaId}")] HttpRequest req,
@@ -280,7 +282,7 @@ public class AreaFunctions
             int checkpointCount = await _locationRepository.CountByAreaAsync(eventId, areaId);
             AreaResponse response = areaEntity.ToResponse(checkpointCount);
 
-            _logger.LogInformation($"Area updated: {areaId}");
+            _logger.LogInformation("Area updated: {AreaId}", areaId);
 
             return new OkObjectResult(response);
         }
@@ -290,7 +292,9 @@ public class AreaFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
+#pragma warning disable MA0051
     [Function("DeleteArea")]
     public async Task<IActionResult> DeleteArea(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "areas/{eventId}/{areaId}")] HttpRequest req,
@@ -309,7 +313,7 @@ public class AreaFunctions
             // Prevent deletion of default area
             if (areaEntity.IsDefault)
             {
-                _logger.LogWarning($"Attempt to delete default area rejected: {areaId} in event {eventId}");
+                _logger.LogWarning("Attempt to delete default area rejected: {AreaId} in event {EventId}", areaId, eventId);
                 return new BadRequestObjectResult(new { message = "Cannot delete default area" });
             }
 
@@ -322,7 +326,7 @@ public class AreaFunctions
                 AreaEntity? defaultArea = await _areaRepository.GetDefaultAreaAsync(eventId);
                 if (defaultArea == null)
                 {
-                    _logger.LogError($"Default area not found for event {eventId}");
+                    _logger.LogError("Default area not found for event {EventId}", eventId);
                     return new StatusCodeResult(500);
                 }
 
@@ -350,12 +354,12 @@ public class AreaFunctions
                 // Execute all updates in parallel
                 await Task.WhenAll(updateTasks);
 
-                _logger.LogInformation($"Reassigned {checkpointsInArea.Count()} checkpoints from area {areaId}");
+                _logger.LogInformation("Reassigned {CheckpointCount} checkpoints from area {AreaId}", checkpointsInArea.Count(), areaId);
             }
 
             await _areaRepository.DeleteAsync(eventId, areaId);
 
-            _logger.LogInformation($"Area deleted: {areaId}");
+            _logger.LogInformation("Area deleted: {AreaId}", areaId);
 
             return new NoContentResult();
         }
@@ -365,6 +369,7 @@ public class AreaFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     [Function("RecalculateCheckpointAreasEndpoint")]
     public async Task<IActionResult> RecalculateCheckpointAreasEndpoint(
@@ -375,7 +380,8 @@ public class AreaFunctions
         {
             await RecalculateCheckpointAreas(eventId);
 
-            return new OkObjectResult(new {
+            return new OkObjectResult(new
+            {
                 message = $"Successfully recalculated checkpoint area assignments for event {eventId}"
             });
         }
@@ -396,9 +402,8 @@ public class AreaFunctions
         {
             IEnumerable<LocationEntity> locationEntities = await _locationRepository.GetByAreaAsync(eventId, areaId);
 
-            List<LocationResponse> locations = locationEntities
-                .Select(l => l.ToResponse())
-                .ToList();
+            List<LocationResponse> locations = [.. locationEntities
+                .Select(l => l.ToResponse())];
 
             return new OkObjectResult(locations);
         }
@@ -419,7 +424,7 @@ public class AreaFunctions
 
         if (defaultArea == null)
         {
-            _logger.LogWarning($"No default area found for event {eventId} during recalculation");
+            _logger.LogWarning("No default area found for event {EventId} during recalculation", eventId);
             return;
         }
 
@@ -440,7 +445,7 @@ public class AreaFunctions
 
         await Task.WhenAll(updateTasks);
 
-        _logger.LogInformation($"Recalculated area assignments for {checkpoints.Count()} checkpoints in event {eventId}");
+        _logger.LogInformation("Recalculated area assignments for {CheckpointCount} checkpoints in event {EventId}", checkpoints.Count(), eventId);
     }
 
     /// <summary>
@@ -448,6 +453,7 @@ public class AreaFunctions
     /// Returns all checkpoints in the lead's areas with marshals, check-in status, and outstanding tasks.
     /// Single API call to minimize latency.
     /// </summary>
+#pragma warning disable MA0051
     [Function("GetAreaLeadDashboard")]
     public async Task<IActionResult> GetAreaLeadDashboard(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/{eventId}/area-lead-dashboard")] HttpRequest req,
@@ -469,11 +475,10 @@ public class AreaFunctions
             }
 
             // Get area IDs this user leads
-            List<string> leadAreaIds = claims.EventRoles
+            List<string> leadAreaIds = [.. claims.EventRoles
                 .Where(r => r.Role == Constants.RoleEventAreaLead)
                 .SelectMany(r => r.AreaIds)
-                .Distinct()
-                .ToList();
+                .Distinct()];
 
             if (leadAreaIds.Count == 0)
             {
@@ -491,16 +496,15 @@ public class AreaFunctions
             await Task.WhenAll(areasTask, locationsTask, marshalsTask, assignmentsTask, checklistItemsTask, completionsTask);
 
             IEnumerable<AreaEntity> areas = areasTask.Result;
-            List<LocationEntity> locationsList = locationsTask.Result.ToList();
+            List<LocationEntity> locationsList = [.. locationsTask.Result];
             IEnumerable<MarshalEntity> marshals = marshalsTask.Result;
             IEnumerable<AssignmentEntity> assignments = assignmentsTask.Result;
             IEnumerable<ChecklistItemEntity> checklistItems = checklistItemsTask.Result;
             IEnumerable<ChecklistCompletionEntity> completions = completionsTask.Result;
 
             // Check if any checkpoints are missing area assignments and auto-calculate
-            List<LocationEntity> checkpointsNeedingAreas = locationsList
-                .Where(l => string.IsNullOrEmpty(l.AreaIdsJson) || l.AreaIdsJson == "[]")
-                .ToList();
+            List<LocationEntity> checkpointsNeedingAreas = [.. locationsList
+                .Where(l => string.IsNullOrEmpty(l.AreaIdsJson) || l.AreaIdsJson == "[]")];
 
             if (checkpointsNeedingAreas.Count > 0)
             {
@@ -547,22 +551,21 @@ public class AreaFunctions
             Dictionary<string, AreaEntity> areaLookup = areas.ToDictionary(a => a.RowKey);
 
             // Get checkpoints in lead's areas
-            List<LocationEntity> checkpointsInAreas = locationsList
-                .Where(loc => {
+            List<LocationEntity> checkpointsInAreas = [.. locationsList
+                .Where(loc =>
+                {
                     if (string.IsNullOrEmpty(loc.AreaIdsJson))
                         return false;
                     List<string> locAreaIds = JsonSerializer.Deserialize<List<string>>(loc.AreaIdsJson) ?? [];
                     return locAreaIds.Any(areaId => leadAreaIds.Contains(areaId));
                 })
-                .OrderBy(loc => loc.Name, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+                .OrderBy(loc => loc.Name, StringComparer.OrdinalIgnoreCase)];
 
             HashSet<string> checkpointIds = checkpointsInAreas.Select(c => c.RowKey).ToHashSet();
 
             // Get assignments for these checkpoints
-            List<AssignmentEntity> relevantAssignments = assignments
-                .Where(a => checkpointIds.Contains(a.LocationId))
-                .ToList();
+            List<AssignmentEntity> relevantAssignments = [.. assignments
+                .Where(a => checkpointIds.Contains(a.LocationId))];
 
             // Get marshal IDs from assignments
             HashSet<string> marshalIds = relevantAssignments.Select(a => a.MarshalId).ToHashSet();
@@ -661,9 +664,8 @@ public class AreaFunctions
                     : null;
 
                 // Get marshals at this checkpoint
-                List<AssignmentEntity> checkpointAssignments = relevantAssignments
-                    .Where(a => a.LocationId == checkpoint.RowKey)
-                    .ToList();
+                List<AssignmentEntity> checkpointAssignments = [.. relevantAssignments
+                    .Where(a => a.LocationId == checkpoint.RowKey)];
 
                 List<AreaLeadMarshalInfo> marshalInfos = [];
                 foreach (AssignmentEntity assignment in checkpointAssignments)
@@ -705,10 +707,9 @@ public class AreaFunctions
             }
 
             // Build area info
-            List<AreaLeadAreaInfo> areaInfos = areas
+            List<AreaLeadAreaInfo> areaInfos = [.. areas
                 .Where(a => leadAreaIds.Contains(a.RowKey))
-                .Select(a => new AreaLeadAreaInfo(a.RowKey, a.Name, a.Color))
-                .ToList();
+                .Select(a => new AreaLeadAreaInfo(a.RowKey, a.Name, a.Color))];
 
             return new OkObjectResult(new AreaLeadDashboardResponse(areaInfos, checkpointInfos));
         }
@@ -718,4 +719,5 @@ public class AreaFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 }

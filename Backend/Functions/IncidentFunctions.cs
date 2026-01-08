@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Repositories;
 using VolunteerCheckin.Functions.Services;
+using VolunteerCheckin.Functions.Helpers;
 
 namespace VolunteerCheckin.Functions.Functions;
 
@@ -23,8 +24,8 @@ public class IncidentFunctions
     private readonly IAreaRepository _areaRepository;
     private readonly ClaimsService _claimsService;
 
-    private static readonly string[] ValidSeverities = ["low", "medium", "high", "critical"];
-    private static readonly string[] ValidStatuses = ["open", "acknowledged", "in_progress", "resolved", "closed"];
+    private static readonly string[] _validSeverities = ["low", "medium", "high", "critical"];
+    private static readonly string[] _validStatuses = ["open", "acknowledged", "in_progress", "resolved", "closed"];
 
     public IncidentFunctions(
         ILogger<IncidentFunctions> logger,
@@ -48,6 +49,7 @@ public class IncidentFunctions
     /// Create a new incident report.
     /// Any authenticated marshal can create an incident.
     /// </summary>
+#pragma warning disable MA0051
     [Function("CreateIncident")]
     public async Task<IActionResult> CreateIncident(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "events/{eventId}/incidents")] HttpRequest req,
@@ -64,7 +66,7 @@ public class IncidentFunctions
 
             // Parse request
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-            CreateIncidentRequest? request = JsonSerializer.Deserialize<CreateIncidentRequest>(requestBody, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            CreateIncidentRequest? request = JsonSerializer.Deserialize<CreateIncidentRequest>(requestBody, FunctionHelpers.JsonOptions);
 
             if (request == null || string.IsNullOrWhiteSpace(request.Description))
             {
@@ -73,9 +75,9 @@ public class IncidentFunctions
 
             // Validate severity
             string severity = request.Severity?.ToLowerInvariant() ?? "medium";
-            if (!ValidSeverities.Contains(severity))
+            if (!_validSeverities.Contains(severity))
             {
-                return new BadRequestObjectResult(new { message = $"Invalid severity. Valid values: {string.Join(", ", ValidSeverities)}" });
+                return new BadRequestObjectResult(new { message = $"Invalid severity. Valid values: {string.Join(", ", _validSeverities)}" });
             }
 
             // Build context snapshot
@@ -99,7 +101,7 @@ public class IncidentFunctions
             string incidentId = Guid.NewGuid().ToString();
             DateTime now = DateTime.UtcNow;
 
-            IncidentEntity incident = new IncidentEntity
+            IncidentEntity incident = new()
             {
                 PartitionKey = eventId,
                 RowKey = incidentId,
@@ -134,6 +136,7 @@ public class IncidentFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     /// <summary>
     /// Get all incidents for an event.
@@ -141,6 +144,7 @@ public class IncidentFunctions
     /// - Area leads see incidents in their areas (by checkpoint area, reporter area, or GPS location)
     /// - Marshals see only their own reported incidents
     /// </summary>
+#pragma warning disable MA0051
     [Function("GetIncidents")]
     public async Task<IActionResult> GetIncidents(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/{eventId}/incidents")] HttpRequest req,
@@ -165,10 +169,9 @@ public class IncidentFunctions
             else
             {
                 // Get area IDs where user is an area lead
-                List<string> leadAreaIds = claims.EventRoles
-                    .Where(r => r.Role == Constants.RoleEventAreaLead)
-                    .SelectMany(r => r.AreaIds)
-                    .ToList();
+                List<string> leadAreaIds = [.. claims.EventRoles
+                    .Where(r => string.Equals(r.Role, Constants.RoleEventAreaLead, StringComparison.Ordinal))
+                    .SelectMany(r => r.AreaIds)];
 
                 // Filter incidents based on marshal/lead rules
                 incidents = await FilterIncidentsForUserAsync(eventId, incidents, claims.MarshalId, leadAreaIds, claims.PersonId);
@@ -180,15 +183,15 @@ public class IncidentFunctions
 
             if (!string.IsNullOrEmpty(statusFilter))
             {
-                incidents = incidents.Where(i => i.Status == statusFilter.ToLowerInvariant());
+                incidents = incidents.Where(i => string.Equals(i.Status, statusFilter, StringComparison.OrdinalIgnoreCase));
             }
 
             if (!string.IsNullOrEmpty(severityFilter))
             {
-                incidents = incidents.Where(i => i.Severity == severityFilter.ToLowerInvariant());
+                incidents = incidents.Where(i => string.Equals(i.Severity, severityFilter, StringComparison.OrdinalIgnoreCase));
             }
 
-            List<IncidentResponse> responses = incidents.Select(ToIncidentResponse).ToList();
+            List<IncidentResponse> responses = [.. incidents.Select(ToIncidentResponse)];
 
             return new OkObjectResult(new IncidentsListResponse(responses));
         }
@@ -198,6 +201,7 @@ public class IncidentFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     /// <summary>
     /// Get incidents for a specific area (area lead view).
@@ -229,7 +233,7 @@ public class IncidentFunctions
 
             IEnumerable<IncidentEntity> incidents = await _incidentRepository.GetByAreaAsync(eventId, areaId);
 
-            List<IncidentResponse> responses = incidents.Select(ToIncidentResponse).ToList();
+            List<IncidentResponse> responses = [.. incidents.Select(ToIncidentResponse)];
 
             return new OkObjectResult(new IncidentsListResponse(responses));
         }
@@ -287,6 +291,7 @@ public class IncidentFunctions
     /// Update an incident's status.
     /// Only event admins and area leads can update status.
     /// </summary>
+#pragma warning disable MA0051
     [Function("UpdateIncidentStatus")]
     public async Task<IActionResult> UpdateIncidentStatus(
         [HttpTrigger(AuthorizationLevel.Anonymous, "patch", Route = "events/{eventId}/incidents/{incidentId}")] HttpRequest req,
@@ -319,7 +324,7 @@ public class IncidentFunctions
 
             // Parse request
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-            UpdateIncidentStatusRequest? request = JsonSerializer.Deserialize<UpdateIncidentStatusRequest>(requestBody, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            UpdateIncidentStatusRequest? request = JsonSerializer.Deserialize<UpdateIncidentStatusRequest>(requestBody, FunctionHelpers.JsonOptions);
 
             if (request == null || string.IsNullOrWhiteSpace(request.Status))
             {
@@ -327,15 +332,15 @@ public class IncidentFunctions
             }
 
             string status = request.Status.ToLowerInvariant();
-            if (!ValidStatuses.Contains(status))
+            if (!_validStatuses.Contains(status))
             {
-                return new BadRequestObjectResult(new { message = $"Invalid status. Valid values: {string.Join(", ", ValidStatuses)}" });
+                return new BadRequestObjectResult(new { message = $"Invalid status. Valid values: {string.Join(", ", _validStatuses)}" });
             }
 
             // Create update entry
             List<IncidentUpdate> updates = JsonSerializer.Deserialize<List<IncidentUpdate>>(incident.UpdatesJson) ?? [];
 
-            IncidentUpdate update = new IncidentUpdate
+            IncidentUpdate update = new()
             {
                 UpdateId = Guid.NewGuid().ToString(),
                 Timestamp = DateTime.UtcNow,
@@ -363,6 +368,7 @@ public class IncidentFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     /// <summary>
     /// Add a note to an incident.
@@ -392,7 +398,7 @@ public class IncidentFunctions
 
             // Parse request
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-            AddIncidentNoteRequest? request = JsonSerializer.Deserialize<AddIncidentNoteRequest>(requestBody, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            AddIncidentNoteRequest? request = JsonSerializer.Deserialize<AddIncidentNoteRequest>(requestBody, FunctionHelpers.JsonOptions);
 
             if (request == null || string.IsNullOrWhiteSpace(request.Note))
             {
@@ -402,7 +408,7 @@ public class IncidentFunctions
             // Create update entry
             List<IncidentUpdate> updates = JsonSerializer.Deserialize<List<IncidentUpdate>>(incident.UpdatesJson) ?? [];
 
-            IncidentUpdate update = new IncidentUpdate
+            IncidentUpdate update = new()
             {
                 UpdateId = Guid.NewGuid().ToString(),
                 Timestamp = DateTime.UtcNow,
@@ -433,7 +439,7 @@ public class IncidentFunctions
 
     private async Task<UserClaims?> GetClaimsAsync(HttpRequest req, string eventId)
     {
-        string? sessionToken = req.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "");
+        string? sessionToken = req.Headers.Authorization.FirstOrDefault()?.Replace("Bearer ", "", StringComparison.OrdinalIgnoreCase);
         if (string.IsNullOrWhiteSpace(sessionToken))
         {
             sessionToken = req.Cookies["session_token"];
@@ -459,6 +465,7 @@ public class IncidentFunctions
     /// - Incidents at checkpoints in my area
     /// - Incidents reported by people at checkpoints in my area
     /// </summary>
+#pragma warning disable MA0051
     private async Task<IEnumerable<IncidentEntity>> FilterIncidentsForUserAsync(
         string eventId,
         IEnumerable<IncidentEntity> incidents,
@@ -473,7 +480,7 @@ public class IncidentFunctions
         if (!string.IsNullOrEmpty(marshalId))
         {
             IEnumerable<AssignmentEntity> myAssignments = await _assignmentRepository.GetByMarshalAsync(eventId, marshalId);
-            myCheckpointIds = myAssignments.Select(a => a.LocationId).ToList();
+            myCheckpointIds = [.. myAssignments.Select(a => a.LocationId)];
 
             // Get all marshals assigned to my checkpoints
             foreach (string checkpointId in myCheckpointIds)
@@ -500,7 +507,7 @@ public class IncidentFunctions
             foreach (LocationEntity checkpoint in checkpoints)
             {
                 List<string> areaIds = JsonSerializer.Deserialize<List<string>>(checkpoint.AreaIdsJson) ?? [];
-                if (areaIds.Any(areaId => leadAreaIds.Contains(areaId)))
+                if (areaIds.Exists(areaId => leadAreaIds.Contains(areaId, StringComparer.Ordinal)))
                 {
                     checkpointsInMyAreas.Add(checkpoint.RowKey);
                 }
@@ -510,11 +517,11 @@ public class IncidentFunctions
             IEnumerable<AssignmentEntity> allAssignments = await _assignmentRepository.GetByEventAsync(eventId);
             marshalCheckpointLookup = allAssignments
                 .GroupBy(a => a.MarshalId)
-                .ToDictionary(g => g.Key, g => g.Select(a => a.LocationId).ToList());
+                .ToDictionary(g => g.Key, g => g.Select(a => a.LocationId).ToList(), StringComparer.Ordinal);
 
             // Get areas for GPS polygon checking
             IEnumerable<AreaEntity> areas = await _areaRepository.GetByEventAsync(eventId);
-            areaLookup = areas.ToDictionary(a => a.RowKey);
+            areaLookup = areas.ToDictionary(a => a.RowKey, StringComparer.Ordinal);
         }
 
         List<IncidentEntity> filteredIncidents = [];
@@ -524,7 +531,7 @@ public class IncidentFunctions
             // === MARSHAL RULES ===
 
             // Rule 1: Incidents I reported
-            if (incident.ReportedByPersonId == personId)
+            if (string.Equals(incident.ReportedByPersonId, personId, StringComparison.Ordinal))
             {
                 filteredIncidents.Add(incident);
                 continue;
@@ -540,7 +547,7 @@ public class IncidentFunctions
 
             // Rule 3: Incidents where any of my checkpoints are tagged
             IncidentContextSnapshot? context = JsonSerializer.Deserialize<IncidentContextSnapshot>(incident.ContextSnapshotJson);
-            if (context?.Checkpoint != null && myCheckpointIds.Contains(context.Checkpoint.CheckpointId))
+            if (context?.Checkpoint != null && myCheckpointIds.Contains(context.Checkpoint.CheckpointId, StringComparer.Ordinal))
             {
                 filteredIncidents.Add(incident);
                 continue;
@@ -559,7 +566,7 @@ public class IncidentFunctions
                 // Rule 5: Incidents reported by people at checkpoints in my area
                 if (!string.IsNullOrEmpty(incident.ReportedByMarshalId) &&
                     marshalCheckpointLookup.TryGetValue(incident.ReportedByMarshalId, out List<string>? reporterCheckpoints) &&
-                    reporterCheckpoints.Any(cpId => checkpointsInMyAreas.Contains(cpId)))
+                    reporterCheckpoints.Exists(cpId => checkpointsInMyAreas.Contains(cpId)))
                 {
                     filteredIncidents.Add(incident);
                     continue;
@@ -592,10 +599,12 @@ public class IncidentFunctions
 
         return filteredIncidents;
     }
+#pragma warning restore MA0051
 
+#pragma warning disable MA0051
     private async Task<IncidentContextSnapshot> BuildContextSnapshotAsync(string eventId, string? marshalId, string? checkpointId, bool skipCheckpointAutoAssign = false)
     {
-        IncidentContextSnapshot snapshot = new IncidentContextSnapshot();
+        IncidentContextSnapshot snapshot = new();
 
         // If no checkpoint specified but marshal has assignments, use their first assignment
         // BUT only if user didn't explicitly choose "no checkpoint"
@@ -622,7 +631,7 @@ public class IncidentFunctions
                 if (areaIds.Count > 0)
                 {
                     IEnumerable<AreaEntity> areas = await _areaRepository.GetByEventAsync(eventId);
-                    Dictionary<string, AreaEntity> areaLookup = areas.ToDictionary(a => a.RowKey);
+                    Dictionary<string, AreaEntity> areaLookup = areas.ToDictionary(a => a.RowKey, StringComparer.Ordinal);
 
                     foreach (string areaId in areaIds)
                     {
@@ -647,7 +656,7 @@ public class IncidentFunctions
                 // Get all marshals assigned to this checkpoint
                 IEnumerable<AssignmentEntity> checkpointAssignments = await _assignmentRepository.GetByLocationAsync(eventId, checkpointId);
                 IEnumerable<MarshalEntity> allMarshals = await _marshalRepository.GetByEventAsync(eventId);
-                Dictionary<string, MarshalEntity> marshalLookup = allMarshals.ToDictionary(m => m.RowKey);
+                Dictionary<string, MarshalEntity> marshalLookup = allMarshals.ToDictionary(m => m.RowKey, StringComparer.Ordinal);
 
                 foreach (AssignmentEntity assignment in checkpointAssignments)
                 {
@@ -685,6 +694,7 @@ public class IncidentFunctions
 
         return (string.Empty, string.Empty);
     }
+#pragma warning restore MA0051
 
     private static bool IsPointInPolygon(double lat, double lng, List<RoutePoint> polygon)
     {
@@ -695,7 +705,7 @@ public class IncidentFunctions
         {
             if (((polygon[i].Lng < lng && polygon[j].Lng >= lng) ||
                  (polygon[j].Lng < lng && polygon[i].Lng >= lng)) &&
-                polygon[i].Lat + (lng - polygon[i].Lng) / (polygon[j].Lng - polygon[i].Lng) * (polygon[j].Lat - polygon[i].Lat) < lat)
+                (polygon[i].Lat + ((lng - polygon[i].Lng) / (polygon[j].Lng - polygon[i].Lng) * (polygon[j].Lat - polygon[i].Lat))) < lat)
             {
                 inside = !inside;
             }
@@ -705,6 +715,7 @@ public class IncidentFunctions
         return inside;
     }
 
+#pragma warning disable MA0051
     private static IncidentResponse ToIncidentResponse(IncidentEntity incident)
     {
         IncidentContextSnapshot context = JsonSerializer.Deserialize<IncidentContextSnapshot>(incident.ContextSnapshotJson)
@@ -726,17 +737,16 @@ public class IncidentFunctions
             );
         }
 
-        List<IncidentMarshalInfo> marshalInfos = context.MarshalsPresentAtCheckpoint
+        List<IncidentMarshalInfo> marshalInfos = [.. context.MarshalsPresentAtCheckpoint
             .Select(m => new IncidentMarshalInfo(
                 MarshalId: m.MarshalId,
                 Name: m.Name,
                 WasCheckedIn: m.WasCheckedIn,
                 CheckInTime: m.CheckInTime,
                 CheckInMethod: m.CheckInMethod
-            ))
-            .ToList();
+            ))];
 
-        List<IncidentUpdateInfo> updateInfos = updates
+        List<IncidentUpdateInfo> updateInfos = [.. updates
             .Select(u => new IncidentUpdateInfo(
                 UpdateId: u.UpdateId,
                 Timestamp: u.Timestamp,
@@ -744,8 +754,7 @@ public class IncidentFunctions
                 AuthorName: u.AuthorName,
                 Note: u.Note,
                 StatusChange: u.StatusChange
-            ))
-            .ToList();
+            ))];
 
         IncidentAreaInfo? areaInfo = null;
         if (!string.IsNullOrEmpty(incident.AreaId))
@@ -780,6 +789,7 @@ public class IncidentFunctions
             Updates: updateInfos
         );
     }
+#pragma warning restore MA0051
 
     #endregion
 }

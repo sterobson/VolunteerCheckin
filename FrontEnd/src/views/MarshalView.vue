@@ -2767,6 +2767,13 @@ watch(() => route.query.code, async (newCode) => {
   }
 });
 
+// Update document title when event loads - use configured person term
+watch(event, (newEvent) => {
+  if (newEvent) {
+    document.title = `OnTheDay App - ${terms.value.person}`;
+  }
+}, { immediate: true });
+
 // Heartbeat to update LastAccessedDate every 5 minutes
 let heartbeatInterval = null;
 
@@ -3270,10 +3277,10 @@ onUnmounted(() => {
 .note-textarea {
   width: 100%;
   padding: 0.75rem;
-  border: 1px solid var(--input-border, #ccc);
+  border: 1px solid var(--input-border);
   border-radius: 6px;
-  background: var(--input-bg, white);
-  color: var(--text-primary, #333);
+  background: var(--input-bg);
+  color: var(--text-primary);
   font-size: 0.9rem;
   font-family: inherit;
   resize: vertical;

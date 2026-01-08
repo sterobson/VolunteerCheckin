@@ -43,6 +43,7 @@ public class ChecklistCompletionFunctions
         _contextHelper = new ChecklistContextHelper(assignmentRepository, locationRepository, areaRepository, eventRoleRepository, marshalRepository);
     }
 
+#pragma warning disable MA0051
     [Function("CompleteChecklistItem")]
     public async Task<IActionResult> CompleteChecklistItem(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "checklist-items/{eventId}/{itemId}/complete")] HttpRequest req,
@@ -53,7 +54,7 @@ public class ChecklistCompletionFunctions
         {
             string body = await new StreamReader(req.Body).ReadToEndAsync();
             CompleteChecklistItemRequest? request = JsonSerializer.Deserialize<CompleteChecklistItemRequest>(body,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                FunctionHelpers.JsonOptions);
 
             if (request == null || string.IsNullOrWhiteSpace(request.MarshalId))
             {
@@ -77,13 +78,13 @@ public class ChecklistCompletionFunctions
             // Verify permission to complete
             if (!ChecklistScopeHelper.CanMarshalCompleteItem(item, context, checkpointLookup))
             {
-                _logger.LogWarning($"Marshal {request.MarshalId} attempted to complete checklist item {itemId} without permission");
+                _logger.LogWarning("Marshal {MarshalId} attempted to complete checklist item {ItemId} without permission", request.MarshalId, itemId);
                 return new ForbidResult();
             }
 
             // Get all completions for this item
             List<ChecklistCompletionEntity> itemCompletions =
-                (await _checklistCompletionRepository.GetByItemAsync(eventId, itemId)).ToList();
+                [.. await _checklistCompletionRepository.GetByItemAsync(eventId, itemId)];
 
             // Check if already completed in this context
             if (ChecklistScopeHelper.IsItemCompletedInContext(item, context, checkpointLookup, itemCompletions))
@@ -149,7 +150,7 @@ public class ChecklistCompletionFunctions
 
             await _checklistCompletionRepository.AddAsync(completion);
 
-            _logger.LogInformation($"Checklist item {itemId} completed by {actorType} {actorName} (context owner: {marshal.Name}) at {completion.CompletedAt}");
+            _logger.LogInformation("Checklist item {ItemId} completed by {ActorType} {ActorName} (context owner: {ContextOwnerName}) at {CompletedAt}", itemId, actorType, actorName, marshal.Name, completion.CompletedAt);
 
             return new OkObjectResult(completion.ToResponse());
         }
@@ -159,7 +160,9 @@ public class ChecklistCompletionFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
+#pragma warning disable MA0051
     [Function("UncompleteChecklistItem")]
     public async Task<IActionResult> UncompleteChecklistItem(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "checklist-items/{eventId}/{itemId}/uncomplete")] HttpRequest req,
@@ -170,7 +173,7 @@ public class ChecklistCompletionFunctions
         {
             string body = await new StreamReader(req.Body).ReadToEndAsync();
             CompleteChecklistItemRequest? request = JsonSerializer.Deserialize<CompleteChecklistItemRequest>(body,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                FunctionHelpers.JsonOptions);
 
             if (request == null || string.IsNullOrWhiteSpace(request.MarshalId))
             {
@@ -202,7 +205,7 @@ public class ChecklistCompletionFunctions
 
             // Get all completions for this item
             List<ChecklistCompletionEntity> itemCompletions =
-                (await _checklistCompletionRepository.GetByItemAsync(eventId, itemId)).ToList();
+                [.. await _checklistCompletionRepository.GetByItemAsync(eventId, itemId)];
 
             // Find the completion to uncomplete
             ChecklistCompletionEntity? completion;
@@ -233,7 +236,7 @@ public class ChecklistCompletionFunctions
 
             await _checklistCompletionRepository.UpdateAsync(completion);
 
-            _logger.LogInformation($"Checklist item {itemId} uncompleted for marshal {request.MarshalId} by admin {adminEmail}");
+            _logger.LogInformation("Checklist item {ItemId} uncompleted for marshal {MarshalId} by admin {AdminEmail}", itemId, request.MarshalId, adminEmail);
 
             return new NoContentResult();
         }
@@ -243,6 +246,7 @@ public class ChecklistCompletionFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     [Function("GetChecklistCompletionReport")]
     public async Task<IActionResult> GetChecklistCompletionReport(
@@ -252,10 +256,10 @@ public class ChecklistCompletionFunctions
         try
         {
             // Get all items
-            List<ChecklistItemEntity> items = (await _checklistItemRepository.GetByEventAsync(eventId)).ToList();
+            List<ChecklistItemEntity> items = [.. await _checklistItemRepository.GetByEventAsync(eventId)];
 
             // Get all completions
-            List<ChecklistCompletionEntity> completions = (await _checklistCompletionRepository.GetByEventAsync(eventId)).ToList();
+            List<ChecklistCompletionEntity> completions = [.. await _checklistCompletionRepository.GetByEventAsync(eventId)];
 
             // Get all marshals for this event
             IEnumerable<MarshalEntity> marshals = await _marshalRepository.GetByEventAsync(eventId);

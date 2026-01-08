@@ -16,7 +16,7 @@ public class LogoFunctions
     private readonly IUserEventMappingRepository _userEventMappingRepository;
     private readonly BlobStorageService _blobStorageService;
 
-    private static readonly HashSet<string> AllowedContentTypes = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> _allowedContentTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "image/png",
         "image/jpeg",
@@ -74,7 +74,7 @@ public class LogoFunctions
 
             // Check content type
             string? contentType = req.ContentType?.Split(';')[0].Trim();
-            if (string.IsNullOrEmpty(contentType) || !AllowedContentTypes.Contains(contentType))
+            if (string.IsNullOrEmpty(contentType) || !_allowedContentTypes.Contains(contentType))
             {
                 return new BadRequestObjectResult(new
                 {

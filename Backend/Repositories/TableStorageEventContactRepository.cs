@@ -48,8 +48,8 @@ public class TableStorageEventContactRepository : IEventContactRepository
         return contacts
             .OrderByDescending(c => c.IsPrimary)
             .ThenBy(c => c.DisplayOrder)
-            .ThenBy(c => c.Role)
-            .ThenBy(c => c.Name);
+            .ThenBy(c => c.Role, StringComparer.Ordinal)
+            .ThenBy(c => c.Name, StringComparer.Ordinal);
     }
 
     public async Task<IEnumerable<EventContactEntity>> GetByRoleAsync(string eventId, string role)
@@ -62,7 +62,7 @@ public class TableStorageEventContactRepository : IEventContactRepository
         return contacts
             .OrderByDescending(c => c.IsPrimary)
             .ThenBy(c => c.DisplayOrder)
-            .ThenBy(c => c.Name);
+            .ThenBy(c => c.Name, StringComparer.Ordinal);
     }
 
     public async Task<IEnumerable<EventContactEntity>> GetByMarshalAsync(string eventId, string marshalId)
@@ -73,7 +73,7 @@ public class TableStorageEventContactRepository : IEventContactRepository
             contacts.Add(contact);
         }
         return contacts
-            .OrderBy(c => c.Role)
+            .OrderBy(c => c.Role, StringComparer.Ordinal)
             .ThenBy(c => c.DisplayOrder);
     }
 

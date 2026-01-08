@@ -18,9 +18,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icons/*.png'],
       manifest: {
-        name: 'Volunteer Check-in',
-        short_name: 'CheckIn',
-        description: 'Volunteer marshal check-in app for events',
+        name: 'OnTheDay App',
+        short_name: 'OnTheDay',
+        description: 'OnTheDay App - Event volunteer management and check-in',
         theme_color: '#667eea',
         background_color: '#667eea',
         display: 'standalone',

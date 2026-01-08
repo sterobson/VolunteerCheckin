@@ -1,12 +1,30 @@
 <template>
-  <div>
-    <h3>{{ terms.areas }} ({{ areas.length }})</h3>
-    <div class="button-group">
-      <button @click="$emit('add-area')" class="btn btn-small btn-primary">
-        Add {{ terms.area.toLowerCase() }}
-      </button>
+  <div class="areas-tab">
+    <!-- Row 1: Action buttons + status pills -->
+    <div class="tab-header">
+      <div class="button-group">
+        <button @click="$emit('add-area')" class="btn btn-primary">
+          Add {{ terms.area.toLowerCase() }}
+        </button>
+      </div>
+      <div class="status-pills" v-if="areas.length > 0">
+        <span class="status-pill">{{ areas.length }} {{ areas.length === 1 ? terms.area.toLowerCase() : terms.areas.toLowerCase() }}</span>
+      </div>
     </div>
 
+    <!-- Row 2: Filters -->
+    <div class="filters-section">
+      <div class="search-group">
+        <input
+          v-model="searchQuery"
+          type="text"
+          class="search-input"
+          :placeholder="`Search by ${terms.area.toLowerCase()} name or ${terms.checkpoint.toLowerCase()} name...`"
+        />
+      </div>
+    </div>
+
+    <!-- Row 3: Content -->
     <div class="areas-list">
       <div
         v-for="area in sortedAreas"
@@ -34,15 +52,15 @@
         </div>
       </div>
 
-      <div v-if="areas.length === 0" class="empty-state">
-        <p>No {{ terms.areas.toLowerCase() }} yet. Click "Add {{ terms.area.toLowerCase() }}" to create one.</p>
+      <div v-if="filteredAreas.length === 0" class="empty-state">
+        <p>{{ searchQuery ? `No ${terms.areas.toLowerCase()} match your search.` : `No ${terms.areas.toLowerCase()} yet. Click "Add ${terms.area.toLowerCase()}" to create one.` }}</p>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { defineProps, defineEmits, computed } from 'vue';
+import { defineProps, defineEmits, computed, ref } from 'vue';
 import { alphanumericCompare } from '../../../utils/sortUtils';
 import { useTerminology, getSingularTerm, getPluralTerm } from '../../../composables/useTerminology';
 
@@ -73,8 +91,40 @@ const props = defineProps({
 
 defineEmits(['add-area', 'select-area']);
 
+const searchQuery = ref('');
+
+// Get checkpoints belonging to an area
+const getCheckpointsForArea = (areaId) => {
+  return props.checkpoints.filter(c => {
+    const areaIds = c.areaIds || c.AreaIds || [];
+    return areaIds.includes(areaId) || c.areaId === areaId;
+  });
+};
+
+// Search filtering - searches area name + checkpoint names + checkpoint descriptions
+const filteredAreas = computed(() => {
+  if (!searchQuery.value.trim()) {
+    return props.areas;
+  }
+
+  const searchTerms = searchQuery.value.toLowerCase().trim().split(/\s+/);
+
+  return props.areas.filter(area => {
+    // Build searchable text from area and its checkpoints
+    const areaCheckpoints = getCheckpointsForArea(area.id);
+    const checkpointText = areaCheckpoints
+      .map(c => `${c.name || ''} ${c.description || ''}`)
+      .join(' ');
+
+    const searchableText = `${area.name || ''} ${area.description || ''} ${checkpointText}`.toLowerCase();
+
+    // All search terms must match
+    return searchTerms.every(term => searchableText.includes(term));
+  });
+});
+
 const sortedAreas = computed(() => {
-  return [...props.areas].sort((a, b) => {
+  return [...filteredAreas.value].sort((a, b) => {
     // Sort by display order first
     if (a.displayOrder !== b.displayOrder) {
       return a.displayOrder - b.displayOrder;
@@ -136,15 +186,37 @@ const formatAreaCheckpointCount = (area) => {
 </script>
 
 <style scoped>
-h3 {
-  margin: 0 0 1rem 0;
-  color: var(--text-primary);
+.areas-tab {
+  width: 100%;
+}
+
+.tab-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
 .button-group {
   display: flex;
+  gap: 0.75rem;
+}
+
+.status-pills {
+  display: flex;
   gap: 0.5rem;
-  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.status-pill {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
 }
 
 .btn {
@@ -156,11 +228,6 @@ h3 {
   transition: background-color 0.2s;
 }
 
-.btn-small {
-  padding: 0.4rem 0.8rem;
-  font-size: 0.85rem;
-}
-
 .btn-primary {
   background: var(--accent-primary);
   color: white;
@@ -170,8 +237,40 @@ h3 {
   background: var(--accent-primary-hover);
 }
 
+.filters-section {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+}
+
+.search-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.search-input {
+  flex: 1;
+  max-width: 400px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  background: var(--input-bg);
+  color: var(--text-primary);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.search-input::placeholder {
+  color: var(--text-muted);
+}
+
 .areas-list {
-  margin-top: 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;

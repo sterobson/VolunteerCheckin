@@ -47,6 +47,7 @@ public class LocationFunctions
         _claimsService = claimsService;
     }
 
+#pragma warning disable MA0051
     [Function("CreateLocation")]
     public async Task<IActionResult> CreateLocation(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "locations")] HttpRequest req)
@@ -165,7 +166,7 @@ public class LocationFunctions
                     };
 
                     await _checklistItemRepository.AddAsync(checklistEntity);
-                    _logger.LogInformation($"Checklist item {itemId} created for new location {locationId}");
+                    _logger.LogInformation("Checklist item {ItemId} created for new location {LocationId}", itemId, locationId);
                 }
             }
 
@@ -205,13 +206,13 @@ public class LocationFunctions
                     };
 
                     await _noteRepository.AddAsync(noteEntity);
-                    _logger.LogInformation($"Note {noteId} created for new location {locationId}");
+                    _logger.LogInformation("Note {NoteId} created for new location {LocationId}", noteId, locationId);
                 }
             }
 
             LocationResponse response = locationEntity.ToResponse();
 
-            _logger.LogInformation($"Location created: {locationEntity.RowKey}");
+            _logger.LogInformation("Location created: {LocationId}", locationEntity.RowKey);
 
             return new OkObjectResult(response);
         }
@@ -221,6 +222,7 @@ public class LocationFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     [Function("GetLocation")]
     public async Task<IActionResult> GetLocation(
@@ -256,16 +258,15 @@ public class LocationFunctions
         try
         {
             IEnumerable<LocationEntity> locationEntities = await _locationRepository.GetByEventAsync(eventId);
-            List<LocationEntity> locationsList = locationEntities.ToList();
+            List<LocationEntity> locationsList = [.. locationEntities];
 
             // Check if any checkpoints are missing area assignments
-            List<LocationEntity> checkpointsNeedingAreas = locationsList
-                .Where(l => string.IsNullOrEmpty(l.AreaIdsJson) || l.AreaIdsJson == "[]")
-                .ToList();
+            List<LocationEntity> checkpointsNeedingAreas = [.. locationsList
+                .Where(l => string.IsNullOrEmpty(l.AreaIdsJson) || l.AreaIdsJson == "[]")];
 
             if (checkpointsNeedingAreas.Count > 0)
             {
-                _logger.LogInformation($"Found {checkpointsNeedingAreas.Count} checkpoints without area assignments. Calculating...");
+                _logger.LogInformation("Found {CheckpointCount} checkpoints without area assignments. Calculating...", checkpointsNeedingAreas.Count);
 
                 // Load areas once for all calculations
                 AreaEntity defaultArea = await EnsureDefaultAreaExists(eventId);
@@ -285,12 +286,11 @@ public class LocationFunctions
                     await _locationRepository.UpdateAsync(checkpoint);
                 }
 
-                _logger.LogInformation($"Automatically assigned areas to {checkpointsNeedingAreas.Count} checkpoints");
+                _logger.LogInformation("Automatically assigned areas to {CheckpointCount} checkpoints", checkpointsNeedingAreas.Count);
             }
 
-            List<LocationResponse> locations = locationsList
-                .Select(l => l.ToResponse())
-                .ToList();
+            List<LocationResponse> locations = [.. locationsList
+                .Select(l => l.ToResponse())];
 
             return new OkObjectResult(locations);
         }
@@ -301,6 +301,7 @@ public class LocationFunctions
         }
     }
 
+#pragma warning disable MA0051
     [Function("UpdateLocation")]
     public async Task<IActionResult> UpdateLocation(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "locations/{eventId}/{locationId}")] HttpRequest req,
@@ -379,7 +380,7 @@ public class LocationFunctions
 
             LocationResponse response = locationEntity.ToResponse();
 
-            _logger.LogInformation($"Location updated: {locationId}");
+            _logger.LogInformation("Location updated: {LocationId}", locationId);
 
             return new OkObjectResult(response);
         }
@@ -389,6 +390,7 @@ public class LocationFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     [Function("DeleteLocation")]
     public async Task<IActionResult> DeleteLocation(
@@ -403,7 +405,7 @@ public class LocationFunctions
 
             await _locationRepository.DeleteAsync(eventId, locationId);
 
-            _logger.LogInformation($"Location deleted: {locationId} (including all assignments)");
+            _logger.LogInformation("Location deleted: {LocationId} (including all assignments)", locationId);
 
             return new NoContentResult();
         }
@@ -414,6 +416,7 @@ public class LocationFunctions
         }
     }
 
+#pragma warning disable MA0051
     [Function("ImportLocations")]
     public async Task<IActionResult> ImportLocations(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "locations/import/{eventId}")] HttpRequest req,
@@ -503,7 +506,7 @@ public class LocationFunctions
                 }
             }
 
-            _logger.LogInformation($"Imported {locationsCreated} new, updated {locationsUpdated} existing locations, and created {assignmentsCreated} assignments for event {eventId}");
+            _logger.LogInformation("Imported {LocationsCreated} new, updated {LocationsUpdated} existing locations, and created {AssignmentsCreated} assignments for event {EventId}", locationsCreated, locationsUpdated, assignmentsCreated, eventId);
 
             return new OkObjectResult(new ImportLocationsResponse(locationsCreated + locationsUpdated, assignmentsCreated, parseResult.Errors));
         }
@@ -513,6 +516,7 @@ public class LocationFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     private async Task<string> FindOrCreateMarshal(string eventId, string marshalName, Dictionary<string, MarshalEntity> marshalCache)
     {
@@ -538,7 +542,7 @@ public class LocationFunctions
         // Add to cache for subsequent lookups within this import
         marshalCache[normalizedName] = newMarshal;
 
-        _logger.LogInformation($"Created new marshal from CSV: {newMarshalId} - {marshalName}");
+        _logger.LogInformation("Created new marshal from CSV: {MarshalId} - {MarshalName}", newMarshalId, marshalName);
 
         return newMarshalId;
     }
@@ -659,7 +663,7 @@ public class LocationFunctions
             string body = await new StreamReader(req.Body).ReadToEndAsync();
             BulkUpdateLocationTimesRequest? request = JsonSerializer.Deserialize<BulkUpdateLocationTimesRequest>(
                 body,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                FunctionHelpers.JsonOptions
             );
 
             if (request == null)
@@ -699,7 +703,7 @@ public class LocationFunctions
             // Execute all updates in parallel
             await Task.WhenAll(updateTasks);
 
-            _logger.LogInformation($"Bulk updated {updatedCount} location times for event {eventId}");
+            _logger.LogInformation("Bulk updated {UpdatedCount} location times for event {EventId}", updatedCount, eventId);
 
             return new OkObjectResult(new { updatedCount });
         }
@@ -713,6 +717,7 @@ public class LocationFunctions
     /// <summary>
     /// Updates the location of a dynamic checkpoint (for lead car/sweep vehicle tracking)
     /// </summary>
+#pragma warning disable MA0051
     [Function("UpdateCheckpointLocation")]
     public async Task<IActionResult> UpdateCheckpointLocation(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "locations/{eventId}/{locationId}/update-position")] HttpRequest req,
@@ -722,7 +727,7 @@ public class LocationFunctions
         try
         {
             // Extract session token from Authorization header
-            string? sessionToken = req.Headers["Authorization"].FirstOrDefault()?.Replace("Bearer ", "");
+            string? sessionToken = req.Headers.Authorization.FirstOrDefault()?.Replace("Bearer ", "", StringComparison.OrdinalIgnoreCase);
             if (string.IsNullOrWhiteSpace(sessionToken))
             {
                 return new UnauthorizedObjectResult(new { message = "Authorization header required" });
@@ -798,7 +803,7 @@ public class LocationFunctions
 
             await _locationRepository.UpdateAsync(checkpoint);
 
-            _logger.LogInformation($"Dynamic checkpoint {locationId} location updated by {claims.PersonId} to ({newLatitude}, {newLongitude})");
+            _logger.LogInformation("Dynamic checkpoint {LocationId} location updated by {PersonId} to ({Latitude}, {Longitude})", locationId, claims.PersonId, newLatitude, newLongitude);
 
             return new OkObjectResult(new UpdateCheckpointLocationResponse(
                 true,
@@ -815,6 +820,7 @@ public class LocationFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     /// <summary>
     /// Gets all dynamic checkpoints for an event (for polling)
@@ -828,7 +834,7 @@ public class LocationFunctions
         {
             IEnumerable<LocationEntity> allLocations = await _locationRepository.GetByEventAsync(eventId);
 
-            List<DynamicCheckpointResponse> dynamicCheckpoints = allLocations
+            List<DynamicCheckpointResponse> dynamicCheckpoints = [.. allLocations
                 .Where(l => l.IsDynamic)
                 .Select(l => new DynamicCheckpointResponse(
                     l.RowKey,
@@ -837,8 +843,7 @@ public class LocationFunctions
                     l.Longitude,
                     l.LastLocationUpdate,
                     l.LastUpdatedByPersonId
-                ))
-                .ToList();
+                ))];
 
             return new OkObjectResult(dynamicCheckpoints);
         }
@@ -852,6 +857,7 @@ public class LocationFunctions
     /// <summary>
     /// Checks if a user has permission to update a checkpoint's location based on scope configurations
     /// </summary>
+#pragma warning disable MA0051
     private async Task<bool> CanUserUpdateCheckpointLocation(UserClaims claims, LocationEntity checkpoint, string eventId)
     {
         // Event admins and system admins always have permission
@@ -883,7 +889,7 @@ public class LocationFunctions
         }
 
         IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByMarshalAsync(eventId, claims.MarshalId);
-        List<string> assignedLocationIds = assignments.Select(a => a.LocationId).ToList();
+        List<string> assignedLocationIds = [.. assignments.Select(a => a.LocationId)];
 
         // Get the areas the marshal is assigned to
         IEnumerable<LocationEntity> assignedLocations = await Task.WhenAll(
@@ -936,6 +942,7 @@ public class LocationFunctions
 
         return result.IsRelevant;
     }
+#pragma warning restore MA0051
 
     // Helper method to ensure default area exists
     private async Task<AreaEntity> EnsureDefaultAreaExists(string eventId)
@@ -958,7 +965,7 @@ public class LocationFunctions
             };
 
             await _areaRepository.AddAsync(defaultArea);
-            _logger.LogInformation($"Created default area for event {eventId}");
+            _logger.LogInformation("Created default area for event {EventId}", eventId);
         }
 
         return defaultArea;

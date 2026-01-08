@@ -72,7 +72,7 @@ public class AuthService
         // Generate token
         string token = GenerateSecureToken(32);
         string tokenHash = HashToken(token);
-        _logger.LogInformation($"Generated token (length {token.Length}), hash: {tokenHash.Substring(0, Math.Min(10, tokenHash.Length))}...");
+        _logger.LogInformation("Generated token (length {TokenLength}), hash: {TokenHashPrefix}...", token.Length, tokenHash.Substring(0, Math.Min(10, tokenHash.Length)));
 
         // Create auth token
         string tokenId = Guid.NewGuid().ToString();
@@ -108,11 +108,11 @@ public class AuthService
             return (false, null, null, "Invalid or expired token");
         }
 
-        _logger.LogInformation($"VerifyMagicLinkAsync called with token length: {token.Length}");
+        _logger.LogInformation("VerifyMagicLinkAsync called with token length: {TokenLength}", token.Length);
 
         // Hash the token to look it up
         string tokenHash = HashToken(token);
-        _logger.LogInformation($"Token hash computed: {tokenHash.Substring(0, Math.Min(10, tokenHash.Length))}...");
+        _logger.LogInformation("Token hash computed: {TokenHashPrefix}...", tokenHash.Substring(0, Math.Min(10, tokenHash.Length)));
 
         // Find the token
         AuthTokenEntity? authToken = await _tokenRepository.GetByTokenHashAsync(tokenHash);
@@ -124,7 +124,7 @@ public class AuthService
 
         if (!authToken.IsValid())
         {
-            _logger.LogWarning($"Token is not valid. UsedAt: {authToken.UsedAt}, ExpiresAt: {authToken.ExpiresAt}, Now: {DateTime.UtcNow}");
+            _logger.LogWarning("Token is not valid. UsedAt: {UsedAt}, ExpiresAt: {ExpiresAt}, Now: {Now}", authToken.UsedAt, authToken.ExpiresAt, DateTime.UtcNow);
             return (false, null, null, "Invalid or expired token");
         }
 
@@ -191,7 +191,7 @@ public class AuthService
         {
             personId = Guid.NewGuid().ToString();
             marshal.PersonId = personId;
-            _logger.LogInformation($"Generated new PersonId {personId} for legacy marshal {marshal.MarshalId}");
+            _logger.LogInformation("Generated new PersonId {PersonId} for legacy marshal {MarshalId}", personId, marshal.MarshalId);
         }
 
         // Update last accessed date

@@ -301,7 +301,7 @@ watch(() => props.tabs, () => {
   width: 100%;
   padding: 1rem 1.25rem;
   border: none;
-  background: var(--bg-primary, #ffffff);
+  background: var(--bg-primary);
   color: var(--text-primary);
   cursor: pointer;
   font-size: 1rem;

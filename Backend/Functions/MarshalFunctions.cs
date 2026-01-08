@@ -49,6 +49,7 @@ public class MarshalFunctions
         _emailService = emailService;
     }
 
+#pragma warning disable MA0051
     [Function("CreateMarshal")]
     public async Task<IActionResult> CreateMarshal(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "marshals")] HttpRequest req)
@@ -56,7 +57,7 @@ public class MarshalFunctions
         try
         {
             string body = await new StreamReader(req.Body).ReadToEndAsync();
-            CreateMarshalRequest? request = JsonSerializer.Deserialize<CreateMarshalRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            CreateMarshalRequest? request = JsonSerializer.Deserialize<CreateMarshalRequest>(body, FunctionHelpers.JsonOptions);
 
             if (request == null)
             {
@@ -142,7 +143,7 @@ public class MarshalFunctions
                     };
 
                     await _checklistItemRepository.AddAsync(checklistEntity);
-                    _logger.LogInformation($"Checklist item {itemId} created for new marshal {marshalId}");
+                    _logger.LogInformation("Checklist item {ItemId} created for new marshal {MarshalId}", itemId, marshalId);
                 }
             }
 
@@ -181,7 +182,7 @@ public class MarshalFunctions
                     };
 
                     await _noteRepository.AddAsync(noteEntity);
-                    _logger.LogInformation($"Note {noteId} created for new marshal {marshalId}");
+                    _logger.LogInformation("Note {NoteId} created for new marshal {MarshalId}", noteId, marshalId);
                 }
             }
 
@@ -198,7 +199,7 @@ public class MarshalFunctions
                 marshalEntity.LastAccessedDate
             );
 
-            _logger.LogInformation($"Marshal created: {marshalId}");
+            _logger.LogInformation("Marshal created: {MarshalId}", marshalId);
 
             return new OkObjectResult(response);
         }
@@ -208,7 +209,9 @@ public class MarshalFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
+#pragma warning disable MA0051
     [Function("GetMarshalsByEvent")]
     public async Task<IActionResult> GetMarshalsByEvent(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/{eventId}/marshals")] HttpRequest req,
@@ -216,11 +219,11 @@ public class MarshalFunctions
     {
         try
         {
-            _logger.LogInformation($"GetMarshalsByEvent called for event {eventId}");
+            _logger.LogInformation("GetMarshalsByEvent called for event {EventId}", eventId);
 
             // Require authentication
             string? sessionToken = FunctionHelpers.GetSessionToken(req);
-            _logger.LogInformation($"Session token present: {!string.IsNullOrWhiteSpace(sessionToken)}");
+            _logger.LogInformation("Session token present: {SessionTokenPresent}", !string.IsNullOrWhiteSpace(sessionToken));
             if (string.IsNullOrWhiteSpace(sessionToken))
             {
                 _logger.LogWarning("No session token provided");
@@ -228,7 +231,7 @@ public class MarshalFunctions
             }
 
             UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
-            _logger.LogInformation($"Claims resolved: {claims != null}, IsEventAdmin: {claims?.IsEventAdmin}, IsSystemAdmin: {claims?.IsSystemAdmin}");
+            _logger.LogInformation("Claims resolved: {ClaimsResolved}, IsEventAdmin: {IsEventAdmin}, IsSystemAdmin: {IsSystemAdmin}", claims != null, claims?.IsEventAdmin, claims?.IsSystemAdmin);
             if (claims == null)
             {
                 _logger.LogWarning("Claims returned null - invalid or expired session");
@@ -237,10 +240,10 @@ public class MarshalFunctions
 
             // Get contact permissions for this user
             ContactPermissions permissions = await _contactPermissionService.GetContactPermissionsAsync(claims, eventId);
-            _logger.LogInformation($"Permissions - CanViewAll: {permissions.CanViewAll}, CanModifyAll: {permissions.CanModifyAll}");
+            _logger.LogInformation("Permissions - CanViewAll: {CanViewAll}, CanModifyAll: {CanModifyAll}", permissions.CanViewAll, permissions.CanModifyAll);
 
             IEnumerable<MarshalEntity> marshalEntities = await _marshalRepository.GetByEventAsync(eventId);
-            _logger.LogInformation($"Found {marshalEntities.Count()} marshals for event {eventId}");
+            _logger.LogInformation("Found {MarshalCount} marshals for event {EventId}", marshalEntities.Count(), eventId);
 
             // Preload all assignments for the event (single DB call instead of N calls)
             IEnumerable<AssignmentEntity> allAssignments = await _assignmentRepository.GetByEventAsync(eventId);
@@ -255,7 +258,7 @@ public class MarshalFunctions
                 // Get assignments from preloaded dictionary (O(1) lookup instead of DB call)
                 List<AssignmentEntity> assignments = assignmentsByMarshal.GetValueOrDefault(marshalEntity.MarshalId, []);
 
-                List<string> assignedLocationIds = assignments.Select(a => a.LocationId).ToList();
+                List<string> assignedLocationIds = [.. assignments.Select(a => a.LocationId)];
                 bool isCheckedIn = assignments.Any(a => a.IsCheckedIn);
 
                 bool canViewContact = _contactPermissionService.CanViewContactDetails(permissions, marshalEntity.MarshalId);
@@ -285,7 +288,9 @@ public class MarshalFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
+#pragma warning disable MA0051
     [Function("GetMarshal")]
     public async Task<IActionResult> GetMarshal(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "marshals/{eventId}/{marshalId}")] HttpRequest req,
@@ -357,7 +362,9 @@ public class MarshalFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
+#pragma warning disable MA0051
     [Function("UpdateMarshal")]
     public async Task<IActionResult> UpdateMarshal(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "marshals/{eventId}/{marshalId}")] HttpRequest req,
@@ -387,7 +394,7 @@ public class MarshalFunctions
             }
 
             string body = await new StreamReader(req.Body).ReadToEndAsync();
-            UpdateMarshalRequest? request = JsonSerializer.Deserialize<UpdateMarshalRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            UpdateMarshalRequest? request = JsonSerializer.Deserialize<UpdateMarshalRequest>(body, FunctionHelpers.JsonOptions);
 
             if (request == null)
             {
@@ -465,7 +472,7 @@ public class MarshalFunctions
                 true // They can modify since we passed the permission check
             );
 
-            _logger.LogInformation($"Marshal updated: {marshalId}");
+            _logger.LogInformation("Marshal updated: {MarshalId}", marshalId);
 
             return new OkObjectResult(response);
         }
@@ -475,7 +482,9 @@ public class MarshalFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
+#pragma warning disable MA0051
     [Function("DeleteMarshal")]
     public async Task<IActionResult> DeleteMarshal(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "marshals/{eventId}/{marshalId}")] HttpRequest req,
@@ -513,7 +522,7 @@ public class MarshalFunctions
             // Delete the marshal
             await _marshalRepository.DeleteAsync(eventId, marshalId);
 
-            _logger.LogInformation($"Marshal deleted: {marshalId}");
+            _logger.LogInformation("Marshal deleted: {MarshalId}", marshalId);
 
             return new NoContentResult();
         }
@@ -523,6 +532,7 @@ public class MarshalFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     [Function("GetMarshalMagicLink")]
     public async Task<IActionResult> GetMarshalMagicLink(
@@ -582,6 +592,7 @@ public class MarshalFunctions
         }
     }
 
+#pragma warning disable MA0051
     [Function("SendMarshalMagicLink")]
     public async Task<IActionResult> SendMarshalMagicLink(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "marshals/{eventId}/{marshalId}/send-magic-link")] HttpRequest req,
@@ -649,7 +660,7 @@ public class MarshalFunctions
                 magicLink
             );
 
-            _logger.LogInformation($"Sent magic link email to marshal {marshalId} at {marshalEntity.Email}");
+            _logger.LogInformation("Sent magic link email to marshal {MarshalId} at {Email}", marshalId, marshalEntity.Email);
 
             return new OkObjectResult(new { message = "Magic link sent successfully" });
         }
@@ -659,7 +670,9 @@ public class MarshalFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
+#pragma warning disable MA0051
     [Function("ImportMarshals")]
     public async Task<IActionResult> ImportMarshals(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "marshals/import/{eventId}")] HttpRequest req,
@@ -758,7 +771,7 @@ public class MarshalFunctions
                 }
             }
 
-            _logger.LogInformation($"Imported {marshalsCreated} new marshals and created {assignmentsCreated} assignments for event {eventId}");
+            _logger.LogInformation("Imported {MarshalsCreated} new marshals and created {AssignmentsCreated} assignments for event {EventId}", marshalsCreated, assignmentsCreated, eventId);
 
             return new OkObjectResult(new ImportMarshalsResponse(marshalsCreated, assignmentsCreated, parseResult.Errors));
         }
@@ -768,6 +781,7 @@ public class MarshalFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     private async Task<MarshalEntity> UpdateExistingMarshal(
         MarshalEntity marshalEntity,
@@ -817,7 +831,7 @@ public class MarshalFunctions
         };
 
         await _marshalRepository.AddAsync(marshalEntity);
-        _logger.LogInformation($"Created new marshal from CSV: {newMarshalId} - {row.Name}");
+        _logger.LogInformation("Created new marshal from CSV: {MarshalId} - {MarshalName}", newMarshalId, row.Name);
 
         return marshalEntity;
     }

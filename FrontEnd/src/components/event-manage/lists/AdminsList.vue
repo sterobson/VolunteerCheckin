@@ -1,6 +1,5 @@
 <template>
   <div>
-    <h3>Event administrators</h3>
     <button @click="$emit('add-admin')" class="btn btn-small btn-primary">
       Add administrator
     </button>

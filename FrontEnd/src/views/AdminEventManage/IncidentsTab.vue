@@ -1,62 +1,65 @@
 <template>
   <div class="incidents-tab">
-    <div class="incidents-tab-header">
-      <div class="header-left">
-        <h2>Incidents</h2>
-        <div class="incidents-summary" v-if="incidents.length > 0">
-          <span class="summary-item open" v-if="openCount > 0">{{ openCount }} open</span>
-          <span class="summary-item in-progress" v-if="inProgressCount > 0">{{ inProgressCount }} in progress</span>
-          <span class="summary-item resolved" v-if="resolvedCount > 0">{{ resolvedCount }} resolved</span>
-        </div>
+    <!-- Row 1: Action buttons + status pills -->
+    <div class="tab-header">
+      <div class="button-group">
+        <button @click="$emit('report-incident')" class="btn btn-primary">
+          Report incident
+        </button>
       </div>
-      <button @click="$emit('report-incident')" class="btn btn-primary">
-        Report incident
-      </button>
+      <div class="status-pills" v-if="incidents.length > 0">
+        <StatusPill
+          variant="neutral"
+          :active="activeFilter === 'all'"
+          @click="setFilter('all')"
+        >
+          {{ incidents.length }} total
+        </StatusPill>
+        <StatusPill
+          v-if="openCount > 0"
+          variant="info"
+          :active="activeFilter === 'open'"
+          @click="setFilter('open')"
+        >
+          {{ openCount }} open
+        </StatusPill>
+        <StatusPill
+          v-if="inProgressCount > 0"
+          variant="purple"
+          :active="activeFilter === 'in-progress'"
+          @click="setFilter('in-progress')"
+        >
+          {{ inProgressCount }} in progress
+        </StatusPill>
+        <StatusPill
+          v-if="resolvedCount > 0"
+          variant="success"
+          :active="activeFilter === 'resolved'"
+          @click="setFilter('resolved')"
+        >
+          {{ resolvedCount }} resolved
+        </StatusPill>
+        <StatusPill
+          v-if="closedCount > 0"
+          variant="neutral"
+          :active="activeFilter === 'closed'"
+          @click="setFilter('closed')"
+        >
+          {{ closedCount }} closed
+        </StatusPill>
+      </div>
     </div>
 
     <!-- Filters -->
     <div class="filters-section">
-      <div class="filter-group">
-        <h4>Filter by status:</h4>
-        <div class="status-filters">
-          <label
-            v-for="status in statuses"
-            :key="status.value"
-            class="filter-checkbox"
-          >
-            <input
-              type="checkbox"
-              :checked="filterStatuses.includes(status.value)"
-              @change="toggleStatus(status.value)"
-            />
-            <span class="status-dot" :class="status.value"></span>
-            {{ status.label }}
-          </label>
-        </div>
+      <div class="search-group">
+        <input
+          v-model="searchQuery"
+          type="text"
+          class="search-input"
+          placeholder="Search by title, description, location, area, or person..."
+        />
       </div>
-
-      <div class="filter-group">
-        <h4>Filter by severity:</h4>
-        <div class="severity-filters">
-          <label
-            v-for="severity in severities"
-            :key="severity.value"
-            class="filter-checkbox"
-          >
-            <input
-              type="checkbox"
-              :checked="filterSeverities.includes(severity.value)"
-              @change="toggleSeverity(severity.value)"
-            />
-            <span class="severity-dot" :class="severity.value"></span>
-            {{ severity.label }}
-          </label>
-        </div>
-      </div>
-
-      <button v-if="hasActiveFilters" @click="clearFilters" class="btn btn-secondary btn-small">
-        Clear filters
-      </button>
     </div>
 
     <!-- Incidents List -->
@@ -66,7 +69,7 @@
       </div>
 
       <div v-else-if="filteredIncidents.length === 0" class="empty-state">
-        <p>{{ hasActiveFilters ? 'No incidents match the selected filters.' : 'No incidents reported yet.' }}</p>
+        <p>{{ (searchQuery || activeFilter !== 'all') ? 'No incidents match your search or filter.' : 'No incidents reported yet.' }}</p>
       </div>
 
       <IncidentCard
@@ -82,6 +85,7 @@
 <script setup>
 import { ref, computed, defineProps, defineEmits } from 'vue';
 import IncidentCard from '../../components/IncidentCard.vue';
+import StatusPill from '../../components/StatusPill.vue';
 
 const props = defineProps({
   incidents: {
@@ -100,28 +104,14 @@ const props = defineProps({
 
 const emit = defineEmits(['select-incident', 'report-incident']);
 
-const statuses = [
-  { value: 'open', label: 'Open' },
-  { value: 'acknowledged', label: 'Acknowledged' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'resolved', label: 'Resolved' },
-  { value: 'closed', label: 'Closed' },
-];
+const searchQuery = ref('');
+const activeFilter = ref('all');
 
-const severities = [
-  { value: 'critical', label: 'Critical' },
-  { value: 'high', label: 'High' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'low', label: 'Low' },
-];
+const setFilter = (filter) => {
+  activeFilter.value = filter;
+};
 
-const filterStatuses = ref(['open', 'acknowledged', 'in_progress', 'resolved', 'closed']);
-const filterSeverities = ref(['critical', 'high', 'medium', 'low']);
-
-const hasActiveFilters = computed(() => {
-  return filterStatuses.value.length < 5 || filterSeverities.value.length < 4;
-});
-
+// Status counts
 const openCount = computed(() => {
   return props.incidents.filter(i => i.status === 'open').length;
 });
@@ -131,38 +121,50 @@ const inProgressCount = computed(() => {
 });
 
 const resolvedCount = computed(() => {
-  return props.incidents.filter(i => i.status === 'resolved' || i.status === 'closed').length;
+  return props.incidents.filter(i => i.status === 'resolved').length;
 });
 
-const toggleStatus = (status) => {
-  const index = filterStatuses.value.indexOf(status);
-  if (index >= 0) {
-    filterStatuses.value.splice(index, 1);
-  } else {
-    filterStatuses.value.push(status);
-  }
-};
+const closedCount = computed(() => {
+  return props.incidents.filter(i => i.status === 'closed').length;
+});
 
-const toggleSeverity = (severity) => {
-  const index = filterSeverities.value.indexOf(severity);
-  if (index >= 0) {
-    filterSeverities.value.splice(index, 1);
-  } else {
-    filterSeverities.value.push(severity);
-  }
-};
-
-const clearFilters = () => {
-  filterStatuses.value = ['open', 'acknowledged', 'in_progress', 'resolved', 'closed'];
-  filterSeverities.value = ['critical', 'high', 'medium', 'low'];
-};
-
+// Filtering by status pill and search query
 const filteredIncidents = computed(() => {
-  return props.incidents.filter(incident => {
-    const statusMatch = filterStatuses.value.includes(incident.status);
-    const severityMatch = filterSeverities.value.includes(incident.severity);
-    return statusMatch && severityMatch;
-  });
+  let result = props.incidents;
+
+  // Filter by status pill
+  if (activeFilter.value === 'open') {
+    result = result.filter(i => i.status === 'open');
+  } else if (activeFilter.value === 'in-progress') {
+    result = result.filter(i => i.status === 'in_progress' || i.status === 'acknowledged');
+  } else if (activeFilter.value === 'resolved') {
+    result = result.filter(i => i.status === 'resolved');
+  } else if (activeFilter.value === 'closed') {
+    result = result.filter(i => i.status === 'closed');
+  }
+
+  // Filter by search query
+  if (searchQuery.value.trim()) {
+    const searchTerms = searchQuery.value.toLowerCase().trim().split(/\s+/);
+
+    result = result.filter(incident => {
+      // Build searchable text from all relevant fields
+      const checkpointText = `${incident.context?.checkpoint?.name || ''} ${incident.context?.checkpoint?.description || ''}`;
+      const areaText = incident.area?.areaName || '';
+      const peopleText = [
+        incident.reportedBy?.name || '',
+        ...(incident.context?.peopleAtCheckpoint || []).map(p => p.name || ''),
+      ].join(' ');
+      const notesText = (incident.updates || []).map(u => u.note || '').join(' ');
+
+      const searchableText = `${incident.title || ''} ${incident.description || ''} ${checkpointText} ${areaText} ${peopleText} ${notesText}`.toLowerCase();
+
+      // All search terms must match
+      return searchTerms.every(term => searchableText.includes(term));
+    });
+  }
+
+  return result;
 });
 
 const sortedIncidents = computed(() => {
@@ -180,29 +182,24 @@ const sortedIncidents = computed(() => {
   gap: 1.5rem;
 }
 
-.incidents-tab-header {
+.tab-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
+  align-items: center;
   margin-bottom: 1rem;
-}
-
-.header-left {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.incidents-tab-header h2 {
-  margin: 0;
-  font-size: 1.5rem;
-  color: var(--text-primary);
-}
-
-.incidents-summary {
-  display: flex;
+  flex-wrap: wrap;
   gap: 1rem;
+}
+
+.button-group {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.status-pills {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .btn-primary {
@@ -211,97 +208,41 @@ const sortedIncidents = computed(() => {
 }
 
 .btn-primary:hover {
-  opacity: 0.9;
-}
-
-.summary-item {
-  padding: 0.25rem 0.75rem;
-  border-radius: 12px;
-  font-size: 0.85rem;
-  font-weight: 500;
-}
-
-.summary-item.open {
-  background: var(--status-open-bg);
-  color: var(--status-open);
-}
-
-.summary-item.in-progress {
-  background: var(--status-in-progress-bg);
-  color: var(--status-in-progress);
-}
-
-.summary-item.resolved {
-  background: var(--status-resolved-bg);
-  color: var(--status-resolved);
+  background: var(--accent-primary-hover);
 }
 
 .filters-section {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.5rem;
-  padding: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
   background: var(--bg-tertiary);
   border-radius: 8px;
-  align-items: flex-start;
 }
 
-.filter-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  min-width: 200px;
-}
-
-.filter-group h4 {
-  margin: 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.status-filters,
-.severity-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.filter-checkbox {
+.search-group {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.search-input {
+  flex: 1;
+  max-width: 400px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
   font-size: 0.9rem;
-  cursor: pointer;
+  background: var(--input-bg);
   color: var(--text-primary);
 }
 
-.filter-checkbox input[type="checkbox"] {
-  cursor: pointer;
-  width: 1rem;
-  height: 1rem;
-  flex-shrink: 0;
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
 }
 
-.status-dot,
-.severity-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
+.search-input::placeholder {
+  color: var(--text-muted);
 }
-
-/* Status dots */
-.status-dot.open { background: var(--status-open); }
-.status-dot.acknowledged { background: var(--status-acknowledged); }
-.status-dot.in_progress { background: var(--status-in-progress); }
-.status-dot.resolved { background: var(--status-resolved); }
-.status-dot.closed { background: var(--status-closed); }
-
-/* Severity dots */
-.severity-dot.critical { background: var(--severity-critical); }
-.severity-dot.high { background: var(--severity-high); }
-.severity-dot.medium { background: var(--severity-medium); }
-.severity-dot.low { background: var(--severity-low); }
 
 .loading-state,
 .empty-state {
@@ -327,32 +268,19 @@ const sortedIncidents = computed(() => {
   transition: background-color 0.2s;
 }
 
-.btn-small {
-  padding: 0.4rem 0.8rem;
-  font-size: 0.85rem;
-}
-
-.btn-secondary {
-  background: var(--btn-secondary-bg);
-  color: white;
-}
-
-.btn-secondary:hover {
-  background: var(--btn-secondary-hover);
-}
-
 @media (max-width: 768px) {
-  .filters-section {
-    flex-direction: column;
-  }
-
-  .filter-group {
-    width: 100%;
-  }
-
-  .incidents-tab-header {
+  .tab-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .button-group {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .button-group button {
+    width: 100%;
   }
 }
 </style>

@@ -43,6 +43,7 @@ public class EventFunctions
         return mapping != null;
     }
 
+#pragma warning disable MA0051
     [Function("CreateEvent")]
     public async Task<IActionResult> CreateEvent(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "events")] HttpRequest req)
@@ -94,7 +95,7 @@ public class EventFunctions
 
             EventResponse response = eventEntity.ToResponse();
 
-            _logger.LogInformation($"Event created: {eventEntity.RowKey}, Admin: {request.AdminEmail}");
+            _logger.LogInformation("Event created: {EventId}, Admin: {AdminEmail}", eventEntity.RowKey, request.AdminEmail);
 
             return new OkObjectResult(response);
         }
@@ -104,6 +105,7 @@ public class EventFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     [Function("GetEvent")]
     public async Task<IActionResult> GetEvent(
@@ -159,7 +161,8 @@ public class EventFunctions
                 return new OkObjectResult(paginatedResponse);
             }
 
-            return new OkObjectResult(events.ToList());
+            List<EventResponse> eventsList = [.. events];
+            return new OkObjectResult(eventsList);
         }
         catch (Exception ex)
         {
@@ -168,6 +171,7 @@ public class EventFunctions
         }
     }
 
+#pragma warning disable MA0051
     [Function("UpdateEvent")]
     public async Task<IActionResult> UpdateEvent(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "events/{eventId}")] HttpRequest req,
@@ -229,7 +233,7 @@ public class EventFunctions
 
             EventResponse response = eventEntity.ToResponse();
 
-            _logger.LogInformation($"Event updated: {eventId}");
+            _logger.LogInformation("Event updated: {EventId}", eventId);
 
             return new OkObjectResult(response);
         }
@@ -239,6 +243,7 @@ public class EventFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     [Function("DeleteEvent")]
     public async Task<IActionResult> DeleteEvent(
@@ -257,7 +262,7 @@ public class EventFunctions
 
             await _eventRepository.DeleteAsync(eventId);
 
-            _logger.LogInformation($"Event deleted: {eventId}");
+            _logger.LogInformation("Event deleted: {EventId}", eventId);
 
             return new NoContentResult();
         }
@@ -301,7 +306,7 @@ public class EventFunctions
 
             IEnumerable<UserEventMappingEntity> mappings = await _userEventMappingRepository.GetByEventAsync(eventId);
 
-            List<UserEventMappingResponse> admins = mappings.Select(m => m.ToResponse()).ToList();
+            List<UserEventMappingResponse> admins = [.. mappings.Select(m => m.ToResponse())];
 
             return new OkObjectResult(admins);
         }
@@ -312,6 +317,7 @@ public class EventFunctions
         }
     }
 
+#pragma warning disable MA0051
     [Function("AddEventAdmin")]
     public async Task<IActionResult> AddEventAdmin(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "events/{eventId}/admins")] HttpRequest req,
@@ -410,7 +416,7 @@ public class EventFunctions
 
             UserEventMappingResponse response = mappingEntity.ToResponse();
 
-            _logger.LogInformation($"Admin added to event {eventId}: {email} (PersonId: {person.PersonId})");
+            _logger.LogInformation("Admin added to event {EventId}: {Email} (PersonId: {PersonId})", eventId, email, person.PersonId);
 
             return new OkObjectResult(response);
         }
@@ -420,6 +426,7 @@ public class EventFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     [Function("RemoveEventAdmin")]
     public async Task<IActionResult> RemoveEventAdmin(
@@ -447,7 +454,7 @@ public class EventFunctions
             // Ensure at least one admin remains
             if (adminCount <= 1)
             {
-                _logger.LogWarning($"Attempt to remove last admin from event {eventId} rejected: {email}");
+                _logger.LogWarning("Attempt to remove last admin from event {EventId} rejected: {Email}", eventId, email);
                 return new BadRequestObjectResult(new { message = Constants.ErrorCannotRemoveLastAdmin });
             }
 
@@ -460,14 +467,13 @@ public class EventFunctions
             {
                 // Get all EventAdmin roles for this person in this event and delete in parallel
                 IEnumerable<EventRoleEntity> roles = await _eventRoleRepository.GetByPersonAndEventAsync(person.PersonId, eventId);
-                List<Task> deleteTasks = roles
+                List<Task> deleteTasks = [.. roles
                     .Where(r => r.Role == Constants.RoleEventAdmin)
-                    .Select(role => _eventRoleRepository.DeleteAsync(person.PersonId, role.RowKey))
-                    .ToList();
+                    .Select(role => _eventRoleRepository.DeleteAsync(person.PersonId, role.RowKey))];
                 await Task.WhenAll(deleteTasks);
             }
 
-            _logger.LogInformation($"Admin removed from event {eventId}: {email}");
+            _logger.LogInformation("Admin removed from event {EventId}: {Email}", eventId, email);
 
             return new NoContentResult();
         }
@@ -478,6 +484,7 @@ public class EventFunctions
         }
     }
 
+#pragma warning disable MA0051
     [Function("UploadGpx")]
     public async Task<IActionResult> UploadGpx(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "events/{eventId}/upload-gpx")] HttpRequest req,
@@ -536,7 +543,7 @@ public class EventFunctions
             eventEntity.GpxRouteJson = routeJson;
             await _eventRepository.UpdateAsync(eventEntity);
 
-            _logger.LogInformation($"GPX route uploaded for event {eventId}: {route.Count} points (simplified)");
+            _logger.LogInformation("GPX route uploaded for event {EventId}: {RouteCount} points (simplified)", eventId, route.Count);
 
             return new OkObjectResult(new { success = true, message = $"Route uploaded successfully with {route.Count} points (simplified)", route });
         }
@@ -551,4 +558,5 @@ public class EventFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 }

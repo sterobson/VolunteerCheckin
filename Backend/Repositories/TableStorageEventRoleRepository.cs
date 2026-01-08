@@ -49,7 +49,7 @@ public class TableStorageEventRoleRepository : IEventRoleRepository
         List<EventRoleEntity> roles = [];
         await foreach (EventRoleEntity role in _table.QueryAsync<EventRoleEntity>(r => r.PartitionKey == personId))
         {
-            if (role.EventId == eventId)
+            if (string.Equals(role.EventId, eventId, StringComparison.Ordinal))
             {
                 roles.Add(role);
             }
@@ -64,7 +64,7 @@ public class TableStorageEventRoleRepository : IEventRoleRepository
         // Consider adding a secondary index if this becomes a performance issue
         await foreach (EventRoleEntity role in _table.QueryAsync<EventRoleEntity>())
         {
-            if (role.EventId == eventId)
+            if (string.Equals(role.EventId, eventId, StringComparison.Ordinal))
             {
                 roles.Add(role);
             }

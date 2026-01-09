@@ -217,9 +217,15 @@ export const healthApi = {
   check: () => api.head('/health'),
 };
 
+// Get the frontend base URL (everything before the #)
+const getFrontendUrl = () => {
+  const url = window.location.href.split('#')[0];
+  return url.endsWith('/') ? url.slice(0, -1) : url;
+};
+
 // Auth API
 export const authApi = {
-  requestLogin: (email) => api.post('/auth/request-login', { email }),
+  requestLogin: (email) => api.post('/auth/request-login', { email, frontendUrl: getFrontendUrl() }),
   verifyToken: (token) => api.post('/auth/verify-token', { token }),
   instantLogin: (email) => api.post('/auth/instant-login', { email }),
   createAdmin: (email) => api.post('/auth/create-admin', { email }),

@@ -114,5 +114,19 @@ namespace VolunteerCheckin.Functions.Tests
             request.Headers["Authorization"] = $"Bearer {sessionToken}";
             return request;
         }
+
+        /// <summary>
+        /// Creates an empty HttpRequest with custom headers
+        /// </summary>
+        public static HttpRequest CreateEmptyHttpRequestWithHeaders(Dictionary<string, string> headers)
+        {
+            DefaultHttpContext context = new();
+            HttpRequest request = context.Request;
+            foreach (KeyValuePair<string, string> header in headers)
+            {
+                request.Headers[header.Key] = header.Value;
+            }
+            return request;
+        }
     }
 }

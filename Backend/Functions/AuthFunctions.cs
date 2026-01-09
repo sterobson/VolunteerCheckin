@@ -74,8 +74,10 @@ public class AuthFunctions
             // Get IP address for audit trail
             string ipAddress = req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
-            // Get frontend URL from request origin for constructing the magic link
-            string frontendUrl = FunctionHelpers.GetFrontendUrl(req);
+            // Get frontend URL - prefer explicit value from request body, fall back to header detection
+            string frontendUrl = !string.IsNullOrWhiteSpace(request.FrontendUrl)
+                ? request.FrontendUrl.TrimEnd('/')
+                : FunctionHelpers.GetFrontendUrl(req);
 
             bool success = await _authService.RequestMagicLinkAsync(request.Email, ipAddress, frontendUrl);
 

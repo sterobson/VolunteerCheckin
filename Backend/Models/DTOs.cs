@@ -621,7 +621,8 @@ public record UserClaims(
 /// Request to send a magic link to an email address
 /// </summary>
 public record RequestLoginRequest(
-    string Email
+    string Email,
+    string? FrontendUrl = null
 );
 
 /// <summary>

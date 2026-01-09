@@ -154,6 +154,52 @@ namespace VolunteerCheckin.Functions.Tests
             result.ShouldBeOfType<BadRequestObjectResult>();
         }
 
+        [TestMethod]
+        public async Task RequestLogin_WithFrontendUrl_UsesFrontendUrlFromBody()
+        {
+            // Arrange
+            string expectedFrontendUrl = "https://sterobson.github.io/VolunteerCheckin/testing";
+            string? capturedFrontendUrl = null;
+
+            _mockAuthService.Setup(a => a.RequestMagicLinkAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()
+            )).Callback<string, string, string>((email, ip, frontendUrl) => capturedFrontendUrl = frontendUrl)
+              .ReturnsAsync(true);
+
+            RequestLoginRequest body = new("user@example.com", expectedFrontendUrl);
+            Microsoft.AspNetCore.Http.HttpRequest request = TestHelpers.CreateHttpRequest(body);
+
+            // Act
+            IActionResult result = await _authFunctions.RequestLogin(request);
+
+            // Assert
+            result.ShouldBeOfType<OkObjectResult>();
+            capturedFrontendUrl.ShouldBe(expectedFrontendUrl);
+        }
+
+        [TestMethod]
+        public async Task RequestLogin_WithFrontendUrlTrailingSlash_TrimsSlash()
+        {
+            // Arrange
+            string? capturedFrontendUrl = null;
+
+            _mockAuthService.Setup(a => a.RequestMagicLinkAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()
+            )).Callback<string, string, string>((email, ip, frontendUrl) => capturedFrontendUrl = frontendUrl)
+              .ReturnsAsync(true);
+
+            // URL with trailing slash
+            RequestLoginRequest body = new("user@example.com", "https://example.com/app/");
+            Microsoft.AspNetCore.Http.HttpRequest request = TestHelpers.CreateHttpRequest(body);
+
+            // Act
+            IActionResult result = await _authFunctions.RequestLogin(request);
+
+            // Assert
+            result.ShouldBeOfType<OkObjectResult>();
+            capturedFrontendUrl.ShouldBe("https://example.com/app");
+        }
+
         // ==================== MarshalLogin HTTP Endpoint Tests ====================
 
         [TestMethod]
@@ -826,7 +872,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .ReturnsAsync(marshal);
 
             MarshalEntity? capturedMarshal = null;
-            mockMarshalRepo.Setup(r => r.UpdateAsync(It.IsAny<MarshalEntity>()))
+            mockMarshalRepo.Setup(r => r.UpdateUnconditionalAsync(It.IsAny<MarshalEntity>()))
                 .Callback<MarshalEntity>(m => capturedMarshal = m)
                 .Returns(Task.CompletedTask);
 

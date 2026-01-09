@@ -21,6 +21,16 @@ function Write-Warning($message) { Write-Host $message -ForegroundColor Yellow }
 function Write-ErrorMessage($message) { Write-Host $message -ForegroundColor Red }
 function Write-Gray($message) { Write-Host $message -ForegroundColor Gray }
 
+# Function to get local network IP address
+function Get-LocalIPAddress {
+    $networkIP = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object {
+        $_.InterfaceAlias -notmatch 'Loopback' -and
+        $_.IPAddress -notmatch '^169\.254\.' -and
+        $_.IPAddress -ne '127.0.0.1'
+    } | Select-Object -First 1).IPAddress
+    return $networkIP
+}
+
 # Function to kill process on a specific port
 function Stop-ProcessOnPort {
     param(
@@ -463,6 +473,10 @@ if ($Environment -eq "local" -and $Frontend) {
         $viteRunning = Get-NetTCPConnection -LocalPort 5174 -State Listen -ErrorAction SilentlyContinue
         if ($viteRunning) {
             Write-Success "Frontend started on http://localhost:5174"
+            $localIP = Get-LocalIPAddress
+            if ($localIP) {
+                Write-Success "Network access:    http://${localIP}:5174"
+            }
         } else {
             Write-Warning "Frontend may still be starting. Check the console window."
         }
@@ -766,6 +780,10 @@ if ($deploymentSuccess) {
         }
         if ($Frontend) {
             Write-Host "  [OK] Frontend -> http://localhost:5174" -ForegroundColor Green
+            $localIP = Get-LocalIPAddress
+            if ($localIP) {
+                Write-Host "       Network  -> http://${localIP}:5174" -ForegroundColor Green
+            }
         }
     } else {
         Write-Host "Deployed to: $Environment" -ForegroundColor White

@@ -88,7 +88,7 @@
               @click="addEmergencyContact"
               class="btn btn-small btn-primary"
             >
-              + Add contact
+              Add contact
             </button>
           </div>
 

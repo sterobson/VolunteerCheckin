@@ -10,6 +10,29 @@ public static class FunctionHelpers
     public static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     /// <summary>
+    /// Extracts the frontend URL from the request origin, referer header, or falls back to environment variable.
+    /// This allows magic links to use the same domain the user requested from.
+    /// </summary>
+    public static string GetFrontendUrl(HttpRequest req)
+    {
+        // Try Origin header first (set by browser on cross-origin requests)
+        string? frontendUrl = req.Headers["Origin"].FirstOrDefault();
+
+        // Fall back to Referer header (extract just the origin)
+        if (string.IsNullOrEmpty(frontendUrl) && req.Headers.TryGetValue("Referer", out Microsoft.Extensions.Primitives.StringValues referer))
+        {
+            string? refererValue = referer.FirstOrDefault();
+            if (!string.IsNullOrEmpty(refererValue) && Uri.TryCreate(refererValue, UriKind.Absolute, out Uri? refererUri))
+            {
+                frontendUrl = $"{refererUri.Scheme}://{refererUri.Authority}";
+            }
+        }
+
+        // Final fallback to environment variable
+        return frontendUrl ?? Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:5174";
+    }
+
+    /// <summary>
     /// Extracts the session token from either the session cookie or Authorization header.
     /// Supports both cookie-based auth (browser) and Bearer token auth (API clients).
     /// </summary>

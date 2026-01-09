@@ -17,16 +17,38 @@
 
     <!-- Hamburger menu when space is limited -->
     <div v-else class="hamburger-container" ref="hamburgerRef">
-      <button
-        class="hamburger-button"
-        @click="toggleMenu"
-        type="button"
-        aria-label="Tab menu"
-      >
-        <span v-if="currentTabIcon" class="current-tab-icon" v-html="getIcon(currentTabIcon)"></span>
-        <span class="current-tab-label">{{ currentTabLabel }}</span>
-        <span class="hamburger-chevron">▼</span>
-      </button>
+      <div class="hamburger-nav">
+        <button
+          class="nav-arrow"
+          :class="{ invisible: !hasPrevTab }"
+          @click="goToPrevTab"
+          type="button"
+          aria-label="Previous tab"
+          :disabled="!hasPrevTab"
+        >
+          ‹
+        </button>
+        <button
+          class="hamburger-button"
+          @click="toggleMenu"
+          type="button"
+          aria-label="Tab menu"
+        >
+          <span v-if="currentTabIcon" class="current-tab-icon" v-html="getIcon(currentTabIcon)"></span>
+          <span class="current-tab-label">{{ currentTabLabel }}</span>
+          <span class="hamburger-chevron">▼</span>
+        </button>
+        <button
+          class="nav-arrow"
+          :class="{ invisible: !hasNextTab }"
+          @click="goToNextTab"
+          type="button"
+          aria-label="Next tab"
+          :disabled="!hasNextTab"
+        >
+          ›
+        </button>
+      </div>
 
       <div v-if="menuOpen" class="hamburger-menu">
         <button
@@ -80,6 +102,30 @@ const currentTabIcon = computed(() => {
   const currentTab = props.tabs.find(t => t.value === props.modelValue);
   return currentTab?.icon || null;
 });
+
+const currentTabIndex = computed(() => {
+  return props.tabs.findIndex(t => t.value === props.modelValue);
+});
+
+const hasPrevTab = computed(() => {
+  return currentTabIndex.value > 0;
+});
+
+const hasNextTab = computed(() => {
+  return currentTabIndex.value < props.tabs.length - 1;
+});
+
+const goToPrevTab = () => {
+  if (hasPrevTab.value) {
+    emit('update:modelValue', props.tabs[currentTabIndex.value - 1].value);
+  }
+};
+
+const goToNextTab = () => {
+  if (hasNextTab.value) {
+    emit('update:modelValue', props.tabs[currentTabIndex.value + 1].value);
+  }
+};
 
 const checkOverflow = () => {
   if (!containerRef.value) return;
@@ -201,15 +247,47 @@ watch(() => props.tabs, () => {
   width: 100%;
 }
 
+.hamburger-nav {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin: 0 -2rem;
+}
+
+.nav-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: var(--bg-tertiary);
+  cursor: pointer;
+  font-size: 1.5rem;
+  color: var(--text-primary);
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.nav-arrow:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--accent-primary);
+}
+
+.nav-arrow.invisible {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .hamburger-button {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 0.75rem 1rem;
-  border: 1px solid var(--border-color);
-  background: var(--card-bg);
-  border-radius: 6px;
+  border: none;
+  background: transparent;
   cursor: pointer;
   font-size: 0.95rem;
   color: var(--text-primary);
@@ -218,7 +296,6 @@ watch(() => props.tabs, () => {
 
 .hamburger-button:hover {
   background: var(--bg-tertiary);
-  border-color: var(--accent-primary);
 }
 
 .current-tab-icon {
@@ -255,7 +332,7 @@ watch(() => props.tabs, () => {
   border-radius: 6px;
   box-shadow: var(--shadow-md);
   z-index: 100;
-  margin-top: 0.25rem;
+  margin-top: 0;
   overflow: hidden;
   max-height: 300px;
   overflow-y: auto;

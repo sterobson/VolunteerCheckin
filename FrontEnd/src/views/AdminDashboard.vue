@@ -3,10 +3,10 @@
     <header class="header">
       <h1>Admin dashboard</h1>
       <div class="header-actions">
-        <ThemeToggle />
         <span class="user-email">{{ authStore.adminEmail }}</span>
         <button @click="goToProfile" class="btn btn-secondary">Profile</button>
         <button @click="handleLogout" class="btn btn-secondary">Logout</button>
+        <ThemeToggle />
       </div>
     </header>
 
@@ -245,6 +245,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  position: relative;
 }
 
 .header h1 {
@@ -346,6 +347,7 @@ onMounted(() => {
   cursor: pointer;
   font-weight: 600;
   transition: all 0.3s;
+  text-align: center;
 }
 
 .btn-small {
@@ -381,6 +383,10 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
+  .admin-dashboard {
+    overflow-x: hidden;
+  }
+
   .header {
     flex-direction: column;
     gap: 1rem;
@@ -395,6 +401,12 @@ onMounted(() => {
     flex-wrap: wrap;
     justify-content: center;
     gap: 0.5rem;
+    width: 100%;
+  }
+
+  .header-actions .btn {
+    flex: 1;
+    min-width: 0;
   }
 
   .user-email {
@@ -414,6 +426,26 @@ onMounted(() => {
     flex-direction: column;
     gap: 1rem;
     text-align: center;
+  }
+
+  .section-header .btn {
+    width: 100%;
+  }
+
+  .events-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .event-card {
+    padding: 1rem;
+  }
+
+  .event-actions {
+    flex-wrap: wrap;
+  }
+
+  .event-actions .btn {
+    flex: 1;
   }
 }
 </style>

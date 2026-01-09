@@ -55,8 +55,8 @@
         </div>
 
         <div class="form-actions">
-          <button type="submit" class="btn btn-primary" :disabled="!formDirty">
-            Save Changes
+          <button type="submit" class="btn btn-save" :disabled="!formDirty">
+            Save
           </button>
         </div>
       </form>
@@ -119,8 +119,12 @@ const handleSubmit = () => {
 
 .form-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 3fr 2fr;
   gap: 1.5rem;
+}
+
+.form-row .form-group {
+  min-width: 0;
 }
 
 .form-group {
@@ -154,6 +158,8 @@ textarea.form-input {
   margin-top: 0.5rem;
   padding-top: 1rem;
   border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
 }
 
 .btn {
@@ -162,30 +168,33 @@ textarea.form-input {
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.9rem;
+  font-weight: 500;
   transition: background-color 0.2s;
 }
 
-.btn-primary {
-  background: var(--accent-primary);
+.btn-save {
+  background: var(--success);
   color: white;
 }
 
-.btn-primary:hover {
-  background: var(--btn-primary-hover);
+.btn-save:hover:not(:disabled) {
+  background: var(--success-hover);
 }
 
-.btn-primary:disabled {
+.btn-save:disabled {
   background: var(--text-muted);
   cursor: not-allowed;
 }
 
 @media (max-width: 600px) {
-  .form-row {
-    grid-template-columns: 1fr;
-  }
-
   .event-info-card {
     padding: 1rem;
+  }
+}
+
+@media (max-width: 350px) {
+  .form-row {
+    grid-template-columns: 1fr;
   }
 }
 </style>

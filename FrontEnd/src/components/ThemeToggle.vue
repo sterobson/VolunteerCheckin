@@ -5,12 +5,9 @@
       @click="toggleDropdown"
       type="button"
       :aria-expanded="isOpen"
+      :title="isDark ? 'Dark mode' : 'Light mode'"
     >
-      <span class="theme-icon" v-html="currentIcon"></span>
-      <span class="theme-label">{{ currentLabel }}</span>
-      <svg class="chevron" :class="{ open: isOpen }" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polyline points="6 9 12 15 18 9"></polyline>
-      </svg>
+      <span class="theme-icon" v-html="resolvedIcon"></span>
     </button>
     <div v-if="isOpen" class="dropdown-menu">
       <button
@@ -31,13 +28,13 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useAdminTheme } from '../composables/useAdminTheme';
 
-const { theme, setTheme } = useAdminTheme();
+const { theme, isDark, setTheme } = useAdminTheme();
 
 const isOpen = ref(false);
 const dropdownRef = ref(null);
 
 const icons = {
-  light: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  light: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <circle cx="12" cy="12" r="5"></circle>
     <line x1="12" y1="1" x2="12" y2="3"></line>
     <line x1="12" y1="21" x2="12" y2="23"></line>
@@ -48,7 +45,7 @@ const icons = {
     <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
     <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
   </svg>`,
-  dark: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  dark: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
   </svg>`,
   system: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -64,11 +61,8 @@ const options = [
   { value: 'dark', label: 'Dark', icon: icons.dark },
 ];
 
-const currentIcon = computed(() => icons[theme.value] || icons.system);
-const currentLabel = computed(() => {
-  const option = options.find(o => o.value === theme.value);
-  return option ? option.label : 'System';
-});
+// Show sun or moon based on resolved theme (not preference)
+const resolvedIcon = computed(() => isDark.value ? icons.dark : icons.light);
 
 const toggleDropdown = () => {
   isOpen.value = !isOpen.value;
@@ -102,20 +96,25 @@ onUnmounted(() => {
 .theme-toggle-btn {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  justify-content: center;
+  padding: 0.5rem;
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
+  background: var(--bg-primary);
+  color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s;
-  font-size: 0.875rem;
+  width: 36px;
+  height: 36px;
 }
 
 .theme-toggle-btn:hover {
   background: var(--bg-hover);
-  color: var(--text-primary);
+  transform: scale(1.05);
+}
+
+.theme-toggle-btn:active {
+  transform: scale(0.95);
 }
 
 .theme-icon,
@@ -123,18 +122,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.theme-label {
-  min-width: 48px;
-}
-
-.chevron {
-  transition: transform 0.2s;
-}
-
-.chevron.open {
-  transform: rotate(180deg);
 }
 
 .dropdown-menu {

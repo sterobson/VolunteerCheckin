@@ -51,7 +51,7 @@ public class AreaFunctions
             if (error != null) return error;
 
             // Validate contacts reference valid marshals (batch load instead of N queries)
-            if (request!.Contacts.Count > 0)
+            if (request!.Contacts?.Count > 0)
             {
                 IEnumerable<MarshalEntity> allMarshals = await _marshalRepository.GetByEventAsync(request.EventId);
                 HashSet<string> validMarshalIds = allMarshals.Select(m => m.MarshalId).ToHashSet();
@@ -73,7 +73,7 @@ public class AreaFunctions
                 Name = request.Name,
                 Description = request.Description,
                 Color = request.Color,
-                ContactsJson = JsonSerializer.Serialize(request.Contacts),
+                ContactsJson = JsonSerializer.Serialize(request.Contacts ?? []),
                 PolygonJson = JsonSerializer.Serialize(request.Polygon ?? []),
                 IsDefault = false,
                 DisplayOrder = 0
@@ -495,12 +495,12 @@ public class AreaFunctions
 
             await Task.WhenAll(areasTask, locationsTask, marshalsTask, assignmentsTask, checklistItemsTask, completionsTask);
 
-            IEnumerable<AreaEntity> areas = areasTask.Result;
-            List<LocationEntity> locationsList = [.. locationsTask.Result];
-            IEnumerable<MarshalEntity> marshals = marshalsTask.Result;
-            IEnumerable<AssignmentEntity> assignments = assignmentsTask.Result;
-            IEnumerable<ChecklistItemEntity> checklistItems = checklistItemsTask.Result;
-            IEnumerable<ChecklistCompletionEntity> completions = completionsTask.Result;
+            IEnumerable<AreaEntity> areas = await areasTask;
+            List<LocationEntity> locationsList = [.. await locationsTask];
+            IEnumerable<MarshalEntity> marshals = await marshalsTask;
+            IEnumerable<AssignmentEntity> assignments = await assignmentsTask;
+            IEnumerable<ChecklistItemEntity> checklistItems = await checklistItemsTask;
+            IEnumerable<ChecklistCompletionEntity> completions = await completionsTask;
 
             // Check if any checkpoints are missing area assignments and auto-calculate
             List<LocationEntity> checkpointsNeedingAreas = [.. locationsList

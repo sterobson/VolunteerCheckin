@@ -135,80 +135,10 @@ public class LocationFunctions
 
             await _locationRepository.AddAsync(locationEntity);
 
-            // Create pending checklist items scoped to this checkpoint
-            if (request.PendingNewChecklistItems != null && request.PendingNewChecklistItems.Count > 0)
-            {
-                string adminEmail = req.Headers[Constants.AdminEmailHeader].ToString();
-                int displayOrder = 0;
-
-                foreach (PendingChecklistItem pendingItem in request.PendingNewChecklistItems)
-                {
-                    if (string.IsNullOrWhiteSpace(pendingItem.Text)) continue;
-
-                    string itemId = Guid.NewGuid().ToString();
-                    List<ScopeConfiguration> scopeConfig =
-                    [
-                        new ScopeConfiguration { Scope = "EveryoneAtCheckpoints", ItemType = "Checkpoint", Ids = [locationId] }
-                    ];
-
-                    ChecklistItemEntity checklistEntity = new()
-                    {
-                        PartitionKey = request.EventId,
-                        RowKey = itemId,
-                        EventId = request.EventId,
-                        ItemId = itemId,
-                        Text = InputSanitizer.SanitizeDescription(pendingItem.Text),
-                        ScopeConfigurationsJson = JsonSerializer.Serialize(scopeConfig),
-                        DisplayOrder = displayOrder++,
-                        IsRequired = false,
-                        CreatedByAdminEmail = adminEmail,
-                        CreatedDate = DateTime.UtcNow
-                    };
-
-                    await _checklistItemRepository.AddAsync(checklistEntity);
-                    _logger.LogInformation("Checklist item {ItemId} created for new location {LocationId}", itemId, locationId);
-                }
-            }
-
-            // Create pending notes scoped to this checkpoint
-            if (request.PendingNewNotes != null && request.PendingNewNotes.Count > 0)
-            {
-                string adminEmail = req.Headers[Constants.AdminEmailHeader].ToString();
-                int displayOrder = 0;
-
-                foreach (PendingNote pendingNote in request.PendingNewNotes)
-                {
-                    if (string.IsNullOrWhiteSpace(pendingNote.Title) && string.IsNullOrWhiteSpace(pendingNote.Content)) continue;
-
-                    string noteId = Guid.NewGuid().ToString();
-                    List<ScopeConfiguration> scopeConfig =
-                    [
-                        new ScopeConfiguration { Scope = "EveryoneAtCheckpoints", ItemType = "Checkpoint", Ids = [locationId] }
-                    ];
-
-                    NoteEntity noteEntity = new()
-                    {
-                        PartitionKey = request.EventId,
-                        RowKey = noteId,
-                        EventId = request.EventId,
-                        NoteId = noteId,
-                        Title = InputSanitizer.SanitizeName(pendingNote.Title ?? "Untitled"),
-                        Content = InputSanitizer.SanitizeDescription(pendingNote.Content ?? string.Empty),
-                        ScopeConfigurationsJson = JsonSerializer.Serialize(scopeConfig),
-                        DisplayOrder = displayOrder++,
-                        Priority = Constants.NotePriorityNormal,
-                        Category = string.Empty,
-                        IsPinned = false,
-                        CreatedByPersonId = string.Empty,
-                        CreatedByName = !string.IsNullOrEmpty(adminEmail) ? adminEmail : "Admin",
-                        CreatedAt = DateTime.UtcNow,
-                        IsDeleted = false
-                    };
-
-                    await _noteRepository.AddAsync(noteEntity);
-                    _logger.LogInformation("Note {NoteId} created for new location {LocationId}", noteId, locationId);
-                }
-            }
+            // Create pending checklist items and notes scoped to this checkpoint
+            string adminEmail = req.Headers[Constants.AdminEmailHeader].ToString();
+            await CreatePendingChecklistItems(request.EventId, locationId, request.PendingNewChecklistItems, adminEmail);
+            await CreatePendingNotes(request.EventId, locationId, request.PendingNewNotes, adminEmail);
 
             LocationResponse response = locationEntity.ToResponse();
 
@@ -338,6 +268,7 @@ public class LocationFunctions
                 return new NotFoundObjectResult(new { message = "Location not found" });
             }
 
+            // Update core properties
             locationEntity.Name = request.Name;
             locationEntity.Description = request.Description;
             locationEntity.Latitude = request.Latitude;
@@ -346,18 +277,21 @@ public class LocationFunctions
             locationEntity.What3Words = request.What3Words ?? string.Empty;
             locationEntity.StartTime = request.StartTime;
             locationEntity.EndTime = request.EndTime;
-            // Update checkpoint style if provided
-            if (request.StyleType != null) locationEntity.StyleType = request.StyleType;
-            if (request.StyleColor != null) locationEntity.StyleColor = request.StyleColor;
-            if (request.StyleBackgroundShape != null) locationEntity.StyleBackgroundShape = request.StyleBackgroundShape;
-            if (request.StyleBackgroundColor != null) locationEntity.StyleBackgroundColor = request.StyleBackgroundColor;
-            if (request.StyleBorderColor != null) locationEntity.StyleBorderColor = request.StyleBorderColor;
-            if (request.StyleIconColor != null) locationEntity.StyleIconColor = request.StyleIconColor;
-            if (request.StyleSize != null) locationEntity.StyleSize = request.StyleSize;
-            if (request.StyleMapRotation != null) locationEntity.StyleMapRotation = request.StyleMapRotation;
-            // Update terminology if provided
-            if (request.PeopleTerm != null) locationEntity.PeopleTerm = request.PeopleTerm;
-            if (request.CheckpointTerm != null) locationEntity.CheckpointTerm = request.CheckpointTerm;
+
+            // Update style and terminology (only non-null values)
+            locationEntity.ApplyStyleUpdates(
+                styleType: request.StyleType,
+                styleColor: request.StyleColor,
+                styleBackgroundShape: request.StyleBackgroundShape,
+                styleBackgroundColor: request.StyleBackgroundColor,
+                styleBorderColor: request.StyleBorderColor,
+                styleIconColor: request.StyleIconColor,
+                styleSize: request.StyleSize,
+                styleMapRotation: request.StyleMapRotation,
+                peopleTerm: request.PeopleTerm,
+                checkpointTerm: request.CheckpointTerm
+            );
+
             // Update dynamic checkpoint settings
             locationEntity.IsDynamic = request.IsDynamic;
             if (request.LocationUpdateScopeConfigurations != null)
@@ -441,7 +375,7 @@ public class LocationFunctions
 
             // Parse the CSV file
             CsvParserService.CsvParseResult parseResult;
-            using (Stream stream = csvFile.OpenReadStream())
+            await using (Stream stream = csvFile.OpenReadStream())
             {
                 parseResult = CsvParserService.ParseLocationsCsv(stream);
             }
@@ -969,5 +903,92 @@ public class LocationFunctions
         }
 
         return defaultArea;
+    }
+
+    /// <summary>
+    /// Create checklist items scoped to a specific checkpoint from pending items.
+    /// </summary>
+    private async Task CreatePendingChecklistItems(
+        string eventId,
+        string locationId,
+        List<PendingChecklistItem>? pendingItems,
+        string adminEmail)
+    {
+        if (pendingItems == null || pendingItems.Count == 0) return;
+
+        int displayOrder = 0;
+        foreach (PendingChecklistItem pendingItem in pendingItems)
+        {
+            if (string.IsNullOrWhiteSpace(pendingItem.Text)) continue;
+
+            string itemId = Guid.NewGuid().ToString();
+            List<ScopeConfiguration> scopeConfig =
+            [
+                new ScopeConfiguration { Scope = "EveryoneAtCheckpoints", ItemType = "Checkpoint", Ids = [locationId] }
+            ];
+
+            ChecklistItemEntity checklistEntity = new()
+            {
+                PartitionKey = eventId,
+                RowKey = itemId,
+                EventId = eventId,
+                ItemId = itemId,
+                Text = InputSanitizer.SanitizeDescription(pendingItem.Text),
+                ScopeConfigurationsJson = JsonSerializer.Serialize(scopeConfig),
+                DisplayOrder = displayOrder++,
+                IsRequired = false,
+                CreatedByAdminEmail = adminEmail,
+                CreatedDate = DateTime.UtcNow
+            };
+
+            await _checklistItemRepository.AddAsync(checklistEntity);
+            _logger.LogInformation("Checklist item {ItemId} created for location {LocationId}", itemId, locationId);
+        }
+    }
+
+    /// <summary>
+    /// Create notes scoped to a specific checkpoint from pending notes.
+    /// </summary>
+    private async Task CreatePendingNotes(
+        string eventId,
+        string locationId,
+        List<PendingNote>? pendingNotes,
+        string adminEmail)
+    {
+        if (pendingNotes == null || pendingNotes.Count == 0) return;
+
+        int displayOrder = 0;
+        foreach (PendingNote pendingNote in pendingNotes)
+        {
+            if (string.IsNullOrWhiteSpace(pendingNote.Title) && string.IsNullOrWhiteSpace(pendingNote.Content)) continue;
+
+            string noteId = Guid.NewGuid().ToString();
+            List<ScopeConfiguration> scopeConfig =
+            [
+                new ScopeConfiguration { Scope = "EveryoneAtCheckpoints", ItemType = "Checkpoint", Ids = [locationId] }
+            ];
+
+            NoteEntity noteEntity = new()
+            {
+                PartitionKey = eventId,
+                RowKey = noteId,
+                EventId = eventId,
+                NoteId = noteId,
+                Title = InputSanitizer.SanitizeName(pendingNote.Title ?? "Untitled"),
+                Content = InputSanitizer.SanitizeDescription(pendingNote.Content ?? string.Empty),
+                ScopeConfigurationsJson = JsonSerializer.Serialize(scopeConfig),
+                DisplayOrder = displayOrder++,
+                Priority = Constants.NotePriorityNormal,
+                Category = string.Empty,
+                IsPinned = false,
+                CreatedByPersonId = string.Empty,
+                CreatedByName = !string.IsNullOrEmpty(adminEmail) ? adminEmail : "Admin",
+                CreatedAt = DateTime.UtcNow,
+                IsDeleted = false
+            };
+
+            await _noteRepository.AddAsync(noteEntity);
+            _logger.LogInformation("Note {NoteId} created for location {LocationId}", noteId, locationId);
+        }
     }
 }

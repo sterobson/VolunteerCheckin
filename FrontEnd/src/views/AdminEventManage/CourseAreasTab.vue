@@ -18,6 +18,91 @@
           @polygon-drawing="handlePolygonDrawing"
         />
 
+        <!-- Map action buttons column -->
+        <div class="map-buttons-column">
+          <!-- Fullscreen button -->
+          <button class="map-btn" @click="$emit('fullscreen')" title="Fullscreen">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+            </svg>
+          </button>
+
+          <!-- Show/Filters button -->
+          <div class="map-btn-wrapper" v-if="!addMenuExpanded">
+            <button class="map-btn" :class="{ active: !filtersCollapsed }" @click="toggleFilters" title="Show/hide options">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+
+            <!-- Filters dropdown -->
+            <div v-if="!filtersCollapsed" class="dropdown-content filters-dropdown">
+              <div class="filter-section">
+                <h4>Show on map:</h4>
+                <label class="filter-checkbox">
+                  <input type="checkbox" v-model="filters.showRoute" />
+                  {{ terms.course }}
+                </label>
+                <label class="filter-checkbox">
+                  <input type="checkbox" v-model="filters.showUncheckedIn" />
+                  Unchecked-in {{ termsLower.checkpoints }}
+                </label>
+                <label class="filter-checkbox">
+                  <input type="checkbox" v-model="filters.showPartiallyCheckedIn" />
+                  Partially checked-in {{ termsLower.checkpoints }}
+                </label>
+                <label class="filter-checkbox">
+                  <input type="checkbox" v-model="filters.showFullyCheckedIn" />
+                  Fully checked-in {{ termsLower.checkpoints }}
+                </label>
+                <label class="filter-checkbox">
+                  <input type="checkbox" v-model="filters.showAreas" />
+                  {{ terms.areas }}
+                </label>
+              </div>
+
+              <div class="filter-section" v-if="areas.length > 0 && filters.showAreas">
+                <h4>Filter {{ termsLower.areas }}:</h4>
+                <AreasSelection
+                  :areas="areas"
+                  :selected-area-ids="filters.selectedAreas"
+                  @update:selected-area-ids="filters.selectedAreas = $event"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Add button -->
+          <div class="map-btn-wrapper" v-if="filtersCollapsed">
+            <button class="map-btn" :class="{ active: addMenuExpanded }" @click="toggleAddMenu" ref="addButtonRef" title="Add">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </button>
+
+            <!-- Add dropdown -->
+            <div v-if="addMenuExpanded" class="dropdown-content add-dropdown">
+              <button @click="handleAddOption('checkpoint')" class="dropdown-item">
+                {{ terms.checkpoint }}
+              </button>
+              <button @click="handleAddOption('many-checkpoints')" class="dropdown-item">
+                Many {{ termsLower.checkpoints }}
+              </button>
+              <button @click="handleAddOption('area')" class="dropdown-item">
+                {{ terms.area }}
+              </button>
+              <button @click="handleImportCheckpoints" class="dropdown-item">
+                Import {{ termsLower.checkpoints }}...
+              </button>
+              <button @click="handleUploadRoute" class="dropdown-item">
+                Upload {{ termsLower.course }}...
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Drawing controls overlay - shown when in drawing mode -->
         <div v-if="drawingMode && polygonPointCount > 0" class="drawing-controls">
           <div class="point-count">{{ polygonPointCount }} point{{ polygonPointCount !== 1 ? 's' : '' }}</div>
@@ -39,82 +124,6 @@
               Redo ↪
             </button>
           </div>
-        </div>
-      </div>
-
-      <!-- Visibility Filters -->
-      <div class="visibility-filters" :class="{ collapsed: filtersCollapsed }" v-if="!addMenuExpanded">
-        <button
-          @click="toggleFilters"
-          class="filters-toggle"
-        >
-          <span v-if="filtersCollapsed">Show...</span>
-          <span v-else>✕</span>
-        </button>
-
-        <div v-if="!filtersCollapsed" class="filters-content">
-          <div class="filter-section">
-            <h4>Show on map:</h4>
-            <label class="filter-checkbox">
-              <input type="checkbox" v-model="filters.showRoute" />
-              {{ terms.course }}
-            </label>
-            <label class="filter-checkbox">
-              <input type="checkbox" v-model="filters.showUncheckedIn" />
-              Unchecked-in {{ termsLower.checkpoints }}
-            </label>
-            <label class="filter-checkbox">
-              <input type="checkbox" v-model="filters.showPartiallyCheckedIn" />
-              Partially checked-in {{ termsLower.checkpoints }}
-            </label>
-            <label class="filter-checkbox">
-              <input type="checkbox" v-model="filters.showFullyCheckedIn" />
-              Fully checked-in {{ termsLower.checkpoints }}
-            </label>
-            <label class="filter-checkbox">
-              <input type="checkbox" v-model="filters.showAreas" />
-              {{ terms.areas }}
-            </label>
-          </div>
-
-          <div class="filter-section" v-if="areas.length > 0 && filters.showAreas">
-            <h4>Filter {{ termsLower.areas }}:</h4>
-            <AreasSelection
-              :areas="areas"
-              :selected-area-ids="filters.selectedAreas"
-              @update:selected-area-ids="filters.selectedAreas = $event"
-            />
-          </div>
-        </div>
-      </div>
-
-      <!-- Add Button -->
-      <div v-if="filtersCollapsed" class="add-menu" :class="{ expanded: addMenuExpanded }">
-        <button
-          @click="toggleAddMenu"
-          class="add-toggle"
-          ref="addButtonRef"
-        >
-          <span v-if="addMenuExpanded">✕</span>
-          <span v-else>Add...</span>
-        </button>
-
-        <div v-if="addMenuExpanded" class="add-menu-content">
-          <button @click="handleAddOption('checkpoint')" class="add-menu-item">
-            Checkpoint
-          </button>
-          <button @click="handleAddOption('many-checkpoints')" class="add-menu-item">
-            Many checkpoints
-          </button>
-          <button @click="handleAddOption('area')" class="add-menu-item">
-            Area
-          </button>
-          <button @click="handleImportCheckpoints" class="add-menu-item">
-            Import checkpoints...
-          </button>
-          <button @click="handleUploadRoute" class="add-menu-item">
-            Upload route...
-          </button>
         </div>
       </div>
     </div>
@@ -167,6 +176,7 @@ const emit = defineEmits([
   'add-checkpoint-from-map',
   'add-many-checkpoints-from-map',
   'add-area-from-map',
+  'fullscreen',
 ]);
 
 const mapSection = ref(null);
@@ -396,52 +406,71 @@ const visibleAreas = computed(() => {
   z-index: 1;
 }
 
-/* Visibility Filters */
-.visibility-filters {
+/* Map buttons column */
+.map-buttons-column {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
-  background: var(--card-bg);
-  border-radius: 8px;
-  box-shadow: var(--shadow-md);
-  z-index: 500;
-  transition: all 0.3s ease;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.visibility-filters.collapsed {
-  padding: 0;
+.map-btn-wrapper {
+  position: relative;
 }
 
-.filters-toggle {
-  padding: 0.5rem 1rem;
-  background: var(--btn-primary-bg);
-  color: white;
-  border: none;
-  border-radius: 4px;
+.map-btn {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px;
   cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 500;
-  min-width: 80px;
-  height: auto;
-  transition: all 0.2s;
-  text-align: center;
+  color: var(--text-primary);
+  box-shadow: var(--shadow-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
-  box-shadow: var(--shadow-xs);
-  white-space: nowrap;
+  transition: background-color 0.2s, transform 0.1s;
+  width: 36px;
+  height: 36px;
 }
 
-.filters-toggle:hover {
-  background: var(--btn-primary-hover);
+.map-btn:hover {
+  background: var(--bg-hover);
+  transform: scale(1.05);
 }
 
-.filters-content {
+.map-btn:active {
+  transform: scale(0.95);
+}
+
+.map-btn.active {
+  background: var(--accent-primary);
+  color: white;
+  border-color: var(--accent-primary);
+}
+
+.map-btn svg {
+  display: block;
+}
+
+/* Dropdown content shared styles */
+.dropdown-content {
+  position: absolute;
+  top: 0;
+  right: calc(100% + 8px);
+  background: var(--card-bg);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  z-index: 1001;
+  min-width: 200px;
+}
+
+/* Filters dropdown */
+.filters-dropdown {
   padding: 1rem;
-  max-width: 250px;
-  position: relative;
-  z-index: 501;
 }
 
 .filter-section {
@@ -477,55 +506,12 @@ const visibleAreas = computed(() => {
   height: 1rem;
 }
 
-/* Add Menu */
-.add-menu {
-  position: absolute;
-  top: 5rem;
-  right: 1rem;
-  background: var(--card-bg);
-  border-radius: 8px;
-  box-shadow: var(--shadow-md);
-  z-index: 500;
-  transition: all 0.3s ease;
-}
-
-.add-menu.expanded {
-  padding: 0;
-}
-
-.add-toggle {
-  padding: 0.5rem 1rem;
-  background: var(--btn-primary-bg);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 500;
-  min-width: 80px;
-  height: auto;
-  transition: all 0.2s;
-  text-align: center;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  box-shadow: var(--shadow-xs);
-  white-space: nowrap;
-}
-
-.add-toggle:hover {
-  background: var(--btn-primary-hover);
-}
-
-.add-menu-content {
+/* Add dropdown */
+.add-dropdown {
   padding: 0.5rem 0;
-  min-width: 180px;
-  position: relative;
-  z-index: 501;
 }
 
-.add-menu-item {
+.dropdown-item {
   display: block;
   width: 100%;
   padding: 0.75rem 1rem;
@@ -538,15 +524,15 @@ const visibleAreas = computed(() => {
   transition: background-color 0.2s;
 }
 
-.add-menu-item:hover {
+.dropdown-item:hover {
   background: var(--bg-tertiary);
 }
 
-.add-menu-item:first-child {
-  border-radius: 0 0 0 0;
+.dropdown-item:first-child {
+  border-radius: 8px 8px 0 0;
 }
 
-.add-menu-item:last-child {
+.dropdown-item:last-child {
   border-radius: 0 0 8px 8px;
 }
 
@@ -555,23 +541,11 @@ const visibleAreas = computed(() => {
     height: 350px;
   }
 
-  .visibility-filters {
-    top: 1rem;
-    right: 1rem;
-    max-height: calc(100vh - 10rem);
-  }
-
-  .filters-content {
-    max-height: calc(100vh - 14rem);
-    overflow-y: auto;
-  }
-
-  .add-menu {
-    top: 5rem;
-    right: 1rem;
-  }
-
-  .add-menu-content {
+  .dropdown-content {
+    right: auto;
+    left: auto;
+    top: calc(100% + 8px);
+    right: 0;
     max-height: calc(100vh - 14rem);
     overflow-y: auto;
   }

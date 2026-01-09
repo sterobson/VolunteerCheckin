@@ -3,7 +3,7 @@
     <header class="header">
       <div class="header-left">
         <button @click="goBack" class="btn-back" title="Back to Dashboard">
-          <AppLogo :size="48" />
+          <AppLogo :size="48" animate />
         </button>
         <div v-if="event">
           <h1>{{ event.name }}</h1>
@@ -11,12 +11,11 @@
         </div>
       </div>
       <div class="header-actions">
-        <ThemeToggle />
         <button v-if="canSwitchToMarshal" @click="switchToMarshalMode" class="btn btn-marshal-mode">
           Switch to Marshal
         </button>
-        <button @click="goToProfile" class="btn btn-secondary">Profile</button>
       </div>
+      <ThemeToggle class="theme-toggle-fixed" />
     </header>
 
     <div class="container">
@@ -52,6 +51,7 @@
           @add-checkpoint-from-map="handleAddCheckpointFromMap"
           @add-many-checkpoints-from-map="handleAddMultipleCheckpointsClick"
           @add-area-from-map="handleAddAreaFromMap"
+          @fullscreen="handleCourseFullscreen"
         />
 
         <CheckpointsList
@@ -239,6 +239,7 @@
     />
 
     <EditMarshalModal
+      ref="editMarshalModalRef"
       :show="showEditMarshal"
       :marshal="selectedMarshal"
       :event-id="route.params.eventId"
@@ -251,6 +252,7 @@
       :all-checklist-items="checklistItems"
       :incidents="selectedMarshalIncidents"
       :is-dirty="formDirty"
+      :validation-errors="marshalValidationErrors"
       @close="closeEditMarshalModal"
       @save="handleSaveMarshal"
       @delete="handleDeleteMarshal"
@@ -299,6 +301,7 @@
     <EditAreaModal
       :show="showEditArea"
       :area="selectedArea"
+      :initial-tab="areaInitialTab"
       :checkpoints="locationStatuses"
       :marshals="marshals"
       :areas="areas"
@@ -645,6 +648,8 @@ const conflictResolveCallback = ref(null);
 const marshals = ref([]);
 const showEditMarshal = ref(false);
 const selectedMarshal = ref(null);
+const editMarshalModalRef = ref(null);
+const marshalValidationErrors = ref({});
 const editMarshalForm = ref({
   id: '',
   name: '',
@@ -695,6 +700,7 @@ const locationForm = ref({
 const areas = ref([]);
 const selectedArea = ref(null);
 const showEditArea = ref(false);
+const areaInitialTab = ref('details');
 const selectedAreaId = ref(null);
 const pendingAreaFormData = ref(null);
 // Fullscreen map - use composable state
@@ -924,9 +930,6 @@ const goBack = () => {
   router.push('/admin/dashboard');
 };
 
-const goToProfile = () => {
-  router.push({ name: 'AdminProfile' });
-};
 
 const shareEvent = () => {
   showShareLink.value = true;
@@ -1205,6 +1208,7 @@ const reloadStatusOnly = async () => {
 
 const handleAddArea = () => {
   selectedArea.value = null;
+  areaInitialTab.value = 'details';
   formDirty.value = false;
   showEditArea.value = true;
 };
@@ -1212,6 +1216,7 @@ const handleAddArea = () => {
 const handleSelectArea = (area) => {
   selectedArea.value = area;
   selectedAreaId.value = area.id;
+  areaInitialTab.value = 'details';
   formDirty.value = false;
   showEditArea.value = true;
 };
@@ -1293,8 +1298,7 @@ const closeEditAreaModal = () => {
 };
 
 const handleAddAreaContact = (area) => {
-  // Close the area modal and open contact modal with pre-configured area scope
-  closeEditAreaModal();
+  // Open contact modal without closing area modal - user can return to area modal after saving contact
   selectedContact.value = null;
   contactInitialTab.value = 'details';
   formDirty.value = false;
@@ -1772,6 +1776,19 @@ const handleAddCheckpointFromMap = () => {
   fullscreenMap.enterPlaceCheckpointMode();
 };
 
+const handleCourseFullscreen = () => {
+  // Capture current map state before entering fullscreen
+  fullscreenMap.saveMapState(courseAreasTab.value);
+
+  // Enter fullscreen view mode
+  isFullscreenMapActive.value = true;
+  fullscreenMode.value = 'view';
+  fullscreenContext.value = {
+    title: 'Course map',
+    description: '',
+  };
+};
+
 const handleAddAreaFromMap = () => {
   // Capture current map state before entering fullscreen
   fullscreenMap.saveMapState(courseAreasTab.value);
@@ -1907,6 +1924,7 @@ const handleFullscreenDone = () => {
     }
 
     exitFullscreen();
+    areaInitialTab.value = 'boundary';
     showEditArea.value = true;
     pendingAreaFormData.value = null;
 
@@ -2442,6 +2460,7 @@ const handleAddNewMarshalInline = async (marshalData) => {
 
 const addNewMarshal = () => {
   selectedMarshal.value = null;
+  marshalValidationErrors.value = {};
   editMarshalForm.value = {
     id: '',
     name: '',
@@ -2457,6 +2476,7 @@ const addNewMarshal = () => {
 
 const selectMarshal = (marshal) => {
   selectedMarshal.value = marshal;
+  marshalValidationErrors.value = {};
   editMarshalForm.value = {
     id: marshal.id,
     name: marshal.name,
@@ -2630,7 +2650,42 @@ const handleSaveMarshal = async (formData) => {
     }
   } catch (error) {
     console.error('Failed to save marshal:', error);
-    alert('Failed to save marshal. Please try again.');
+
+    // Extract error message from API response
+    const errorMessage = error.response?.data?.message || 'Failed to save marshal. Please try again.';
+
+    // Check if it's a validation error (name required, etc.)
+    if (error.response?.status === 400) {
+      // Parse the error message to determine which field has the error
+      const lowerMessage = errorMessage.toLowerCase();
+
+      if (lowerMessage.includes('name')) {
+        marshalValidationErrors.value = { name: errorMessage };
+        // Switch to details tab and focus the name field
+        if (editMarshalModalRef.value) {
+          editMarshalModalRef.value.switchToTab('details');
+          editMarshalModalRef.value.focusField('name');
+        }
+      } else if (lowerMessage.includes('email')) {
+        marshalValidationErrors.value = { email: errorMessage };
+        if (editMarshalModalRef.value) {
+          editMarshalModalRef.value.switchToTab('details');
+          editMarshalModalRef.value.focusField('email');
+        }
+      } else {
+        // General validation error
+        marshalValidationErrors.value = { general: errorMessage };
+        if (editMarshalModalRef.value) {
+          editMarshalModalRef.value.switchToTab('details');
+        }
+      }
+    } else {
+      // Other errors (network, server, etc.)
+      marshalValidationErrors.value = { general: errorMessage };
+      if (editMarshalModalRef.value) {
+        editMarshalModalRef.value.switchToTab('details');
+      }
+    }
   }
 };
 
@@ -2680,6 +2735,7 @@ const assignMarshalToLocation = (locationId) => {
 const closeEditMarshalModal = () => {
   showEditMarshal.value = false;
   selectedMarshal.value = null;
+  marshalValidationErrors.value = {};
   editMarshalForm.value = {
     id: '',
     name: '',
@@ -2908,7 +2964,9 @@ onUnmounted(() => {
   min-height: 100vh;
   background: var(--bg-secondary);
   color: var(--text-primary);
-  overflow: visible;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .header {
@@ -2918,6 +2976,14 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  position: relative;
+}
+
+.theme-toggle-fixed {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 100;
 }
 
 .header-left {
@@ -2971,6 +3037,7 @@ onUnmounted(() => {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+  text-align: center;
 }
 
 .btn-marshal-mode:hover {
@@ -3040,10 +3107,25 @@ onUnmounted(() => {
 }
 
 @media (max-width: 768px) {
+  .admin-event-manage {
+    overflow-x: hidden;
+    width: 100%;
+  }
+
   .header {
     flex-direction: column;
     align-items: flex-start;
     gap: 1rem;
+    padding: 1rem;
+  }
+
+  .header-left {
+    width: 100%;
+    gap: 0.75rem;
+  }
+
+  .header-left h1 {
+    font-size: 1.25rem;
   }
 
   .header-actions {
@@ -3057,7 +3139,8 @@ onUnmounted(() => {
 
   .container {
     padding: 1rem;
-    overflow: visible;
+    width: 100%;
+    max-width: 100%;
   }
 
   .tabs-nav {

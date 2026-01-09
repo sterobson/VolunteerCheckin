@@ -8,16 +8,23 @@
           <p v-if="contextDescription">{{ contextDescription }}</p>
         </div>
         <div class="action-buttons">
-          <button @click="handleCancel" class="btn btn-cancel">
-            Cancel
-          </button>
-          <button
-            @click="handleDone"
-            class="btn btn-done"
-            :disabled="!canComplete"
-          >
-            Done
-          </button>
+          <template v-if="mode === 'view'">
+            <button @click="handleCancel" class="btn btn-done">
+              Close
+            </button>
+          </template>
+          <template v-else>
+            <button @click="handleCancel" class="btn btn-cancel">
+              Cancel
+            </button>
+            <button
+              @click="handleDone"
+              class="btn btn-done"
+              :disabled="!canComplete"
+            >
+              Done
+            </button>
+          </template>
         </div>
       </div>
 
@@ -77,7 +84,7 @@ const props = defineProps({
   },
   mode: {
     type: String,
-    validator: (value) => ['place-checkpoint', 'move-checkpoint', 'draw-area', 'add-multiple'].includes(value),
+    validator: (value) => ['place-checkpoint', 'move-checkpoint', 'draw-area', 'add-multiple', 'view'].includes(value),
   },
   contextTitle: {
     type: String,

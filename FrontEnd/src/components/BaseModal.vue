@@ -14,9 +14,11 @@
     >
       <!-- Fixed Header -->
       <div class="base-modal-header">
-        <slot name="header">
-          <h2 v-if="title" class="base-modal-title">{{ title }}</h2>
-        </slot>
+        <div class="base-modal-header-content">
+          <slot name="header">
+            <h2 v-if="title" class="base-modal-title">{{ title }}</h2>
+          </slot>
+        </div>
         <button
           v-if="showCloseButton"
           @click="handleClose"
@@ -196,26 +198,31 @@ const handleConfirmCloseCancel = () => {
 /* Fixed Header */
 .base-modal-header {
   flex-shrink: 0;
-  padding: 2rem 2rem 1rem 2rem;
-  position: relative;
+  padding: 1rem 1rem 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
   border-bottom: 1px solid var(--border-color);
+}
+
+.base-modal-header-content {
+  flex: 1;
+  min-width: 0;
 }
 
 .base-modal-title {
   margin: 0;
-  padding-right: 3rem; /* Space for close button */
   color: var(--text-primary);
   font-size: 1.25rem;
   font-weight: 600;
 }
 
 .base-modal-close {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
+  flex-shrink: 0;
   background: none;
   border: none;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   cursor: pointer;
   color: var(--text-secondary);
   width: 32px;

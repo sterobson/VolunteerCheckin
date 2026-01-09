@@ -10,7 +10,7 @@
         class="add-item-btn"
         @click="showAddForm = !showAddForm"
       >
-        {{ showAddForm ? 'Cancel' : '+ Add note' }}
+        {{ showAddForm ? 'Cancel' : 'Add note' }}
       </button>
     </div>
 
@@ -299,6 +299,8 @@ const getContextInfo = (note) => {
   font-size: 0.85rem;
   cursor: pointer;
   transition: background-color 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .add-item-btn:hover {

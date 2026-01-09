@@ -198,36 +198,35 @@ public class EventFunctions
                 return new NotFoundObjectResult(new { message = "Event not found" });
             }
 
-            // Convert the event date to UTC
+            // Convert the event date to UTC and apply all updates
             DateTime eventDateUtc = FunctionHelpers.ConvertToUtc(request!.EventDate, request.TimeZoneId);
 
-            eventEntity.Name = request.Name;
-            eventEntity.Description = request.Description;
-            eventEntity.EventDate = eventDateUtc;
-            eventEntity.TimeZoneId = request.TimeZoneId;
-            // Only update terminology if provided
-            if (request.PeopleTerm != null) eventEntity.PeopleTerm = request.PeopleTerm;
-            if (request.CheckpointTerm != null) eventEntity.CheckpointTerm = request.CheckpointTerm;
-            if (request.AreaTerm != null) eventEntity.AreaTerm = request.AreaTerm;
-            if (request.ChecklistTerm != null) eventEntity.ChecklistTerm = request.ChecklistTerm;
-            if (request.CourseTerm != null) eventEntity.CourseTerm = request.CourseTerm;
-            // Only update default checkpoint style if provided
-            if (request.DefaultCheckpointStyleType != null) eventEntity.DefaultCheckpointStyleType = request.DefaultCheckpointStyleType;
-            if (request.DefaultCheckpointStyleColor != null) eventEntity.DefaultCheckpointStyleColor = request.DefaultCheckpointStyleColor;
-            if (request.DefaultCheckpointStyleBackgroundShape != null) eventEntity.DefaultCheckpointStyleBackgroundShape = request.DefaultCheckpointStyleBackgroundShape;
-            if (request.DefaultCheckpointStyleBackgroundColor != null) eventEntity.DefaultCheckpointStyleBackgroundColor = request.DefaultCheckpointStyleBackgroundColor;
-            if (request.DefaultCheckpointStyleBorderColor != null) eventEntity.DefaultCheckpointStyleBorderColor = request.DefaultCheckpointStyleBorderColor;
-            if (request.DefaultCheckpointStyleIconColor != null) eventEntity.DefaultCheckpointStyleIconColor = request.DefaultCheckpointStyleIconColor;
-            if (request.DefaultCheckpointStyleSize != null) eventEntity.DefaultCheckpointStyleSize = request.DefaultCheckpointStyleSize;
-            if (request.DefaultCheckpointStyleMapRotation != null) eventEntity.DefaultCheckpointStyleMapRotation = request.DefaultCheckpointStyleMapRotation;
-            // Marshal mode branding
-            if (request.BrandingHeaderGradientStart != null) eventEntity.BrandingHeaderGradientStart = request.BrandingHeaderGradientStart;
-            if (request.BrandingHeaderGradientEnd != null) eventEntity.BrandingHeaderGradientEnd = request.BrandingHeaderGradientEnd;
-            if (request.BrandingLogoUrl != null) eventEntity.BrandingLogoUrl = request.BrandingLogoUrl;
-            if (request.BrandingLogoPosition != null) eventEntity.BrandingLogoPosition = request.BrandingLogoPosition;
-            if (request.BrandingAccentColor != null) eventEntity.BrandingAccentColor = request.BrandingAccentColor;
-            if (request.BrandingPageGradientStart != null) eventEntity.BrandingPageGradientStart = request.BrandingPageGradientStart;
-            if (request.BrandingPageGradientEnd != null) eventEntity.BrandingPageGradientEnd = request.BrandingPageGradientEnd;
+            eventEntity.ApplyUpdates(
+                name: request.Name,
+                description: request.Description,
+                eventDateUtc: eventDateUtc,
+                timeZoneId: request.TimeZoneId,
+                peopleTerm: request.PeopleTerm,
+                checkpointTerm: request.CheckpointTerm,
+                areaTerm: request.AreaTerm,
+                checklistTerm: request.ChecklistTerm,
+                courseTerm: request.CourseTerm,
+                defaultCheckpointStyleType: request.DefaultCheckpointStyleType,
+                defaultCheckpointStyleColor: request.DefaultCheckpointStyleColor,
+                defaultCheckpointStyleBackgroundShape: request.DefaultCheckpointStyleBackgroundShape,
+                defaultCheckpointStyleBackgroundColor: request.DefaultCheckpointStyleBackgroundColor,
+                defaultCheckpointStyleBorderColor: request.DefaultCheckpointStyleBorderColor,
+                defaultCheckpointStyleIconColor: request.DefaultCheckpointStyleIconColor,
+                defaultCheckpointStyleSize: request.DefaultCheckpointStyleSize,
+                defaultCheckpointStyleMapRotation: request.DefaultCheckpointStyleMapRotation,
+                brandingHeaderGradientStart: request.BrandingHeaderGradientStart,
+                brandingHeaderGradientEnd: request.BrandingHeaderGradientEnd,
+                brandingLogoUrl: request.BrandingLogoUrl,
+                brandingLogoPosition: request.BrandingLogoPosition,
+                brandingAccentColor: request.BrandingAccentColor,
+                brandingPageGradientStart: request.BrandingPageGradientStart,
+                brandingPageGradientEnd: request.BrandingPageGradientEnd
+            );
 
             await _eventRepository.UpdateAsync(eventEntity);
 
@@ -514,7 +513,7 @@ public class EventFunctions
 
             // Parse the GPX file
             List<RoutePoint> route;
-            using (Stream stream = gpxFile.OpenReadStream())
+            await using (Stream stream = gpxFile.OpenReadStream())
             {
                 route = GpxParserService.ParseGpxFile(stream);
             }

@@ -1,45 +1,62 @@
 <template>
   <div class="tab-content">
-    <div class="form-group">
+    <!-- General error message -->
+    <div v-if="validationErrors.general" class="error-banner">
+      {{ validationErrors.general }}
+    </div>
+
+    <div class="form-group" :class="{ 'has-error': validationErrors.name }">
       <label>Name *</label>
       <input
+        ref="nameInputRef"
         :value="form.name"
         @input="handleInput('name', $event.target.value)"
         type="text"
         required
         class="form-input"
+        :class="{ 'input-error': validationErrors.name }"
       />
+      <span v-if="validationErrors.name" class="field-error">{{ validationErrors.name }}</span>
     </div>
 
-    <div class="form-group">
+    <div class="form-group" :class="{ 'has-error': validationErrors.email }">
       <label>Email</label>
       <input
+        ref="emailInputRef"
         :value="form.email"
         @input="handleInput('email', $event.target.value)"
         type="email"
         class="form-input"
+        :class="{ 'input-error': validationErrors.email }"
       />
+      <span v-if="validationErrors.email" class="field-error">{{ validationErrors.email }}</span>
     </div>
 
-    <div class="form-group">
+    <div class="form-group" :class="{ 'has-error': validationErrors.phoneNumber }">
       <label>Phone number</label>
       <input
+        ref="phoneInputRef"
         :value="form.phoneNumber"
         @input="handleInput('phoneNumber', $event.target.value)"
         type="tel"
         class="form-input"
+        :class="{ 'input-error': validationErrors.phoneNumber }"
       />
+      <span v-if="validationErrors.phoneNumber" class="field-error">{{ validationErrors.phoneNumber }}</span>
     </div>
 
-    <div class="form-group">
+    <div class="form-group" :class="{ 'has-error': validationErrors.notes }">
       <label>Notes</label>
       <textarea
+        ref="notesInputRef"
         :value="form.notes"
         @input="handleInput('notes', $event.target.value)"
         class="form-input"
+        :class="{ 'input-error': validationErrors.notes }"
         rows="3"
         placeholder="e.g., Needs to leave by 11am"
       ></textarea>
+      <span v-if="validationErrors.notes" class="field-error">{{ validationErrors.notes }}</span>
     </div>
 
     <!-- Magic Link Section (only for existing marshals) -->
@@ -66,6 +83,7 @@
             {{ copySuccess ? 'Copied!' : 'Copy link' }}
           </button>
         </div>
+        <p v-if="copyError" class="error-text">{{ copyError }}</p>
         <div v-if="hasEmail" class="magic-link-actions">
           <button
             type="button"
@@ -86,7 +104,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, defineProps, defineEmits } from 'vue';
+import { ref, watch, onMounted, defineProps, defineEmits, defineExpose, nextTick } from 'vue';
 import { marshalsApi } from '../../../services/api';
 
 const props = defineProps({
@@ -102,9 +120,19 @@ const props = defineProps({
     type: String,
     default: null,
   },
+  validationErrors: {
+    type: Object,
+    default: () => ({}),
+  },
 });
 
 const emit = defineEmits(['update:form', 'input']);
+
+// Input refs for focusing
+const nameInputRef = ref(null);
+const emailInputRef = ref(null);
+const phoneInputRef = ref(null);
+const notesInputRef = ref(null);
 
 const magicLink = ref('');
 const hasEmail = ref(false);
@@ -138,15 +166,56 @@ const fetchMagicLink = async () => {
   }
 };
 
+const copyError = ref('');
+
 const copyLink = async () => {
+  copyError.value = '';
+
   try {
-    await navigator.clipboard.writeText(magicLink.value);
-    copySuccess.value = true;
-    setTimeout(() => {
-      copySuccess.value = false;
-    }, 2000);
+    // Try modern clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(magicLink.value);
+      copySuccess.value = true;
+      setTimeout(() => {
+        copySuccess.value = false;
+      }, 2000);
+      return;
+    }
   } catch (error) {
-    console.error('Failed to copy:', error);
+    console.warn('Clipboard API failed, trying fallback:', error);
+  }
+
+  // Fallback for older browsers (including some Samsung Internet versions)
+  try {
+    const textArea = document.createElement('textarea');
+    textArea.value = magicLink.value;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-9999px';
+    textArea.style.top = '0';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+
+    const successful = document.execCommand('copy');
+    document.body.removeChild(textArea);
+
+    if (successful) {
+      copySuccess.value = true;
+      setTimeout(() => {
+        copySuccess.value = false;
+      }, 2000);
+    } else {
+      copyError.value = 'Copy failed. Please select and copy the link manually.';
+      setTimeout(() => {
+        copyError.value = '';
+      }, 4000);
+    }
+  } catch (error) {
+    console.error('Fallback copy failed:', error);
+    copyError.value = 'Copy not supported. Please select and copy the link manually.';
+    setTimeout(() => {
+      copyError.value = '';
+    }, 4000);
   }
 };
 
@@ -180,6 +249,27 @@ watch(() => props.marshalId, (newVal) => {
     hasEmail.value = false;
   }
 }, { immediate: true });
+
+// Focus on a specific field
+const focusField = (fieldName) => {
+  nextTick(() => {
+    const refMap = {
+      name: nameInputRef,
+      email: emailInputRef,
+      phoneNumber: phoneInputRef,
+      notes: notesInputRef,
+    };
+    const inputRef = refMap[fieldName];
+    if (inputRef?.value) {
+      inputRef.value.focus();
+      inputRef.value.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+};
+
+defineExpose({
+  focusField,
+});
 </script>
 
 <style scoped>
@@ -310,6 +400,37 @@ textarea.form-input {
 
 .error-text {
   margin: 0.5rem 0 0 0;
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
+/* Validation error styles */
+.error-banner {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  color: var(--danger-text);
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.form-group.has-error label {
+  color: var(--danger);
+}
+
+.form-input.input-error {
+  border-color: var(--danger);
+}
+
+.form-input.input-error:focus {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 2px var(--danger-bg);
+}
+
+.field-error {
+  display: block;
+  margin-top: 0.25rem;
   color: var(--danger);
   font-size: 0.85rem;
 }

@@ -109,11 +109,11 @@ function handleAuthError() {
     localStorage.removeItem('adminEmail');
     localStorage.removeItem('sessionToken');
 
-    // Redirect to login page (avoid redirect loop if already on login)
+    // Redirect to home with login modal (avoid redirect loop if already on home)
     // Use hash check since app uses hash-based routing
     const currentHash = window.location.hash || '';
-    if (!currentHash.includes('/login') && !currentHash.includes('/verify')) {
-      window.location.href = `${import.meta.env.BASE_URL}#/admin/login`;
+    if (!currentHash.includes('login') && !currentHash.includes('/verify')) {
+      window.location.href = `${import.meta.env.BASE_URL}#/?login=true`;
     }
   }
 }

@@ -1,5 +1,8 @@
 /**
- * Theme CSS Variables using light-dark()
+ * Theme CSS Variables
+ *
+ * Fallback values (light mode) are defined first for browsers that don't support light-dark().
+ * Modern browsers that support light-dark() get the dynamic values via @supports.
  *
  * Usage:
  * - color-scheme: light dark;  -> follows system preference
@@ -9,80 +12,80 @@
 
 :root {
   /* ========================================
-   * BACKGROUNDS
+   * BACKGROUNDS (light mode fallback)
    * ======================================== */
-  --bg-primary: light-dark(#ffffff, #121220);
-  --bg-secondary: light-dark(#f8f9fa, #1a1a2e);
-  --bg-tertiary: light-dark(#e9ecef, #252542);
-  --bg-hover: light-dark(#f0f0f0, #2a2a4a);
-  --bg-active: light-dark(#e7f1ff, #1e3a5f);
-  --bg-light: light-dark(#f8f9fa, #1a1a2e);
-  --bg-lighter: light-dark(#fafafa, #151525);
-  --bg-muted: light-dark(#f5f5f5, #202035);
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8f9fa;
+  --bg-tertiary: #e9ecef;
+  --bg-hover: #f0f0f0;
+  --bg-active: #e7f1ff;
+  --bg-light: #f8f9fa;
+  --bg-lighter: #fafafa;
+  --bg-muted: #f5f5f5;
 
   /* ========================================
-   * TEXT COLORS
+   * TEXT COLORS (light mode fallback)
    * ======================================== */
-  --text-primary: light-dark(#212529, #e8e8e8);
-  --text-secondary: light-dark(#666666, #a0a0a0);
-  --text-muted: light-dark(#999999, #707070);
-  --text-light: light-dark(#888888, #808080);
-  --text-dark: light-dark(#333333, #e0e0e0);
-  --text-darker: light-dark(#555555, #c0c0c0);
+  --text-primary: #212529;
+  --text-secondary: #666666;
+  --text-muted: #999999;
+  --text-light: #888888;
+  --text-dark: #333333;
+  --text-darker: #555555;
 
   /* ========================================
-   * BORDERS
+   * BORDERS (light mode fallback)
    * ======================================== */
-  --border-color: light-dark(#dee2e6, #2a2a4a);
-  --border-light: light-dark(#e0e0e0, #2a2a4a);
-  --border-lighter: light-dark(#eee, #252542);
-  --border-medium: light-dark(#ddd, #3a3a5a);
-  --border-dark: light-dark(#ccc, #4a4a6a);
+  --border-color: #dee2e6;
+  --border-light: #e0e0e0;
+  --border-lighter: #eee;
+  --border-medium: #ddd;
+  --border-dark: #ccc;
 
   /* ========================================
-   * INPUTS
+   * INPUTS (light mode fallback)
    * ======================================== */
-  --input-bg: light-dark(#ffffff, #1a1a2e);
-  --input-border: light-dark(#ced4da, #3a3a5a);
-  --input-focus-border: light-dark(#86b7fe, #4a7cff);
-  --input-disabled-bg: light-dark(#f5f5f5, #252542);
+  --input-bg: #ffffff;
+  --input-border: #ced4da;
+  --input-focus-border: #86b7fe;
+  --input-disabled-bg: #f5f5f5;
 
   /* ========================================
-   * SHADOWS (rgba values for compositing)
+   * SHADOWS (light mode fallback)
    * ======================================== */
-  --shadow-color: light-dark(rgba(0,0,0,0.1), rgba(0,0,0,0.4));
-  --shadow-xs: light-dark(0 1px 2px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.2));
-  --shadow-sm: light-dark(0 2px 4px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.3));
-  --shadow-md: light-dark(0 4px 8px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.4));
-  --shadow-lg: light-dark(0 10px 25px rgba(0,0,0,0.15), 0 10px 25px rgba(0,0,0,0.5));
-  --shadow-xl: light-dark(0 20px 40px rgba(0,0,0,0.2), 0 20px 40px rgba(0,0,0,0.6));
+  --shadow-color: rgba(0,0,0,0.1);
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-sm: 0 2px 4px rgba(0,0,0,0.1);
+  --shadow-md: 0 4px 8px rgba(0,0,0,0.1);
+  --shadow-lg: 0 10px 25px rgba(0,0,0,0.15);
+  --shadow-xl: 0 20px 40px rgba(0,0,0,0.2);
 
   /* Raw shadow opacity values for custom shadows */
-  --shadow-opacity-xs: light-dark(0.05, 0.2);
-  --shadow-opacity-sm: light-dark(0.1, 0.3);
-  --shadow-opacity-md: light-dark(0.15, 0.4);
-  --shadow-opacity-lg: light-dark(0.2, 0.5);
-  --shadow-opacity-xl: light-dark(0.3, 0.6);
-  --shadow-overlay: light-dark(rgba(0,0,0,0.5), rgba(0,0,0,0.7));
+  --shadow-opacity-xs: 0.05;
+  --shadow-opacity-sm: 0.1;
+  --shadow-opacity-md: 0.15;
+  --shadow-opacity-lg: 0.2;
+  --shadow-opacity-xl: 0.3;
+  --shadow-overlay: rgba(0,0,0,0.5);
 
   /* ========================================
-   * CARDS & PANELS
+   * CARDS & PANELS (light mode fallback)
    * ======================================== */
-  --card-bg: light-dark(#ffffff, #1a1a2e);
-  --card-border: light-dark(#e0e0e0, #2a2a4a);
+  --card-bg: #ffffff;
+  --card-border: #e0e0e0;
 
   /* ========================================
-   * TABLES
+   * TABLES (light mode fallback)
    * ======================================== */
-  --table-header-bg: light-dark(#f8f9fa, #252542);
-  --table-row-hover: light-dark(#f5f5f5, #2a2a4a);
-  --table-border: light-dark(#e0e0e0, #2a2a4a);
+  --table-header-bg: #f8f9fa;
+  --table-row-hover: #f5f5f5;
+  --table-border: #e0e0e0;
 
   /* ========================================
-   * MODALS
+   * MODALS (light mode fallback)
    * ======================================== */
-  --modal-bg: light-dark(#ffffff, #1a1a2e);
-  --modal-overlay: light-dark(rgba(0,0,0,0.5), rgba(0,0,0,0.7));
+  --modal-bg: #ffffff;
+  --modal-overlay: rgba(0,0,0,0.5);
 
   /* ========================================
    * BRAND COLORS
@@ -90,7 +93,7 @@
   --brand-primary: #667eea;
   --brand-primary-hover: #5568d3;
   --brand-primary-light: #f0f4ff;
-  --brand-primary-bg: light-dark(#e3e9ff, #1a1a3a);
+  --brand-primary-bg: #e3e9ff;
   --brand-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   --brand-shadow: rgba(102, 126, 234, 0.2);
   --brand-shadow-md: rgba(102, 126, 234, 0.3);
@@ -101,55 +104,55 @@
    * ======================================== */
   --accent-primary: #007bff;
   --accent-primary-hover: #0056b3;
-  --accent-primary-light: light-dark(#e7f3ff, #1a2a4a);
+  --accent-primary-light: #e7f3ff;
 
   /* ========================================
-   * SEMANTIC: SUCCESS
+   * SEMANTIC: SUCCESS (light mode fallback)
    * ======================================== */
   --success: #28a745;
   --success-hover: #218838;
   --success-light: #4caf50;
   --success-dark: #2e7d32;
-  --success-bg: light-dark(#d4edda, #1a3d2a);
-  --success-bg-light: light-dark(#e8f5e9, #1a3025);
-  --success-bg-lighter: light-dark(#f1f8f4, #152a20);
-  --success-text: light-dark(#155724, #8bc34a);
-  --success-border: light-dark(#c3e6cb, #2a4a3a);
+  --success-bg: #d4edda;
+  --success-bg-light: #e8f5e9;
+  --success-bg-lighter: #f1f8f4;
+  --success-text: #155724;
+  --success-border: #c3e6cb;
 
   /* ========================================
-   * SEMANTIC: DANGER / ERROR
+   * SEMANTIC: DANGER / ERROR (light mode fallback)
    * ======================================== */
   --danger: #dc3545;
   --danger-hover: #c82333;
   --danger-light: #ef4444;
   --danger-dark: #c62828;
-  --danger-bg: light-dark(#f8d7da, #3d1a1a);
-  --danger-bg-light: light-dark(#ffebee, #351515);
-  --danger-bg-lighter: light-dark(#fff5f5, #2d1010);
-  --danger-text: light-dark(#721c24, #ff6b6b);
-  --danger-border: light-dark(#f5c6cb, #5a2a2a);
+  --danger-bg: #f8d7da;
+  --danger-bg-light: #ffebee;
+  --danger-bg-lighter: #fff5f5;
+  --danger-text: #721c24;
+  --danger-border: #f5c6cb;
 
   /* ========================================
-   * SEMANTIC: WARNING
+   * SEMANTIC: WARNING (light mode fallback)
    * ======================================== */
   --warning: #ffc107;
   --warning-hover: #e0a800;
   --warning-dark: #f57c00;
   --warning-orange: #fd7e14;
-  --warning-bg: light-dark(#fff3cd, #3d3a1a);
-  --warning-bg-light: light-dark(#fff8e6, #35321a);
-  --warning-bg-lighter: light-dark(#fffbf0, #2d2a15);
-  --warning-text: light-dark(#856404, #ffd54f);
-  --warning-border: light-dark(#ffc107, #5a5020);
+  --warning-bg: #fff3cd;
+  --warning-bg-light: #fff8e6;
+  --warning-bg-lighter: #fffbf0;
+  --warning-text: #856404;
+  --warning-border: #ffc107;
 
   /* ========================================
-   * SEMANTIC: INFO
+   * SEMANTIC: INFO (light mode fallback)
    * ======================================== */
   --info: #17a2b8;
   --info-blue: #1976d2;
-  --info-bg: light-dark(#e3f2fd, #1a2a3d);
-  --info-bg-light: light-dark(#f0f7ff, #152535);
-  --info-text: light-dark(#1565c0, #64b5f6);
+  --info-bg: #e3f2fd;
+  --info-bg-light: #f0f7ff;
+  --info-text: #1565c0;
 
   /* ========================================
    * BUTTONS: PRIMARY
@@ -167,57 +170,57 @@
   --btn-secondary-text: #ffffff;
 
   /* ========================================
-   * BUTTONS: CANCEL / NEUTRAL
+   * BUTTONS: CANCEL / NEUTRAL (light mode fallback)
    * ======================================== */
-  --btn-cancel-bg: light-dark(#e0e0e0, #3a3a5a);
-  --btn-cancel-hover: light-dark(#d0d0d0, #4a4a6a);
-  --btn-cancel-text: light-dark(#333333, #e0e0e0);
+  --btn-cancel-bg: #e0e0e0;
+  --btn-cancel-hover: #d0d0d0;
+  --btn-cancel-text: #333333;
 
   /* ========================================
-   * STATUS COLORS (for incidents, workflows)
+   * STATUS COLORS (light mode fallback)
    * ======================================== */
   --status-open: #1565c0;
-  --status-open-bg: light-dark(#e3f2fd, #1a2a3d);
+  --status-open-bg: #e3f2fd;
   --status-acknowledged: #e65100;
-  --status-acknowledged-bg: light-dark(#fff3e0, #3d2a1a);
+  --status-acknowledged-bg: #fff3e0;
   --status-in-progress: #7b1fa2;
-  --status-in-progress-bg: light-dark(#f3e5f5, #2d1a3d);
+  --status-in-progress-bg: #f3e5f5;
   --status-resolved: #2e7d32;
-  --status-resolved-bg: light-dark(#e8f5e9, #1a3025);
+  --status-resolved-bg: #e8f5e9;
   --status-closed: #616161;
-  --status-closed-bg: light-dark(#f5f5f5, #2a2a3a);
+  --status-closed-bg: #f5f5f5;
 
   /* ========================================
-   * SEVERITY COLORS
+   * SEVERITY COLORS (light mode fallback)
    * ======================================== */
   --severity-critical: #dc3545;
-  --severity-critical-bg: light-dark(#f8d7da, #3d1a1a);
-  --severity-critical-text: light-dark(#721c24, #ff6b6b);
+  --severity-critical-bg: #f8d7da;
+  --severity-critical-text: #721c24;
   --severity-high: #fd7e14;
-  --severity-high-bg: light-dark(#fff3cd, #3d3a1a);
-  --severity-high-text: light-dark(#856404, #ffd54f);
+  --severity-high-bg: #fff3cd;
+  --severity-high-text: #856404;
   --severity-medium: #ffc107;
-  --severity-medium-bg: light-dark(#fff9e6, #35321a);
-  --severity-medium-text: light-dark(#856404, #ffd54f);
+  --severity-medium-bg: #fff9e6;
+  --severity-medium-text: #856404;
   --severity-low: #667eea;
-  --severity-low-bg: light-dark(#e8edff, #1a1a3a);
-  --severity-low-text: light-dark(#3d5afe, #8c9eff);
+  --severity-low-bg: #e8edff;
+  --severity-low-text: #3d5afe;
 
   /* ========================================
-   * PRIORITY COLORS (for notes)
+   * PRIORITY COLORS (light mode fallback)
    * ======================================== */
   --priority-urgent: #dc3545;
-  --priority-urgent-bg: light-dark(#f8d7da, #3d1a1a);
-  --priority-urgent-text: light-dark(#721c24, #ff6b6b);
+  --priority-urgent-bg: #f8d7da;
+  --priority-urgent-text: #721c24;
   --priority-high: #fd7e14;
-  --priority-high-bg: light-dark(#fff3cd, #3d3a1a);
-  --priority-high-text: light-dark(#856404, #ffd54f);
+  --priority-high-bg: #fff3cd;
+  --priority-high-text: #856404;
   --priority-normal: #28a745;
-  --priority-normal-bg: light-dark(#d4edda, #1a3d2a);
-  --priority-normal-text: light-dark(#155724, #8bc34a);
+  --priority-normal-bg: #d4edda;
+  --priority-normal-text: #155724;
   --priority-low: #6c757d;
-  --priority-low-bg: light-dark(#e2e3e5, #2a2a3a);
-  --priority-low-text: light-dark(#383d41, #a0a0a0);
+  --priority-low-bg: #e2e3e5;
+  --priority-low-text: #383d41;
 
   /* ========================================
    * GLASS EFFECTS (for overlays)
@@ -235,22 +238,22 @@
   --glass-text-strong: rgba(255, 255, 255, 0.8);
 
   /* ========================================
-   * CHECKED-IN STATUS
+   * CHECKED-IN STATUS (light mode fallback)
    * ======================================== */
-  --checked-in-bg: light-dark(#f1f8f4, #1a3025);
-  --checked-in-border: light-dark(#c8e6c9, #2a4a3a);
+  --checked-in-bg: #f1f8f4;
+  --checked-in-border: #c8e6c9;
   --checked-in-text: #4caf50;
 
   /* ========================================
-   * MISCELLANEOUS
+   * MISCELLANEOUS (light mode fallback)
    * ======================================== */
-  --link-color: light-dark(#007bff, #64b5f6);
-  --link-hover: light-dark(#0056b3, #90caf9);
-  --divider: light-dark(#e0e0e0, #2a2a4a);
-  --placeholder: light-dark(#999999, #606060);
-  --disabled-bg: light-dark(#f5f5f5, #252542);
-  --disabled-text: light-dark(#999999, #606060);
-  --selection-highlight: light-dark(rgba(66, 133, 244, 0.2), rgba(66, 133, 244, 0.3));
+  --link-color: #007bff;
+  --link-hover: #0056b3;
+  --divider: #e0e0e0;
+  --placeholder: #999999;
+  --disabled-bg: #f5f5f5;
+  --disabled-text: #999999;
+  --selection-highlight: rgba(66, 133, 244, 0.2);
 
   /* Phone mockup frame */
   --mockup-frame: #1a1a1a;
@@ -264,4 +267,289 @@
   --emergency-bg: #ff4444;
   --emergency-hover: #cc0000;
   --emergency-border: #ff4444;
+}
+
+/* ========================================
+ * DYNAMIC THEME SUPPORT
+ * Override with light-dark() for browsers that support it
+ * ======================================== */
+@supports (color: light-dark(white, black)) {
+  :root {
+    /* BACKGROUNDS */
+    --bg-primary: light-dark(#ffffff, #121220);
+    --bg-secondary: light-dark(#f8f9fa, #1a1a2e);
+    --bg-tertiary: light-dark(#e9ecef, #252542);
+    --bg-hover: light-dark(#f0f0f0, #2a2a4a);
+    --bg-active: light-dark(#e7f1ff, #1e3a5f);
+    --bg-light: light-dark(#f8f9fa, #1a1a2e);
+    --bg-lighter: light-dark(#fafafa, #151525);
+    --bg-muted: light-dark(#f5f5f5, #202035);
+
+    /* TEXT COLORS */
+    --text-primary: light-dark(#212529, #e8e8e8);
+    --text-secondary: light-dark(#666666, #a0a0a0);
+    --text-muted: light-dark(#999999, #707070);
+    --text-light: light-dark(#888888, #808080);
+    --text-dark: light-dark(#333333, #e0e0e0);
+    --text-darker: light-dark(#555555, #c0c0c0);
+
+    /* BORDERS */
+    --border-color: light-dark(#dee2e6, #2a2a4a);
+    --border-light: light-dark(#e0e0e0, #2a2a4a);
+    --border-lighter: light-dark(#eee, #252542);
+    --border-medium: light-dark(#ddd, #3a3a5a);
+    --border-dark: light-dark(#ccc, #4a4a6a);
+
+    /* INPUTS */
+    --input-bg: light-dark(#ffffff, #1a1a2e);
+    --input-border: light-dark(#ced4da, #3a3a5a);
+    --input-focus-border: light-dark(#86b7fe, #4a7cff);
+    --input-disabled-bg: light-dark(#f5f5f5, #252542);
+
+    /* SHADOWS */
+    --shadow-color: light-dark(rgba(0,0,0,0.1), rgba(0,0,0,0.4));
+    --shadow-xs: light-dark(0 1px 2px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.2));
+    --shadow-sm: light-dark(0 2px 4px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.3));
+    --shadow-md: light-dark(0 4px 8px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.4));
+    --shadow-lg: light-dark(0 10px 25px rgba(0,0,0,0.15), 0 10px 25px rgba(0,0,0,0.5));
+    --shadow-xl: light-dark(0 20px 40px rgba(0,0,0,0.2), 0 20px 40px rgba(0,0,0,0.6));
+    --shadow-opacity-xs: light-dark(0.05, 0.2);
+    --shadow-opacity-sm: light-dark(0.1, 0.3);
+    --shadow-opacity-md: light-dark(0.15, 0.4);
+    --shadow-opacity-lg: light-dark(0.2, 0.5);
+    --shadow-opacity-xl: light-dark(0.3, 0.6);
+    --shadow-overlay: light-dark(rgba(0,0,0,0.5), rgba(0,0,0,0.7));
+
+    /* CARDS & PANELS */
+    --card-bg: light-dark(#ffffff, #1a1a2e);
+    --card-border: light-dark(#e0e0e0, #2a2a4a);
+
+    /* TABLES */
+    --table-header-bg: light-dark(#f8f9fa, #252542);
+    --table-row-hover: light-dark(#f5f5f5, #2a2a4a);
+    --table-border: light-dark(#e0e0e0, #2a2a4a);
+
+    /* MODALS */
+    --modal-bg: light-dark(#ffffff, #1a1a2e);
+    --modal-overlay: light-dark(rgba(0,0,0,0.5), rgba(0,0,0,0.7));
+
+    /* BRAND */
+    --brand-primary-bg: light-dark(#e3e9ff, #1a1a3a);
+
+    /* ACCENT */
+    --accent-primary-light: light-dark(#e7f3ff, #1a2a4a);
+
+    /* SUCCESS */
+    --success-bg: light-dark(#d4edda, #1a3d2a);
+    --success-bg-light: light-dark(#e8f5e9, #1a3025);
+    --success-bg-lighter: light-dark(#f1f8f4, #152a20);
+    --success-text: light-dark(#155724, #8bc34a);
+    --success-border: light-dark(#c3e6cb, #2a4a3a);
+
+    /* DANGER */
+    --danger-bg: light-dark(#f8d7da, #3d1a1a);
+    --danger-bg-light: light-dark(#ffebee, #351515);
+    --danger-bg-lighter: light-dark(#fff5f5, #2d1010);
+    --danger-text: light-dark(#721c24, #ff6b6b);
+    --danger-border: light-dark(#f5c6cb, #5a2a2a);
+
+    /* WARNING */
+    --warning-bg: light-dark(#fff3cd, #3d3a1a);
+    --warning-bg-light: light-dark(#fff8e6, #35321a);
+    --warning-bg-lighter: light-dark(#fffbf0, #2d2a15);
+    --warning-text: light-dark(#856404, #ffd54f);
+    --warning-border: light-dark(#ffc107, #5a5020);
+
+    /* INFO */
+    --info-bg: light-dark(#e3f2fd, #1a2a3d);
+    --info-bg-light: light-dark(#f0f7ff, #152535);
+    --info-text: light-dark(#1565c0, #64b5f6);
+
+    /* BUTTONS: CANCEL */
+    --btn-cancel-bg: light-dark(#e0e0e0, #3a3a5a);
+    --btn-cancel-hover: light-dark(#d0d0d0, #4a4a6a);
+    --btn-cancel-text: light-dark(#333333, #e0e0e0);
+
+    /* STATUS */
+    --status-open-bg: light-dark(#e3f2fd, #1a2a3d);
+    --status-acknowledged-bg: light-dark(#fff3e0, #3d2a1a);
+    --status-in-progress-bg: light-dark(#f3e5f5, #2d1a3d);
+    --status-resolved-bg: light-dark(#e8f5e9, #1a3025);
+    --status-closed-bg: light-dark(#f5f5f5, #2a2a3a);
+
+    /* SEVERITY */
+    --severity-critical-bg: light-dark(#f8d7da, #3d1a1a);
+    --severity-critical-text: light-dark(#721c24, #ff6b6b);
+    --severity-high-bg: light-dark(#fff3cd, #3d3a1a);
+    --severity-high-text: light-dark(#856404, #ffd54f);
+    --severity-medium-bg: light-dark(#fff9e6, #35321a);
+    --severity-medium-text: light-dark(#856404, #ffd54f);
+    --severity-low-bg: light-dark(#e8edff, #1a1a3a);
+    --severity-low-text: light-dark(#3d5afe, #8c9eff);
+
+    /* PRIORITY */
+    --priority-urgent-bg: light-dark(#f8d7da, #3d1a1a);
+    --priority-urgent-text: light-dark(#721c24, #ff6b6b);
+    --priority-high-bg: light-dark(#fff3cd, #3d3a1a);
+    --priority-high-text: light-dark(#856404, #ffd54f);
+    --priority-normal-bg: light-dark(#d4edda, #1a3d2a);
+    --priority-normal-text: light-dark(#155724, #8bc34a);
+    --priority-low-bg: light-dark(#e2e3e5, #2a2a3a);
+    --priority-low-text: light-dark(#383d41, #a0a0a0);
+
+    /* CHECKED-IN */
+    --checked-in-bg: light-dark(#f1f8f4, #1a3025);
+    --checked-in-border: light-dark(#c8e6c9, #2a4a3a);
+
+    /* MISC */
+    --link-color: light-dark(#007bff, #64b5f6);
+    --link-hover: light-dark(#0056b3, #90caf9);
+    --divider: light-dark(#e0e0e0, #2a2a4a);
+    --placeholder: light-dark(#999999, #606060);
+    --disabled-bg: light-dark(#f5f5f5, #252542);
+    --disabled-text: light-dark(#999999, #606060);
+    --selection-highlight: light-dark(rgba(66, 133, 244, 0.2), rgba(66, 133, 244, 0.3));
+  }
+}
+
+/* ========================================
+ * FALLBACK DARK MODE
+ * For browsers that don't support light-dark() (e.g., older Samsung Internet)
+ * Applied via .theme-dark class on <html> element
+ * ======================================== */
+html.theme-dark {
+  /* BACKGROUNDS */
+  --bg-primary: #121220;
+  --bg-secondary: #1a1a2e;
+  --bg-tertiary: #252542;
+  --bg-hover: #2a2a4a;
+  --bg-active: #1e3a5f;
+  --bg-light: #1a1a2e;
+  --bg-lighter: #151525;
+  --bg-muted: #202035;
+
+  /* TEXT COLORS */
+  --text-primary: #e8e8e8;
+  --text-secondary: #a0a0a0;
+  --text-muted: #707070;
+  --text-light: #808080;
+  --text-dark: #e0e0e0;
+  --text-darker: #c0c0c0;
+
+  /* BORDERS */
+  --border-color: #2a2a4a;
+  --border-light: #2a2a4a;
+  --border-lighter: #252542;
+  --border-medium: #3a3a5a;
+  --border-dark: #4a4a6a;
+
+  /* INPUTS */
+  --input-bg: #1a1a2e;
+  --input-border: #3a3a5a;
+  --input-focus-border: #4a7cff;
+  --input-disabled-bg: #252542;
+
+  /* SHADOWS */
+  --shadow-color: rgba(0,0,0,0.4);
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-sm: 0 2px 4px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 8px rgba(0,0,0,0.4);
+  --shadow-lg: 0 10px 25px rgba(0,0,0,0.5);
+  --shadow-xl: 0 20px 40px rgba(0,0,0,0.6);
+  --shadow-opacity-xs: 0.2;
+  --shadow-opacity-sm: 0.3;
+  --shadow-opacity-md: 0.4;
+  --shadow-opacity-lg: 0.5;
+  --shadow-opacity-xl: 0.6;
+  --shadow-overlay: rgba(0,0,0,0.7);
+
+  /* CARDS & PANELS */
+  --card-bg: #1a1a2e;
+  --card-border: #2a2a4a;
+
+  /* TABLES */
+  --table-header-bg: #252542;
+  --table-row-hover: #2a2a4a;
+  --table-border: #2a2a4a;
+
+  /* MODALS */
+  --modal-bg: #1a1a2e;
+  --modal-overlay: rgba(0,0,0,0.7);
+
+  /* BRAND */
+  --brand-primary-bg: #1a1a3a;
+
+  /* ACCENT */
+  --accent-primary-light: #1a2a4a;
+
+  /* SUCCESS */
+  --success-bg: #1a3d2a;
+  --success-bg-light: #1a3025;
+  --success-bg-lighter: #152a20;
+  --success-text: #8bc34a;
+  --success-border: #2a4a3a;
+
+  /* DANGER */
+  --danger-bg: #3d1a1a;
+  --danger-bg-light: #351515;
+  --danger-bg-lighter: #2d1010;
+  --danger-text: #ff6b6b;
+  --danger-border: #5a2a2a;
+
+  /* WARNING */
+  --warning-bg: #3d3a1a;
+  --warning-bg-light: #35321a;
+  --warning-bg-lighter: #2d2a15;
+  --warning-text: #ffd54f;
+  --warning-border: #5a5020;
+
+  /* INFO */
+  --info-bg: #1a2a3d;
+  --info-bg-light: #152535;
+  --info-text: #64b5f6;
+
+  /* BUTTONS: CANCEL */
+  --btn-cancel-bg: #3a3a5a;
+  --btn-cancel-hover: #4a4a6a;
+  --btn-cancel-text: #e0e0e0;
+
+  /* STATUS */
+  --status-open-bg: #1a2a3d;
+  --status-acknowledged-bg: #3d2a1a;
+  --status-in-progress-bg: #2d1a3d;
+  --status-resolved-bg: #1a3025;
+  --status-closed-bg: #2a2a3a;
+
+  /* SEVERITY */
+  --severity-critical-bg: #3d1a1a;
+  --severity-critical-text: #ff6b6b;
+  --severity-high-bg: #3d3a1a;
+  --severity-high-text: #ffd54f;
+  --severity-medium-bg: #35321a;
+  --severity-medium-text: #ffd54f;
+  --severity-low-bg: #1a1a3a;
+  --severity-low-text: #8c9eff;
+
+  /* PRIORITY */
+  --priority-urgent-bg: #3d1a1a;
+  --priority-urgent-text: #ff6b6b;
+  --priority-high-bg: #3d3a1a;
+  --priority-high-text: #ffd54f;
+  --priority-normal-bg: #1a3d2a;
+  --priority-normal-text: #8bc34a;
+  --priority-low-bg: #2a2a3a;
+  --priority-low-text: #a0a0a0;
+
+  /* CHECKED-IN */
+  --checked-in-bg: #1a3025;
+  --checked-in-border: #2a4a3a;
+
+  /* MISC */
+  --link-color: #64b5f6;
+  --link-hover: #90caf9;
+  --divider: #2a2a4a;
+  --placeholder: #606060;
+  --disabled-bg: #252542;
+  --disabled-text: #606060;
+  --selection-highlight: rgba(66, 133, 244, 0.3);
 }

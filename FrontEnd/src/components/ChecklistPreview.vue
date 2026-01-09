@@ -10,7 +10,7 @@
         class="add-item-btn"
         @click="showAddForm = !showAddForm"
       >
-        {{ showAddForm ? 'Cancel' : `+ Add ${termsLower.checklist}` }}
+        {{ showAddForm ? 'Cancel' : `Add ${termsLower.checklist}` }}
       </button>
     </div>
 
@@ -356,6 +356,8 @@ const getContextInfo = (item) => {
   font-size: 0.85rem;
   cursor: pointer;
   transition: background-color 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .add-item-btn:hover {

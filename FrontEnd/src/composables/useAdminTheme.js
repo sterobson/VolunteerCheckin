@@ -8,7 +8,7 @@
  * <div :style="{ colorScheme }">
  */
 
-import { ref, computed, watch } from 'vue';
+import { ref, computed } from 'vue';
 
 const STORAGE_KEY = 'admin-theme-preference';
 

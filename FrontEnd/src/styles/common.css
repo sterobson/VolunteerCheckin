@@ -18,8 +18,10 @@
   transition: background-color 0.2s, transform 0.1s;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   white-space: nowrap;
+  text-align: center;
 }
 
 .btn:hover {

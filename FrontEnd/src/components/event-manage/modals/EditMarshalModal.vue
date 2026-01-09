@@ -18,9 +18,11 @@
     <!-- Details Tab -->
     <MarshalDetailsTab
       v-if="activeTab === 'details'"
+      ref="detailsTabRef"
       :form="form"
       :event-id="eventId"
       :marshal-id="isEditing ? marshal?.id : null"
+      :validation-errors="validationErrors"
       @update:form="updateForm"
       @input="handleInput"
     />
@@ -99,17 +101,26 @@
     <!-- Custom footer with left and right aligned buttons -->
     <template #footer>
       <div class="custom-footer">
-        <button
-          v-if="isEditing"
-          type="button"
-          @click="handleDelete"
-          class="btn btn-danger"
-        >
-          Delete {{ termsLower.person }}
-        </button>
-        <div v-else></div>
-        <button type="button" @click="handlePrimaryAction" class="btn btn-primary">
-          {{ isEditing ? 'Save changes' : createButtonText }}
+        <div class="footer-left">
+          <button
+            v-if="isEditing"
+            type="button"
+            @click="handleDelete"
+            class="btn btn-danger"
+          >
+            Delete {{ termsLower.person }}
+          </button>
+          <button
+            v-if="!isEditing && !isLastTab"
+            type="button"
+            @click="goToNextTab"
+            class="btn btn-secondary mobile-only"
+          >
+            {{ nextTabButtonText }}
+          </button>
+        </div>
+        <button type="button" @click="handleSave" class="btn btn-primary">
+          {{ isEditing ? 'Save changes' : `Create ${termsLower.person}` }}
         </button>
       </div>
     </template>
@@ -180,6 +191,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  validationErrors: {
+    type: Object,
+    default: () => ({}),
+  },
 });
 
 const emit = defineEmits([
@@ -194,6 +209,7 @@ const emit = defineEmits([
 ]);
 
 const activeTab = ref('details');
+const detailsTabRef = ref(null);
 const checkpointsTabRef = ref(null);
 const checklistTabRef = ref(null);
 const checklistChanges = ref([]);
@@ -241,12 +257,10 @@ const nextTab = computed(() => {
   return availableTabs.value[currentTabIndex.value + 1];
 });
 
-// Button text for create mode - shows "Add [next tab]..." or "Create [person]"
-const createButtonText = computed(() => {
-  if (isLastTab.value) {
-    return `Create ${termsLower.value.person}`;
-  }
-  return `Add ${nextTab.value.label.toLowerCase()}...`;
+// Button text for next tab button (mobile only)
+const nextTabButtonText = computed(() => {
+  if (!nextTab.value) return '';
+  return `${nextTab.value.label}...`;
 });
 
 // Pending location IDs for checklist preview (when creating new marshal)
@@ -335,15 +349,8 @@ const handleChecklistChange = () => {
   emit('update:isDirty', true);
 };
 
-const handlePrimaryAction = () => {
-  if (props.isEditing) {
-    // When editing, always save
-    handleSave();
-  } else if (isLastTab.value) {
-    // When creating and on the last tab, save
-    handleSave();
-  } else {
-    // When creating and not on the last tab, advance to next tab
+const goToNextTab = () => {
+  if (nextTab.value) {
     activeTab.value = nextTab.value.value;
   }
 };
@@ -392,6 +399,24 @@ const handleAssignToLocation = (locationId) => {
 const handleClose = () => {
   emit('close');
 };
+
+// Switch to a specific tab (used by parent for validation errors)
+const switchToTab = (tabName) => {
+  activeTab.value = tabName;
+};
+
+// Focus on a specific field (used by parent for validation errors)
+const focusField = (fieldName) => {
+  if (detailsTabRef.value?.focusField) {
+    detailsTabRef.value.focusField(fieldName);
+  }
+};
+
+// Expose methods to parent
+defineExpose({
+  switchToTab,
+  focusField,
+});
 </script>
 
 <style scoped>
@@ -400,6 +425,21 @@ const handleClose = () => {
   justify-content: space-between;
   align-items: center;
   width: 100%;
+}
+
+.footer-left {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.mobile-only {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-only {
+    display: inline-block;
+  }
 }
 
 .btn {
@@ -418,6 +458,15 @@ const handleClose = () => {
 
 .btn-primary:hover {
   background: var(--btn-primary-hover);
+}
+
+.btn-secondary {
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
+}
+
+.btn-secondary:hover {
+  background: var(--btn-secondary-hover);
 }
 
 .btn-danger {

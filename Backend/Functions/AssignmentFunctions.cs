@@ -228,8 +228,8 @@ public class AssignmentFunctions
 
             await Task.WhenAll(assignmentsTask, locationsTask);
 
-            List<AssignmentEntity> assignments = [.. assignmentsTask.Result];
-            HashSet<string> locationIds = locationsTask.Result.Select(l => l.RowKey).ToHashSet();
+            List<AssignmentEntity> assignments = [.. await assignmentsTask];
+            HashSet<string> locationIds = (await locationsTask).Select(l => l.RowKey).ToHashSet();
 
             // Find orphaned assignments (where location no longer exists)
             List<AssignmentEntity> orphanedAssignments = [.. assignments
@@ -280,10 +280,10 @@ public class AssignmentFunctions
 
             await Task.WhenAll(locationsTask, assignmentsTask, eventTask, areasTask);
 
-            List<LocationEntity> locationsList = [.. locationsTask.Result];
-            IEnumerable<AssignmentEntity> assignments = assignmentsTask.Result;
-            EventEntity? eventEntity = eventTask.Result;
-            List<AreaEntity> areasList = [.. areasTask.Result];
+            List<LocationEntity> locationsList = [.. await locationsTask];
+            IEnumerable<AssignmentEntity> assignments = await assignmentsTask;
+            EventEntity? eventEntity = await eventTask;
+            List<AreaEntity> areasList = [.. await areasTask];
 
             // Check if any checkpoints are missing area assignments
             List<LocationEntity> checkpointsNeedingAreas = [.. locationsList

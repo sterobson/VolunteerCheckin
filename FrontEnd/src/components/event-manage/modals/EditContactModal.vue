@@ -146,29 +146,26 @@
 
     <template #footer>
       <div class="custom-footer">
-        <button
-          v-if="isEditing"
-          type="button"
-          @click="handleDelete"
-          class="btn btn-danger"
-        >
-          Delete
-        </button>
-        <button
-          v-if="!isEditing && activeTab === 'details'"
-          type="button"
-          @click="goToVisibilityTab"
-          class="btn btn-primary"
-        >
-          Next
-        </button>
-        <button
-          v-if="isEditing || activeTab === 'visibility'"
-          type="button"
-          @click="handleSave"
-          class="btn btn-primary"
-        >
-          {{ isEditing ? 'Save changes' : 'Create' }}
+        <div class="footer-left">
+          <button
+            v-if="isEditing"
+            type="button"
+            @click="handleDelete"
+            class="btn btn-danger"
+          >
+            Delete
+          </button>
+          <button
+            v-if="!isEditing && activeTab === 'details'"
+            type="button"
+            @click="goToVisibilityTab"
+            class="btn btn-secondary mobile-only"
+          >
+            Visibility...
+          </button>
+        </div>
+        <button type="button" @click="handleSave" class="btn btn-primary">
+          {{ isEditing ? 'Save changes' : 'Create contact' }}
         </button>
       </div>
     </template>
@@ -577,6 +574,15 @@ select {
   gap: 1rem;
 }
 
+.footer-left {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.mobile-only {
+  display: none;
+}
+
 .btn {
   padding: 0.6rem 1.5rem;
   border: none;
@@ -596,6 +602,15 @@ select {
   background: var(--btn-primary-hover);
 }
 
+.btn-secondary {
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
+}
+
+.btn-secondary:hover {
+  background: var(--btn-secondary-hover);
+}
+
 .btn-danger {
   background: var(--danger);
   color: var(--btn-primary-text);
@@ -612,6 +627,10 @@ select {
 
   .role-input-group {
     flex-direction: column;
+  }
+
+  .mobile-only {
+    display: inline-block;
   }
 }
 </style>

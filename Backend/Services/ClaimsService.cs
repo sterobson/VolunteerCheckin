@@ -41,105 +41,32 @@ public class ClaimsService
     /// <param name="sessionToken">The session token from cookie/header</param>
     /// <param name="eventId">The event being accessed (optional for cross-event admin)</param>
     /// <returns>UserClaims if valid, null if invalid/expired</returns>
-#pragma warning disable MA0051 // Method is too long - resolves claims with role migration logic
     public virtual async Task<UserClaims?> GetClaimsAsync(string sessionToken, string? eventId = null)
     {
-        // Hash the session token to look it up
-        string tokenHash = HashToken(sessionToken);
-
-        // Look up the session
-        AuthSessionEntity? session = await _sessionRepository.GetBySessionTokenHashAsync(tokenHash);
-        if (session?.IsValid() != true)
+        // Validate session and get person
+        AuthSessionEntity? session = await GetAndUpdateSessionAsync(sessionToken);
+        if (session == null)
         {
             return null;
         }
 
-        // Update last accessed time (use unconditional update to avoid race conditions)
-        session.LastAccessedAt = DateTime.UtcNow;
-        await _sessionRepository.UpdateUnconditionalAsync(session);
-
-        // Update marshal's last accessed date if this is a marshal session
-        if (!string.IsNullOrEmpty(session.MarshalId) && !string.IsNullOrEmpty(session.EventId))
-        {
-            MarshalEntity? marshal = await _marshalRepository.GetAsync(session.EventId, session.MarshalId);
-            if (marshal != null)
-            {
-                marshal.LastAccessedDate = DateTime.UtcNow;
-                await _marshalRepository.UpdateUnconditionalAsync(marshal);
-            }
-        }
-
-        // Get the person
         PersonEntity? person = await _personRepository.GetAsync(session.PersonId);
         if (person == null)
         {
             return null;
         }
 
-        // Determine the effective event ID
-        // For marshal sessions, use the session's locked EventId
-        // For admin sessions, use the provided eventId parameter
+        // Update marshal's last accessed date if this is a marshal session
+        await UpdateMarshalLastAccessedAsync(session);
+
+        // Determine the effective event ID (marshal sessions are locked to their event)
         string? effectiveEventId = session.EventId ?? eventId;
 
-        // Get event roles if we have an event ID
-        List<EventRoleInfo> eventRoles = [];
-        if (effectiveEventId != null)
-        {
-            // Check new EventRoles table
-            IEnumerable<EventRoleEntity> roles = await _roleRepository.GetByPersonAndEventAsync(person.PersonId, effectiveEventId);
-            eventRoles = roles.Select(r => new EventRoleInfo(
-                r.Role,
-                System.Text.Json.JsonSerializer.Deserialize<List<string>>(r.AreaIdsJson) ?? []
-            )).ToList();
+        // Resolve event roles (including legacy migration)
+        List<EventRoleInfo> eventRoles = await GetEventRolesAsync(person, effectiveEventId);
 
-            // Migrate legacy UserEventMappings to new EventRoles table if needed
-            // Use cache to avoid repeated database queries for the same person/event
-            string migrationCacheKey = $"{person.PersonId}:{effectiveEventId}";
-            if (!eventRoles.Any(r => r.Role == Constants.RoleEventAdmin) &&
-                !_migrationCheckCache.ContainsKey(migrationCacheKey))
-            {
-                // Mark as checked first (even before the query) to prevent concurrent migration attempts
-                _migrationCheckCache.TryAdd(migrationCacheKey, true);
-
-                try
-                {
-                    UserEventMappingEntity? legacyMapping = await _userEventMappingRepository.GetAsync(effectiveEventId, person.Email);
-                    if (legacyMapping?.Role == "Admin")
-                    {
-                        // Migrate to new EventRoles table
-                        string roleId = Guid.NewGuid().ToString();
-                        EventRoleEntity newRole = new EventRoleEntity
-                        {
-                            PartitionKey = person.PersonId,
-                            RowKey = EventRoleEntity.CreateRowKey(effectiveEventId, roleId),
-                            PersonId = person.PersonId,
-                            EventId = effectiveEventId,
-                            Role = Constants.RoleEventAdmin,
-                            AreaIdsJson = "[]",
-                            GrantedAt = DateTime.UtcNow,
-                            GrantedByPersonId = "system-migration"
-                        };
-                        await _roleRepository.AddAsync(newRole);
-
-                        eventRoles.Add(new EventRoleInfo(Constants.RoleEventAdmin, []));
-                    }
-                }
-                catch
-                {
-                    // Ignore errors from legacy table - it may not exist
-                }
-            }
-        }
-
-        // Get marshal ID - prefer session's stored MarshalId (reliable for marshal sessions)
-        // Fall back to lookup by PersonId for admin sessions viewing marshal data
-        string? marshalId = session.MarshalId;
-        if (marshalId == null && effectiveEventId != null)
-        {
-            IEnumerable<MarshalEntity> marshals = await _marshalRepository.GetByEventAsync(effectiveEventId);
-            MarshalEntity? marshal = marshals.FirstOrDefault(m => m.PersonId == person.PersonId);
-            marshalId = marshal?.MarshalId;
-        }
+        // Get marshal ID for this person/event
+        string? marshalId = await GetMarshalIdAsync(session, person.PersonId, effectiveEventId);
 
         return new UserClaims(
             PersonId: person.PersonId,
@@ -151,6 +78,139 @@ public class ClaimsService
             MarshalId: marshalId,
             EventRoles: eventRoles
         );
+    }
+
+    /// <summary>
+    /// Validate session token and update last accessed time.
+    /// </summary>
+    private async Task<AuthSessionEntity?> GetAndUpdateSessionAsync(string sessionToken)
+    {
+        string tokenHash = HashToken(sessionToken);
+        AuthSessionEntity? session = await _sessionRepository.GetBySessionTokenHashAsync(tokenHash);
+
+        if (session?.IsValid() != true)
+        {
+            return null;
+        }
+
+        // Update last accessed time (use unconditional update to avoid race conditions)
+        session.LastAccessedAt = DateTime.UtcNow;
+        await _sessionRepository.UpdateUnconditionalAsync(session);
+
+        return session;
+    }
+
+    /// <summary>
+    /// Update marshal's last accessed date for marshal sessions.
+    /// </summary>
+    private async Task UpdateMarshalLastAccessedAsync(AuthSessionEntity session)
+    {
+        if (string.IsNullOrEmpty(session.MarshalId) || string.IsNullOrEmpty(session.EventId))
+        {
+            return;
+        }
+
+        MarshalEntity? marshal = await _marshalRepository.GetAsync(session.EventId, session.MarshalId);
+        if (marshal != null)
+        {
+            marshal.LastAccessedDate = DateTime.UtcNow;
+            await _marshalRepository.UpdateUnconditionalAsync(marshal);
+        }
+    }
+
+    /// <summary>
+    /// Get event roles for a person, including legacy migration if needed.
+    /// </summary>
+    private async Task<List<EventRoleInfo>> GetEventRolesAsync(PersonEntity person, string? eventId)
+    {
+        if (eventId == null)
+        {
+            return [];
+        }
+
+        // Get roles from new EventRoles table
+        IEnumerable<EventRoleEntity> roles = await _roleRepository.GetByPersonAndEventAsync(person.PersonId, eventId);
+        List<EventRoleInfo> eventRoles = roles.Select(r => new EventRoleInfo(
+            r.Role,
+            System.Text.Json.JsonSerializer.Deserialize<List<string>>(r.AreaIdsJson) ?? []
+        )).ToList();
+
+        // Attempt legacy migration if no admin role found
+        await MigrateLegacyAdminRoleIfNeededAsync(person, eventId, eventRoles);
+
+        return eventRoles;
+    }
+
+    /// <summary>
+    /// Migrate legacy UserEventMapping admin role to new EventRoles table if needed.
+    /// </summary>
+    private async Task MigrateLegacyAdminRoleIfNeededAsync(PersonEntity person, string eventId, List<EventRoleInfo> eventRoles)
+    {
+        // Skip if already has admin role
+        if (eventRoles.Any(r => r.Role == Constants.RoleEventAdmin))
+        {
+            return;
+        }
+
+        // Use cache to avoid repeated database queries
+        string migrationCacheKey = $"{person.PersonId}:{eventId}";
+        if (_migrationCheckCache.ContainsKey(migrationCacheKey))
+        {
+            return;
+        }
+
+        // Mark as checked first to prevent concurrent migration attempts
+        _migrationCheckCache.TryAdd(migrationCacheKey, true);
+
+        try
+        {
+            UserEventMappingEntity? legacyMapping = await _userEventMappingRepository.GetAsync(eventId, person.Email);
+            if (legacyMapping?.Role == "Admin")
+            {
+                // Migrate to new EventRoles table
+                string roleId = Guid.NewGuid().ToString();
+                EventRoleEntity newRole = new EventRoleEntity
+                {
+                    PartitionKey = person.PersonId,
+                    RowKey = EventRoleEntity.CreateRowKey(eventId, roleId),
+                    PersonId = person.PersonId,
+                    EventId = eventId,
+                    Role = Constants.RoleEventAdmin,
+                    AreaIdsJson = "[]",
+                    GrantedAt = DateTime.UtcNow,
+                    GrantedByPersonId = "system-migration"
+                };
+                await _roleRepository.AddAsync(newRole);
+
+                eventRoles.Add(new EventRoleInfo(Constants.RoleEventAdmin, []));
+            }
+        }
+        catch
+        {
+            // Ignore errors from legacy table - it may not exist
+        }
+    }
+
+    /// <summary>
+    /// Get marshal ID for a person in an event.
+    /// </summary>
+    private async Task<string?> GetMarshalIdAsync(AuthSessionEntity session, string personId, string? eventId)
+    {
+        // Prefer session's stored MarshalId (reliable for marshal sessions)
+        if (session.MarshalId != null)
+        {
+            return session.MarshalId;
+        }
+
+        // Fall back to lookup by PersonId for admin sessions viewing marshal data
+        if (eventId == null)
+        {
+            return null;
+        }
+
+        IEnumerable<MarshalEntity> marshals = await _marshalRepository.GetByEventAsync(eventId);
+        MarshalEntity? marshal = marshals.FirstOrDefault(m => m.PersonId == personId);
+        return marshal?.MarshalId;
     }
 
     /// <summary>

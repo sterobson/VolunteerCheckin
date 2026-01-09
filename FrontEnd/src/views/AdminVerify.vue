@@ -10,7 +10,7 @@
       <div v-else-if="error" class="status error">
         <h2>Login failed</h2>
         <p>{{ error }}</p>
-        <router-link to="/admin/login" class="btn btn-primary">
+        <router-link :to="{ name: 'Home', query: { login: 'true' } }" class="btn btn-primary">
           Try again
         </router-link>
       </div>

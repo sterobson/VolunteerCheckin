@@ -119,7 +119,20 @@ const fetchMagicLink = async () => {
 
 const copyLink = async () => {
   try {
-    await navigator.clipboard.writeText(magicLink.value);
+    // Try modern clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(magicLink.value);
+    } else {
+      // Fallback for non-secure contexts (e.g., localhost without HTTPS)
+      const textArea = document.createElement('textarea');
+      textArea.value = magicLink.value;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-9999px';
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+    }
     copySuccess.value = true;
     setTimeout(() => {
       copySuccess.value = false;

@@ -32,7 +32,8 @@
       "Bash(reportgenerator:*)",
       "Bash(start \"\" \"TestResults\\\\CoverageReport\\\\index.html\")",
       "Bash(cat:*)",
-      "Bash(dotnet format:*)"
+      "Bash(dotnet format:*)",
+      "Bash(dir /s /b C:UserssterosourcereposVolunteerCheckinBackend)"
     ]
   }
 }

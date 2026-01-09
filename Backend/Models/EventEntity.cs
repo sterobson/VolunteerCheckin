@@ -53,4 +53,111 @@ public class EventEntity : ITableEntity
     // Marshal mode branding - page background gradient
     public string BrandingPageGradientStart { get; set; } = string.Empty; // Hex color, default #667eea
     public string BrandingPageGradientEnd { get; set; } = string.Empty;   // Hex color, default #764ba2
+
+    /// <summary>
+    /// Apply updates from an UpdateEventRequest, only updating properties that are provided (non-null).
+    /// </summary>
+    public void ApplyUpdates(
+        string name,
+        string description,
+        DateTime eventDateUtc,
+        string timeZoneId,
+        string? peopleTerm = null,
+        string? checkpointTerm = null,
+        string? areaTerm = null,
+        string? checklistTerm = null,
+        string? courseTerm = null,
+        string? defaultCheckpointStyleType = null,
+        string? defaultCheckpointStyleColor = null,
+        string? defaultCheckpointStyleBackgroundShape = null,
+        string? defaultCheckpointStyleBackgroundColor = null,
+        string? defaultCheckpointStyleBorderColor = null,
+        string? defaultCheckpointStyleIconColor = null,
+        string? defaultCheckpointStyleSize = null,
+        string? defaultCheckpointStyleMapRotation = null,
+        string? brandingHeaderGradientStart = null,
+        string? brandingHeaderGradientEnd = null,
+        string? brandingLogoUrl = null,
+        string? brandingLogoPosition = null,
+        string? brandingAccentColor = null,
+        string? brandingPageGradientStart = null,
+        string? brandingPageGradientEnd = null)
+    {
+        // Required fields
+        Name = name;
+        Description = description;
+        EventDate = eventDateUtc;
+        TimeZoneId = timeZoneId;
+
+        // Optional updates by category
+        ApplyTerminologyUpdates(peopleTerm, checkpointTerm, areaTerm, checklistTerm, courseTerm);
+        ApplyDefaultStyleUpdates(defaultCheckpointStyleType, defaultCheckpointStyleColor,
+            defaultCheckpointStyleBackgroundShape, defaultCheckpointStyleBackgroundColor,
+            defaultCheckpointStyleBorderColor, defaultCheckpointStyleIconColor,
+            defaultCheckpointStyleSize, defaultCheckpointStyleMapRotation);
+        ApplyBrandingUpdates(brandingHeaderGradientStart, brandingHeaderGradientEnd,
+            brandingLogoUrl, brandingLogoPosition, brandingAccentColor,
+            brandingPageGradientStart, brandingPageGradientEnd);
+    }
+
+    /// <summary>
+    /// Apply terminology updates (only non-null values).
+    /// </summary>
+    public void ApplyTerminologyUpdates(
+        string? peopleTerm = null,
+        string? checkpointTerm = null,
+        string? areaTerm = null,
+        string? checklistTerm = null,
+        string? courseTerm = null)
+    {
+        if (peopleTerm != null) PeopleTerm = peopleTerm;
+        if (checkpointTerm != null) CheckpointTerm = checkpointTerm;
+        if (areaTerm != null) AreaTerm = areaTerm;
+        if (checklistTerm != null) ChecklistTerm = checklistTerm;
+        if (courseTerm != null) CourseTerm = courseTerm;
+    }
+
+    /// <summary>
+    /// Apply default checkpoint style updates (only non-null values).
+    /// </summary>
+    public void ApplyDefaultStyleUpdates(
+        string? styleType = null,
+        string? styleColor = null,
+        string? backgroundShape = null,
+        string? backgroundColor = null,
+        string? borderColor = null,
+        string? iconColor = null,
+        string? size = null,
+        string? mapRotation = null)
+    {
+        if (styleType != null) DefaultCheckpointStyleType = styleType;
+        if (styleColor != null) DefaultCheckpointStyleColor = styleColor;
+        if (backgroundShape != null) DefaultCheckpointStyleBackgroundShape = backgroundShape;
+        if (backgroundColor != null) DefaultCheckpointStyleBackgroundColor = backgroundColor;
+        if (borderColor != null) DefaultCheckpointStyleBorderColor = borderColor;
+        if (iconColor != null) DefaultCheckpointStyleIconColor = iconColor;
+        if (size != null) DefaultCheckpointStyleSize = size;
+        if (mapRotation != null) DefaultCheckpointStyleMapRotation = mapRotation;
+    }
+
+    /// <summary>
+    /// Apply branding updates (only non-null values).
+    /// </summary>
+    public void ApplyBrandingUpdates(
+        string? headerGradientStart = null,
+        string? headerGradientEnd = null,
+        string? logoUrl = null,
+        string? logoPosition = null,
+        string? accentColor = null,
+        string? pageGradientStart = null,
+        string? pageGradientEnd = null)
+    {
+        if (headerGradientStart != null) BrandingHeaderGradientStart = headerGradientStart;
+        if (headerGradientEnd != null) BrandingHeaderGradientEnd = headerGradientEnd;
+        if (logoUrl != null) BrandingLogoUrl = logoUrl;
+        if (logoPosition != null) BrandingLogoPosition = logoPosition;
+        if (accentColor != null) BrandingAccentColor = accentColor;
+        if (pageGradientStart != null) BrandingPageGradientStart = pageGradientStart;
+        if (pageGradientEnd != null) BrandingPageGradientEnd = pageGradientEnd;
+    }
 }

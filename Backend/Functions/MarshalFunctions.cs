@@ -575,8 +575,8 @@ public class MarshalFunctions
                 await _marshalRepository.UpdateAsync(marshalEntity);
             }
 
-            // Construct the magic link URL
-            string frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:5174";
+            // Construct the magic link URL using the request origin
+            string frontendUrl = FunctionHelpers.GetFrontendUrl(req);
             string magicLink = $"{frontendUrl}/#/event/{eventId}?code={marshalEntity.MagicCode}";
 
             return new OkObjectResult(new MarshalMagicLinkResponse(
@@ -648,8 +648,8 @@ public class MarshalFunctions
             EventEntity? eventEntity = await _eventRepository.GetAsync(eventId);
             string eventName = eventEntity?.Name ?? "Event";
 
-            // Construct the magic link URL
-            string frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:5174";
+            // Construct the magic link URL using the request origin
+            string frontendUrl = FunctionHelpers.GetFrontendUrl(req);
             string magicLink = $"{frontendUrl}/#/event/{eventId}?code={marshalEntity.MagicCode}";
 
             // Send the email
@@ -713,7 +713,7 @@ public class MarshalFunctions
 
             // Parse the CSV file
             CsvParserService.MarshalCsvParseResult parseResult;
-            using (Stream stream = csvFile.OpenReadStream())
+            await using (Stream stream = csvFile.OpenReadStream())
             {
                 parseResult = CsvParserService.ParseMarshalsCsv(stream);
             }

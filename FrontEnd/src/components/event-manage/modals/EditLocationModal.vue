@@ -254,17 +254,26 @@
     <!-- Custom footer with left and right aligned buttons -->
     <template #footer>
       <div class="custom-footer">
-        <button
-          v-if="isExistingLocation"
-          type="button"
-          @click="handleDelete"
-          class="btn btn-danger"
-        >
-          Delete {{ effectiveCheckpointTermSingularLower }}
-        </button>
-        <div v-else></div>
-        <button type="button" @click="handlePrimaryAction" class="btn btn-primary">
-          {{ isExistingLocation ? 'Save changes' : createButtonText }}
+        <div class="footer-left">
+          <button
+            v-if="isExistingLocation"
+            type="button"
+            @click="handleDelete"
+            class="btn btn-danger"
+          >
+            Delete {{ effectiveCheckpointTermSingularLower }}
+          </button>
+          <button
+            v-if="!isExistingLocation && !isLastTab"
+            type="button"
+            @click="goToNextTab"
+            class="btn btn-secondary mobile-only"
+          >
+            {{ nextTabButtonText }}
+          </button>
+        </div>
+        <button type="button" @click="handleSave" class="btn btn-primary">
+          {{ isExistingLocation ? 'Save changes' : `Create ${effectiveCheckpointTermSingularLower}` }}
         </button>
       </div>
     </template>
@@ -752,12 +761,10 @@ const nextTab = computed(() => {
   return availableTabs.value[currentTabIndex.value + 1];
 });
 
-// Button text for create mode - shows "Add [next tab]..." or "Create [checkpoint]"
-const createButtonText = computed(() => {
-  if (isLastTab.value) {
-    return `Create ${effectiveCheckpointTermSingularLower.value}`;
-  }
-  return `Add ${nextTab.value.label.toLowerCase()}...`;
+// Button text for next tab button (mobile only)
+const nextTabButtonText = computed(() => {
+  if (!nextTab.value) return '';
+  return `${nextTab.value.label}...`;
 });
 
 // Track whether form has been initialized for current location
@@ -854,15 +861,8 @@ const handleChecklistChange = (changes) => {
   handleInput();
 };
 
-const handlePrimaryAction = () => {
-  if (isExistingLocation.value) {
-    // When editing, always save
-    handleSave();
-  } else if (isLastTab.value) {
-    // When creating and on the last tab, save
-    handleSave();
-  } else {
-    // When creating and not on the last tab, advance to next tab
+const goToNextTab = () => {
+  if (nextTab.value) {
     activeTab.value = nextTab.value.value;
   }
 };
@@ -925,6 +925,21 @@ const handleStyleInput = (field, value) => {
   width: 100%;
 }
 
+.footer-left {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.mobile-only {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-only {
+    display: inline-block;
+  }
+}
+
 .btn {
   padding: 0.5rem 1rem;
   border: none;
@@ -941,6 +956,15 @@ const handleStyleInput = (field, value) => {
 
 .btn-primary:hover {
   background: var(--btn-primary-hover);
+}
+
+.btn-secondary {
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
+}
+
+.btn-secondary:hover {
+  background: var(--btn-secondary-hover);
 }
 
 .btn-danger {

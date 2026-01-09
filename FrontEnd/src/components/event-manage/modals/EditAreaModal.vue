@@ -396,17 +396,26 @@
     <!-- Custom footer with left and right aligned buttons -->
     <template #footer>
       <div class="custom-footer">
-        <button
-          v-if="isExistingArea && !form.isDefault"
-          type="button"
-          @click="handleDelete"
-          class="btn btn-danger"
-        >
-          Delete {{ termsLower.area }}
-        </button>
-        <div v-else></div>
-        <button type="button" @click="handlePrimaryAction" class="btn btn-primary">
-          {{ isExistingArea ? 'Save changes' : createButtonText }}
+        <div class="footer-left">
+          <button
+            v-if="isExistingArea && !form.isDefault"
+            type="button"
+            @click="handleDelete"
+            class="btn btn-danger"
+          >
+            Delete {{ termsLower.area }}
+          </button>
+          <button
+            v-if="!isExistingArea && !isLastTab"
+            type="button"
+            @click="goToNextTab"
+            class="btn btn-secondary mobile-only"
+          >
+            {{ nextTabButtonText }}
+          </button>
+        </div>
+        <button type="button" @click="handleSave" class="btn btn-primary">
+          {{ isExistingArea ? 'Save changes' : `Create ${termsLower.area}` }}
         </button>
       </div>
     </template>
@@ -563,6 +572,10 @@ const props = defineProps({
   incidents: {
     type: Array,
     default: () => [],
+  },
+  initialTab: {
+    type: String,
+    default: 'details',
   },
 });
 
@@ -753,12 +766,10 @@ const nextTab = computed(() => {
   return availableTabs.value[currentTabIndex.value + 1];
 });
 
-// Button text for create mode - shows "Add [next tab]..." or "Create [area]"
-const createButtonText = computed(() => {
-  if (isLastTab.value) {
-    return `Create ${termsLower.value.area}`;
-  }
-  return `Add ${nextTab.value.label.toLowerCase()}...`;
+// Button text for next tab button (mobile only)
+const nextTabButtonText = computed(() => {
+  if (!nextTab.value) return '';
+  return `${nextTab.value.label}...`;
 });
 
 // Compute assignments for checkpoints in this area
@@ -956,7 +967,7 @@ watch(() => props.area, (newVal) => {
 
 watch(() => props.show, (newVal) => {
   if (newVal) {
-    activeTab.value = 'details';
+    activeTab.value = props.initialTab || 'details';
     checklistChanges.value = [];
     checkpointChecklistStatus.value = {};
     loadingChecklistStatus.value = {};
@@ -1040,15 +1051,8 @@ const handleChecklistChange = (changes) => {
   handleInput();
 };
 
-const handlePrimaryAction = () => {
-  if (isExistingArea.value) {
-    // When editing, always save
-    handleSave();
-  } else if (isLastTab.value) {
-    // When creating and on the last tab, save
-    handleSave();
-  } else {
-    // When creating and not on the last tab, advance to next tab
+const goToNextTab = () => {
+  if (nextTab.value) {
     activeTab.value = nextTab.value.value;
   }
 };
@@ -1360,6 +1364,21 @@ const getCheckpointIconSvg = (checkpoint) => {
   justify-content: space-between;
   align-items: center;
   width: 100%;
+}
+
+.footer-left {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.mobile-only {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-only {
+    display: inline-block;
+  }
 }
 
 .btn {

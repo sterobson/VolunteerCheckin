@@ -43,4 +43,31 @@ public class LocationEntity : ITableEntity
     public string LocationUpdateScopeJson { get; set; } = "[]"; // JSON array of ScopeConfiguration - who can update location
     public DateTime? LastLocationUpdate { get; set; }
     public string LastUpdatedByPersonId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Apply style and terminology updates, only updating properties that are provided (non-null).
+    /// </summary>
+    public void ApplyStyleUpdates(
+        string? styleType = null,
+        string? styleColor = null,
+        string? styleBackgroundShape = null,
+        string? styleBackgroundColor = null,
+        string? styleBorderColor = null,
+        string? styleIconColor = null,
+        string? styleSize = null,
+        string? styleMapRotation = null,
+        string? peopleTerm = null,
+        string? checkpointTerm = null)
+    {
+        if (styleType != null) StyleType = styleType;
+        if (styleColor != null) StyleColor = styleColor;
+        if (styleBackgroundShape != null) StyleBackgroundShape = styleBackgroundShape;
+        if (styleBackgroundColor != null) StyleBackgroundColor = styleBackgroundColor;
+        if (styleBorderColor != null) StyleBorderColor = styleBorderColor;
+        if (styleIconColor != null) StyleIconColor = styleIconColor;
+        if (styleSize != null) StyleSize = styleSize;
+        if (styleMapRotation != null) StyleMapRotation = styleMapRotation;
+        if (peopleTerm != null) PeopleTerm = peopleTerm;
+        if (checkpointTerm != null) CheckpointTerm = checkpointTerm;
+    }
 }

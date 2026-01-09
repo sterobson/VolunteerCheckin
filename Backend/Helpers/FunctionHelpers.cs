@@ -10,26 +10,30 @@ public static class FunctionHelpers
     public static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     /// <summary>
-    /// Extracts the frontend URL from the request origin, referer header, or falls back to environment variable.
-    /// This allows magic links to use the same domain the user requested from.
+    /// Extracts the frontend URL from the request referer header, origin header, or falls back to environment variable.
+    /// For hash-based routing (e.g., GitHub Pages), extracts everything before the # as the deployment base.
     /// </summary>
     public static string GetFrontendUrl(HttpRequest req)
     {
-        // Try Origin header first (set by browser on cross-origin requests)
-        string? frontendUrl = req.Headers["Origin"].FirstOrDefault();
-
-        // Fall back to Referer header (extract just the origin)
-        if (string.IsNullOrEmpty(frontendUrl) && req.Headers.TryGetValue("Referer", out Microsoft.Extensions.Primitives.StringValues referer))
+        // Try Referer header first since it includes the full path (important for subpath deployments like GitHub Pages)
+        string? refererValue = req.Headers["Referer"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(refererValue))
         {
-            string? refererValue = referer.FirstOrDefault();
-            if (!string.IsNullOrEmpty(refererValue) && Uri.TryCreate(refererValue, UriKind.Absolute, out Uri? refererUri))
-            {
-                frontendUrl = $"{refererUri.Scheme}://{refererUri.Authority}";
-            }
+            // Extract everything before the # (hash marks where client-side routing begins)
+            int hashIndex = refererValue.IndexOf('#');
+            string baseUrl = hashIndex >= 0 ? refererValue[..hashIndex] : refererValue;
+            return baseUrl.TrimEnd('/');
+        }
+
+        // Fall back to Origin header (only contains scheme + host, no path)
+        string? originValue = req.Headers["Origin"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(originValue))
+        {
+            return originValue.TrimEnd('/');
         }
 
         // Final fallback to environment variable
-        return frontendUrl ?? Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:5174";
+        return Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:5174";
     }
 
     /// <summary>

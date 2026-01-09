@@ -12,6 +12,19 @@ public class EmailService
     private readonly string _fromEmail;
     private readonly string _fromName;
 
+    /// <summary>
+    /// Protected constructor for testing/mocking purposes.
+    /// </summary>
+    protected EmailService()
+    {
+        _smtpHost = string.Empty;
+        _smtpPort = 0;
+        _smtpUsername = string.Empty;
+        _smtpPassword = string.Empty;
+        _fromEmail = string.Empty;
+        _fromName = string.Empty;
+    }
+
     public EmailService(string smtpHost, int smtpPort, string smtpUsername, string smtpPassword, string fromEmail, string fromName)
     {
         _smtpHost = smtpHost;
@@ -22,7 +35,7 @@ public class EmailService
         _fromName = fromName;
     }
 
-    public async Task SendMagicLinkEmailAsync(string toEmail, string magicLink)
+    public virtual async Task SendMagicLinkEmailAsync(string toEmail, string magicLink)
     {
         MimeMessage message = new();
         message.From.Add(new MailboxAddress(_fromName, _fromEmail));
@@ -63,7 +76,7 @@ public class EmailService
         await client.DisconnectAsync(true);
     }
 
-    public async Task SendMarshalMagicLinkEmailAsync(string toEmail, string marshalName, string eventName, string magicLink)
+    public virtual async Task SendMarshalMagicLinkEmailAsync(string toEmail, string marshalName, string eventName, string magicLink)
     {
         MimeMessage message = new();
         message.From.Add(new MailboxAddress(_fromName, _fromEmail));

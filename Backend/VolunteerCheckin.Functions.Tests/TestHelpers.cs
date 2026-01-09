@@ -128,5 +128,45 @@ namespace VolunteerCheckin.Functions.Tests
             }
             return request;
         }
+
+        /// <summary>
+        /// Creates an HttpRequest with auth header and query parameters
+        /// </summary>
+        public static HttpRequest CreateEmptyHttpRequestWithAuthAndQuery(string sessionToken, Dictionary<string, string> queryParams)
+        {
+            DefaultHttpContext context = new();
+            HttpRequest request = context.Request;
+            request.Headers["Authorization"] = $"Bearer {sessionToken}";
+
+            QueryString queryString = QueryString.Empty;
+            foreach (KeyValuePair<string, string> param in queryParams)
+            {
+                queryString = queryString.Add(param.Key, param.Value);
+            }
+            request.QueryString = queryString;
+
+            return request;
+        }
+
+        /// <summary>
+        /// Creates an HttpRequest with auth header, custom headers, and a body
+        /// </summary>
+        public static HttpRequest CreateHttpRequestWithAuthAndHeaders(object body, string sessionToken, Dictionary<string, string> headers)
+        {
+            DefaultHttpContext context = new();
+            HttpRequest request = context.Request;
+
+            string json = JsonSerializer.Serialize(body);
+            byte[] bytes = Encoding.UTF8.GetBytes(json);
+            request.Body = new MemoryStream(bytes);
+            request.Headers["Authorization"] = $"Bearer {sessionToken}";
+
+            foreach (KeyValuePair<string, string> header in headers)
+            {
+                request.Headers[header.Key] = header.Value;
+            }
+
+            return request;
+        }
     }
 }

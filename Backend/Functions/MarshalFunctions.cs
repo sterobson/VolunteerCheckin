@@ -575,8 +575,11 @@ public class MarshalFunctions
                 await _marshalRepository.UpdateAsync(marshalEntity);
             }
 
-            // Construct the magic link URL using the request origin
-            string frontendUrl = FunctionHelpers.GetFrontendUrl(req);
+            // Get frontend URL - prefer explicit value from query parameter, fall back to header detection
+            string? frontendUrlParam = req.Query["frontendUrl"].FirstOrDefault();
+            string frontendUrl = !string.IsNullOrWhiteSpace(frontendUrlParam)
+                ? frontendUrlParam.TrimEnd('/')
+                : FunctionHelpers.GetFrontendUrl(req);
             string magicLink = $"{frontendUrl}/#/event/{eventId}?code={marshalEntity.MagicCode}";
 
             return new OkObjectResult(new MarshalMagicLinkResponse(
@@ -648,8 +651,14 @@ public class MarshalFunctions
             EventEntity? eventEntity = await _eventRepository.GetAsync(eventId);
             string eventName = eventEntity?.Name ?? "Event";
 
-            // Construct the magic link URL using the request origin
-            string frontendUrl = FunctionHelpers.GetFrontendUrl(req);
+            // Get frontend URL - prefer explicit value from request body, fall back to header detection
+            string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+            SendMarshalMagicLinkRequest? request = string.IsNullOrWhiteSpace(requestBody)
+                ? null
+                : JsonSerializer.Deserialize<SendMarshalMagicLinkRequest>(requestBody, FunctionHelpers.JsonOptions);
+            string frontendUrl = !string.IsNullOrWhiteSpace(request?.FrontendUrl)
+                ? request.FrontendUrl.TrimEnd('/')
+                : FunctionHelpers.GetFrontendUrl(req);
             string magicLink = $"{frontendUrl}/#/event/{eventId}?code={marshalEntity.MagicCode}";
 
             // Send the email

@@ -443,6 +443,13 @@ public record MarshalMagicLinkResponse(
     bool HasEmail
 );
 
+/// <summary>
+/// Request to send a marshal magic link via email.
+/// </summary>
+public record SendMarshalMagicLinkRequest(
+    string? FrontendUrl = null
+);
+
 public record BulkUpdateLocationTimesRequest(
     TimeSpan TimeDelta
 );

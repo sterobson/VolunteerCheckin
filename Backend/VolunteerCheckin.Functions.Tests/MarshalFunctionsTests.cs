@@ -478,5 +478,439 @@ namespace VolunteerCheckin.Functions.Tests
         }
 
         #endregion
+
+        #region GetMarshalMagicLink Tests
+
+        [TestMethod]
+        public async Task GetMarshalMagicLink_WithFrontendUrlQueryParam_UsesFrontendUrlInLink()
+        {
+            // Arrange
+            string eventId = "event-123";
+            string marshalId = "marshal-456";
+            string frontendUrl = "https://sterobson.github.io/VolunteerCheckin/testing";
+
+            MarshalEntity marshal = new()
+            {
+                MarshalId = marshalId,
+                EventId = eventId,
+                Name = "John Doe",
+                Email = "john@example.com",
+                MagicCode = "existing-code"
+            };
+
+            _mockMarshalRepository
+                .Setup(r => r.GetAsync(eventId, marshalId))
+                .ReturnsAsync(marshal);
+
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuthAndQuery(
+                TestSessionToken,
+                new Dictionary<string, string> { { "frontendUrl", frontendUrl } }
+            );
+
+            // Act
+            IActionResult result = await _marshalFunctions.GetMarshalMagicLink(httpRequest, eventId, marshalId);
+
+            // Assert
+            result.ShouldBeOfType<OkObjectResult>();
+            OkObjectResult okResult = (OkObjectResult)result;
+            MarshalMagicLinkResponse? response = okResult.Value as MarshalMagicLinkResponse;
+            response.ShouldNotBeNull();
+            response.MagicLink.ShouldStartWith(frontendUrl);
+            response.MagicLink.ShouldContain($"/#/event/{eventId}?code=");
+        }
+
+        [TestMethod]
+        public async Task GetMarshalMagicLink_WithoutFrontendUrlQueryParam_UsesRefererHeader()
+        {
+            // Arrange
+            string eventId = "event-123";
+            string marshalId = "marshal-456";
+            string refererUrl = "https://example.com/app/#/admin";
+
+            MarshalEntity marshal = new()
+            {
+                MarshalId = marshalId,
+                EventId = eventId,
+                Name = "John Doe",
+                Email = "john@example.com",
+                MagicCode = "existing-code"
+            };
+
+            _mockMarshalRepository
+                .Setup(r => r.GetAsync(eventId, marshalId))
+                .ReturnsAsync(marshal);
+
+            DefaultHttpContext context = new();
+            HttpRequest httpRequest = context.Request;
+            httpRequest.Headers["Authorization"] = $"Bearer {TestSessionToken}";
+            httpRequest.Headers["Referer"] = refererUrl;
+
+            // Act
+            IActionResult result = await _marshalFunctions.GetMarshalMagicLink(httpRequest, eventId, marshalId);
+
+            // Assert
+            result.ShouldBeOfType<OkObjectResult>();
+            OkObjectResult okResult = (OkObjectResult)result;
+            MarshalMagicLinkResponse? response = okResult.Value as MarshalMagicLinkResponse;
+            response.ShouldNotBeNull();
+            // Should use base URL before #
+            response.MagicLink.ShouldStartWith("https://example.com/app");
+            response.MagicLink.ShouldContain($"/#/event/{eventId}?code=");
+        }
+
+        [TestMethod]
+        public async Task GetMarshalMagicLink_GeneratesMagicCodeIfNotExists()
+        {
+            // Arrange
+            string eventId = "event-123";
+            string marshalId = "marshal-456";
+
+            MarshalEntity marshal = new()
+            {
+                MarshalId = marshalId,
+                EventId = eventId,
+                Name = "John Doe",
+                Email = "john@example.com",
+                MagicCode = null // No existing code
+            };
+
+            _mockMarshalRepository
+                .Setup(r => r.GetAsync(eventId, marshalId))
+                .ReturnsAsync(marshal);
+
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth(TestSessionToken);
+
+            // Act
+            IActionResult result = await _marshalFunctions.GetMarshalMagicLink(httpRequest, eventId, marshalId);
+
+            // Assert
+            result.ShouldBeOfType<OkObjectResult>();
+
+            // Verify that the marshal was updated with a new magic code
+            _mockMarshalRepository.Verify(
+                r => r.UpdateAsync(It.Is<MarshalEntity>(m =>
+                    !string.IsNullOrWhiteSpace(m.MagicCode)
+                )),
+                Times.Once
+            );
+        }
+
+        [TestMethod]
+        public async Task GetMarshalMagicLink_MarshalNotFound_ReturnsNotFound()
+        {
+            // Arrange
+            _mockMarshalRepository
+                .Setup(r => r.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
+                .ReturnsAsync((MarshalEntity?)null);
+
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth(TestSessionToken);
+
+            // Act
+            IActionResult result = await _marshalFunctions.GetMarshalMagicLink(httpRequest, "event-123", "marshal-456");
+
+            // Assert
+            result.ShouldBeOfType<NotFoundObjectResult>();
+        }
+
+        #endregion
+
+        #region SendMarshalMagicLink Tests
+
+        [TestMethod]
+        public async Task SendMarshalMagicLink_WithFrontendUrlInBody_UsesFrontendUrlInLink()
+        {
+            // Arrange
+            string eventId = "event-123";
+            string marshalId = "marshal-456";
+            string frontendUrl = "https://sterobson.github.io/VolunteerCheckin/testing";
+
+            MarshalEntity marshal = new()
+            {
+                MarshalId = marshalId,
+                EventId = eventId,
+                Name = "John Doe",
+                Email = "john@example.com",
+                MagicCode = "existing-code"
+            };
+
+            EventEntity eventEntity = new()
+            {
+                RowKey = eventId,
+                Name = "Test Event"
+            };
+
+            _mockMarshalRepository
+                .Setup(r => r.GetAsync(eventId, marshalId))
+                .ReturnsAsync(marshal);
+
+            _mockEventRepository
+                .Setup(r => r.GetAsync(eventId))
+                .ReturnsAsync(eventEntity);
+
+            Mock<EmailService> mockEmailService = new(MockBehavior.Loose);
+            string? capturedMagicLink = null;
+            mockEmailService
+                .Setup(e => e.SendMarshalMagicLinkEmailAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>()
+                ))
+                .Callback<string, string, string, string>((email, name, eventName, magicLink) =>
+                {
+                    capturedMagicLink = magicLink;
+                })
+                .Returns(Task.CompletedTask);
+
+            // Create function instance with email service
+            MarshalFunctions functionsWithEmail = new(
+                _mockLogger.Object,
+                _mockMarshalRepository.Object,
+                _mockLocationRepository.Object,
+                _mockAssignmentRepository.Object,
+                _mockEventRepository.Object,
+                _mockChecklistItemRepository.Object,
+                _mockNoteRepository.Object,
+                _mockClaimsService.Object,
+                _mockContactPermissionService.Object,
+                mockEmailService.Object
+            );
+
+            SendMarshalMagicLinkRequest request = new(frontendUrl);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAuth(request, TestSessionToken);
+
+            // Act
+            IActionResult result = await functionsWithEmail.SendMarshalMagicLink(httpRequest, eventId, marshalId);
+
+            // Assert
+            result.ShouldBeOfType<OkObjectResult>();
+            capturedMagicLink.ShouldNotBeNull();
+            capturedMagicLink.ShouldStartWith(frontendUrl);
+            capturedMagicLink.ShouldContain($"/#/event/{eventId}?code=");
+        }
+
+        [TestMethod]
+        public async Task SendMarshalMagicLink_WithoutFrontendUrl_UsesRefererHeader()
+        {
+            // Arrange
+            string eventId = "event-123";
+            string marshalId = "marshal-456";
+            string refererUrl = "https://example.com/myapp/#/admin/marshals";
+
+            MarshalEntity marshal = new()
+            {
+                MarshalId = marshalId,
+                EventId = eventId,
+                Name = "John Doe",
+                Email = "john@example.com",
+                MagicCode = "existing-code"
+            };
+
+            EventEntity eventEntity = new()
+            {
+                RowKey = eventId,
+                Name = "Test Event"
+            };
+
+            _mockMarshalRepository
+                .Setup(r => r.GetAsync(eventId, marshalId))
+                .ReturnsAsync(marshal);
+
+            _mockEventRepository
+                .Setup(r => r.GetAsync(eventId))
+                .ReturnsAsync(eventEntity);
+
+            Mock<EmailService> mockEmailService = new(MockBehavior.Loose);
+            string? capturedMagicLink = null;
+            mockEmailService
+                .Setup(e => e.SendMarshalMagicLinkEmailAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>()
+                ))
+                .Callback<string, string, string, string>((email, name, eventName, magicLink) =>
+                {
+                    capturedMagicLink = magicLink;
+                })
+                .Returns(Task.CompletedTask);
+
+            MarshalFunctions functionsWithEmail = new(
+                _mockLogger.Object,
+                _mockMarshalRepository.Object,
+                _mockLocationRepository.Object,
+                _mockAssignmentRepository.Object,
+                _mockEventRepository.Object,
+                _mockChecklistItemRepository.Object,
+                _mockNoteRepository.Object,
+                _mockClaimsService.Object,
+                _mockContactPermissionService.Object,
+                mockEmailService.Object
+            );
+
+            // Create request with empty body but with Referer header
+            DefaultHttpContext context = new();
+            HttpRequest httpRequest = context.Request;
+            httpRequest.Headers["Authorization"] = $"Bearer {TestSessionToken}";
+            httpRequest.Headers["Referer"] = refererUrl;
+            httpRequest.Body = new MemoryStream(Encoding.UTF8.GetBytes("{}"));
+
+            // Act
+            IActionResult result = await functionsWithEmail.SendMarshalMagicLink(httpRequest, eventId, marshalId);
+
+            // Assert
+            result.ShouldBeOfType<OkObjectResult>();
+            capturedMagicLink.ShouldNotBeNull();
+            // Should use base URL before #
+            capturedMagicLink.ShouldStartWith("https://example.com/myapp");
+            capturedMagicLink.ShouldContain($"/#/event/{eventId}?code=");
+        }
+
+        [TestMethod]
+        public async Task SendMarshalMagicLink_MarshalWithoutEmail_ReturnsBadRequest()
+        {
+            // Arrange
+            string eventId = "event-123";
+            string marshalId = "marshal-456";
+
+            MarshalEntity marshal = new()
+            {
+                MarshalId = marshalId,
+                EventId = eventId,
+                Name = "John Doe",
+                Email = null // No email
+            };
+
+            _mockMarshalRepository
+                .Setup(r => r.GetAsync(eventId, marshalId))
+                .ReturnsAsync(marshal);
+
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAuth(new { }, TestSessionToken);
+
+            // Act
+            IActionResult result = await _marshalFunctions.SendMarshalMagicLink(httpRequest, eventId, marshalId);
+
+            // Assert
+            result.ShouldBeOfType<BadRequestObjectResult>();
+        }
+
+        [TestMethod]
+        public async Task SendMarshalMagicLink_NoEmailService_ReturnsServiceUnavailable()
+        {
+            // Arrange
+            string eventId = "event-123";
+            string marshalId = "marshal-456";
+
+            MarshalEntity marshal = new()
+            {
+                MarshalId = marshalId,
+                EventId = eventId,
+                Name = "John Doe",
+                Email = "john@example.com"
+            };
+
+            _mockMarshalRepository
+                .Setup(r => r.GetAsync(eventId, marshalId))
+                .ReturnsAsync(marshal);
+
+            // _marshalFunctions was created without email service in Setup()
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAuth(new { }, TestSessionToken);
+
+            // Act
+            IActionResult result = await _marshalFunctions.SendMarshalMagicLink(httpRequest, eventId, marshalId);
+
+            // Assert
+            ObjectResult objectResult = result.ShouldBeOfType<ObjectResult>();
+            objectResult.StatusCode.ShouldBe(503);
+        }
+
+        [TestMethod]
+        public async Task SendMarshalMagicLink_MarshalNotFound_ReturnsNotFound()
+        {
+            // Arrange
+            _mockMarshalRepository
+                .Setup(r => r.GetAsync(It.IsAny<string>(), It.IsAny<string>()))
+                .ReturnsAsync((MarshalEntity?)null);
+
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAuth(new { }, TestSessionToken);
+
+            // Act
+            IActionResult result = await _marshalFunctions.SendMarshalMagicLink(httpRequest, "event-123", "marshal-456");
+
+            // Assert
+            result.ShouldBeOfType<NotFoundObjectResult>();
+        }
+
+        [TestMethod]
+        public async Task SendMarshalMagicLink_GeneratesMagicCodeIfNotExists()
+        {
+            // Arrange
+            string eventId = "event-123";
+            string marshalId = "marshal-456";
+
+            MarshalEntity marshal = new()
+            {
+                MarshalId = marshalId,
+                EventId = eventId,
+                Name = "John Doe",
+                Email = "john@example.com",
+                MagicCode = null // No existing code
+            };
+
+            EventEntity eventEntity = new()
+            {
+                RowKey = eventId,
+                Name = "Test Event"
+            };
+
+            _mockMarshalRepository
+                .Setup(r => r.GetAsync(eventId, marshalId))
+                .ReturnsAsync(marshal);
+
+            _mockEventRepository
+                .Setup(r => r.GetAsync(eventId))
+                .ReturnsAsync(eventEntity);
+
+            Mock<EmailService> mockEmailService = new(MockBehavior.Loose);
+            mockEmailService
+                .Setup(e => e.SendMarshalMagicLinkEmailAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<string>()
+                ))
+                .Returns(Task.CompletedTask);
+
+            MarshalFunctions functionsWithEmail = new(
+                _mockLogger.Object,
+                _mockMarshalRepository.Object,
+                _mockLocationRepository.Object,
+                _mockAssignmentRepository.Object,
+                _mockEventRepository.Object,
+                _mockChecklistItemRepository.Object,
+                _mockNoteRepository.Object,
+                _mockClaimsService.Object,
+                _mockContactPermissionService.Object,
+                mockEmailService.Object
+            );
+
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAuth(new { }, TestSessionToken);
+
+            // Act
+            IActionResult result = await functionsWithEmail.SendMarshalMagicLink(httpRequest, eventId, marshalId);
+
+            // Assert
+            result.ShouldBeOfType<OkObjectResult>();
+
+            // Verify that the marshal was updated with a new magic code
+            _mockMarshalRepository.Verify(
+                r => r.UpdateAsync(It.Is<MarshalEntity>(m =>
+                    !string.IsNullOrWhiteSpace(m.MagicCode)
+                )),
+                Times.Once
+            );
+        }
+
+        #endregion
     }
 }

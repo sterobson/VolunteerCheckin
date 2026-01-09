@@ -66,6 +66,8 @@
       :show="showConfirmModal"
       :title="confirmModalTitle"
       :message="confirmModalMessage"
+      :is-danger="confirmModalIsDanger"
+      :confirm-text="confirmModalConfirmText"
       @confirm="handleConfirmModalConfirm"
       @cancel="handleConfirmModalCancel"
     />
@@ -104,6 +106,8 @@ const showConfirmModal = ref(false);
 const confirmModalTitle = ref('');
 const confirmModalMessage = ref('');
 const confirmModalCallback = ref(null);
+const confirmModalIsDanger = ref(false);
+const confirmModalConfirmText = ref('OK');
 
 const loadEvents = async () => {
   loading.value = true;
@@ -152,6 +156,8 @@ const editEvent = (event) => {
 const confirmDelete = async (event) => {
   confirmModalTitle.value = 'Delete event';
   confirmModalMessage.value = `Are you sure you want to delete "${event.name}"?`;
+  confirmModalIsDanger.value = true;
+  confirmModalConfirmText.value = 'Delete';
   confirmModalCallback.value = async () => {
     try {
       await eventsStore.deleteEvent(event.id);

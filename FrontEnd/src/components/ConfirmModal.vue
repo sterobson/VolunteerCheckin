@@ -5,7 +5,7 @@
       <p>{{ message }}</p>
       <div class="confirm-actions">
         <button v-if="showCancel" @click="handleCancel" class="btn btn-secondary">{{ cancelText }}</button>
-        <button @click="handleConfirm" class="btn btn-primary">{{ confirmText }}</button>
+        <button @click="handleConfirm" :class="['btn', isDanger ? 'btn-danger' : 'btn-primary']">{{ confirmText }}</button>
       </div>
     </div>
   </div>
@@ -38,6 +38,10 @@ defineProps({
   showCancel: {
     type: Boolean,
     default: true,
+  },
+  isDanger: {
+    type: Boolean,
+    default: false,
   },
 });
 
@@ -111,6 +115,15 @@ const handleCancel = () => {
 
 .btn-primary:hover {
   background: var(--accent-primary-hover);
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: white;
+}
+
+.btn-danger:hover {
+  background: var(--danger-hover);
 }
 
 .btn-secondary {

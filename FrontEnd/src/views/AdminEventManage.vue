@@ -464,6 +464,8 @@
       :show="showConfirmModal"
       :title="confirmModalTitle"
       :message="confirmModalMessage"
+      :is-danger="confirmModalIsDanger"
+      :confirm-text="confirmModalConfirmText"
       @confirm="handleConfirmModalConfirm"
       @cancel="handleConfirmModalCancel"
     />
@@ -552,6 +554,8 @@ const {
   showConfirmModal,
   confirmModalTitle,
   confirmModalMessage,
+  confirmModalIsDanger,
+  confirmModalConfirmText,
   showConfirm,
   handleConfirmModalConfirm,
   handleConfirmModalCancel,
@@ -1270,7 +1274,7 @@ const handleSaveArea = async (formData) => {
 };
 
 const handleDeleteArea = async (areaId) => {
-  showConfirm('Delete area', 'Are you sure you want to delete this area? Checkpoints will be automatically reassigned.', async () => {
+  showConfirm(`Delete ${termsLower.value.area}`, `Are you sure you want to delete this ${termsLower.value.area}? ${terms.value.checkpoints} will be automatically reassigned.`, async () => {
     try {
       // Delete the area (checkpoints will be automatically reassigned to default area on backend)
       await areasApi.delete(route.params.eventId, areaId);
@@ -1282,10 +1286,10 @@ const handleDeleteArea = async (areaId) => {
       await loadEventData();
       closeEditAreaModal();
     } catch (error) {
-      console.error('Failed to delete area:', error);
-      alert(error.response?.data?.message || 'Failed to delete area. Please try again.');
+      console.error(`Failed to delete ${termsLower.value.area}:`, error);
+      alert(error.response?.data?.message || `Failed to delete ${termsLower.value.area}. Please try again.`);
     }
-  });
+  }, { isDanger: true, confirmText: 'Delete' });
 };
 
 const closeEditAreaModal = () => {
@@ -1354,16 +1358,16 @@ const handleSaveChecklistItem = async (formData) => {
 };
 
 const handleDeleteChecklistItem = async (itemId) => {
-  showConfirm('Delete checklist item', 'Are you sure you want to delete this checklist item?', async () => {
+  showConfirm(`Delete ${termsLower.value.checklist}`, `Are you sure you want to delete this ${termsLower.value.checklist}?`, async () => {
     try {
       await checklistApi.delete(route.params.eventId, itemId);
       await loadChecklists();
       closeEditChecklistItemModal();
     } catch (error) {
-      console.error('Failed to delete checklist item:', error);
-      alert(error.response?.data?.message || 'Failed to delete checklist item. Please try again.');
+      console.error(`Failed to delete ${termsLower.value.checklist}:`, error);
+      alert(error.response?.data?.message || `Failed to delete ${termsLower.value.checklist}. Please try again.`);
     }
-  });
+  }, { isDanger: true, confirmText: 'Delete' });
 };
 
 const closeEditChecklistItemModal = () => {
@@ -1414,7 +1418,7 @@ const handleDeleteNote = async (noteId) => {
       console.error('Failed to delete note:', error);
       alert(error.response?.data?.message || 'Failed to delete note. Please try again.');
     }
-  });
+  }, { isDanger: true, confirmText: 'Delete' });
 };
 
 const closeEditNoteModal = () => {
@@ -1541,7 +1545,7 @@ const handleDeleteContact = async (contactId) => {
       console.error('Failed to delete contact:', error);
       alert(error.response?.data?.message || 'Failed to delete contact. Please try again.');
     }
-  });
+  }, { isDanger: true, confirmText: 'Delete' });
 };
 
 const closeEditContactModal = () => {
@@ -1627,7 +1631,7 @@ const handleAddAdminSubmit = async (email) => {
 };
 
 const removeAdmin = async (userEmail) => {
-  showConfirm('Remove Administrator', `Remove ${userEmail} as an administrator?`, async () => {
+  showConfirm('Remove administrator', `Remove ${userEmail} as an administrator?`, async () => {
     try {
       await eventAdminsComposable.removeAdmin(userEmail);
       await loadEventAdmins();
@@ -1635,7 +1639,7 @@ const removeAdmin = async (userEmail) => {
       console.error('Failed to remove admin:', error);
       alert(error.response?.data?.message || 'Failed to remove administrator. Please try again.');
     }
-  });
+  }, { isDanger: true, confirmText: 'Remove' });
 };
 
 const closeAdminModal = () => {
@@ -2287,16 +2291,16 @@ const handleUpdateLocation = async (formData) => {
 };
 
 const handleDeleteLocation = async (locationId) => {
-  showConfirm('Delete location', 'Are you sure you want to delete this location?', async () => {
+  showConfirm(`Delete ${termsLower.value.checkpoint}`, `Are you sure you want to delete this ${termsLower.value.checkpoint}?`, async () => {
     try {
       await locationsApi.delete(route.params.eventId, locationId);
       await reloadLocationsAreasAndStatus();
       closeEditLocationModal();
     } catch (error) {
-      console.error('Failed to delete location:', error);
-      alert('Failed to delete location. Please try again.');
+      console.error(`Failed to delete ${termsLower.value.checkpoint}:`, error);
+      alert(`Failed to delete ${termsLower.value.checkpoint}. Please try again.`);
     }
-  });
+  }, { isDanger: true, confirmText: 'Delete' });
 };
 
 const toggleCheckIn = async (assignment) => {
@@ -2707,7 +2711,7 @@ const handleDeleteMarshal = async (marshalId) => {
       console.error(`Failed to delete ${personTerm}:`, error);
       alert(`Failed to delete ${personTerm}. Please try again.`);
     }
-  });
+  }, { isDanger: true, confirmText: 'Delete' });
 };
 
 const handleDeleteMarshalFromGrid = (marshal) => {

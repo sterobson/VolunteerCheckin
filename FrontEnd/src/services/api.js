@@ -307,8 +307,8 @@ export const marshalsApi = {
   getById: (eventId, marshalId) => api.get(`/marshals/${eventId}/${marshalId}`),
   update: (eventId, marshalId, data) => api.put(`/marshals/${eventId}/${marshalId}`, data),
   delete: (eventId, marshalId) => api.delete(`/marshals/${eventId}/${marshalId}`),
-  getMagicLink: (eventId, marshalId) => api.get(`/marshals/${eventId}/${marshalId}/magic-link`),
-  sendMagicLink: (eventId, marshalId) => api.post(`/marshals/${eventId}/${marshalId}/send-magic-link`),
+  getMagicLink: (eventId, marshalId) => api.get(`/marshals/${eventId}/${marshalId}/magic-link`, { params: { frontendUrl: getFrontendUrl() } }),
+  sendMagicLink: (eventId, marshalId) => api.post(`/marshals/${eventId}/${marshalId}/send-magic-link`, { frontendUrl: getFrontendUrl() }),
   importCsv: (eventId, file) => {
     const formData = new FormData();
     formData.append('csv', file);

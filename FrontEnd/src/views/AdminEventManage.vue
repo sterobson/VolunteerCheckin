@@ -305,6 +305,7 @@
       :checkpoints="locationStatuses"
       :marshals="marshals"
       :areas="areas"
+      :route="event?.route || []"
       :is-dirty="formDirty"
       :event-id="route.params.eventId"
       :all-locations="locationStatuses"
@@ -846,22 +847,20 @@ const displayCheckpoints = computed(() => {
 
 // Combine real areas with the area being drawn/edited
 const displayAreas = computed(() => {
-  const areasList = [...areas.value];
+  let areasList = [...areas.value];
+
+  // If in draw mode, exclude the area being redrawn (so old boundary doesn't show)
+  if (fullscreenMode.value === 'draw-area' && selectedArea.value?.id) {
+    areasList = areasList.filter(a => a.id !== selectedArea.value.id);
+  }
 
   // If drawing or editing an area with a polygon, include it in display
   if (fullscreenMode.value === 'draw-area' && selectedArea.value?.polygon?.length > 0) {
-    // Check if this area already exists in the list
-    const existingIndex = areasList.findIndex(a => a.id === selectedArea.value.id);
-    if (existingIndex >= 0) {
-      // Replace existing area with updated version
-      areasList[existingIndex] = { ...selectedArea.value };
-    } else {
-      // Add new area being drawn
-      areasList.push({
-        ...selectedArea.value,
-        id: selectedArea.value.id || 'temp-area',
-      });
-    }
+    // Add the area being drawn with its new polygon
+    areasList.push({
+      ...selectedArea.value,
+      id: selectedArea.value.id || 'temp-area',
+    });
   }
 
   return areasList;
@@ -1227,9 +1226,12 @@ const handleSelectArea = (area) => {
 
 const handleSaveArea = async (formData) => {
   try {
+    let areaId;
+
     if (selectedArea.value && selectedArea.value.id) {
       // Update existing area (checkpoints will be automatically recalculated on backend)
-      await areasApi.update(route.params.eventId, selectedArea.value.id, formData);
+      areaId = selectedArea.value.id;
+      await areasApi.update(route.params.eventId, areaId, formData);
 
       // Process checklist changes
       if (formData.checklistChanges && formData.checklistChanges.length > 0) {
@@ -1258,10 +1260,57 @@ const handleSaveArea = async (formData) => {
       }
     } else {
       // Create new area (checkpoints will be automatically assigned on backend)
-      await areasApi.create({
+      const response = await areasApi.create({
         eventId: route.params.eventId,
         ...formData,
       });
+      areaId = response.data.id;
+    }
+
+    // Process pending contacts - add the area to each contact's scope
+    if (formData.pendingContacts && formData.pendingContacts.length > 0 && areaId) {
+      for (const contact of formData.pendingContacts) {
+        try {
+          // Clone existing scope configurations
+          const scopeConfigurations = contact.scopeConfigurations
+            ? JSON.parse(JSON.stringify(contact.scopeConfigurations))
+            : [];
+
+          // Check if there's already an EveryoneInAreas scope for Area type
+          const existingAreaScope = scopeConfigurations.find(
+            (config) => config.scope === 'EveryoneInAreas' && config.itemType === 'Area'
+          );
+
+          if (existingAreaScope) {
+            // Add the area ID if not already present
+            if (!existingAreaScope.ids) {
+              existingAreaScope.ids = [];
+            }
+            if (!existingAreaScope.ids.includes(areaId)) {
+              existingAreaScope.ids.push(areaId);
+            }
+          } else {
+            // Create new scope configuration for this area
+            scopeConfigurations.push({
+              scope: 'EveryoneInAreas',
+              itemType: 'Area',
+              ids: [areaId],
+            });
+          }
+
+          // Update the contact with the new scope configurations
+          await contactsApi.update(route.params.eventId, contact.contactId, {
+            ...contact,
+            scopeConfigurations,
+          });
+        } catch (error) {
+          console.error('Failed to add area to contact:', contact, error);
+          // Continue with other contacts even if one fails
+        }
+      }
+
+      // Reload contacts to reflect the changes
+      await loadContacts();
     }
 
     await loadAreas();
@@ -1556,8 +1605,11 @@ const closeEditContactModal = () => {
 };
 
 const handleDrawBoundary = (formData) => {
-  // Store form data
-  pendingAreaFormData.value = formData;
+  // Store form data (but clear polygon so old boundary doesn't show while redrawing)
+  const formWithoutPolygon = { ...formData, polygon: [] };
+  pendingAreaFormData.value = formWithoutPolygon;
+  // Also set selectedArea so displayAreas uses version without polygon
+  selectedArea.value = formWithoutPolygon;
   // Close modal
   showEditArea.value = false;
 
@@ -3056,6 +3108,7 @@ onUnmounted(() => {
 }
 
 .tabs-nav {
+  flex-wrap: nowrap;
   display: flex;
   gap: 0.5rem;
   margin-bottom: 2rem;
@@ -3148,6 +3201,7 @@ onUnmounted(() => {
   }
 
   .tabs-nav {
+  flex-wrap: nowrap;
     overflow-x: visible;
     overflow-y: visible;
   }

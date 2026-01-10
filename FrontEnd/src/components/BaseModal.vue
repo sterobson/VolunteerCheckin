@@ -1,17 +1,18 @@
 <template>
-  <div
-    v-if="show"
-    class="base-modal-overlay"
-    :style="{ zIndex: zIndex }"
-    @click.self="handleOverlayClick"
-  >
+  <Transition name="modal" appear>
     <div
-      class="base-modal"
-      :class="[
-        `base-modal--${size}`,
-        `base-modal--${variant}`,
-      ]"
+      v-if="show"
+      class="base-modal-overlay"
+      :style="{ zIndex: zIndex }"
+      @click.self="handleOverlayClick"
     >
+      <div
+        class="base-modal"
+        :class="[
+          `base-modal--${size}`,
+          `base-modal--${variant}`,
+        ]"
+      >
       <!-- Fixed Header -->
       <div class="base-modal-header">
         <div class="base-modal-header-content">
@@ -36,8 +37,10 @@
       </div>
 
       <!-- Scrollable Content Area -->
-      <div class="base-modal-body">
-        <slot></slot>
+      <div class="base-modal-body" ref="bodyRef">
+        <div class="base-modal-body-content" ref="contentRef">
+          <slot></slot>
+        </div>
       </div>
 
       <!-- Fixed Footer -->
@@ -48,23 +51,34 @@
           </div>
         </slot>
       </div>
-    </div>
+      </div>
 
-    <!-- Nested confirm modal for unsaved changes -->
-    <ConfirmModal
-      v-if="confirmOnClose && !isConfirmModalRefactored"
-      :show="showConfirmClose"
-      title="Unsaved changes"
-      message="You have unsaved changes. Are you sure you want to close?"
-      @confirm="handleConfirmCloseConfirm"
-      @cancel="handleConfirmCloseCancel"
-    />
-  </div>
+      <!-- Nested confirm modal for unsaved changes -->
+      <ConfirmModal
+        v-if="confirmOnClose && !isConfirmModalRefactored"
+        :show="showConfirmClose"
+        title="Unsaved changes"
+        message="You have unsaved changes. Are you sure you want to close?"
+        @confirm="handleConfirmCloseConfirm"
+        @cancel="handleConfirmCloseCancel"
+      />
+    </div>
+  </Transition>
 </template>
 
 <script setup>
-import { ref, defineProps, defineEmits } from 'vue';
+import { ref, defineProps, defineEmits, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import ConfirmModal from './ConfirmModal.vue';
+
+// Get animation duration from CSS variable (default 0.3s)
+const getAnimationDuration = () => {
+  const root = document.documentElement;
+  const duration = getComputedStyle(root).getPropertyValue('--modal-resize-duration').trim();
+  if (duration.endsWith('s')) {
+    return parseFloat(duration) * 1000;
+  }
+  return 300; // Default fallback
+};
 
 const props = defineProps({
   show: {
@@ -111,6 +125,107 @@ const emit = defineEmits(['close']);
 
 const showConfirmClose = ref(false);
 const isConfirmModalRefactored = ref(false); // Will be set to true once ConfirmModal uses BaseModal to prevent infinite loop
+
+// Refs for height animation
+const bodyRef = ref(null);
+const contentRef = ref(null);
+let mutationObserver = null;
+let isAnimating = false;
+let lastContentHeight = 0;
+
+// Animate content height when it changes
+const animateHeightChange = () => {
+  if (!contentRef.value || !bodyRef.value || isAnimating) return;
+
+  const newHeight = contentRef.value.scrollHeight;
+  const oldHeight = lastContentHeight;
+
+  // Skip animation if heights are the same or this is the first render
+  if (oldHeight === newHeight || lastContentHeight === 0) {
+    lastContentHeight = newHeight;
+    return;
+  }
+
+  isAnimating = true;
+
+  // Set explicit height on content wrapper to animate from
+  contentRef.value.style.height = `${oldHeight}px`;
+  contentRef.value.style.overflow = 'hidden';
+
+  // Force reflow
+  contentRef.value.offsetHeight;
+
+  // Animate to new height
+  contentRef.value.style.transition = `height var(--modal-resize-duration, 0.3s) ease`;
+  contentRef.value.style.height = `${newHeight}px`;
+
+  // After animation, reset to auto
+  const duration = getAnimationDuration();
+  setTimeout(() => {
+    if (contentRef.value) {
+      contentRef.value.style.height = '';
+      contentRef.value.style.overflow = '';
+      contentRef.value.style.transition = '';
+    }
+    isAnimating = false;
+    lastContentHeight = newHeight;
+  }, duration);
+};
+
+// Setup mutation observer to detect content changes (more reliable than ResizeObserver for DOM changes)
+const setupMutationObserver = () => {
+  if (!bodyRef.value || typeof MutationObserver === 'undefined') return;
+
+  // Store initial height
+  if (contentRef.value) {
+    lastContentHeight = contentRef.value.scrollHeight;
+  }
+
+  mutationObserver = new MutationObserver(() => {
+    // Debounce to avoid multiple triggers
+    nextTick(() => {
+      animateHeightChange();
+    });
+  });
+
+  mutationObserver.observe(bodyRef.value, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    characterData: true,
+  });
+};
+
+const cleanupMutationObserver = () => {
+  if (mutationObserver) {
+    mutationObserver.disconnect();
+    mutationObserver = null;
+  }
+};
+
+onMounted(() => {
+  nextTick(() => {
+    if (props.show) {
+      setupMutationObserver();
+    }
+  });
+});
+
+onUnmounted(() => {
+  cleanupMutationObserver();
+});
+
+// Setup/cleanup observer when modal opens/closes
+watch(() => props.show, (newVal) => {
+  if (newVal) {
+    nextTick(() => {
+      lastContentHeight = 0; // Reset on open
+      setupMutationObserver();
+    });
+  } else {
+    cleanupMutationObserver();
+  }
+});
 
 const handleOverlayClick = () => {
   if (props.closeOnOverlay) {
@@ -159,8 +274,9 @@ const handleConfirmCloseCancel = () => {
   display: flex;
   flex-direction: column;
   max-height: 90vh;
-  width: 90%;
+  width: 95%;
   position: relative;
+  overflow: hidden;
 }
 
 /* Size Variants */
@@ -173,7 +289,9 @@ const handleConfirmCloseCancel = () => {
 }
 
 .base-modal--large {
-  max-width: 800px;
+  width: fit-content;
+  min-width: min(500px, 95vw);
+  max-width: 95vw;
 }
 
 /* Variant: Center (default) */
@@ -254,6 +372,11 @@ const handleConfirmCloseCancel = () => {
   padding: 1.5rem 2rem;
 }
 
+/* Inner content wrapper for height animation */
+.base-modal-body-content {
+  /* No special styling needed, just acts as measurement wrapper */
+}
+
 /* Fixed Footer */
 .base-modal-footer {
   flex-shrink: 0;
@@ -272,5 +395,26 @@ const handleConfirmCloseCancel = () => {
 .base-modal--sidebar .base-modal-overlay {
   justify-content: flex-end;
   align-items: stretch;
+}
+
+/* Modal transition - overlay fades while modal slides */
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity var(--modal-open-duration, 0.5s) ease;
+}
+
+.modal-enter-active .base-modal,
+.modal-leave-active .base-modal {
+  transition: transform var(--modal-open-duration, 0.5s) ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+
+.modal-enter-from .base-modal,
+.modal-leave-to .base-modal {
+  transform: translateY(100vh);
 }
 </style>

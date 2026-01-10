@@ -106,6 +106,46 @@ export function useAdminContactManagement(eventId) {
     await contactsApi.delete(eventId.value, contactId);
   };
 
+  /**
+   * Add an area to a contact's visibility scope
+   * @param {Object} contact - The contact to update
+   * @param {string} areaId - The area ID to add to the contact's scope
+   */
+  const addAreaToContact = async (contact, areaId) => {
+    // Clone existing scope configurations
+    const scopeConfigurations = contact.scopeConfigurations
+      ? JSON.parse(JSON.stringify(contact.scopeConfigurations))
+      : [];
+
+    // Check if there's already an EveryoneInAreas scope for Area type
+    const existingAreaScope = scopeConfigurations.find(
+      (config) => config.scope === 'EveryoneInAreas' && config.itemType === 'Area'
+    );
+
+    if (existingAreaScope) {
+      // Add the area ID if not already present
+      if (!existingAreaScope.ids) {
+        existingAreaScope.ids = [];
+      }
+      if (!existingAreaScope.ids.includes(areaId)) {
+        existingAreaScope.ids.push(areaId);
+      }
+    } else {
+      // Create new scope configuration for this area
+      scopeConfigurations.push({
+        scope: 'EveryoneInAreas',
+        itemType: 'Area',
+        ids: [areaId],
+      });
+    }
+
+    // Update the contact with the new scope configurations
+    await contactsApi.update(eventId.value, contact.contactId, {
+      ...contact,
+      scopeConfigurations,
+    });
+  };
+
   return {
     // Data
     contacts,
@@ -130,5 +170,6 @@ export function useAdminContactManagement(eventId) {
     closeEditContactModal,
     saveContact,
     deleteContact,
+    addAreaToContact,
   };
 }

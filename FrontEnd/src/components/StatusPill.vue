@@ -43,7 +43,7 @@ defineEmits(['click']);
   cursor: pointer;
   font-family: inherit;
   line-height: inherit;
-  transition: box-shadow 0.2s;
+  transition: box-shadow 0.2s, border-color 0.2s;
 }
 
 .status-pill.active {
@@ -53,6 +53,11 @@ defineEmits(['click']);
 .status-pill.neutral {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.1));
+}
+
+.status-pill.neutral.active {
+  border-color: transparent;
 }
 
 .status-pill.success {

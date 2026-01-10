@@ -272,8 +272,8 @@
             {{ nextTabButtonText }}
           </button>
         </div>
-        <button type="button" @click="handleSave" class="btn btn-primary">
-          {{ isExistingLocation ? 'Save changes' : `Create ${effectiveCheckpointTermSingularLower}` }}
+        <button type="button" @click="handleSave" class="btn btn-success">
+          Save
         </button>
       </div>
     </template>
@@ -965,6 +965,15 @@ const handleStyleInput = (field, value) => {
 
 .btn-secondary:hover {
   background: var(--btn-secondary-hover);
+}
+
+.btn-success {
+  background: var(--success);
+  color: white;
+}
+
+.btn-success:hover {
+  background: var(--success-hover);
 }
 
 .btn-danger {

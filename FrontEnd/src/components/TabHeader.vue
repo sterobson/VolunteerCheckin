@@ -1,7 +1,7 @@
 <template>
   <div class="tabs-container" ref="containerRef">
     <!-- Regular tabs when there's enough space -->
-    <div v-if="!showHamburger" class="tabs">
+    <div v-if="!showHamburger" class="tabs" ref="tabsRef">
       <button
         v-for="tab in tabs"
         :key="tab.value"
@@ -86,6 +86,7 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue']);
 
 const containerRef = ref(null);
+const tabsRef = ref(null);
 const hamburgerRef = ref(null);
 const showHamburger = ref(false);
 const menuOpen = ref(false);
@@ -130,14 +131,38 @@ const goToNextTab = () => {
 const checkOverflow = () => {
   if (!containerRef.value) return;
 
-  // Get the container width
   const containerWidth = containerRef.value.clientWidth;
 
-  // Estimate the tabs width (rough calculation based on tab count and average width)
-  const estimatedTabWidth = props.tabs.length * 100; // ~100px per tab on average
+  // Small screen threshold - always use hamburger
+  if (containerWidth < HAMBURGER_THRESHOLD) {
+    showHamburger.value = true;
+    return;
+  }
 
-  // If tabs would overflow, use hamburger menu
-  showHamburger.value = estimatedTabWidth > containerWidth || containerWidth < HAMBURGER_THRESHOLD;
+  // If tabs are currently visible, check their actual width
+  if (tabsRef.value && !showHamburger.value) {
+    const tabsWidth = tabsRef.value.scrollWidth;
+    if (tabsWidth > containerWidth) {
+      showHamburger.value = true;
+    }
+    return;
+  }
+
+  // If currently showing hamburger, check if tabs would fit now
+  // Use a more accurate estimate: ~90px per tab without icon, ~110px with icon
+  const avgTabWidth = props.tabs.some(t => t.icon) ? 110 : 90;
+  const estimatedTabWidth = props.tabs.length * avgTabWidth;
+  const gapWidth = (props.tabs.length - 1) * 8; // 0.5rem gap
+
+  if (estimatedTabWidth + gapWidth <= containerWidth) {
+    // Tabs might fit - switch to tabs and re-check
+    showHamburger.value = false;
+    nextTick(() => {
+      if (tabsRef.value && tabsRef.value.scrollWidth > containerWidth) {
+        showHamburger.value = true;
+      }
+    });
+  }
 };
 
 const toggleMenu = () => {
@@ -201,7 +226,8 @@ watch(() => props.tabs, () => {
   display: flex;
   gap: 0.5rem;
   padding: 0.5rem 0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  position: relative;
 }
 
 .tab-button {
@@ -214,10 +240,11 @@ watch(() => props.tabs, () => {
   color: var(--text-secondary);
   cursor: pointer;
   font-size: 0.9rem;
-  border-bottom: 2px solid transparent;
-  transition: all 0.2s;
+  transition: color 0.2s, border-color 0.2s;
   flex-shrink: 0;
   white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
 }
 
 .tab-button:hover {
@@ -226,8 +253,8 @@ watch(() => props.tabs, () => {
 
 .tab-button.active {
   color: var(--accent-primary);
-  border-bottom-color: var(--accent-primary);
   font-weight: 500;
+  border-bottom-color: var(--accent-primary);
 }
 
 .tab-icon {
@@ -331,7 +358,7 @@ watch(() => props.tabs, () => {
   border: 1px solid var(--border-color);
   border-radius: 6px;
   box-shadow: var(--shadow-md);
-  z-index: 100;
+  z-index: 2000;
   margin-top: 0;
   overflow: hidden;
   max-height: 300px;

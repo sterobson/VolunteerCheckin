@@ -1,9 +1,24 @@
 <template>
-  <div ref="mapContainer" class="map-container"></div>
+  <div class="map-container-wrapper">
+    <div ref="mapContainer" class="map-container"></div>
+
+    <!-- Recenter button (shows when highlighted location is out of view) -->
+    <button
+      v-if="showRecenterButton"
+      class="recenter-btn"
+      @click="recenterOnHighlighted"
+      title="Recenter on checkpoint"
+    >
+      <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+        <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+      </svg>
+      <span>Recenter</span>
+    </button>
+  </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch, defineProps, defineEmits } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, defineProps, defineEmits } from 'vue';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
@@ -49,6 +64,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  editingPolygon: {
+    type: Array,
+    default: null,
+  },
   userLocation: {
     type: Object,
     default: null,
@@ -75,7 +94,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['location-click', 'map-click', 'area-click', 'polygon-complete', 'polygon-drawing']);
+const emit = defineEmits(['location-click', 'map-click', 'area-click', 'polygon-complete', 'polygon-drawing', 'polygon-update']);
 
 const mapContainer = ref(null);
 let map = null;
@@ -86,6 +105,15 @@ const polygonHistory = ref([]); // For undo - stores previous states
 const polygonFuture = ref([]); // For redo - stores undone states
 let polygonPreviewLayer = null;
 let polygonMarkersLayer = null;
+
+// Polygon editing state
+const editingPoints = ref([]);
+let editingPolygonLayer = null;
+let editingMarkersLayer = null;
+let justEmittedPolygonUpdate = false; // Flag to prevent watcher from rebuilding after our own emit
+
+// Track if user has manually panned the map (to avoid auto-recentering)
+const userHasPanned = ref(false);
 
 // Expose methods to get current map state and control polygon drawing
 const getMapCenter = () => {
@@ -163,6 +191,55 @@ const areaLayers = ref([]);
 let drawControl = null;
 let drawnItems = null;
 let userLocationMarker = null;
+
+// Track if highlighted location is in view
+const highlightedLocationInView = ref(true);
+
+// Computed: should show recenter button
+const showRecenterButton = computed(() => {
+  // Only show if there's a highlighted location (single, not multiple)
+  // and the user has panned away from it
+  if (!props.highlightLocationId) return false;
+  if (!userHasPanned.value) return false;
+  return !highlightedLocationInView.value;
+});
+
+// Function to check if highlighted location is in current map bounds
+const checkHighlightedInView = () => {
+  if (!map || !props.highlightLocationId) {
+    highlightedLocationInView.value = true;
+    return;
+  }
+
+  // Find the highlighted location
+  const highlightedLocation = props.locations.find(loc => loc.id === props.highlightLocationId);
+  if (!highlightedLocation || !highlightedLocation.latitude || !highlightedLocation.longitude) {
+    highlightedLocationInView.value = true;
+    return;
+  }
+
+  // Check if location is within current map bounds
+  const bounds = map.getBounds();
+  const locationLatLng = L.latLng(highlightedLocation.latitude, highlightedLocation.longitude);
+  highlightedLocationInView.value = bounds.contains(locationLatLng);
+};
+
+// Function to recenter map on highlighted location
+const recenterOnHighlighted = () => {
+  if (!map || !props.highlightLocationId) return;
+
+  const highlightedLocation = props.locations.find(loc => loc.id === props.highlightLocationId);
+  if (!highlightedLocation || !highlightedLocation.latitude || !highlightedLocation.longitude) return;
+
+  map.setView([highlightedLocation.latitude, highlightedLocation.longitude], map.getZoom(), {
+    animate: true,
+    duration: 0.5
+  });
+
+  // Reset user panned state since we've recentered
+  userHasPanned.value = false;
+  highlightedLocationInView.value = true;
+};
 
 // System default color for checkpoint markers
 const SYSTEM_DEFAULT_COLOR = '#667eea';
@@ -330,6 +407,13 @@ const initMap = () => {
     } else {
       checkVisibleMarkersAndUpdate();
     }
+    // Check if highlighted location is still in view
+    checkHighlightedInView();
+  });
+
+  // Track when user manually pans the map to avoid auto-recentering
+  map.on('dragstart', () => {
+    userHasPanned.value = true;
   });
 
   updateMarkers();
@@ -337,6 +421,7 @@ const initMap = () => {
   updateAreaPolygons();
   updateUserLocationMarker();
   initDrawingMode();
+  initEditingMode();
 };
 
 const updateRoute = () => {
@@ -456,6 +541,159 @@ const updatePolygonPreview = () => {
       opacity: 0.8,
       dashArray: polygonPoints.value.length < 3 ? '10, 10' : null,
     }).addTo(map);
+  }
+};
+
+// Update the editable polygon on the map with draggable vertices
+const updateEditingPolygon = () => {
+  if (!map) return;
+
+  // Remove existing editing layers
+  if (editingPolygonLayer) {
+    editingPolygonLayer.remove();
+    editingPolygonLayer = null;
+  }
+  if (editingMarkersLayer) {
+    editingMarkersLayer.remove();
+    editingMarkersLayer = null;
+  }
+
+  if (editingPoints.value.length === 0) return;
+
+  // Create the polygon shape (use markerPane to be above other polygons)
+  const coords = editingPoints.value.map(p => [p.lat, p.lng]);
+  editingPolygonLayer = L.polygon(coords, {
+    color: '#667eea',
+    fillColor: '#667eea',
+    fillOpacity: 0.2,
+    weight: 3,
+    opacity: 0.8,
+    pane: 'overlayPane',
+  }).addTo(map);
+
+  // Bring editing polygon to front
+  editingPolygonLayer.bringToFront();
+
+  // Create a layer group for draggable vertex markers (use popupPane for highest z-index)
+  editingMarkersLayer = L.layerGroup({ pane: 'markerPane' }).addTo(map);
+
+  // Helper to delete a vertex
+  const deleteVertex = (indexToDelete) => {
+    // Minimum 3 points required
+    if (editingPoints.value.length <= 3) return;
+
+    editingPoints.value.splice(indexToDelete, 1);
+    justEmittedPolygonUpdate = true;
+    emit('polygon-update', [...editingPoints.value]);
+    updateEditingPolygon(); // Rebuild markers
+  };
+
+  // Add draggable markers for each vertex
+  editingPoints.value.forEach((point, index) => {
+    const canDelete = editingPoints.value.length > 3;
+
+    const markerIcon = L.divIcon({
+      className: 'polygon-edit-marker',
+      html: `<div class="vertex-marker" style="
+        position: relative;
+        width: 16px;
+        height: 16px;
+        background-color: #667eea;
+        border: 3px solid white;
+        border-radius: 50%;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+        cursor: move;
+      "></div>`,
+      iconSize: [16, 16],
+      iconAnchor: [8, 8],
+    });
+
+    const marker = L.marker([point.lat, point.lng], {
+      icon: markerIcon,
+      draggable: true,
+    }).addTo(editingMarkersLayer);
+
+    // Handle drag events
+    marker.on('drag', (e) => {
+      const latlng = e.target.getLatLng();
+      editingPoints.value[index] = { lat: latlng.lat, lng: latlng.lng };
+      // Update polygon shape while dragging
+      const newCoords = editingPoints.value.map(p => [p.lat, p.lng]);
+      editingPolygonLayer.setLatLngs(newCoords);
+    });
+
+    marker.on('dragend', () => {
+      // Emit the updated polygon
+      justEmittedPolygonUpdate = true;
+      emit('polygon-update', [...editingPoints.value]);
+    });
+
+    // Right-click to delete vertex (desktop)
+    marker.on('contextmenu', (e) => {
+      L.DomEvent.preventDefault(e);
+      if (canDelete) {
+        deleteVertex(index);
+      }
+    });
+
+    // Bind popup for delete option (works on mobile too)
+    if (canDelete) {
+      const popupContent = document.createElement('div');
+      const deleteBtn = document.createElement('button');
+      deleteBtn.textContent = 'Delete point';
+      deleteBtn.style.cssText = `
+        background: #dc3545;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.9rem;
+      `;
+
+      // Use both click and touchend for mobile compatibility
+      const handleDelete = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        marker.closePopup();
+        deleteVertex(index);
+      };
+
+      deleteBtn.addEventListener('click', handleDelete);
+      deleteBtn.addEventListener('touchend', handleDelete);
+      popupContent.appendChild(deleteBtn);
+
+      marker.bindPopup(popupContent, { closeButton: false, className: 'vertex-popup' });
+    }
+  });
+};
+
+// Initialize editing mode with existing polygon
+const initEditingMode = (fitBounds = true) => {
+  if (!map) return;
+
+  // Clean up editing layers when not in editing mode
+  if (!props.editingPolygon || props.editingPolygon.length === 0) {
+    if (editingPolygonLayer) {
+      editingPolygonLayer.remove();
+      editingPolygonLayer = null;
+    }
+    if (editingMarkersLayer) {
+      editingMarkersLayer.remove();
+      editingMarkersLayer = null;
+    }
+    editingPoints.value = [];
+    return;
+  }
+
+  // Initialize editing points from prop
+  editingPoints.value = props.editingPolygon.map(p => ({ lat: p.lat, lng: p.lng }));
+  updateEditingPolygon();
+
+  // Fit bounds to the editing polygon
+  if (fitBounds && editingPoints.value.length >= 3) {
+    const bounds = L.latLngBounds(editingPoints.value.map(p => [p.lat, p.lng]));
+    map.fitBounds(bounds, { padding: [50, 50] });
   }
 };
 
@@ -619,6 +857,10 @@ const updateMarkers = () => {
 
   if (!map) return;
 
+  // Calculate max label width as 75% of map container width
+  const mapWidth = mapContainer.value?.clientWidth || 400;
+  const maxLabelWidth = Math.floor(mapWidth * 0.75);
+
   props.locations.forEach((location) => {
     // Skip locations without valid coordinates (no location or 0,0)
     const lat = location.latitude ?? location.Latitude;
@@ -720,8 +962,8 @@ const updateMarkers = () => {
       box-shadow: 0 1px 2px rgba(0,0,0,0.3);
     ">${checkedInCount}/${requiredMarshals}</div>` : '';
 
-    // Custom styled checkpoint
-    if (hasCustomStyle) {
+    // Custom styled checkpoint (skip if showing simplified)
+    if (!showSimplified && hasCustomStyle) {
       // Use the new composable SVG generator with all resolved style fields
       const baseSize = isHighlighted ? 40 : 32;
       const sizePercent = location.resolvedStyleSize || location.ResolvedStyleSize || '100';
@@ -752,8 +994,8 @@ const updateMarkers = () => {
         markerHtml = legacyMarker || buildDefaultMarker(checkedInCount, requiredMarshals, isHighlighted, props.marshalMode, true);
       }
     }
-    // Default status-based colored circle with status badge
-    else {
+    // Default status-based colored circle with status badge (skip if showing simplified)
+    else if (!showSimplified) {
       // Skip badge in the marker itself - we'll add it separately
       markerHtml = buildDefaultMarker(checkedInCount, requiredMarshals, isHighlighted, props.marshalMode, true);
     }
@@ -793,6 +1035,9 @@ const updateMarkers = () => {
             font-weight: bold;
             color: ${labelColor};
             white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: ${maxLabelWidth}px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.3);
             margin-top: 2px;
           ">
@@ -953,7 +1198,8 @@ watch(
 watch(
   () => props.center,
   (newCenter) => {
-    if (map) {
+    // Don't recenter if user has manually panned the map
+    if (map && !userHasPanned.value) {
       map.setView([newCenter.lat, newCenter.lng], props.zoom);
     }
   }
@@ -979,6 +1225,19 @@ watch(
   () => {
     initDrawingMode();
   }
+);
+
+watch(
+  () => props.editingPolygon,
+  () => {
+    // Skip rebuilding if we just emitted an update (prevents losing drag state)
+    if (justEmittedPolygonUpdate) {
+      justEmittedPolygonUpdate = false;
+      return;
+    }
+    initEditingMode();
+  },
+  { deep: true }
 );
 
 watch(
@@ -1040,12 +1299,52 @@ watch(
 </script>
 
 <style scoped>
+.map-container-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
 .map-container {
   width: 100%;
   height: 100%;
-  min-height: 400px;
+  min-height: 200px;
   border-radius: 8px;
   overflow: hidden;
+}
+
+.recenter-btn {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--card-bg, white);
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 20px;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary, #333);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s ease;
+}
+
+.recenter-btn:hover {
+  background: var(--bg-hover, #f5f5f5);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.recenter-btn:active {
+  transform: translateX(-50%) scale(0.98);
+}
+
+.recenter-btn svg {
+  flex-shrink: 0;
 }
 </style>
 

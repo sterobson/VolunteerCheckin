@@ -18,10 +18,12 @@ const pendingActionsCount = ref(0);
 const lastSyncTime = ref(null);
 const syncStatus = ref('idle'); // 'idle' | 'syncing' | 'error' | 'success'
 const syncError = ref(null);
+const isCheckingStatus = ref(false); // Indicates a status check is in progress
 
 let healthCheckInterval = null;
 let syncInProgress = false;
 let autoSyncTimeout = null;
+let lastVisibilityCheck = 0;
 
 /**
  * Get a random delay between min and max milliseconds
@@ -95,6 +97,60 @@ async function checkServerHealth() {
     isServerHealthy.value = false;
     return false;
   }
+}
+
+/**
+ * Quick connectivity check - used when page becomes visible
+ * This is faster than the full health check and handles edge cases
+ * when the phone wakes from sleep
+ */
+async function quickConnectivityCheck() {
+  // Debounce - don't check more than once every 2 seconds
+  const now = Date.now();
+  if (now - lastVisibilityCheck < 2000) {
+    return;
+  }
+  lastVisibilityCheck = now;
+
+  // Update navigator.onLine state immediately
+  const browserOnline = navigator.onLine;
+  isOnline.value = browserOnline;
+
+  if (!browserOnline) {
+    isServerHealthy.value = false;
+    return;
+  }
+
+  // Always verify server connectivity when page becomes visible
+  // Network state may have changed while phone was sleeping
+  isCheckingStatus.value = true;
+  try {
+    const healthy = await checkServerHealth();
+    if (healthy && pendingActionsCount.value > 0) {
+      scheduleAutoSync();
+    }
+  } finally {
+    isCheckingStatus.value = false;
+  }
+}
+
+/**
+ * Handle page visibility change - fired when phone wakes from sleep
+ * or user switches back to the tab/app
+ */
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    console.log('Page became visible, checking connectivity...');
+    quickConnectivityCheck();
+  }
+}
+
+/**
+ * Handle window focus - backup for visibility change
+ */
+function handleWindowFocus() {
+  console.log('Window focused, checking connectivity...');
+  quickConnectivityCheck();
 }
 
 /**
@@ -289,9 +345,13 @@ export function useOffline() {
     // Update pending actions count
     await updatePendingCount();
 
-    // Set up event listeners
+    // Set up event listeners for online/offline
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+
+    // Set up visibility and focus listeners for phone wake-from-sleep detection
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleWindowFocus);
 
     // Check server health on mount
     if (navigator.onLine) {
@@ -310,6 +370,8 @@ export function useOffline() {
   onUnmounted(() => {
     window.removeEventListener('online', handleOnline);
     window.removeEventListener('offline', handleOffline);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.removeEventListener('focus', handleWindowFocus);
 
     // Clear auto-sync timeout
     if (autoSyncTimeout) {
@@ -380,6 +442,7 @@ export function useOffline() {
     isOnline,
     isServerHealthy,
     isFullyOnline,
+    isCheckingStatus,
     pendingActionsCount,
     lastSyncTime,
     syncStatus,
@@ -387,6 +450,7 @@ export function useOffline() {
 
     // Actions
     checkServerHealth,
+    quickConnectivityCheck,
     syncPendingActions,
     updatePendingCount,
     refreshCache,

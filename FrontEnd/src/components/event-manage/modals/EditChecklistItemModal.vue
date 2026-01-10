@@ -8,24 +8,12 @@
     @close="handleClose"
   >
     <!-- Tab Headers -->
-    <div class="tab-headers">
-      <button
-        type="button"
-        class="tab-header"
-        :class="{ active: activeTab === 'details' }"
-        @click="activeTab = 'details'"
-      >
-        Details
-      </button>
-      <button
-        type="button"
-        class="tab-header"
-        :class="{ active: activeTab === 'visibility' }"
-        @click="activeTab = 'visibility'"
-      >
-        Visibility
-      </button>
-    </div>
+    <template #tab-header>
+      <TabHeader
+        v-model="activeTab"
+        :tabs="tabs"
+      />
+    </template>
 
     <form @submit.prevent="handleSave" class="checklist-form">
       <!-- Details Tab -->
@@ -66,29 +54,26 @@
 
     <template #footer>
       <div class="custom-footer">
-        <button
-          v-if="isEditing"
-          type="button"
-          @click="handleDelete"
-          class="btn btn-danger"
-        >
-          Delete
-        </button>
-        <button
-          v-if="!isEditing && activeTab === 'details'"
-          type="button"
-          @click="goToVisibilityTab"
-          class="btn btn-primary"
-        >
-          Next
-        </button>
-        <button
-          v-if="isEditing || activeTab === 'visibility'"
-          type="button"
-          @click="handleSave"
-          class="btn btn-primary"
-        >
-          {{ isEditing ? 'Save changes' : 'Create' }}
+        <div class="footer-left">
+          <button
+            v-if="isEditing"
+            type="button"
+            @click="handleDelete"
+            class="btn btn-danger"
+          >
+            Delete
+          </button>
+          <button
+            v-if="!isEditing && !isLastTab"
+            type="button"
+            @click="goToNextTab"
+            class="btn btn-secondary mobile-only"
+          >
+            {{ nextTabLabel }}...
+          </button>
+        </div>
+        <button type="button" @click="handleSave" class="btn btn-success">
+          Save
         </button>
       </div>
     </template>
@@ -105,6 +90,7 @@
 <script setup>
 import { ref, computed, defineProps, defineEmits, watch } from 'vue';
 import BaseModal from '../../BaseModal.vue';
+import TabHeader from '../../TabHeader.vue';
 import ScopeConfigurationEditor from '../ScopeConfigurationEditor.vue';
 import InfoModal from '../../InfoModal.vue';
 
@@ -166,6 +152,18 @@ const form = ref({
 });
 
 const isEditing = computed(() => !!props.checklistItem);
+
+const tabs = [
+  { value: 'details', label: 'Details' },
+  { value: 'visibility', label: 'Visibility' },
+];
+
+const currentTabIndex = computed(() => tabs.findIndex(t => t.value === activeTab.value));
+const isLastTab = computed(() => currentTabIndex.value === tabs.length - 1);
+const nextTabLabel = computed(() => {
+  if (isLastTab.value) return '';
+  return tabs[currentTabIndex.value + 1]?.label || '';
+});
 
 watch(() => props.show, (newVal) => {
   if (newVal) {
@@ -232,8 +230,10 @@ const handleClose = () => {
   emit('close');
 };
 
-const goToVisibilityTab = () => {
-  activeTab.value = 'visibility';
+const goToNextTab = () => {
+  if (!isLastTab.value) {
+    activeTab.value = tabs[currentTabIndex.value + 1].value;
+  }
 };
 
 const showError = (message) => {
@@ -292,37 +292,6 @@ const handleDelete = () => {
 </script>
 
 <style scoped>
-.tab-headers {
-  display: flex;
-  gap: 0;
-  border-bottom: 2px solid var(--border-light);
-  margin-bottom: 1.5rem;
-}
-
-.tab-header {
-  padding: 0.75rem 1.5rem;
-  background: transparent;
-  border: none;
-  border-bottom: 3px solid transparent;
-  cursor: pointer;
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  transition: all 0.2s;
-  margin-bottom: -2px;
-}
-
-.tab-header:hover {
-  color: var(--text-dark);
-  background: var(--bg-secondary);
-}
-
-.tab-header.active {
-  color: var(--accent-primary);
-  border-bottom-color: var(--accent-primary);
-  background: transparent;
-}
-
 .tab-content {
   display: flex;
   flex-direction: column;
@@ -438,8 +407,23 @@ select {
 .custom-footer {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   width: 100%;
-  gap: 1rem;
+}
+
+.footer-left {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.mobile-only {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-only {
+    display: inline-block;
+  }
 }
 
 .btn {
@@ -452,13 +436,22 @@ select {
   transition: background-color 0.2s;
 }
 
-.btn-primary {
-  background: var(--btn-primary-bg);
-  color: var(--btn-primary-text);
+.btn-success {
+  background: var(--success);
+  color: white;
 }
 
-.btn-primary:hover {
-  background: var(--btn-primary-hover);
+.btn-success:hover {
+  background: var(--success-hover);
+}
+
+.btn-secondary {
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
+}
+
+.btn-secondary:hover {
+  background: var(--btn-secondary-hover);
 }
 
 .btn-danger {

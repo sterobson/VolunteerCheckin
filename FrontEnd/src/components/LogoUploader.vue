@@ -49,6 +49,7 @@
 
 <script setup>
 import { ref } from 'vue';
+import { API_BASE_URL } from '../config';
 
 const props = defineProps({
   modelValue: {
@@ -64,6 +65,20 @@ const props = defineProps({
     required: true,
   },
 });
+
+// Get auth headers (same as api.js interceptor)
+function getAuthHeaders() {
+  const headers = {};
+  const adminEmail = localStorage.getItem('adminEmail');
+  if (adminEmail) {
+    headers['X-Admin-Email'] = adminEmail;
+  }
+  const sessionToken = localStorage.getItem('sessionToken');
+  if (sessionToken) {
+    headers['Authorization'] = `Bearer ${sessionToken}`;
+  }
+  return headers;
+}
 
 const emit = defineEmits(['update:modelValue']);
 
@@ -118,11 +133,11 @@ async function uploadFile(file) {
   isUploading.value = true;
 
   try {
-    const response = await fetch(`/api/events/${props.eventId}/logo`, {
+    const response = await fetch(`${API_BASE_URL}/events/${props.eventId}/logo`, {
       method: 'POST',
       headers: {
         'Content-Type': file.type,
-        'X-Admin-Email': props.adminEmail,
+        ...getAuthHeaders(),
       },
       body: file,
     });
@@ -136,7 +151,12 @@ async function uploadFile(file) {
     emit('update:modelValue', result.logoUrl);
   } catch (error) {
     console.error('Logo upload error:', error);
-    errorMessage.value = error.message || 'Failed to upload logo. Please try again.';
+    // Provide more helpful error message for network errors
+    if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+      errorMessage.value = 'Network error. The file may be too large or the server is unavailable.';
+    } else {
+      errorMessage.value = error.message || 'Failed to upload logo. Please try again.';
+    }
   } finally {
     isUploading.value = false;
   }
@@ -147,11 +167,9 @@ async function removeLogo() {
   isUploading.value = true;
 
   try {
-    const response = await fetch(`/api/events/${props.eventId}/logo`, {
+    const response = await fetch(`${API_BASE_URL}/events/${props.eventId}/logo`, {
       method: 'DELETE',
-      headers: {
-        'X-Admin-Email': props.adminEmail,
-      },
+      headers: getAuthHeaders(),
     });
 
     if (!response.ok) {

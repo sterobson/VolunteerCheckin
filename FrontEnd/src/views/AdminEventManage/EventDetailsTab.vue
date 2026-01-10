@@ -119,7 +119,7 @@ const handleSubmit = () => {
 
 .form-row {
   display: grid;
-  grid-template-columns: 3fr 2fr;
+  grid-template-columns: 1fr 1fr;
   gap: 1.5rem;
 }
 
@@ -189,6 +189,12 @@ textarea.form-input {
 @media (max-width: 600px) {
   .event-info-card {
     padding: 1rem;
+  }
+}
+
+@media (max-width: 500px) {
+  .form-row {
+    grid-template-columns: 3fr 2fr;
   }
 }
 

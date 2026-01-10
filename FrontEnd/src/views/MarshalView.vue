@@ -122,7 +122,8 @@
                 <button @click="cancelMapLocationSelect" class="btn btn-secondary btn-sm">Cancel</button>
               </div>
               <div class="map-wrapper">
-                <MapView
+                <CommonMap
+                  ref="courseMapRef"
                   :locations="allLocations"
                   :route="eventRoute"
                   :center="mapCenter"
@@ -131,15 +132,21 @@
                   :highlight-location-ids="assignmentLocationIds"
                   :marshal-mode="true"
                   :clickable="selectingLocationOnMap || hasDynamicAssignment"
+                  :show-fullscreen="true"
+                  :fullscreen-title="terms.course"
+                  :fullscreen-header-style="headerStyle"
+                  :fullscreen-header-text-color="headerTextColor"
                   :class="{ 'selecting-location': selectingLocationOnMap }"
+                  height="100%"
                   @map-click="handleMapClick"
                   @location-click="handleLocationClick"
-                />
-                <button class="fullscreen-btn" @click="openFullscreenMap('course')" title="Full screen">
-                  <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                    <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
-                  </svg>
-                </button>
+                >
+                  <!-- Selection mode banner -->
+                  <template v-if="selectingLocationOnMap" #fullscreen-banner>
+                    <span>Click on the map to set the new location for <strong>{{ updatingLocationFor?.location?.name }}</strong></span>
+                    <button @click="cancelMapLocationSelect" class="btn btn-secondary btn-sm">Cancel</button>
+                  </template>
+                </CommonMap>
               </div>
             </div>
           </div>
@@ -187,7 +194,7 @@
                   <div v-if="expandedCheckpoint === assign.id" class="checkpoint-accordion-content">
                     <!-- Mini-map for this checkpoint -->
                     <div v-if="assign.location" class="checkpoint-mini-map">
-                      <MapView
+                      <CommonMap
                         :locations="allLocations"
                         :route="eventRoute"
                         :center="{ lat: assign.location.latitude, lng: assign.location.longitude }"
@@ -197,14 +204,27 @@
                         :marshal-mode="true"
                         :simplify-non-highlighted="true"
                         :clickable="hasDynamicAssignment"
+                        :show-fullscreen="true"
+                        :fullscreen-title="assign.location?.name || assign.locationName"
+                        :fullscreen-header-style="headerStyle"
+                        :fullscreen-header-text-color="headerTextColor"
+                        height="280px"
                         @map-click="handleMapClick"
                         @location-click="handleLocationClick"
-                      />
-                      <button class="fullscreen-btn" @click="openFullscreenMap(assign.id, assign)" title="Full screen">
-                        <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
-                          <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
-                        </svg>
-                      </button>
+                      >
+                        <!-- Update location button for dynamic checkpoints -->
+                        <template v-if="assign.location?.isDynamic" #fullscreen-footer>
+                          <button
+                            class="btn btn-primary"
+                            @click="openLocationUpdateModal(assign)"
+                          >
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" style="margin-right: 0.5rem;">
+                              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                            </svg>
+                            Update location
+                          </button>
+                        </template>
+                      </CommonMap>
                     </div>
 
                     <!-- Marshals on this checkpoint -->
@@ -769,84 +789,6 @@
       </div>
     </div>
 
-    <!-- Fullscreen Map Overlay -->
-    <div v-if="fullscreenMap" class="fullscreen-map-overlay">
-      <div class="fullscreen-map-header" :style="headerStyle">
-        <div class="fullscreen-map-title" :style="{ color: headerTextColor }">
-          <template v-if="fullscreenMap === 'course'">
-            {{ terms.course }}
-          </template>
-          <template v-else-if="fullscreenMapAssignment">
-            {{ fullscreenMapAssignment.location?.name }}
-          </template>
-        </div>
-        <button class="fullscreen-close-btn" :style="{ color: headerTextColor }" @click="closeFullscreenMap">
-          <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
-            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-          </svg>
-        </button>
-      </div>
-
-      <!-- Map selection mode banner (in fullscreen) -->
-      <div v-if="selectingLocationOnMap" class="fullscreen-map-banner">
-        <span>Click on the map to set the new location for <strong>{{ updatingLocationFor?.location?.name }}</strong></span>
-        <button @click="cancelMapLocationSelect" class="btn btn-secondary btn-sm">Cancel</button>
-      </div>
-
-      <!-- Course Map Fullscreen -->
-      <div v-if="fullscreenMap === 'course'" class="fullscreen-map-container">
-        <MapView
-          :locations="allLocations"
-          :route="eventRoute"
-          :center="mapCenter"
-          :zoom="15"
-          :user-location="userLocation"
-          :highlight-location-ids="assignmentLocationIds"
-          :marshal-mode="true"
-          :clickable="selectingLocationOnMap || hasDynamicAssignment"
-          :class="{ 'selecting-location': selectingLocationOnMap }"
-          @map-click="handleMapClick"
-          @location-click="handleLocationClick"
-        />
-      </div>
-
-      <!-- Checkpoint Map Fullscreen -->
-      <div v-else-if="fullscreenMapAssignment?.location" class="fullscreen-map-container">
-        <MapView
-          :locations="allLocations"
-          :route="eventRoute"
-          :center="{ lat: fullscreenMapAssignment.location.latitude, lng: fullscreenMapAssignment.location.longitude }"
-          :zoom="16"
-          :user-location="userLocation"
-          :highlight-location-id="fullscreenMapAssignment.locationId"
-          :marshal-mode="true"
-          :simplify-non-highlighted="true"
-          :clickable="hasDynamicAssignment"
-          @map-click="handleMapClick"
-          @location-click="handleLocationClick"
-        />
-      </div>
-
-      <!-- Update Location Button (if applicable) -->
-      <div v-if="fullscreenMapAssignment?.location?.isDynamic || (fullscreenMap === 'course' && hasDynamicAssignment)" class="fullscreen-map-actions">
-        <button
-          v-if="fullscreenMapAssignment"
-          class="btn btn-primary"
-          :style="accentButtonStyle"
-          @click="openLocationUpdateModal(fullscreenMapAssignment)"
-        >
-          Update Location
-        </button>
-        <button
-          v-else-if="firstDynamicAssignment"
-          class="btn btn-primary"
-          :style="accentButtonStyle"
-          @click="openLocationUpdateModal(firstDynamicAssignment)"
-        >
-          Update {{ firstDynamicAssignment.location?.name }} Location
-        </button>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -854,7 +796,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { authApi, checkInApi, checklistApi, eventsApi, assignmentsApi, locationsApi, areasApi, notesApi, contactsApi, incidentsApi, queueOfflineAction, getOfflineMode } from '../services/api';
-import MapView from '../components/MapView.vue';
+import CommonMap from '../components/common/CommonMap.vue';
 import ConfirmModal from '../components/ConfirmModal.vue';
 import BaseModal from '../components/BaseModal.vue';
 import EmergencyContactModal from '../components/event-manage/modals/EmergencyContactModal.vue';
@@ -1125,9 +1067,8 @@ const showCheckInReminderModal = ref(false);
 const checkInReminderCheckpoint = ref(null);
 const dismissedCheckInReminders = ref(new Set());
 
-// Fullscreen map state
-const fullscreenMap = ref(null); // 'course' or assignment id
-const fullscreenMapAssignment = ref(null); // The assignment for checkpoint fullscreen
+// Course map ref
+const courseMapRef = ref(null);
 
 // Helper to check if a check-in is stale (more than 24 hours old)
 const isCheckInStale = (checkInTime) => {
@@ -1213,9 +1154,27 @@ const assignmentsWithDetails = computed(() => {
     }));
 
     // Get area contacts for this checkpoint's areas
-    const areaContacts = areaContactsRaw.value.filter(contact =>
-      areaIds.includes(contact.areaId)
+    // Filter out self and deduplicate
+    const rawAreaContacts = areaContactsRaw.value.filter(contact =>
+      areaIds.includes(contact.areaId) &&
+      (!contact.marshalId || contact.marshalId !== currentMarshalId.value)
     );
+    const seenContacts = new Set();
+    const areaContacts = rawAreaContacts.filter(contact => {
+      const key = JSON.stringify({
+        name: contact.name || '',
+        marshalId: contact.marshalId || '',
+        role: contact.role || '',
+        phone: contact.phone || '',
+        email: contact.email || '',
+        notes: contact.notes || '',
+      });
+      if (seenContacts.has(key)) {
+        return false;
+      }
+      seenContacts.add(key);
+      return true;
+    });
 
     // Effective check-in status (reset if checked in more than 24 hours ago)
     const effectiveIsCheckedIn = assign.isCheckedIn && !isCheckInStale(assign.checkInTime);
@@ -1305,21 +1264,6 @@ const dismissCheckInReminder = (assignmentId) => {
   checkInReminderCheckpoint.value = null;
 };
 
-// Fullscreen map functions
-const openFullscreenMap = (type, assignment = null) => {
-  fullscreenMap.value = type;
-  fullscreenMapAssignment.value = assignment;
-  // Prevent body scroll
-  document.body.style.overflow = 'hidden';
-};
-
-const closeFullscreenMap = () => {
-  fullscreenMap.value = null;
-  fullscreenMapAssignment.value = null;
-  // Restore body scroll
-  document.body.style.overflow = '';
-};
-
 // Event route for map display
 const eventRoute = computed(() => {
   if (!event.value?.route) return [];
@@ -1368,13 +1312,36 @@ const contactsLoading = ref(false);
 const eventContacts = computed(() => {
   // Use new contacts API data, filtering to show only event-wide contacts
   // (those not specifically tied to areas/checkpoints in their scope)
-  return myContacts.value;
+
+  // Filter out contacts that are linked to the current marshal (don't show yourself)
+  const filtered = myContacts.value.filter(contact => {
+    return !contact.marshalId || contact.marshalId !== currentMarshalId.value;
+  });
+
+  // Deduplicate contacts with same name, marshalId, role, phone, email, and notes
+  const seen = new Set();
+  return filtered.filter(contact => {
+    const key = JSON.stringify({
+      name: contact.name || '',
+      marshalId: contact.marshalId || '',
+      role: contact.role || '',
+      phone: contact.phone || '',
+      email: contact.email || '',
+      notes: contact.notes || '',
+    });
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 });
 
 // Emergency contacts - filter for specific roles that should be shown in emergency modal
 const emergencyContacts = computed(() => {
   const emergencyRoles = ['EmergencyContact', 'EventDirector', 'MedicalLead', 'SafetyOfficer'];
-  return myContacts.value.filter(contact => emergencyRoles.includes(contact.role));
+  // Use eventContacts which already filters out self and deduplicates
+  return eventContacts.value.filter(contact => emergencyRoles.includes(contact.role));
 });
 
 // Emergency notes - filter for Emergency or Urgent priority notes
@@ -1392,9 +1359,33 @@ const areaContactsRaw = ref([]);
 const areaContactsByArea = computed(() => {
   if (areaContactsRaw.value.length === 0) return [];
 
+  // Filter out contacts that are linked to the current marshal (don't show yourself)
+  const filtered = areaContactsRaw.value.filter(contact => {
+    return !contact.marshalId || contact.marshalId !== currentMarshalId.value;
+  });
+
+  // Deduplicate contacts with same name, marshalId, role, phone, email, and notes
+  const seen = new Set();
+  const deduped = filtered.filter(contact => {
+    const key = JSON.stringify({
+      name: contact.name || '',
+      marshalId: contact.marshalId || '',
+      role: contact.role || '',
+      phone: contact.phone || '',
+      email: contact.email || '',
+      notes: contact.notes || '',
+      areaId: contact.areaId || '',
+    });
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+
   // Group by area
   const grouped = {};
-  for (const contact of areaContactsRaw.value) {
+  for (const contact of deduped) {
     const key = contact.areaId || 'unknown';
     if (!grouped[key]) {
       grouped[key] = {
@@ -1409,9 +1400,9 @@ const areaContactsByArea = computed(() => {
   return Object.values(grouped);
 });
 
-// Total area contacts count
+// Total area contacts count (after filtering and deduplication)
 const totalAreaContacts = computed(() => {
-  return areaContactsRaw.value.length;
+  return areaContactsByArea.value.reduce((sum, group) => sum + group.contacts.length, 0);
 });
 
 // Available source checkpoints for copying location (excludes the one being updated)
@@ -1450,19 +1441,20 @@ const mapCenter = computed(() => {
   return { lat: 51.505, lng: -0.09 };
 });
 
-const authenticateWithMagicCode = async (eventId, code) => {
+const authenticateWithMagicCode = async (eventId, code, isReauth = false) => {
   authenticating.value = true;
   loginError.value = null;
-  console.log('Authenticating with magic code:', { eventId, code });
+  console.log('Authenticating with magic code:', { eventId, code, isReauth });
 
   try {
     const response = await authApi.marshalLogin(eventId, code);
     console.log('Auth response:', response.data);
 
     if (response.data.success) {
-      // Store session token
+      // Store session token and magic code for future re-authentication
       localStorage.setItem('sessionToken', response.data.sessionToken);
       localStorage.setItem(`marshal_${eventId}`, response.data.marshalId);
+      localStorage.setItem(`marshalCode_${eventId}`, code); // Store for re-auth
 
       currentPerson.value = response.data.person;
       currentMarshalId.value = response.data.marshalId;
@@ -1500,8 +1492,15 @@ const authenticateWithMagicCode = async (eventId, code) => {
 const checkExistingSession = async (eventId) => {
   const sessionToken = localStorage.getItem('sessionToken');
   const marshalId = localStorage.getItem(`marshal_${eventId}`);
+  const storedCode = localStorage.getItem(`marshalCode_${eventId}`);
 
   if (!sessionToken || !marshalId) {
+    // No session, but check if we have a stored code to re-authenticate
+    if (storedCode) {
+      console.log('No session but have stored code, attempting re-authentication...');
+      await authenticateWithMagicCode(eventId, storedCode, true);
+      return isAuthenticated.value;
+    }
     return false;
   }
 
@@ -1524,9 +1523,25 @@ const checkExistingSession = async (eventId) => {
       return true;
     }
   } catch (error) {
-    // Session invalid, clear it
+    console.log('Session validation failed, attempting re-authentication...', error);
+
+    // Session invalid - try to re-authenticate with stored magic code
+    if (storedCode) {
+      try {
+        await authenticateWithMagicCode(eventId, storedCode, true);
+        if (isAuthenticated.value) {
+          console.log('Re-authentication successful');
+          return true;
+        }
+      } catch (reAuthError) {
+        console.error('Re-authentication failed:', reAuthError);
+      }
+    }
+
+    // Re-auth failed or no stored code, clear session
     localStorage.removeItem('sessionToken');
     localStorage.removeItem(`marshal_${eventId}`);
+    localStorage.removeItem(`marshalCode_${eventId}`);
   }
 
   return false;
@@ -2594,8 +2609,10 @@ const handleLogout = async () => {
     // Ignore logout errors
   }
 
+  const eventId = route.params.eventId;
   localStorage.removeItem('sessionToken');
-  localStorage.removeItem(`marshal_${route.params.eventId}`);
+  localStorage.removeItem(`marshal_${eventId}`);
+  localStorage.removeItem(`marshalCode_${eventId}`);
 
   isAuthenticated.value = false;
   currentPerson.value = null;
@@ -3529,32 +3546,6 @@ onUnmounted(() => {
   border-radius: 0 0 12px 12px;
 }
 
-/* Fullscreen button */
-.fullscreen-btn {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background: var(--card-bg);
-  border: none;
-  border-radius: 4px;
-  padding: 8px;
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 400;
-  transition: background 0.2s;
-}
-
-.fullscreen-btn:hover {
-  background: var(--bg-hover);
-}
-
-.fullscreen-btn svg {
-  display: block;
-}
-
 /* Nested checkpoint accordion styles */
 .assignments-accordion-content {
   padding: 0.5rem;
@@ -3881,16 +3872,7 @@ onUnmounted(() => {
   position: relative;
 }
 
-.checkpoint-mini-map :deep(.map-container) {
-  height: 200px;
-  min-height: 200px;
-}
-
-.checkpoint-mini-map .fullscreen-btn {
-  top: 8px;
-  right: 8px;
-  padding: 6px;
-}
+/* Map height is controlled via the height prop on CommonMap */
 
 /* Dynamic location section */
 .dynamic-location-section {
@@ -4331,80 +4313,4 @@ onUnmounted(() => {
   }
 }
 
-/* Fullscreen Map Overlay */
-.fullscreen-map-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: var(--z-fullscreen-map, 2000);
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-muted);
-}
-
-.fullscreen-map-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 1.5rem;
-  flex-shrink: 0;
-}
-
-.fullscreen-map-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-}
-
-.fullscreen-close-btn {
-  background: var(--glass-bg-medium);
-  border: none;
-  border-radius: 50%;
-  padding: 8px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.2s;
-}
-
-.fullscreen-close-btn:hover {
-  background: var(--glass-hover);
-}
-
-.fullscreen-map-banner {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  background: var(--warning-bg);
-  border-bottom: 1px solid var(--warning);
-  flex-shrink: 0;
-}
-
-.fullscreen-map-container {
-  flex: 1;
-  position: relative;
-  min-height: 0;
-}
-
-.fullscreen-map-container :deep(.map-container) {
-  height: 100% !important;
-  border-radius: 0;
-}
-
-.fullscreen-map-actions {
-  padding: 1rem;
-  background: var(--card-bg);
-  border-top: 1px solid var(--border-light);
-  display: flex;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.fullscreen-map-actions .btn {
-  min-width: 200px;
-}
 </style>

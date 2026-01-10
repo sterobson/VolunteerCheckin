@@ -8,24 +8,12 @@
     @close="handleClose"
   >
     <!-- Tab Headers -->
-    <div class="tab-headers">
-      <button
-        type="button"
-        class="tab-header"
-        :class="{ active: activeTab === 'details' }"
-        @click="activeTab = 'details'"
-      >
-        Details
-      </button>
-      <button
-        type="button"
-        class="tab-header"
-        :class="{ active: activeTab === 'visibility' }"
-        @click="activeTab = 'visibility'"
-      >
-        Visibility
-      </button>
-    </div>
+    <template #tab-header>
+      <TabHeader
+        v-model="activeTab"
+        :tabs="tabs"
+      />
+    </template>
 
     <form @submit.prevent="handleSave" class="contact-form">
       <!-- Details Tab -->
@@ -164,8 +152,13 @@
             Visibility...
           </button>
         </div>
-        <button type="button" @click="handleSave" class="btn btn-primary">
-          {{ isEditing ? 'Save changes' : 'Create contact' }}
+        <button
+          type="button"
+          @click="handleSave"
+          class="btn btn-success"
+          :disabled="isEditing && !isDirty"
+        >
+          Save
         </button>
       </div>
     </template>
@@ -182,6 +175,7 @@
 <script setup>
 import { ref, computed, defineProps, defineEmits, watch } from 'vue';
 import BaseModal from '../../BaseModal.vue';
+import TabHeader from '../../TabHeader.vue';
 import ScopeConfigurationEditor from '../ScopeConfigurationEditor.vue';
 import InfoModal from '../../InfoModal.vue';
 import { alphanumericCompare } from '../../../utils/sortUtils';
@@ -255,6 +249,11 @@ const form = ref({
 });
 
 const isEditing = computed(() => !!props.contact);
+
+const tabs = [
+  { value: 'details', label: 'Details' },
+  { value: 'visibility', label: 'Visibility' },
+];
 
 const isLinkedToMarshal = computed(() => !!form.value.marshalId);
 
@@ -420,37 +419,6 @@ const handleDelete = () => {
 </script>
 
 <style scoped>
-.tab-headers {
-  display: flex;
-  gap: 0;
-  border-bottom: 2px solid var(--border-light);
-  margin-bottom: 1.5rem;
-}
-
-.tab-header {
-  padding: 0.75rem 1.5rem;
-  background: transparent;
-  border: none;
-  border-bottom: 3px solid transparent;
-  cursor: pointer;
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  transition: all 0.2s;
-  margin-bottom: -2px;
-}
-
-.tab-header:hover {
-  color: var(--text-dark);
-  background: var(--bg-secondary);
-}
-
-.tab-header.active {
-  color: var(--accent-primary);
-  border-bottom-color: var(--accent-primary);
-  background: transparent;
-}
-
 .tab-content {
   display: flex;
   flex-direction: column;
@@ -609,6 +577,20 @@ select {
 
 .btn-secondary:hover {
   background: var(--btn-secondary-hover);
+}
+
+.btn-success {
+  background: var(--success);
+  color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+  background: var(--success-hover);
+}
+
+.btn-success:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .btn-danger {

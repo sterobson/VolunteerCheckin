@@ -259,7 +259,7 @@ const sortedIncidents = computed(() => {
 }
 
 .btn {
-  padding: 0.6rem 1.2rem;
+  padding: 0.5rem 1rem;
   border: none;
   border-radius: 4px;
   cursor: pointer;

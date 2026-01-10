@@ -142,17 +142,17 @@
           </div>
           <div v-if="locationMode === 'map'" class="map-picker-container">
             <div v-if="mapVisible" class="map-picker-hint">Tap to select location</div>
-            <MapView
+            <CommonMap
               v-if="mapVisible"
               :locations="availableCheckpoints"
               :route="route"
               :center="mapCenter"
               :zoom="14"
-              :clickable="true"
+              mode="select-point"
               :user-location="initialLocation"
               :highlight-location-id="selectedCheckpointId"
-              @map-click="handleMapClick"
-              class="location-picker-map"
+              height="150px"
+              @point-selected="handleMapClick"
             />
             <div v-if="currentLocation && currentLocation.latitude != null" class="location-display">
               <span>{{ currentLocation.latitude.toFixed(5) }}, {{ currentLocation.longitude.toFixed(5) }}</span>
@@ -189,7 +189,7 @@
 <script setup>
 import { ref, computed, watch, defineProps, defineEmits } from 'vue';
 import BaseModal from './BaseModal.vue';
-import MapView from './MapView.vue';
+import CommonMap from './common/CommonMap.vue';
 
 const props = defineProps({
   show: {

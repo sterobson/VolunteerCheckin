@@ -39,8 +39,19 @@ export function useAdminTheme() {
   /**
    * Set the theme preference
    * @param {'light' | 'dark' | 'system'} value
+   * @param {boolean} animate - Whether to animate the transition (default: true)
    */
-  const setTheme = (value) => {
+  const setTheme = (value, animate = true) => {
+    if (animate && typeof document !== 'undefined') {
+      // Add transitioning class to enable smooth color animation
+      document.documentElement.classList.add('theme-transitioning');
+
+      // Remove the class after the transition completes
+      setTimeout(() => {
+        document.documentElement.classList.remove('theme-transitioning');
+      }, 1000); // Matches --theme-transition-duration
+    }
+
     theme.value = value;
     saveTheme(value);
   };

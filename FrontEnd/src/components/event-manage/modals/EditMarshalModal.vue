@@ -119,8 +119,8 @@
             {{ nextTabButtonText }}
           </button>
         </div>
-        <button type="button" @click="handleSave" class="btn btn-primary">
-          {{ isEditing ? 'Save changes' : `Create ${termsLower.person}` }}
+        <button type="button" @click="handleSave" class="btn btn-success">
+          Save
         </button>
       </div>
     </template>
@@ -458,6 +458,15 @@ defineExpose({
 
 .btn-primary:hover {
   background: var(--btn-primary-hover);
+}
+
+.btn-success {
+  background: var(--success);
+  color: white;
+}
+
+.btn-success:hover {
+  background: var(--success-hover);
 }
 
 .btn-secondary {

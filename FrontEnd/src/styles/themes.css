@@ -12,6 +12,13 @@
 
 :root {
   /* ========================================
+   * ANIMATION DURATIONS
+   * ======================================== */
+  --modal-resize-duration: 0.2s;
+  --modal-open-duration: 0.5s;
+  --theme-transition-duration: 0.5s;
+
+  /* ========================================
    * BACKGROUNDS (light mode fallback)
    * ======================================== */
   --bg-primary: #ffffff;
@@ -85,7 +92,7 @@
    * MODALS (light mode fallback)
    * ======================================== */
   --modal-bg: #ffffff;
-  --modal-overlay: rgba(0,0,0,0.5);
+  --modal-overlay: rgba(0,0,0,0.65);
 
   /* ========================================
    * BRAND COLORS
@@ -331,7 +338,7 @@
 
     /* MODALS */
     --modal-bg: light-dark(#ffffff, #1a1a2e);
-    --modal-overlay: light-dark(rgba(0,0,0,0.5), rgba(0,0,0,0.7));
+    --modal-overlay: light-dark(rgba(0,0,0,0.65), rgba(0,0,0,0.8));
 
     /* BRAND */
     --brand-primary-bg: light-dark(#e3e9ff, #1a1a3a);
@@ -474,7 +481,7 @@ html.theme-dark {
 
   /* MODALS */
   --modal-bg: #1a1a2e;
-  --modal-overlay: rgba(0,0,0,0.7);
+  --modal-overlay: rgba(0,0,0,0.8);
 
   /* BRAND */
   --brand-primary-bg: #1a1a3a;
@@ -552,4 +559,22 @@ html.theme-dark {
   --disabled-bg: #252542;
   --disabled-text: #606060;
   --selection-highlight: rgba(66, 133, 244, 0.3);
+}
+
+/* ========================================
+ * THEME TRANSITION ANIMATION
+ * Smooth color transitions when switching themes
+ * Applied via .theme-transitioning class on <html>
+ * ======================================== */
+html.theme-transitioning,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition:
+    background-color var(--theme-transition-duration) ease,
+    color var(--theme-transition-duration) ease,
+    border-color var(--theme-transition-duration) ease,
+    box-shadow var(--theme-transition-duration) ease,
+    fill var(--theme-transition-duration) ease,
+    stroke var(--theme-transition-duration) ease !important;
 }

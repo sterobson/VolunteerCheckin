@@ -104,13 +104,13 @@
           </div>
           <!-- Map showing incident location with route and checkpoints -->
           <div v-if="hasGpsLocation" class="incident-map-container">
-            <MapView
+            <CommonMap
               :locations="checkpoints"
               :route="route"
               :center="incidentMapCenter"
               :zoom="15"
               :user-location="incidentMarker"
-              class="incident-location-map"
+              height="200px"
             />
           </div>
         </div>
@@ -221,7 +221,7 @@
 <script setup>
 import { ref, computed, watch, defineProps, defineEmits } from 'vue';
 import BaseModal from './BaseModal.vue';
-import MapView from './MapView.vue';
+import CommonMap from './common/CommonMap.vue';
 
 const props = defineProps({
   show: {

@@ -46,62 +46,115 @@
     <!-- Boundary Tab -->
     <div v-if="activeTab === 'boundary'" class="tab-content">
       <div class="boundary-section">
-        <div class="instructions-card">
-          <p>
-            <strong>Draw a polygon on the map to define this area's boundary</strong>
-          </p>
-          <p>
-            Click "Draw on Map" to activate drawing mode. Click on the map to add vertices,
-            and double-click to complete the polygon.
-          </p>
+        <!-- Show editable map if boundary exists -->
+        <div v-if="form.polygon && form.polygon.length > 0" class="boundary-preview">
+          <CommonMap
+            mode="edit-polygon"
+            :editing-polygon="form.polygon"
+            :route="route"
+            :locations="checkpoints"
+            :areas="otherAreas"
+            :highlight-location-ids="areaCheckpointIds"
+            :simplify-non-highlighted="true"
+            :all-locations-for-bounds="polygonBoundsLocations"
+            height="300px"
+            @polygon-update="handlePolygonUpdate"
+          />
+          <p class="boundary-hint">Drag points to move them. Click a point to delete it (minimum 3 required).</p>
         </div>
 
         <div class="boundary-actions">
-          <button @click="handleDrawBoundary" class="btn btn-primary btn-full">
-            Draw on Map
-          </button>
           <button
-            v-if="form.polygon && form.polygon.length > 0"
-            @click="clearBoundary"
-            class="btn btn-danger btn-full"
+            v-if="!form.polygon || form.polygon.length === 0"
+            @click="handleDrawBoundary"
+            class="btn btn-primary btn-full"
           >
-            Clear Boundary
+            Draw on map
           </button>
+          <template v-else>
+            <button
+              @click="handleDrawBoundary"
+              class="btn btn-secondary"
+            >
+              Redraw
+            </button>
+            <button
+              @click="showClearBoundaryConfirm = true"
+              class="btn btn-danger"
+            >
+              Delete boundary
+            </button>
+          </template>
         </div>
 
       </div>
     </div>
+
+    <!-- Clear boundary confirmation modal -->
+    <ConfirmModal
+      :show="showClearBoundaryConfirm"
+      title="Delete boundary"
+      message="Are you sure you want to delete this boundary? This cannot be undone."
+      confirm-text="Delete"
+      :is-danger="true"
+      @confirm="confirmClearBoundary"
+      @cancel="showClearBoundaryConfirm = false"
+    />
 
     <!-- Contacts Tab -->
     <div v-if="activeTab === 'contacts'" class="tab-content">
       <h3 class="section-title">{{ terms.area }} contacts</h3>
 
       <div class="contacts-actions">
-        <button @click="handleAddAreaContact" class="btn btn-primary btn-full">
-          Add contact for this {{ termsLower.area }}
+        <button @click="handleAddAreaContact" class="btn btn-primary">
+          Add new contact
+        </button>
+        <button @click="handleSelectExistingContact" class="btn btn-secondary">
+          Select existing
         </button>
       </div>
 
-      <!-- Show existing contacts scoped to this area -->
-      <div v-if="areaContacts.length > 0" class="area-contacts-list">
-        <h4>Contacts visible in this {{ termsLower.area }} ({{ areaContacts.length }})</h4>
+      <!-- Show existing contacts scoped to this area + pending contacts -->
+      <div v-if="displayContacts.length > 0" class="area-contacts-list">
+        <h4>Contacts visible in this {{ termsLower.area }} ({{ displayContacts.length }})</h4>
         <div
-          v-for="contact in areaContacts"
+          v-for="contact in displayContacts"
           :key="contact.contactId"
           class="contact-item"
-          @click="$emit('edit-contact', contact)"
+          :class="{ pending: contact.isPending }"
+          @click="contact.isPending ? null : $emit('edit-contact', contact)"
         >
           <div class="contact-info">
             <strong>{{ contact.name }}</strong>
             <span v-if="contact.role" class="contact-role-badge">{{ formatRoleName(contact.role) }}</span>
+            <span v-if="contact.isPending" class="pending-badge">Pending</span>
             <div v-if="contact.phone || contact.email" class="contact-details">
               <span v-if="contact.phone">{{ contact.phone }}</span>
               <span v-if="contact.email">{{ contact.email }}</span>
             </div>
           </div>
+          <button
+            v-if="contact.isPending"
+            type="button"
+            class="btn btn-small btn-danger"
+            @click.stop="removePendingContact(contact.contactId)"
+          >
+            Remove
+          </button>
         </div>
       </div>
     </div>
+
+    <!-- Contact Selector Modal -->
+    <ContactSelectorModal
+      :show="showContactSelector"
+      :area-name="form.name || 'this ' + termsLower.area"
+      :area-id="props.area?.id || ''"
+      :contacts="props.contacts"
+      :exclude-contact-ids="excludeContactIds"
+      @close="showContactSelector = false"
+      @select="handleContactSelected"
+    />
 
     <!-- Checkpoints Tab (only when editing) -->
     <div v-if="activeTab === 'checkpoints' && isExistingArea" class="tab-content">
@@ -414,8 +467,8 @@
             {{ nextTabButtonText }}
           </button>
         </div>
-        <button type="button" @click="handleSave" class="btn btn-primary">
-          {{ isExistingArea ? 'Save changes' : `Create ${termsLower.area}` }}
+        <button type="button" @click="handleSave" class="btn btn-success">
+          Save
         </button>
       </div>
     </template>
@@ -430,6 +483,9 @@ import CheckpointChecklistView from '../../CheckpointChecklistView.vue';
 import NotesView from '../../NotesView.vue';
 import CheckpointStylePicker from '../../CheckpointStylePicker.vue';
 import IncidentCard from '../../IncidentCard.vue';
+import ConfirmModal from '../../ConfirmModal.vue';
+import CommonMap from '../../common/CommonMap.vue';
+import ContactSelectorModal from './ContactSelectorModal.vue';
 import { AREA_COLORS, DEFAULT_AREA_COLOR, getNextAvailableColor } from '../../../constants/areaColors';
 import { checklistApi } from '../../../services/api';
 import { useTerminology, terminologyOptions, getCheckpointOptionLabel, getSingularTerm, getPluralTerm } from '../../../composables/useTerminology';
@@ -577,6 +633,10 @@ const props = defineProps({
     type: String,
     default: 'details',
   },
+  route: {
+    type: Array,
+    default: () => [],
+  },
 });
 
 const emit = defineEmits([
@@ -596,6 +656,9 @@ const checklistTabRef = ref(null);
 const checklistChanges = ref([]);
 const checkpointChecklistStatus = ref({});
 const loadingChecklistStatus = ref({});
+const showClearBoundaryConfirm = ref(false);
+const showContactSelector = ref(false);
+const pendingContacts = ref([]);
 
 const form = ref({
   name: '',
@@ -734,6 +797,45 @@ const isExistingArea = computed(() => {
   return props.area && props.area.id;
 });
 
+// Calculate center of polygon for map preview
+const polygonCenter = computed(() => {
+  if (!form.value.polygon || form.value.polygon.length === 0) {
+    return { lat: 0, lng: 0 };
+  }
+  const lats = form.value.polygon.map(p => p.lat);
+  const lngs = form.value.polygon.map(p => p.lng);
+  return {
+    lat: lats.reduce((a, b) => a + b, 0) / lats.length,
+    lng: lngs.reduce((a, b) => a + b, 0) / lngs.length,
+  };
+});
+
+// Convert polygon points to locations for auto-fit bounds
+const polygonBoundsLocations = computed(() => {
+  if (!form.value.polygon || form.value.polygon.length === 0) {
+    return [];
+  }
+  // Convert polygon points to location-like objects for MapView's fitBounds
+  return form.value.polygon.map((point, index) => ({
+    id: `polygon-point-${index}`,
+    latitude: point.lat,
+    longitude: point.lng,
+  }));
+});
+
+// Other areas (excluding the one being edited) for display on the map - shown in gray
+const otherAreas = computed(() => {
+  if (!props.area?.id) return props.areas.map(a => ({ ...a, color: '#999999' }));
+  return props.areas
+    .filter(a => a.id !== props.area.id)
+    .map(a => ({ ...a, color: '#999999' }));
+});
+
+// IDs of checkpoints in this area (for highlighting)
+const areaCheckpointIds = computed(() => {
+  return areaCheckpoints.value.map(cp => cp.id);
+});
+
 // All tabs - incidents shown conditionally
 const availableTabs = computed(() => {
   const tabs = [
@@ -828,6 +930,22 @@ const areaContacts = computed(() => {
       return false;
     });
   });
+});
+
+// Combined list of area contacts + pending contacts for display
+const displayContacts = computed(() => {
+  const existing = areaContacts.value.map(c => ({ ...c, isPending: false }));
+  const pending = pendingContacts.value.map(c => ({ ...c, isPending: true }));
+  return [...existing, ...pending].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+  );
+});
+
+// Contact IDs to exclude from the selector (already scoped + pending)
+const excludeContactIds = computed(() => {
+  const scopedIds = areaContacts.value.map(c => c.contactId);
+  const pendingIds = pendingContacts.value.map(c => c.contactId);
+  return [...scopedIds, ...pendingIds];
 });
 
 // Get assignments for a specific checkpoint
@@ -971,6 +1089,7 @@ watch(() => props.show, (newVal) => {
     checklistChanges.value = [];
     checkpointChecklistStatus.value = {};
     loadingChecklistStatus.value = {};
+    pendingContacts.value = [];
     // Reset form when opening for a new area
     if (!isExistingArea.value) {
       form.value = {
@@ -1028,14 +1147,38 @@ const handleDrawBoundary = () => {
   emit('draw-boundary', form.value);
 };
 
-const clearBoundary = () => {
+const handlePolygonUpdate = (points) => {
+  form.value.polygon = points;
+  handleInput();
+};
+
+const confirmClearBoundary = () => {
   form.value.polygon = [];
+  showClearBoundaryConfirm.value = false;
   handleInput();
 };
 
 const handleAddAreaContact = () => {
   // Emit to parent to open contact modal with pre-configured area scope
   emit('add-area-contact', props.area);
+};
+
+const handleSelectExistingContact = () => {
+  showContactSelector.value = true;
+};
+
+const handleContactSelected = (contact) => {
+  // Add to pending contacts list
+  if (!pendingContacts.value.find(c => c.contactId === contact.contactId)) {
+    pendingContacts.value.push(contact);
+    handleInput(); // Mark form as dirty
+  }
+  showContactSelector.value = false;
+};
+
+const removePendingContact = (contactId) => {
+  pendingContacts.value = pendingContacts.value.filter(c => c.contactId !== contactId);
+  handleInput();
 };
 
 const formatRoleName = (role) => {
@@ -1081,6 +1224,8 @@ const handleSave = () => {
     checkpointTerm: form.value.checkpointTerm,
     // Include pending checklist changes
     checklistChanges: checklistChanges.value || [],
+    // Include pending contacts to add to this area
+    pendingContacts: pendingContacts.value || [],
   } : {
     // Create request
     name: form.value.name,
@@ -1099,6 +1244,8 @@ const handleSave = () => {
       : null,
     peopleTerm: form.value.peopleTerm,
     checkpointTerm: form.value.checkpointTerm,
+    // Include pending contacts to add to this area
+    pendingContacts: pendingContacts.value || [],
   };
 
   emit('save', formData);
@@ -1305,27 +1452,30 @@ const getCheckpointIconSvg = (checkpoint) => {
 .boundary-section {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
-.instructions-card {
-  background: var(--bg-active);
-  padding: 1rem;
+.boundary-preview {
   border-radius: 8px;
-  color: var(--accent-primary);
+  overflow: hidden;
+  border: 1px solid var(--border-color);
 }
 
-.instructions-card p {
-  margin: 0 0 0.5rem 0;
-}
-
-.instructions-card p:last-child {
-  margin-bottom: 0;
+.boundary-map {
+  height: 300px;
+  width: 100%;
 }
 
 .boundary-actions {
   display: flex;
   gap: 1rem;
+}
+
+.boundary-hint {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  text-align: center;
 }
 
 .boundary-info {
@@ -1415,6 +1565,15 @@ const getCheckpointIconSvg = (checkpoint) => {
 
 .btn-secondary:hover {
   background: var(--btn-secondary-hover);
+}
+
+.btn-success {
+  background: var(--success);
+  color: white;
+}
+
+.btn-success:hover {
+  background: var(--success-hover);
 }
 
 .btn-danger {
@@ -1643,6 +1802,28 @@ const getCheckpointIconSvg = (checkpoint) => {
   gap: 1rem;
   font-size: 0.85rem;
   color: var(--text-secondary);
+}
+
+.pending-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  background: var(--status-warning-bg);
+  color: var(--accent-warning);
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-left: 0.5rem;
+}
+
+.contact-item.pending {
+  border-style: dashed;
+  background: var(--bg-tertiary);
+}
+
+.contact-item.pending:hover {
+  cursor: default;
+  background: var(--bg-tertiary);
+  border-color: var(--border-color);
 }
 
 .placeholder-message {

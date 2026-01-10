@@ -480,6 +480,38 @@ if ($Environment -eq "local" -and $Frontend) {
         } else {
             Write-Warning "Frontend may still be starting. Check the console window."
         }
+
+        # Ask about subpath server for testing
+        Write-Host ""
+        Write-Host "Would you like to also start a subpath server for testing?" -ForegroundColor Cyan
+        Write-Gray "  This simulates the GitHub Pages deployment path (/VolunteerCheckin/testing/)"
+        Write-Gray "  Useful for testing that magic links include the correct path."
+        Write-Host ""
+        Write-Host "  1. Yes, start subpath server on port 5175" -ForegroundColor White
+        Write-Host "  2. No, just use the root server" -ForegroundColor White
+        Write-Host ""
+
+        $subpathChoice = Read-Host "Enter choice (1 or 2)"
+
+        if ($subpathChoice -eq "1") {
+            # Stop any existing server on 5175
+            Stop-ProcessOnPort -Port 5175 -ServiceName "Frontend subpath server" | Out-Null
+
+            Write-Info "Starting subpath dev server..."
+            $subpathCommand = "`$env:VITE_BASE_PATH='/VolunteerCheckin/testing/'; npm run dev -- --port 5175"
+            Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-Command", "cd '$frontendPath'; $subpathCommand" -WindowStyle Normal
+            Start-Sleep -Seconds 3
+
+            $subpathRunning = Get-NetTCPConnection -LocalPort 5175 -State Listen -ErrorAction SilentlyContinue
+            if ($subpathRunning) {
+                Write-Success "Subpath server started on http://localhost:5175/VolunteerCheckin/testing/"
+            } else {
+                Write-Warning "Subpath server may still be starting. Check the console window."
+            }
+
+            # Track that we started subpath server for summary
+            $script:StartedSubpathServer = $true
+        }
     }
 }
 
@@ -783,6 +815,9 @@ if ($deploymentSuccess) {
             $localIP = Get-LocalIPAddress
             if ($localIP) {
                 Write-Host "       Network  -> http://${localIP}:5174" -ForegroundColor Green
+            }
+            if ($script:StartedSubpathServer) {
+                Write-Host "  [OK] Subpath  -> http://localhost:5175/VolunteerCheckin/testing/" -ForegroundColor Green
             }
         }
     } else {

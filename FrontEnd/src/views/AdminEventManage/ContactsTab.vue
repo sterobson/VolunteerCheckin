@@ -1,6 +1,6 @@
 <template>
   <div class="contacts-tab">
-    <div class="contacts-tab-header">
+    <div class="tab-header">
       <div class="button-group">
         <button @click="$emit('add-contact')" class="btn btn-primary">
           Add contact
@@ -202,14 +202,16 @@ const truncateContent = (content) => {
   gap: 1.5rem;
 }
 
-.contacts-tab-header {
+.tab-header {
+  flex-wrap: wrap;
+  gap: 1rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
 }
 
-.contacts-tab-header h2 {
+.tab-header h2 {
   margin: 0;
   font-size: 1.5rem;
   color: var(--text-primary);
@@ -219,6 +221,7 @@ const truncateContent = (content) => {
   display: flex;
   gap: 0.75rem;
 }
+.btn {  padding: 0.5rem 1rem;  border: none;  border-radius: 4px;  cursor: pointer;  font-size: 0.9rem;  transition: background-color 0.2s;}.btn-primary {  background: var(--accent-primary);  color: white;}.btn-primary:hover {  background: var(--accent-primary-hover);}
 
 .filters-section {
   margin-bottom: 1rem;

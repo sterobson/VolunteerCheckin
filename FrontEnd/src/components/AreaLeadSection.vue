@@ -48,13 +48,14 @@
         <div v-if="expandedCheckpoint === checkpoint.checkpointId" class="checkpoint-accordion-content">
           <!-- Mini Map -->
           <div class="checkpoint-mini-map">
-            <MapView
+            <CommonMap
               :locations="[{ id: checkpoint.checkpointId, name: checkpoint.name, description: checkpoint.description, latitude: checkpoint.latitude, longitude: checkpoint.longitude }]"
               :route="route"
               :center="{ lat: checkpoint.latitude, lng: checkpoint.longitude }"
               :zoom="16"
               :highlight-location-id="checkpoint.checkpointId"
               :marshal-mode="true"
+              height="280px"
             />
           </div>
 
@@ -304,7 +305,7 @@ import { useTerminology } from '../composables/useTerminology';
 import { alphanumericCompare } from '../utils/sortUtils';
 import { getCachedEventData, updateCachedField, cacheEventData } from '../services/offlineDb';
 import { useOffline } from '../composables/useOffline';
-import MapView from './MapView.vue';
+import CommonMap from './common/CommonMap.vue';
 import BaseModal from './BaseModal.vue';
 import IncidentCard from './IncidentCard.vue';
 import IncidentDetailModal from './IncidentDetailModal.vue';

@@ -2,13 +2,15 @@
   <div class="areas-tab">
     <div class="content-grid">
       <div class="map-section">
-        <MapView
+        <CommonMap
           :locations="checkpoints"
           :route="route"
           :areas="areas"
           :selected-area-id="selectedAreaId"
           :clickable="true"
-          :drawing-mode="drawingMode"
+          :mode="drawingMode ? 'draw-polygon' : 'view'"
+          show-filters
+          height="100%"
           @map-click="$emit('map-click', $event)"
           @area-click="$emit('area-click', $event)"
           @polygon-complete="$emit('polygon-complete', $event)"
@@ -33,7 +35,7 @@
 
 <script setup>
 import { defineProps, defineEmits } from 'vue';
-import MapView from '../../components/MapView.vue';
+import CommonMap from '../../components/common/CommonMap.vue';
 import AreasList from '../../components/event-manage/lists/AreasList.vue';
 
 const props = defineProps({

@@ -1,80 +1,47 @@
 <template>
   <div class="tab-content">
-    <h3 class="section-title">Assigned {{ termsLower.checkpoints }} ({{ totalAssignments }})</h3>
-    <div class="assignments-list">
-      <!-- Existing assignments -->
-      <div
-        v-for="assignment in assignments"
-        :key="assignment.id"
-        class="assignment-item"
-        :class="{
-          'checked-in': !assignment.isPending && getEffectiveCheckInStatus(assignment),
-          'is-pending': assignment.isPending
-        }"
-      >
-        <div class="assignment-info">
-          <div class="assignment-header">
-            <span
-              v-if="!assignment.isPending"
-              class="status-indicator"
-              :style="{ color: getStatusColor(assignment) }"
-              :title="getStatusText(assignment)"
-            >
-              {{ getStatusIcon(assignment) }}
-            </span>
-            <span v-else class="status-indicator pending-indicator" title="Will be assigned on save">
-              ⏳
-            </span>
-            <strong>{{ assignment.locationName }}</strong>
-            <span v-if="assignment.isPending" class="pending-badge">
-              (will be assigned on save)
-            </span>
-            <span v-else-if="pendingCheckInChanges.has(assignment.id)" class="pending-badge">
-              (unsaved)
-            </span>
-          </div>
-          <span v-if="!assignment.isPending && getEffectiveCheckInStatus(assignment)" class="check-in-info">
-            <template v-if="assignment.isCheckedIn && !pendingCheckInChanges.has(assignment.id)">
-              {{ formatTime(assignment.checkInTime) }}
-              <span class="check-in-method">({{ assignment.checkInMethod }})</span>
-            </template>
-            <template v-else>
-              Will be checked in on save
-            </template>
-          </span>
-        </div>
-        <div class="assignment-actions">
-          <button
-            v-if="!assignment.isPending"
-            @click="handleToggleCheckIn(assignment)"
-            class="btn btn-small"
-            :class="getEffectiveCheckInStatus(assignment) ? 'btn-danger' : 'btn-secondary'"
-          >
-            {{ getEffectiveCheckInStatus(assignment) ? 'Undo' : 'Check in' }}
-          </button>
-          <button
-            @click="$emit('remove-assignment', assignment)"
-            class="btn btn-small btn-danger"
-          >
-            Remove
-          </button>
-        </div>
-      </div>
+    <!-- Read-only notice when opened from a checkpoint -->
+    <div v-if="lockedCheckpointId" class="read-only-notice">
+      Viewing from {{ termsLower.checkpoint }} - {{ termsLower.checkpoints }} cannot be modified here.
+    </div>
 
-      <!-- Assign to checkpoint -->
-      <div v-if="sortedAvailableLocations.length > 0" class="form-group" style="margin-top: 1.5rem;">
-        <label>Assign to {{ termsLower.checkpoint }}</label>
-        <select v-model="selectedLocationId" class="form-input" @change="handleSelectionChange">
-          <option value="">Select a {{ termsLower.checkpoint }}...</option>
-          <option
-            v-for="location in sortedAvailableLocations"
-            :key="location.id"
-            :value="location.id"
-          >
-            {{ location.name }}<template v-if="location.description"> - {{ location.description }}</template>
-          </option>
-        </select>
-      </div>
+    <h3 class="section-title">Assigned {{ termsLower.checkpoints }} ({{ totalAssignments }})</h3>
+
+    <CardsGrid
+      :is-empty="assignments.length === 0"
+      :empty-message="`No ${termsLower.checkpoints} assigned yet.`"
+      :empty-hint="lockedCheckpointId ? '' : `Use the dropdown below to assign this ${termsLower.person} to ${termsLower.checkpoints}.`"
+    >
+      <MarshalCheckpointCard
+        v-for="assignment in sortedAssignments"
+        :key="assignment.id"
+        :assignment="assignment"
+        :location="getLocation(assignment.locationId)"
+        :areas="areas"
+        :effective-check-in-status="getEffectiveCheckInStatus(assignment)"
+        :has-unsaved-changes="pendingCheckInChanges.has(assignment.id)"
+        :is-locked="!!lockedCheckpointId"
+        :is-marked-for-removal="isAssignmentMarkedForRemoval(assignment.id)"
+        @click="handleSelectCheckpoint"
+        @toggle-check-in="handleToggleCheckIn"
+        @remove="handleMarkForRemoval"
+        @undo-remove="handleUndoRemoval"
+      />
+    </CardsGrid>
+
+    <!-- Assign to checkpoint (hidden when locked) -->
+    <div v-if="!lockedCheckpointId && sortedAvailableLocations.length > 0" class="form-group" style="margin-top: 1.5rem;">
+      <label>Assign to {{ termsLower.checkpoint }}</label>
+      <select v-model="selectedLocationId" class="form-input" @change="handleSelectionChange">
+        <option value="">Select a {{ termsLower.checkpoint }}...</option>
+        <option
+          v-for="location in sortedAvailableLocations"
+          :key="location.id"
+          :value="location.id"
+        >
+          {{ location.name }}<template v-if="location.description"> - {{ location.description }}</template>
+        </option>
+      </select>
     </div>
   </div>
 </template>
@@ -83,6 +50,8 @@
 import { ref, computed, defineProps, defineEmits } from 'vue';
 import { useCheckInManagement } from '../../../composables/useCheckInManagement';
 import { useTerminology } from '../../../composables/useTerminology';
+import CardsGrid from '../../common/CardsGrid.vue';
+import MarshalCheckpointCard from '../MarshalCheckpointCard.vue';
 
 const { termsLower } = useTerminology();
 
@@ -95,30 +64,92 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  allLocations: {
+    type: Array,
+    default: () => [],
+  },
+  areas: {
+    type: Array,
+    default: () => [],
+  },
   isNewMarshal: {
     type: Boolean,
     default: false,
   },
+  lockedCheckpointId: {
+    type: String,
+    default: null,
+  },
 });
 
-const emit = defineEmits(['input', 'remove-assignment', 'assign-to-location']);
+const emit = defineEmits(['input', 'remove-assignment', 'assign-to-location', 'select-checkpoint']);
 
 // Use check-in management composable
 const {
   pendingCheckInChanges,
   getEffectiveCheckInStatus,
-  handleToggleCheckIn,
-  getStatusIcon,
-  getStatusColor,
-  getStatusText,
-  formatTime,
+  handleToggleCheckIn: toggleCheckIn,
 } = useCheckInManagement(() => emit('input'));
 
 const selectedLocationId = ref('');
+const markedForRemoval = ref(new Set());
 
 const totalAssignments = computed(() => {
   return props.assignments?.length || 0;
 });
+
+// Get location object for an assignment
+const getLocation = (locationId) => {
+  if (!props.allLocations) return null;
+  return props.allLocations.find(l => l.id === locationId) || null;
+};
+
+// Sort assignments by location name
+const sortedAssignments = computed(() => {
+  return [...props.assignments].sort((a, b) => {
+    return (a.locationName || '').localeCompare(b.locationName || '', undefined, { numeric: true, sensitivity: 'base' });
+  });
+});
+
+// Check if an assignment is for the locked checkpoint
+const isLockedCheckpoint = (assignment) => {
+  return props.lockedCheckpointId && assignment.locationId === props.lockedCheckpointId;
+};
+
+// Check if an assignment is marked for removal
+const isAssignmentMarkedForRemoval = (assignmentId) => {
+  return markedForRemoval.value.has(assignmentId);
+};
+
+// Handle clicking on a checkpoint to view its details
+const handleSelectCheckpoint = (assignment) => {
+  if (!assignment.isPending) {
+    emit('select-checkpoint', assignment);
+  }
+};
+
+// Handle toggle check-in
+const handleToggleCheckIn = (assignment) => {
+  toggleCheckIn(assignment);
+};
+
+// Handle marking for removal (pending assignments are removed immediately)
+const handleMarkForRemoval = (assignment) => {
+  if (assignment.isPending) {
+    // For pending assignments, remove immediately
+    emit('remove-assignment', assignment);
+  } else {
+    // For existing assignments, mark for removal on save
+    markedForRemoval.value.add(assignment.id);
+    emit('input');
+  }
+};
+
+// Handle undo removal
+const handleUndoRemoval = (assignment) => {
+  markedForRemoval.value.delete(assignment.id);
+  emit('input');
+};
 
 // Sort locations alphabetically with natural number sorting
 const sortedAvailableLocations = computed(() => {
@@ -142,6 +173,7 @@ defineExpose({
   pendingCheckInChanges,
   clearPendingChanges: () => {
     pendingCheckInChanges.value.clear();
+    markedForRemoval.value.clear();
     selectedLocationId.value = '';
   },
   getPendingChanges: () => {
@@ -149,6 +181,9 @@ defineExpose({
       assignmentId,
       shouldBeCheckedIn,
     }));
+  },
+  getMarkedForRemoval: () => {
+    return Array.from(markedForRemoval.value);
   },
 });
 </script>
@@ -187,132 +222,14 @@ defineExpose({
   color: var(--text-primary);
 }
 
-.assignments-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.assignment-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem;
+.read-only-notice {
+  padding: 0.75rem 1rem;
   background: var(--bg-tertiary);
-  border-radius: 8px;
   border: 1px solid var(--border-color);
-  gap: 1rem;
-}
-
-@media (max-width: 640px) {
-  .assignment-item {
-    flex-direction: column;
-    align-items: stretch;
-  }
-}
-
-.assignment-item.checked-in {
-  background: var(--success-bg);
-  border-color: var(--success-border);
-}
-
-.assignment-item.is-pending {
-  background: var(--warning-bg-light);
-  border-color: var(--warning);
-  border-style: dashed;
-}
-
-.pending-indicator {
-  color: var(--warning);
-}
-
-.assignment-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.assignment-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.status-indicator {
-  font-size: 1.1rem;
-  font-weight: bold;
-}
-
-.check-in-info {
-  font-size: 0.85rem;
+  border-radius: 6px;
   color: var(--text-secondary);
-}
-
-.check-in-method {
-  color: var(--text-muted);
-}
-
-.pending-badge {
-  color: var(--warning-orange);
-  font-size: 0.85rem;
-  font-weight: 600;
-  font-style: italic;
-}
-
-.assignment-actions {
-  display: flex;
-  gap: 0.5rem;
-  flex-shrink: 0;
-}
-
-@media (max-width: 640px) {
-  .assignment-actions {
-    width: 100%;
-  }
-
-  .assignment-actions .btn {
-    flex: 1;
-  }
-}
-
-.btn {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
   font-size: 0.9rem;
-  transition: background-color 0.2s;
-}
-
-.btn-full {
-  width: 100%;
-}
-
-.btn-small {
-  padding: 0.375rem 0.75rem;
-  font-size: 0.85rem;
-}
-
-.btn-secondary {
-  background: var(--btn-secondary-bg);
-  color: var(--btn-secondary-text);
-}
-
-.btn-secondary:hover {
-  background: var(--btn-secondary-hover);
-}
-
-.btn-danger {
-  background: var(--danger);
-  color: var(--btn-primary-text);
-}
-
-.btn-danger:hover {
-  background: var(--danger-hover);
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  font-style: italic;
+  margin-bottom: 1rem;
 }
 </style>

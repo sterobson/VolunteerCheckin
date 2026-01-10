@@ -78,8 +78,28 @@ public class ChecklistCompletionEntity : ITableEntity
     public DateTime? UncompletedAt { get; set; }
 
     /// <summary>
-    /// Admin email who undid this completion
+    /// Who uncompleted this item.
+    /// Values: "Marshal", "EventAdmin", "AreaLead"
     /// </summary>
+    public string UncompletedByActorType { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ID of the actor who uncompleted this item.
+    /// - For "Marshal" or "AreaLead": MarshalId
+    /// - For "EventAdmin": Admin email
+    /// </summary>
+    public string UncompletedByActorId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Denormalized name of the actor who uncompleted for display purposes
+    /// </summary>
+    public string UncompletedByActorName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Legacy field - Admin email who undid this completion.
+    /// Kept for backwards compatibility with existing data.
+    /// </summary>
+    [Obsolete("Use UncompletedByActorId instead")]
     public string UncompletedByAdminEmail { get; set; } = string.Empty;
 
     /// <summary>

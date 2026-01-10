@@ -4,11 +4,16 @@
     <div class="tab-header">
       <div class="button-group">
         <button @click="$emit('add-area')" class="btn btn-primary">
-          Add {{ terms.area.toLowerCase() }}
+          Add {{ termsLower.area }}
         </button>
       </div>
       <div class="status-pills" v-if="areas.length > 0">
-        <span class="status-pill">{{ areas.length }} {{ areas.length === 1 ? terms.area.toLowerCase() : terms.areas.toLowerCase() }}</span>
+        <StatusPill
+          variant="neutral"
+          :active="false"
+        >
+          {{ areas.length }} {{ areas.length === 1 ? termsLower.area : termsLower.areas }}
+        </StatusPill>
       </div>
     </div>
 
@@ -19,52 +24,32 @@
           v-model="searchQuery"
           type="text"
           class="search-input"
-          :placeholder="`Search by ${terms.area.toLowerCase()} name or ${terms.checkpoint.toLowerCase()} name...`"
+          :placeholder="`Search by ${termsLower.area} name or ${termsLower.checkpoint} name...`"
         />
       </div>
     </div>
 
     <!-- Row 3: Content -->
-    <div class="areas-list">
-      <div
-        v-for="area in sortedAreas"
-        :key="area.id"
-        class="area-item"
-        :style="{ borderLeftColor: area.color || '#667eea' }"
-        @click="$emit('select-area', area)"
-      >
-        <div class="area-info">
-          <div class="area-header">
-            <strong>{{ area.name }}</strong>
-            <span v-if="area.isDefault" class="default-badge">Default</span>
-          </div>
-          <p v-if="area.description" class="area-description">
-            {{ area.description }}
-          </p>
-          <div class="area-stats">
-            <span class="stat-badge">
-              {{ formatAreaCheckpointCount(area) }}
-            </span>
-            <span class="stat-badge">
-              {{ getContactCount(area) }} contact{{ getContactCount(area) === 1 ? '' : 's' }}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="filteredAreas.length === 0" class="empty-state">
-        <p>{{ searchQuery ? `No ${terms.areas.toLowerCase()} match your search.` : `No ${terms.areas.toLowerCase()} yet. Click "Add ${terms.area.toLowerCase()}" to create one.` }}</p>
-      </div>
-    </div>
+    <AreasGrid
+      :areas="sortedAreas"
+      :checkpoints="checkpoints"
+      :contacts="contacts"
+      :event-people-term="eventPeopleTerm"
+      :event-checkpoint-term="eventCheckpointTerm"
+      :empty-message="emptyMessage"
+      @select="$emit('select-area', $event)"
+    />
   </div>
 </template>
 
 <script setup>
 import { defineProps, defineEmits, computed, ref } from 'vue';
 import { alphanumericCompare } from '../../../utils/sortUtils';
-import { useTerminology, getSingularTerm, getPluralTerm } from '../../../composables/useTerminology';
+import { useTerminology } from '../../../composables/useTerminology';
+import StatusPill from '../../StatusPill.vue';
+import AreasGrid from '../AreasGrid.vue';
 
-const { terms } = useTerminology();
+const { terms, termsLower } = useTerminology();
 
 const props = defineProps({
   areas: {
@@ -135,54 +120,13 @@ const sortedAreas = computed(() => {
   });
 });
 
-const getCheckpointCount = (area) => {
-  if (area.checkpointCount !== undefined) {
-    return area.checkpointCount;
+// Empty message based on search
+const emptyMessage = computed(() => {
+  if (searchQuery.value.trim()) {
+    return `No ${termsLower.value.areas} match your search.`;
   }
-  // Fallback: count from checkpoints array
-  return props.checkpoints.filter((c) => c.areaId === area.id).length;
-};
-
-const getContactCount = (area) => {
-  // Count contacts from EventContacts that are scoped to this area
-  return props.contacts.filter(contact => {
-    if (!contact.scopeConfigurations) return false;
-
-    return contact.scopeConfigurations.some(config => {
-      // Check if this contact is visible to everyone in specific areas and this area is included
-      if (config.scope === 'EveryoneInAreas' && config.itemType === 'Area') {
-        // ALL_AREAS means all areas
-        if (config.ids?.includes('ALL_AREAS')) return true;
-        // Check if this specific area is in the list
-        return config.ids?.includes(area.id);
-      }
-      return false;
-    });
-  }).length;
-};
-
-// Get the effective people term for an area
-const getAreaPeopleTerm = (area) => {
-  return area.peopleTerm || props.eventPeopleTerm || 'Marshals';
-};
-
-// Get the effective checkpoint term for an area (resolves "Person points" dynamically)
-const getAreaCheckpointTerm = (area, count) => {
-  const storedTerm = area.checkpointTerm || props.eventCheckpointTerm || 'Checkpoints';
-  const peopleTerm = getAreaPeopleTerm(area);
-
-  if (count === 1) {
-    return getSingularTerm('checkpoint', storedTerm, peopleTerm);
-  }
-  return getPluralTerm('checkpoint', storedTerm, peopleTerm);
-};
-
-// Format checkpoint count with area-specific terminology (sentence case)
-const formatAreaCheckpointCount = (area) => {
-  const count = getCheckpointCount(area);
-  const term = getAreaCheckpointTerm(area, count).toLowerCase();
-  return `${count} ${term}`;
-};
+  return `No ${termsLower.value.areas} yet. Click "Add ${termsLower.value.area}" to create one.`;
+});
 </script>
 
 <style scoped>
@@ -208,15 +152,6 @@ const formatAreaCheckpointCount = (area) => {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
-}
-
-.status-pill {
-  padding: 0.25rem 0.75rem;
-  border-radius: 12px;
-  font-size: 0.8rem;
-  font-weight: 500;
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
 }
 
 .btn {
@@ -268,85 +203,5 @@ const formatAreaCheckpointCount = (area) => {
 
 .search-input::placeholder {
   color: var(--text-muted);
-}
-
-.areas-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.area-item {
-  padding: 1rem;
-  border: 2px solid var(--border-color);
-  border-left: 4px solid var(--accent-primary);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.3s;
-  background: var(--card-bg);
-}
-
-.area-item:hover {
-  border-color: var(--accent-primary);
-  box-shadow: var(--shadow-md);
-}
-
-.area-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.area-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.area-header strong {
-  font-size: 1rem;
-  color: var(--text-primary);
-}
-
-.default-badge {
-  padding: 0.2rem 0.5rem;
-  background: var(--warning);
-  border-radius: 4px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  text-transform: uppercase;
-}
-
-.area-description {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-}
-
-.area-stats {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.stat-badge {
-  padding: 0.25rem 0.75rem;
-  background: var(--bg-tertiary);
-  border-radius: 12px;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 2rem;
-  color: var(--text-muted);
-}
-
-.empty-state p {
-  margin: 0;
-  font-size: 0.9rem;
 }
 </style>

@@ -104,7 +104,7 @@
 
           <div class="form-actions">
             <button @click="handleSubmit" class="btn btn-primary" :disabled="!formDirty">
-              Save Changes
+              Save
             </button>
           </div>
         </div>
@@ -150,7 +150,7 @@
 
           <div class="form-actions">
             <button @click="handleSubmit" class="btn btn-primary" :disabled="!formDirty">
-              Save Changes
+              Save
             </button>
           </div>
         </div>
@@ -181,11 +181,11 @@
           />
 
           <div class="form-actions">
-            <button @click="handleSubmit" class="btn btn-primary" :disabled="!formDirty">
-              Save Changes
-            </button>
             <button @click="resetBranding" class="btn btn-secondary">
-              Reset to Default
+              Reset to default
+            </button>
+            <button @click="handleSubmit" class="btn btn-primary" :disabled="!formDirty">
+              Save
             </button>
           </div>
         </div>
@@ -386,6 +386,9 @@ const handleSubmit = () => {
   margin-top: 1.5rem;
   padding-top: 1rem;
   border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 
 .section-description {
@@ -433,12 +436,12 @@ const handleSubmit = () => {
 }
 
 .btn-primary {
-  background: var(--accent-primary);
+  background: var(--accent-success);
   color: white;
 }
 
 .btn-primary:hover {
-  background: var(--btn-primary-hover);
+  background: var(--accent-success-hover, #16a34a);
 }
 
 .btn-primary:disabled {
@@ -449,7 +452,6 @@ const handleSubmit = () => {
 .btn-secondary {
   background: var(--bg-tertiary);
   color: var(--text-primary);
-  margin-left: 0.5rem;
 }
 
 .btn-secondary:hover {

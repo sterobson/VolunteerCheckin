@@ -92,9 +92,13 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  hideRecenterButton: {
+    type: Boolean,
+    default: false,
+  },
 });
 
-const emit = defineEmits(['location-click', 'map-click', 'area-click', 'polygon-complete', 'polygon-drawing', 'polygon-update']);
+const emit = defineEmits(['location-click', 'map-click', 'area-click', 'polygon-complete', 'polygon-drawing', 'polygon-update', 'visibility-change']);
 
 const mapContainer = ref(null);
 let map = null;
@@ -170,6 +174,50 @@ const clearPolygonDrawing = () => {
   updatePolygonPreview();
 };
 
+// Function to recenter map on user's GPS location
+const recenterOnUserLocation = () => {
+  if (!map || !props.userLocation) return;
+
+  map.setView([props.userLocation.lat, props.userLocation.lng], map.getZoom(), {
+    animate: true,
+    duration: 0.5
+  });
+
+  // Keep userHasPanned true to prevent auto-recentering back to center
+  userHasPanned.value = true;
+};
+
+// Function to recenter map on specific coordinates
+const recenterOnLocation = (lat, lng, zoom = null) => {
+  if (!map || lat == null || lng == null) return;
+
+  map.setView([lat, lng], zoom ?? map.getZoom(), {
+    animate: true,
+    duration: 0.5
+  });
+
+  // Reset user panned state only if recentering to the original center
+  // Otherwise keep it true to prevent auto-recentering
+  const isReturningToCenter = props.center &&
+    Math.abs(props.center.lat - lat) < 0.0001 &&
+    Math.abs(props.center.lng - lng) < 0.0001;
+  userHasPanned.value = !isReturningToCenter;
+};
+
+// Track if highlighted location is in view
+const highlightedLocationInView = ref(true);
+
+// Track if user location is in view
+const userLocationInView = ref(true);
+
+// Function to check if coordinates are within current map bounds
+const isLocationInView = (lat, lng) => {
+  if (!map || lat == null || lng == null) return true;
+  const bounds = map.getBounds();
+  const locationLatLng = L.latLng(lat, lng);
+  return bounds.contains(locationLatLng);
+};
+
 defineExpose({
   getMapCenter,
   getMapZoom,
@@ -180,6 +228,11 @@ defineExpose({
   getPolygonPointCount,
   completePolygon,
   clearPolygonDrawing,
+  recenterOnUserLocation,
+  recenterOnLocation,
+  isLocationInView,
+  userLocationInView,
+  highlightedLocationInView,
 });
 
 const markers = ref([]);
@@ -192,11 +245,10 @@ let drawControl = null;
 let drawnItems = null;
 let userLocationMarker = null;
 
-// Track if highlighted location is in view
-const highlightedLocationInView = ref(true);
-
 // Computed: should show recenter button
 const showRecenterButton = computed(() => {
+  // Hide if explicitly disabled via prop
+  if (props.hideRecenterButton) return false;
   // Only show if there's a highlighted location (single, not multiple)
   // and the user has panned away from it
   if (!props.highlightLocationId) return false;
@@ -206,22 +258,52 @@ const showRecenterButton = computed(() => {
 
 // Function to check if highlighted location is in current map bounds
 const checkHighlightedInView = () => {
-  if (!map || !props.highlightLocationId) {
+  // Check single highlighted location first
+  if (props.highlightLocationId) {
+    const highlightedLocation = props.locations.find(loc => loc.id === props.highlightLocationId);
+    if (highlightedLocation?.latitude && highlightedLocation?.longitude) {
+      highlightedLocationInView.value = isLocationInView(highlightedLocation.latitude, highlightedLocation.longitude);
+      return;
+    }
+  }
+
+  // Fall back to checking first item in highlightLocationIds array
+  if (props.highlightLocationIds && props.highlightLocationIds.length > 0) {
+    const firstHighlightedId = props.highlightLocationIds[0];
+    const firstHighlightedLocation = props.locations.find(loc => loc.id === firstHighlightedId);
+    if (firstHighlightedLocation?.latitude && firstHighlightedLocation?.longitude) {
+      highlightedLocationInView.value = isLocationInView(firstHighlightedLocation.latitude, firstHighlightedLocation.longitude);
+      return;
+    }
+  }
+
+  // No highlighted location to track
+  if (!map) {
     highlightedLocationInView.value = true;
     return;
   }
+  highlightedLocationInView.value = true;
+};
 
-  // Find the highlighted location
-  const highlightedLocation = props.locations.find(loc => loc.id === props.highlightLocationId);
-  if (!highlightedLocation || !highlightedLocation.latitude || !highlightedLocation.longitude) {
-    highlightedLocationInView.value = true;
+// Function to check if user location is in current map bounds
+const checkUserLocationInView = () => {
+  if (!map || !props.userLocation) {
+    userLocationInView.value = true;
     return;
   }
+  userLocationInView.value = isLocationInView(props.userLocation.lat, props.userLocation.lng);
+};
 
-  // Check if location is within current map bounds
-  const bounds = map.getBounds();
-  const locationLatLng = L.latLng(highlightedLocation.latitude, highlightedLocation.longitude);
-  highlightedLocationInView.value = bounds.contains(locationLatLng);
+// Function to check all tracked locations
+const checkLocationsInView = () => {
+  checkHighlightedInView();
+  checkUserLocationInView();
+
+  // Emit visibility change event
+  emit('visibility-change', {
+    userLocationInView: userLocationInView.value,
+    highlightedLocationInView: highlightedLocationInView.value,
+  });
 };
 
 // Function to recenter map on highlighted location
@@ -399,16 +481,22 @@ const initMap = () => {
     });
   }
 
+  // Track zoom animation state to prevent marker updates during animation
+  map.on('zoomstart', () => {
+    isZoomAnimating = true;
+  });
+
   // Listen for zoom and move events to update label visibility
   // Also process any pending marker updates that were deferred during zoom
   map.on('zoomend moveend', () => {
+    isZoomAnimating = false;
     if (pendingMarkerUpdate) {
       updateMarkers();
     } else {
       checkVisibleMarkersAndUpdate();
     }
-    // Check if highlighted location is still in view
-    checkHighlightedInView();
+    // Check if tracked locations are still in view
+    checkLocationsInView();
   });
 
   // Track when user manually pans the map to avoid auto-recentering
@@ -836,10 +924,12 @@ const initDrawingMode = () => {
 
 // Track if marker update was requested during zoom
 let pendingMarkerUpdate = false;
+// Track if zoom animation is in progress (more reliable than map._animatingZoom)
+let isZoomAnimating = false;
 
 const updateMarkers = () => {
   // Don't update markers during map animations to prevent positioning bugs
-  if (map && map._animatingZoom) {
+  if (map && (map._animatingZoom || isZoomAnimating)) {
     pendingMarkerUpdate = true;
     return;
   }
@@ -1197,10 +1287,16 @@ watch(
 
 watch(
   () => props.center,
-  (newCenter) => {
+  (newCenter, oldCenter) => {
     // Don't recenter if user has manually panned the map
     if (map && !userHasPanned.value) {
-      map.setView([newCenter.lat, newCenter.lng], props.zoom);
+      // Only recenter if the center values actually changed (not just object identity)
+      const centerChanged = !oldCenter ||
+        Math.abs(newCenter.lat - oldCenter.lat) > 0.000001 ||
+        Math.abs(newCenter.lng - oldCenter.lng) > 0.000001;
+      if (centerChanged) {
+        map.setView([newCenter.lat, newCenter.lng], props.zoom);
+      }
     }
   }
 );

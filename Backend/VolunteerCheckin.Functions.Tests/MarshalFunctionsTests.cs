@@ -571,7 +571,7 @@ namespace VolunteerCheckin.Functions.Tests
                 EventId = eventId,
                 Name = "John Doe",
                 Email = "john@example.com",
-                MagicCode = null // No existing code
+                MagicCode = string.Empty // No existing code
             };
 
             _mockMarshalRepository
@@ -778,7 +778,7 @@ namespace VolunteerCheckin.Functions.Tests
                 MarshalId = marshalId,
                 EventId = eventId,
                 Name = "John Doe",
-                Email = null // No email
+                Email = string.Empty // No email
             };
 
             _mockMarshalRepository
@@ -854,7 +854,7 @@ namespace VolunteerCheckin.Functions.Tests
                 EventId = eventId,
                 Name = "John Doe",
                 Email = "john@example.com",
-                MagicCode = null // No existing code
+                MagicCode = string.Empty // No existing code
             };
 
             EventEntity eventEntity = new()

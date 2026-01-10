@@ -103,128 +103,50 @@
 
     <!-- Contacts Tab -->
     <div v-if="activeTab === 'contacts'" class="tab-content">
-      <h3 class="section-title">{{ terms.area }} contacts</h3>
-
-      <div class="contacts-actions">
-        <button @click="handleAddAreaContact" class="btn btn-primary">
-          Add new contact
-        </button>
-        <button @click="handleSelectExistingContact" class="btn btn-secondary">
-          Select existing
+      <div class="contacts-header">
+        <h3 class="section-title">{{ terms.area }} contacts ({{ displayContacts.length }})</h3>
+        <button @click="showAddContactModal = true" class="btn btn-primary btn-small">
+          Add contact
         </button>
       </div>
 
       <!-- Show existing contacts scoped to this area + pending contacts -->
-      <div v-if="displayContacts.length > 0" class="area-contacts-list">
-        <h4>Contacts visible in this {{ termsLower.area }} ({{ displayContacts.length }})</h4>
-        <div
-          v-for="contact in displayContacts"
-          :key="contact.contactId"
-          class="contact-item"
-          :class="{ pending: contact.isPending }"
-          @click="contact.isPending ? null : $emit('edit-contact', contact)"
-        >
-          <div class="contact-info">
-            <strong>{{ contact.name }}</strong>
-            <span v-if="contact.role" class="contact-role-badge">{{ formatRoleName(contact.role) }}</span>
-            <span v-if="contact.isPending" class="pending-badge">Pending</span>
-            <div v-if="contact.phone || contact.email" class="contact-details">
-              <span v-if="contact.phone">{{ contact.phone }}</span>
-              <span v-if="contact.email">{{ contact.email }}</span>
-            </div>
-          </div>
-          <button
-            v-if="contact.isPending"
-            type="button"
-            class="btn btn-small btn-danger"
-            @click.stop="removePendingContact(contact.contactId)"
-          >
-            Remove
-          </button>
-        </div>
-      </div>
+      <ContactsGrid
+        :contacts="displayContacts"
+        :show-remove-button="true"
+        :remove-title="getContactRemoveTitle"
+        :empty-message="`No contacts assigned to this ${termsLower.area}.`"
+        :empty-hint="`Click 'Add contact' to assign contacts who will be visible to ${termsLower.people} in this ${termsLower.area}.`"
+        @select="$emit('edit-contact', $event)"
+        @remove="handleContactRemove"
+        @undo-remove="handleUndoRemove"
+      />
     </div>
 
-    <!-- Contact Selector Modal -->
-    <ContactSelectorModal
-      :show="showContactSelector"
+    <!-- Add Contact Modal -->
+    <AddAreaContactModal
+      :show="showAddContactModal"
       :area-name="form.name || 'this ' + termsLower.area"
       :area-id="props.area?.id || ''"
       :contacts="props.contacts"
+      :marshals="props.marshals"
       :exclude-contact-ids="excludeContactIds"
-      @close="showContactSelector = false"
-      @select="handleContactSelected"
+      @close="showAddContactModal = false"
+      @select-contact="handleContactSelected"
+      @create-from-marshal="handleCreateFromMarshal"
+      @create-new="handleCreateNewContact"
     />
 
     <!-- Checkpoints Tab (only when editing) -->
     <div v-if="activeTab === 'checkpoints' && isExistingArea" class="tab-content">
       <h3 class="section-title">{{ getAreaCheckpointTerm() }} in {{ area?.name }} ({{ areaCheckpoints.length }})</h3>
 
-      <div v-if="areaCheckpoints.length === 0" class="empty-state">
-        <p>No {{ getAreaCheckpointTermLower() }} in this {{ termsLower.area }} yet.</p>
-      </div>
-
-      <div v-else class="checkpoints-list">
-        <div
-          v-for="checkpoint in sortedAreaCheckpoints"
-          :key="checkpoint.id"
-          class="checkpoint-card"
-          @click="$emit('select-checkpoint', checkpoint)"
-        >
-          <div class="checkpoint-header">
-            <span class="checkpoint-icon" v-html="getCheckpointIconSvg(checkpoint)"></span>
-            <div class="checkpoint-name-section">
-              <h4>{{ checkpoint.name }}<span v-if="checkpoint.description" class="checkpoint-description"> - {{ checkpoint.description }}</span></h4>
-            </div>
-            <div class="checkpoint-stats">
-              <div class="stat-badge" :class="getCheckInStatusClass(checkpoint)">
-                {{ getCheckInStatusText(checkpoint) }}
-              </div>
-            </div>
-          </div>
-
-          <div class="checkpoint-details">
-            <div class="detail-row with-pills">
-              <span class="detail-label">{{ getCheckpointPeopleTerm(checkpoint) }}:</span>
-              <span class="detail-value">
-                {{ getCheckpointAssignments(checkpoint.id).length }} / {{ checkpoint.requiredMarshals }}
-                <span v-if="getCheckpointAssignments(checkpoint.id).length < checkpoint.requiredMarshals" class="warning-text">
-                  ({{ checkpoint.requiredMarshals - getCheckpointAssignments(checkpoint.id).length }} needed)
-                </span>
-              </span>
-              <!-- Marshal name pills on same line -->
-              <div v-if="getCheckpointAssignments(checkpoint.id).length > 0" class="marshal-pills">
-                <span
-                  v-for="assignment in getSortedAssignments(checkpoint.id)"
-                  :key="assignment.id"
-                  class="marshal-pill"
-                  :class="{ 'checked-in': assignment.isCheckedIn }"
-                >
-                  {{ assignment.marshalName }}
-                </span>
-              </div>
-            </div>
-
-            <div class="detail-row">
-              <span class="detail-label">Checked in:</span>
-              <span class="detail-value">
-                {{ getCheckedInCount(checkpoint) }} / {{ getCheckpointAssignments(checkpoint.id).length }}
-              </span>
-            </div>
-
-            <div class="detail-row" v-if="checkpointChecklistStatus[checkpoint.id]">
-              <span class="detail-label">Tasks:</span>
-              <span class="detail-value" :class="getChecklistStatusClass(checkpoint.id)">
-                {{ getChecklistStatusText(checkpoint.id) }}
-              </span>
-            </div>
-            <div class="detail-row" v-else-if="loadingChecklistStatus[checkpoint.id]">
-              <span class="detail-label">Tasks:</span>
-              <span class="detail-value loading-text">Loading...</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <CheckpointsGrid
+        :checkpoints="sortedAreaCheckpoints"
+        :areas="areas"
+        :empty-message="`No ${getAreaCheckpointTermLower()} in this ${termsLower.area} yet.`"
+        @select="$emit('select-checkpoint', $event)"
+      />
     </div>
 
     <!-- Checkpoints placeholder when creating -->
@@ -485,7 +407,9 @@ import CheckpointStylePicker from '../../CheckpointStylePicker.vue';
 import IncidentCard from '../../IncidentCard.vue';
 import ConfirmModal from '../../ConfirmModal.vue';
 import CommonMap from '../../common/CommonMap.vue';
-import ContactSelectorModal from './ContactSelectorModal.vue';
+import AddAreaContactModal from './AddAreaContactModal.vue';
+import ContactsGrid from '../ContactsGrid.vue';
+import CheckpointsGrid from '../CheckpointsGrid.vue';
 import { AREA_COLORS, DEFAULT_AREA_COLOR, getNextAvailableColor } from '../../../constants/areaColors';
 import { checklistApi } from '../../../services/api';
 import { useTerminology, terminologyOptions, getCheckpointOptionLabel, getSingularTerm, getPluralTerm } from '../../../composables/useTerminology';
@@ -646,7 +570,8 @@ const emit = defineEmits([
   'draw-boundary',
   'update:isDirty',
   'select-checkpoint',
-  'add-area-contact',
+  'create-contact-from-marshal',
+  'create-new-contact',
   'edit-contact',
   'select-incident',
 ]);
@@ -657,8 +582,9 @@ const checklistChanges = ref([]);
 const checkpointChecklistStatus = ref({});
 const loadingChecklistStatus = ref({});
 const showClearBoundaryConfirm = ref(false);
-const showContactSelector = ref(false);
+const showAddContactModal = ref(false);
 const pendingContacts = ref([]);
+const contactsToRemove = ref([]);
 
 const form = ref({
   name: '',
@@ -932,10 +858,20 @@ const areaContacts = computed(() => {
   });
 });
 
-// Combined list of area contacts + pending contacts for display
+// Combined list of area contacts + pending contacts for display (including those marked for removal)
 const displayContacts = computed(() => {
-  const existing = areaContacts.value.map(c => ({ ...c, isPending: false }));
-  const pending = pendingContacts.value.map(c => ({ ...c, isPending: true }));
+  const existingIds = new Set(areaContacts.value.map(c => c.contactId));
+  const existing = areaContacts.value
+    .map(c => ({
+      ...c,
+      isPending: false,
+      isExisting: true,
+      isMarkedForRemoval: contactsToRemove.value.includes(c.contactId),
+    }));
+  // Filter out pending contacts that are already in the existing list
+  const pending = pendingContacts.value
+    .filter(c => !existingIds.has(c.contactId))
+    .map(c => ({ ...c, isPending: true, isExisting: false, isMarkedForRemoval: false }));
   return [...existing, ...pending].sort((a, b) =>
     a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
   );
@@ -1090,6 +1026,8 @@ watch(() => props.show, (newVal) => {
     checkpointChecklistStatus.value = {};
     loadingChecklistStatus.value = {};
     pendingContacts.value = [];
+    contactsToRemove.value = [];
+    showAddContactModal.value = false;
     // Reset form when opening for a new area
     if (!isExistingArea.value) {
       form.value = {
@@ -1158,13 +1096,16 @@ const confirmClearBoundary = () => {
   handleInput();
 };
 
-const handleAddAreaContact = () => {
-  // Emit to parent to open contact modal with pre-configured area scope
-  emit('add-area-contact', props.area);
+const handleCreateFromMarshal = (marshal) => {
+  // Close the add contact modal and emit to parent to open contact modal with marshal pre-selected
+  showAddContactModal.value = false;
+  emit('create-contact-from-marshal', { marshal, area: props.area });
 };
 
-const handleSelectExistingContact = () => {
-  showContactSelector.value = true;
+const handleCreateNewContact = (name) => {
+  // Close the add contact modal and emit to parent to open contact modal with name pre-filled
+  showAddContactModal.value = false;
+  emit('create-new-contact', { name, area: props.area });
 };
 
 const handleContactSelected = (contact) => {
@@ -1173,11 +1114,36 @@ const handleContactSelected = (contact) => {
     pendingContacts.value.push(contact);
     handleInput(); // Mark form as dirty
   }
-  showContactSelector.value = false;
+  showAddContactModal.value = false;
 };
 
 const removePendingContact = (contactId) => {
   pendingContacts.value = pendingContacts.value.filter(c => c.contactId !== contactId);
+  handleInput();
+};
+
+const removeExistingContact = (contactId) => {
+  if (!contactsToRemove.value.includes(contactId)) {
+    contactsToRemove.value.push(contactId);
+    handleInput();
+  }
+};
+
+const getContactRemoveTitle = (contact) => {
+  return contact.isPending ? 'Remove pending contact' : `Remove from ${termsLower.value.area}`;
+};
+
+const handleContactRemove = (contactId) => {
+  const contact = displayContacts.value.find(c => c.contactId === contactId);
+  if (contact?.isPending) {
+    removePendingContact(contactId);
+  } else {
+    removeExistingContact(contactId);
+  }
+};
+
+const handleUndoRemove = (contactId) => {
+  contactsToRemove.value = contactsToRemove.value.filter(id => id !== contactId);
   handleInput();
 };
 
@@ -1226,6 +1192,8 @@ const handleSave = () => {
     checklistChanges: checklistChanges.value || [],
     // Include pending contacts to add to this area
     pendingContacts: pendingContacts.value || [],
+    // Include contacts to remove from this area
+    contactsToRemove: contactsToRemove.value || [],
   } : {
     // Create request
     name: form.value.name,
@@ -1291,6 +1259,26 @@ const getCheckpointIconSvg = (checkpoint) => {
     <circle cx="10" cy="10" r="8" fill="#667eea" stroke="#fff" stroke-width="1.5"/>
   </svg>`;
 };
+
+// Expose methods for parent component to manage contacts
+defineExpose({
+  addPendingContact: (contact) => {
+    if (contact && !pendingContacts.value.find(c => c.contactId === contact.contactId)) {
+      pendingContacts.value.push(contact);
+      handleInput(); // Mark form as dirty
+    }
+  },
+  removeContactById: (contactId) => {
+    // Remove from pending contacts if present
+    const hadPending = pendingContacts.value.some(c => c.contactId === contactId);
+    pendingContacts.value = pendingContacts.value.filter(c => c.contactId !== contactId);
+    // Also remove from contactsToRemove if present (no longer needed since contact is deleted)
+    contactsToRemove.value = contactsToRemove.value.filter(id => id !== contactId);
+    if (hadPending) {
+      handleInput();
+    }
+  },
+});
 </script>
 
 <style scoped>
@@ -1388,8 +1376,7 @@ const getCheckpointIconSvg = (checkpoint) => {
   margin-top: 1rem;
 }
 
-.checkpoint-item,
-.contact-item {
+.checkpoint-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1402,14 +1389,12 @@ const getCheckpointIconSvg = (checkpoint) => {
   transition: all 0.2s;
 }
 
-.checkpoint-item:hover,
-.contact-item:hover {
+.checkpoint-item:hover {
   background: var(--bg-hover);
   border-color: var(--accent-primary);
 }
 
-.checkpoint-info,
-.contact-info {
+.checkpoint-info {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -1748,82 +1733,24 @@ const getCheckpointIconSvg = (checkpoint) => {
   margin-bottom: 1.5rem;
 }
 
-.area-contacts-list {
-  margin-top: 1rem;
-}
-
-.area-contacts-list h4 {
-  margin: 0 0 0.75rem 0;
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-}
-
-.contact-item {
+/* Contacts Tab Styles */
+.contacts-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1rem;
-  background: var(--card-bg);
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
-  margin-bottom: 0.5rem;
-  cursor: pointer;
-  transition: all 0.2s;
+  margin-bottom: 1rem;
 }
 
-.contact-item:hover {
-  background: var(--bg-hover);
-  border-color: var(--accent-primary);
+.contacts-header .section-title {
+  margin: 0;
 }
 
-.contact-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.contact-info strong {
-  display: inline;
-}
-
-.contact-role-badge {
-  display: inline-block;
-  padding: 0.15rem 0.5rem;
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  margin-left: 0.5rem;
-}
-
-.contact-details {
-  display: flex;
-  gap: 1rem;
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-}
-
-.pending-badge {
-  display: inline-block;
-  padding: 0.15rem 0.5rem;
-  background: var(--status-warning-bg);
-  color: var(--accent-warning);
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  margin-left: 0.5rem;
-}
-
-.contact-item.pending {
-  border-style: dashed;
-  background: var(--bg-tertiary);
-}
-
-.contact-item.pending:hover {
-  cursor: default;
-  background: var(--bg-tertiary);
-  border-color: var(--border-color);
+@media (max-width: 640px) {
+  .contacts-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
 }
 
 .placeholder-message {

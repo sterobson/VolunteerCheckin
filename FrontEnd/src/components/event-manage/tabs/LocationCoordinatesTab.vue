@@ -21,11 +21,10 @@
           <div class="form-group">
             <label>Longitude</label>
             <input
-              :value="formatCoordinate(form.longitude)"
-              @input="handleNumberInput('longitude', $event.target.value)"
-              type="number"
-              step="0.000001"
-              required
+              v-model="longitudeInput"
+              @blur="handleCoordinateBlur('longitude')"
+              type="text"
+              inputmode="decimal"
               class="form-input"
               :disabled="isMoving"
               placeholder="e.g., -0.091234"
@@ -35,11 +34,10 @@
           <div class="form-group">
             <label>Latitude</label>
             <input
-              :value="formatCoordinate(form.latitude)"
-              @input="handleNumberInput('latitude', $event.target.value)"
-              type="number"
-              step="0.000001"
-              required
+              v-model="latitudeInput"
+              @blur="handleCoordinateBlur('latitude')"
+              type="text"
+              inputmode="decimal"
               class="form-input"
               :disabled="isMoving"
               placeholder="e.g., 51.505123"
@@ -116,7 +114,7 @@
 </template>
 
 <script setup>
-import { ref, defineProps, defineEmits } from 'vue';
+import { ref, watch, defineProps, defineEmits } from 'vue';
 import ScopeConfigurationEditor from '../ScopeConfigurationEditor.vue';
 
 const props = defineProps({
@@ -158,19 +156,44 @@ const emit = defineEmits(['update:form', 'input', 'save', 'move-location']);
 
 const expandedDynamic = ref(false);
 
+// Local state for coordinate inputs (allows free typing without reformatting)
+const longitudeInput = ref('');
+const latitudeInput = ref('');
+
 // Format coordinate to 6 decimal places (~0.1m accuracy)
 const formatCoordinate = (value) => {
-  if (value === null || value === undefined || value === '') return '';
+  if (value === null || value === undefined || value === '' || isNaN(value)) return '';
   return Number(value).toFixed(6);
+};
+
+// Initialize local inputs from form values
+watch(() => props.form.longitude, (newVal) => {
+  longitudeInput.value = formatCoordinate(newVal);
+}, { immediate: true });
+
+watch(() => props.form.latitude, (newVal) => {
+  latitudeInput.value = formatCoordinate(newVal);
+}, { immediate: true });
+
+// Handle coordinate blur - parse and update form
+const handleCoordinateBlur = (field) => {
+  const inputRef = field === 'longitude' ? longitudeInput : latitudeInput;
+  const value = parseFloat(inputRef.value);
+
+  if (!isNaN(value)) {
+    emit('update:form', { ...props.form, [field]: value });
+    emit('input');
+    // Format the display value
+    inputRef.value = formatCoordinate(value);
+  } else if (inputRef.value.trim() === '') {
+    emit('update:form', { ...props.form, [field]: 0 });
+    emit('input');
+    inputRef.value = formatCoordinate(0);
+  }
 };
 
 const handleInput = (field, value) => {
   emit('update:form', { ...props.form, [field]: value });
-  emit('input');
-};
-
-const handleNumberInput = (field, value) => {
-  emit('update:form', { ...props.form, [field]: Number(value) });
   emit('input');
 };
 

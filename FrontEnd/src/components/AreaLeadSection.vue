@@ -107,10 +107,11 @@
             </div>
           </div>
 
-          <!-- Outstanding checkpoint tasks -->
-          <div v-if="checkpoint.outstandingTaskCount > 0" class="checkpoint-tasks-section">
-            <div class="marshals-label">Outstanding {{ termsLower.checkpoint }} tasks ({{ checkpoint.outstandingTaskCount }})</div>
+          <!-- Checkpoint tasks (outstanding and completed) -->
+          <div v-if="checkpoint.outstandingTaskCount > 0 || (checkpoint.completedTasks && checkpoint.completedTasks.length > 0)" class="checkpoint-tasks-section">
+            <div class="marshals-label">{{ terms.checkpoint }} tasks</div>
             <div class="tasks-list">
+              <!-- Outstanding tasks -->
               <div
                 v-for="task in checkpoint.outstandingTasks"
                 :key="task.itemId"
@@ -123,57 +124,25 @@
                 />
                 <span class="task-text">{{ task.text }}</span>
               </div>
+              <!-- Completed tasks -->
+              <div
+                v-for="task in (checkpoint.completedTasks || [])"
+                :key="`completed-${task.itemId}`"
+                class="task-item task-completed"
+              >
+                <input
+                  type="checkbox"
+                  checked
+                  :disabled="savingTask"
+                  @change="uncompleteCheckpointTask(task, checkpoint)"
+                />
+                <span class="task-text">{{ task.text }}</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
-
-    <!-- Incidents Section (Accordion) -->
-    <div class="incidents-accordion-section">
-      <button
-        class="incidents-accordion-header"
-        :class="{ active: showIncidentsSection }"
-        @click="toggleIncidentsSection"
-      >
-        <div class="incidents-header-content">
-          <span class="incidents-title">Incidents</span>
-          <span v-if="openIncidentsCount > 0" class="incidents-badge">
-            {{ openIncidentsCount }} open
-          </span>
-        </div>
-        <span class="accordion-icon">{{ showIncidentsSection ? '−' : '+' }}</span>
-      </button>
-
-      <div v-if="showIncidentsSection" class="incidents-accordion-content">
-        <div v-if="incidentsLoading" class="loading-state">
-          Loading incidents...
-        </div>
-
-        <div v-else-if="incidents.length === 0" class="empty-state">
-          <p>No incidents reported in your areas.</p>
-        </div>
-
-        <div v-else class="incidents-list">
-          <IncidentCard
-            v-for="incident in incidents"
-            :key="incident.incidentId"
-            :incident="incident"
-            @select="handleSelectIncident"
-          />
-        </div>
-      </div>
-    </div>
-
-    <!-- Incident Detail Modal -->
-    <IncidentDetailModal
-      :show="showIncidentDetail"
-      :incident="selectedIncident"
-      :can-manage="true"
-      @close="closeIncidentDetailModal"
-      @status-change="handleIncidentStatusChange"
-      @add-note="handleIncidentAddNote"
-    />
 
     <!-- Marshal Details Modal -->
     <BaseModal
@@ -300,15 +269,13 @@
 
 <script setup>
 import { ref, computed, defineProps, defineEmits, watch } from 'vue';
-import { areasApi, checklistApi, checkInApi, incidentsApi, getOfflineMode, queueOfflineAction } from '../services/api';
+import { areasApi, checklistApi, checkInApi, getOfflineMode, queueOfflineAction } from '../services/api';
 import { useTerminology } from '../composables/useTerminology';
 import { alphanumericCompare } from '../utils/sortUtils';
 import { getCachedEventData, updateCachedField, cacheEventData } from '../services/offlineDb';
 import { useOffline } from '../composables/useOffline';
 import CommonMap from './common/CommonMap.vue';
 import BaseModal from './BaseModal.vue';
-import IncidentCard from './IncidentCard.vue';
-import IncidentDetailModal from './IncidentDetailModal.vue';
 
 const { terms, termsLower } = useTerminology();
 const { updatePendingCount } = useOffline();
@@ -342,10 +309,22 @@ const expandedCheckpoint = ref(null);
 const savingTask = ref(false);
 const checkingIn = ref(null); // Tracks which marshal is being checked in
 
-// Sort checkpoints alphanumerically (numbers first, then alphabetical)
+// Filter and sort checkpoints based on areaIds prop
 const sortedCheckpoints = computed(() => {
-  return [...checkpoints.value].sort((a, b) => alphanumericCompare(a.name, b.name));
+  const areaIdSet = new Set(props.areaIds);
+  // If no filter specified, show all checkpoints
+  if (areaIdSet.size === 0) {
+    return [...checkpoints.value].sort((a, b) => alphanumericCompare(a.name, b.name));
+  }
+  // Filter checkpoints that belong to any of the specified areas
+  return checkpoints.value
+    .filter(c => {
+      const checkpointAreaIds = c.areaIds || [];
+      return checkpointAreaIds.some(areaId => areaIdSet.has(areaId));
+    })
+    .sort((a, b) => alphanumericCompare(a.name, b.name));
 });
+
 
 // Truncate description for display in header
 const truncateDescription = (description, maxLength = 60) => {
@@ -354,24 +333,10 @@ const truncateDescription = (description, maxLength = 60) => {
   return description.substring(0, maxLength).trim() + '...';
 };
 
-// Expose data for parent component
-defineExpose({
-  areas,
-  checkpoints,
-  loading,
-});
-
 // Modal state
 const showMarshalModal = ref(false);
 const selectedMarshal = ref(null);
 const selectedCheckpoint = ref(null);
-
-// Incidents state
-const incidents = ref([]);
-const incidentsLoading = ref(false);
-const showIncidentsSection = ref(false);
-const selectedIncident = ref(null);
-const showIncidentDetail = ref(false);
 
 const loadDashboard = async () => {
   if (!props.eventId || props.areaIds.length === 0) return;
@@ -440,100 +405,6 @@ const loadDashboard = async () => {
     error.value = err.response?.data?.message || 'Failed to load dashboard';
   } finally {
     loading.value = false;
-  }
-};
-
-// Load incidents for all areas this lead manages
-const loadIncidents = async () => {
-  if (!props.eventId || props.areaIds.length === 0) return;
-
-  incidentsLoading.value = true;
-  try {
-    // Load incidents for each area and combine
-    const allIncidents = [];
-    for (const areaId of props.areaIds) {
-      try {
-        const response = await incidentsApi.getForArea(props.eventId, areaId);
-        const areaIncidents = response.data.incidents || [];
-        allIncidents.push(...areaIncidents);
-      } catch (err) {
-        console.warn(`Failed to load incidents for area ${areaId}:`, err);
-      }
-    }
-
-    // Deduplicate incidents (in case same incident appears in multiple areas)
-    const uniqueIncidents = allIncidents.reduce((acc, incident) => {
-      if (!acc.find(i => i.incidentId === incident.incidentId)) {
-        acc.push(incident);
-      }
-      return acc;
-    }, []);
-
-    // Sort by date, most recent first
-    incidents.value = uniqueIncidents.sort((a, b) => {
-      return new Date(b.incidentTime || b.createdAt) - new Date(a.incidentTime || a.createdAt);
-    });
-  } catch (err) {
-    console.error('Failed to load incidents:', err);
-  } finally {
-    incidentsLoading.value = false;
-  }
-};
-
-// Computed for open incidents count
-const openIncidentsCount = computed(() => {
-  return incidents.value.filter(i => i.status === 'open' || i.status === 'acknowledged' || i.status === 'in_progress').length;
-});
-
-// Incident handlers
-const toggleIncidentsSection = () => {
-  showIncidentsSection.value = !showIncidentsSection.value;
-  if (showIncidentsSection.value && incidents.value.length === 0) {
-    loadIncidents();
-  }
-};
-
-const handleSelectIncident = (incident) => {
-  selectedIncident.value = incident;
-  showIncidentDetail.value = true;
-};
-
-const closeIncidentDetailModal = () => {
-  showIncidentDetail.value = false;
-  selectedIncident.value = null;
-};
-
-const handleIncidentStatusChange = async ({ incidentId, status }) => {
-  try {
-    await incidentsApi.updateStatus(props.eventId, incidentId, { status });
-    await loadIncidents();
-    // Update selected incident if still viewing
-    if (selectedIncident.value?.incidentId === incidentId) {
-      const updated = incidents.value.find(i => i.incidentId === incidentId);
-      if (updated) {
-        selectedIncident.value = updated;
-      }
-    }
-  } catch (err) {
-    console.error('Failed to update incident status:', err);
-    alert(err.response?.data?.message || 'Failed to update status');
-  }
-};
-
-const handleIncidentAddNote = async ({ incidentId, note }) => {
-  try {
-    await incidentsApi.addNote(props.eventId, incidentId, note);
-    await loadIncidents();
-    // Update selected incident if still viewing
-    if (selectedIncident.value?.incidentId === incidentId) {
-      const updated = incidents.value.find(i => i.incidentId === incidentId);
-      if (updated) {
-        selectedIncident.value = updated;
-      }
-    }
-  } catch (err) {
-    console.error('Failed to add note to incident:', err);
-    alert(err.response?.data?.message || 'Failed to add note');
   }
 };
 
@@ -688,6 +559,68 @@ const completeTask = async (task, checkpoint) => {
   }
 };
 
+const uncompleteCheckpointTask = async (task, checkpoint) => {
+  if (savingTask.value) return;
+  savingTask.value = true;
+
+  // Use the first marshal at this checkpoint
+  const marshalId = checkpoint.marshals.length > 0 ? checkpoint.marshals[0].marshalId : props.marshalId;
+
+  const actionData = {
+    marshalId: marshalId,
+    contextType: task.contextType,
+    contextId: task.contextId,
+    actorMarshalId: props.marshalId,
+  };
+
+  try {
+    if (getOfflineMode()) {
+      await queueOfflineAction('checklist_uncomplete', {
+        eventId: props.eventId,
+        itemId: task.itemId,
+        data: actionData
+      });
+
+      // Optimistic update - move from completed to outstanding
+      if (checkpoint.completedTasks) {
+        checkpoint.completedTasks = checkpoint.completedTasks.filter(t => t.itemId !== task.itemId);
+      }
+      if (!checkpoint.outstandingTasks) checkpoint.outstandingTasks = [];
+      checkpoint.outstandingTasks.push(task);
+      checkpoint.outstandingTaskCount = (checkpoint.outstandingTaskCount || 0) + 1;
+
+      await updatePendingCount();
+      emit('checklist-updated');
+    } else {
+      await checklistApi.uncomplete(props.eventId, task.itemId, actionData);
+      await loadDashboard();
+      emit('checklist-updated');
+    }
+  } catch (err) {
+    console.error('Failed to uncomplete task:', err);
+
+    if (getOfflineMode() || !err.response) {
+      await queueOfflineAction('checklist_uncomplete', {
+        eventId: props.eventId,
+        itemId: task.itemId,
+        data: actionData
+      });
+
+      if (checkpoint.completedTasks) {
+        checkpoint.completedTasks = checkpoint.completedTasks.filter(t => t.itemId !== task.itemId);
+      }
+      if (!checkpoint.outstandingTasks) checkpoint.outstandingTasks = [];
+      checkpoint.outstandingTasks.push(task);
+      checkpoint.outstandingTaskCount = (checkpoint.outstandingTaskCount || 0) + 1;
+
+      await updatePendingCount();
+      emit('checklist-updated');
+    }
+  } finally {
+    savingTask.value = false;
+  }
+};
+
 const completeTaskForMarshal = async (task) => {
   if (savingTask.value || !selectedMarshal.value) return;
   savingTask.value = true;
@@ -755,6 +688,7 @@ const completeTaskForMarshal = async (task) => {
   }
 };
 
+
 const formatTime = (dateString) => {
   if (!dateString) return '';
   return new Date(dateString).toLocaleTimeString('en-US', {
@@ -795,7 +729,15 @@ const formatCheckInMethod = (method) => {
   return methods[method] || method;
 };
 
-watch(() => [props.eventId, props.areaIds], () => {
+// Expose data and methods for parent component
+defineExpose({
+  areas,
+  checkpoints,
+  loading,
+  loadDashboard,
+});
+
+watch(() => props.eventId, () => {
   loadDashboard();
 }, { immediate: true });
 </script>
@@ -1112,7 +1054,7 @@ watch(() => [props.eventId, props.areaIds], () => {
 
 .task-item {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.75rem;
   padding: 0.5rem;
   background: var(--card-bg);
@@ -1121,16 +1063,25 @@ watch(() => [props.eventId, props.areaIds], () => {
 }
 
 .task-item input[type="checkbox"] {
-  margin-top: 0.15rem;
   cursor: pointer;
   width: 1rem;
   height: 1rem;
+  flex-shrink: 0;
 }
 
 .task-text {
   flex: 1;
   font-size: 0.9rem;
   color: var(--text-dark);
+}
+
+.task-item.task-completed {
+  opacity: 0.7;
+}
+
+.task-item.task-completed .task-text {
+  text-decoration: line-through;
+  color: var(--text-muted);
 }
 
 /* Modal */
@@ -1314,69 +1265,4 @@ watch(() => [props.eventId, props.areaIds], () => {
   }
 }
 
-/* Incidents Section Styles */
-.incidents-accordion-section {
-  margin-top: 1rem;
-  background: var(--warning-bg-light);
-  border: 1px solid var(--warning);
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.incidents-accordion-header {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 1.25rem;
-  background: var(--warning-bg-light);
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-dark);
-  transition: background 0.2s;
-  gap: 0.5rem;
-}
-
-.incidents-accordion-header:hover {
-  background: var(--warning-bg);
-}
-
-.incidents-accordion-header.active {
-  background: var(--warning-bg);
-  border-bottom: 1px solid var(--warning);
-}
-
-.incidents-header-content {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.incidents-title {
-  font-weight: 600;
-  color: var(--text-dark);
-}
-
-.incidents-badge {
-  padding: 0.2rem 0.6rem;
-  background: var(--danger);
-  color: white;
-  border-radius: 10px;
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.incidents-accordion-content {
-  padding: 1rem;
-  background: var(--warning-bg-lighter);
-}
-
-.incidents-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
 </style>

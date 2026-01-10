@@ -226,7 +226,9 @@ public record UpdateAreaRequest(
     string? CheckpointStyleMapRotation = null,
     // Terminology overrides (optional, null = don't change, empty = inherit from event)
     string? PeopleTerm = null,
-    string? CheckpointTerm = null
+    string? CheckpointTerm = null,
+    // Event contacts to unlink from this area (removes area from their scope)
+    List<string>? ContactsToRemove = null
 );
 
 public record AreaResponse(
@@ -533,7 +535,8 @@ public record ChecklistItemWithStatus(
 public record CompleteChecklistItemRequest(
     string MarshalId,
     string? ContextType = null,  // Optional override for context
-    string? ContextId = null     // Optional override for context
+    string? ContextId = null,    // Optional override for context
+    string? ActorMarshalId = null // Who is performing the action (e.g., area lead completing on behalf of marshal)
 );
 
 public record ChecklistCompletionResponse(

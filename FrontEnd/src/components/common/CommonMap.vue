@@ -19,12 +19,14 @@
         :marshal-mode="marshalMode"
         :simplify-non-highlighted="simplifyNonHighlighted"
         :selected-area-id="selectedAreaId"
+        :hide-recenter-button="hideRecenterButton"
         @location-click="$emit('location-click', $event)"
         @map-click="handleMapClick"
         @area-click="$emit('area-click', $event)"
         @polygon-complete="handlePolygonComplete"
         @polygon-drawing="handlePolygonDrawing"
         @polygon-update="handlePolygonUpdate"
+        @visibility-change="$emit('visibility-change', $event)"
       />
 
       <!-- Toolbar -->
@@ -94,12 +96,14 @@
           :marshal-mode="marshalMode"
           :simplify-non-highlighted="simplifyNonHighlighted"
           :selected-area-id="selectedAreaId"
+          :hide-recenter-button="hideRecenterButton"
           @location-click="$emit('location-click', $event)"
           @map-click="handleMapClick"
           @area-click="$emit('area-click', $event)"
           @polygon-complete="handlePolygonComplete"
           @polygon-drawing="handlePolygonDrawing"
           @polygon-update="handlePolygonUpdate"
+          @visibility-change="$emit('visibility-change', $event)"
         />
 
         <!-- Drawing controls in fullscreen -->
@@ -241,6 +245,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  hideRecenterButton: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const emit = defineEmits([
@@ -248,6 +256,7 @@ const emit = defineEmits([
   'location-click',
   'map-click',
   'area-click',
+  'visibility-change',
 
   // Mode-specific
   'point-selected',
@@ -495,6 +504,15 @@ defineExpose({
     canUndoPoints.value = false;
     canRedoPoints.value = false;
   },
+
+  // Recentering methods
+  recenterOnUserLocation: () => getActiveMapRef()?.recenterOnUserLocation?.(),
+  recenterOnLocation: (lat, lng, zoom) => getActiveMapRef()?.recenterOnLocation?.(lat, lng, zoom),
+
+  // Visibility tracking
+  isLocationInView: (lat, lng) => getActiveMapRef()?.isLocationInView?.(lat, lng) ?? true,
+  getUserLocationInView: () => getActiveMapRef()?.userLocationInView?.value ?? true,
+  getHighlightedLocationInView: () => getActiveMapRef()?.highlightedLocationInView?.value ?? true,
 
   // Fullscreen control
   openFullscreen: () => {

@@ -6,6 +6,31 @@
           Add contact
         </button>
       </div>
+      <div class="status-pills" v-if="contacts.length > 0">
+        <StatusPill
+          variant="neutral"
+          :active="activeFilter === 'all'"
+          @click="setFilter('all')"
+        >
+          {{ contacts.length }} total
+        </StatusPill>
+        <StatusPill
+          v-if="withScopeCount > 0"
+          variant="success"
+          :active="activeFilter === 'with-scope'"
+          @click="setFilter('with-scope')"
+        >
+          {{ withScopeCount }} assigned
+        </StatusPill>
+        <StatusPill
+          v-if="noScopeCount > 0"
+          variant="danger"
+          :active="activeFilter === 'no-scope'"
+          @click="setFilter('no-scope')"
+        >
+          {{ noScopeCount }} unassigned
+        </StatusPill>
+      </div>
     </div>
 
     <!-- Filters -->
@@ -15,58 +40,26 @@
           v-model="searchQuery"
           type="text"
           class="search-input"
-          placeholder="Search by name or role..."
+          placeholder="Search by name, role, email, or phone..."
         />
       </div>
     </div>
 
-    <!-- Contacts List -->
-    <div class="contacts-list">
-      <div v-if="filteredContacts.length === 0" class="empty-state">
-        <p>{{ searchQuery ? 'No contacts match your search.' : 'No contacts yet. Create one to get started!' }}</p>
-      </div>
-
-      <div
-        v-for="contact in sortedContacts"
-        :key="contact.contactId"
-        class="contact-card"
-        :class="{ primary: contact.isPrimary }"
-        @click="$emit('select-contact', contact)"
-      >
-        <div class="contact-header">
-          <div class="contact-title-row">
-            <span v-if="contact.isPrimary" class="primary-badge" title="Primary contact">★</span>
-            <strong>{{ contact.name }}</strong>
-            <span class="role-badge">{{ formatRoleName(contact.role) }}</span>
-          </div>
-          <div class="contact-details">
-            <span v-if="contact.phone" class="contact-phone">{{ contact.phone }}</span>
-            <span v-if="contact.email" class="contact-email">{{ contact.email }}</span>
-          </div>
-        </div>
-        <div v-if="contact.notes" class="contact-notes">
-          {{ truncateContent(contact.notes) }}
-        </div>
-        <div class="contact-scopes">
-          <span
-            v-for="(config, index) in contact.scopeConfigurations"
-            :key="index"
-            class="scope-badge"
-          >
-            {{ formatScopeConfig(config) }}
-          </span>
-        </div>
-      </div>
-    </div>
+    <!-- Contacts Grid -->
+    <ContactsGrid
+      :contacts="sortedContacts"
+      :show-notes="true"
+      :show-scopes="true"
+      :empty-message="emptyMessage"
+      @select="$emit('select-contact', $event)"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, defineProps, defineEmits } from 'vue';
-import { alphanumericCompare } from '../../utils/sortUtils';
-import { useTerminology } from '../../composables/useTerminology';
-
-const { termsLower } = useTerminology();
+import ContactsGrid from '../../components/event-manage/ContactsGrid.vue';
+import StatusPill from '../../components/StatusPill.vue';
 
 const props = defineProps({
   contacts: {
@@ -94,137 +87,143 @@ const props = defineProps({
 const emit = defineEmits(['add-contact', 'select-contact']);
 
 const searchQuery = ref('');
+const activeFilter = ref('all');
 
-// Search filtering - searches name + role
-const filteredContacts = computed(() => {
-  if (!searchQuery.value.trim()) {
-    return props.contacts;
-  }
-
-  const searchTerms = searchQuery.value.toLowerCase().trim().split(/\s+/);
-
-  return props.contacts.filter(contact => {
-    const roleText = formatRoleName(contact.role);
-    const searchableText = `${contact.name || ''} ${roleText}`.toLowerCase();
-
-    // All search terms must match
-    return searchTerms.every(term => searchableText.includes(term));
-  });
+// Count contacts without scope
+const noScopeCount = computed(() => {
+  return props.contacts.filter(c => !c.scopeConfigurations || c.scopeConfigurations.length === 0).length;
 });
 
-const sortedContacts = computed(() => {
-  return [...filteredContacts.value].sort((a, b) => {
-    // Primary contacts first
-    if (a.isPrimary !== b.isPrimary) {
-      return a.isPrimary ? -1 : 1;
-    }
-
-    // Then by role
-    const roleCompare = a.role.localeCompare(b.role);
-    if (roleCompare !== 0) return roleCompare;
-
-    // Then by display order
-    if (a.displayOrder !== b.displayOrder) {
-      return a.displayOrder - b.displayOrder;
-    }
-
-    // Then by name
-    return alphanumericCompare(a.name, b.name);
-  });
+// Count contacts with scope
+const withScopeCount = computed(() => {
+  return props.contacts.filter(c => c.scopeConfigurations && c.scopeConfigurations.length > 0).length;
 });
 
+const setFilter = (filter) => {
+  activeFilter.value = filter;
+};
+
+// Normalize text for searching - remove punctuation
+const normalizeText = (text) => {
+  if (!text) return '';
+  return text.toLowerCase().replace(/[.,\-_'"()]/g, ' ').replace(/\s+/g, ' ').trim();
+};
+
+// Format role name for search matching
 const formatRoleName = (role) => {
   if (!role) return '';
-  // Special handling for AreaLead - use terminology
-  if (role === 'AreaLead') {
-    return `${termsLower.value.area.charAt(0).toUpperCase() + termsLower.value.area.slice(1)} Lead`;
-  }
-  // Convert PascalCase/camelCase to words
   return role
     .replace(/([A-Z])/g, ' $1')
     .replace(/^./, str => str.toUpperCase())
     .trim();
 };
 
-const formatScope = (scope) => {
-  // Use terminology for dynamic terms
-  const scopeMap = {
-    'Everyone': 'Everyone',
-    'EveryoneInAreas': `Everyone in ${termsLower.value.areas}`,
-    'EveryoneAtCheckpoints': `Everyone at ${termsLower.value.checkpoints}`,
-    'SpecificPeople': `Specific ${termsLower.value.people}`,
-    'EveryAreaLead': `Every ${termsLower.value.area} lead`,
-  };
-  return scopeMap[scope] || scope;
-};
+// Search filtering - searches name + role with multi-term support
+const filteredContacts = computed(() => {
+  let result = props.contacts;
 
-const formatScopeConfig = (config) => {
-  if (!config) return '';
-
-  const scopeName = formatScope(config.scope);
-
-  if (config.itemType === null) {
-    return scopeName;
+  // Apply status filter
+  if (activeFilter.value === 'no-scope') {
+    result = result.filter(c => !c.scopeConfigurations || c.scopeConfigurations.length === 0);
+  } else if (activeFilter.value === 'with-scope') {
+    result = result.filter(c => c.scopeConfigurations && c.scopeConfigurations.length > 0);
   }
 
-  const ids = config.ids || [];
+  // Apply search filter
+  if (searchQuery.value.trim()) {
+    const normalizedQuery = normalizeText(searchQuery.value);
+    const searchTerms = normalizedQuery.split(' ').filter(t => t.length > 0);
 
-  if (ids.includes('ALL_MARSHALS')) {
-    return `${scopeName} (Everyone)`;
-  }
-  if (ids.includes('ALL_AREAS')) {
-    return `${scopeName} (All ${termsLower.value.areas})`;
-  }
-  if (ids.includes('ALL_CHECKPOINTS')) {
-    return `${scopeName} (All ${termsLower.value.checkpoints})`;
+    result = result.filter(contact => {
+      const roleText = formatRoleName(contact.role);
+      const searchableText = normalizeText(
+        `${contact.name || ''} ${roleText} ${contact.email || ''} ${contact.phone || ''}`
+      );
+
+      // All search terms must match
+      return searchTerms.every(term => searchableText.includes(term));
+    });
   }
 
-  const count = ids.length;
-  if (count === 0) {
-    return scopeName;
+  return result;
+});
+
+// Sort alphabetically by name
+const sortedContacts = computed(() => {
+  return [...filteredContacts.value].sort((a, b) => {
+    return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+  });
+});
+
+// Empty message based on filters
+const emptyMessage = computed(() => {
+  const hasSearch = searchQuery.value.trim();
+
+  if (activeFilter.value === 'no-scope') {
+    if (hasSearch) {
+      return 'No unassigned contacts match your search.';
+    }
+    return 'All contacts are assigned.';
   }
-
-  return `${scopeName} (${count})`;
-};
-
-const truncateContent = (content) => {
-  if (!content) return '';
-  const maxLength = 100;
-  if (content.length <= maxLength) return content;
-  return content.substring(0, maxLength) + '...';
-};
+  if (activeFilter.value === 'with-scope') {
+    if (hasSearch) {
+      return 'No assigned contacts match your search.';
+    }
+    return 'No contacts are assigned yet.';
+  }
+  if (hasSearch) {
+    return 'No contacts match your search.';
+  }
+  return 'No contacts yet. Create one to get started!';
+});
 </script>
 
 <style scoped>
 .contacts-tab {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .tab-header {
-  flex-wrap: wrap;
-  gap: 1rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
-.tab-header h2 {
-  margin: 0;
-  font-size: 1.5rem;
-  color: var(--text-primary);
+.status-pills {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .button-group {
   display: flex;
   gap: 0.75rem;
 }
-.btn {  padding: 0.5rem 1rem;  border: none;  border-radius: 4px;  cursor: pointer;  font-size: 0.9rem;  transition: background-color 0.2s;}.btn-primary {  background: var(--accent-primary);  color: white;}.btn-primary:hover {  background: var(--accent-primary-hover);}
+
+.btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.btn-primary {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--btn-primary-hover);
+}
 
 .filters-section {
-  margin-bottom: 1rem;
   padding: 0.75rem 1rem;
   background: var(--bg-tertiary);
   border-radius: 8px;
@@ -254,143 +253,5 @@ const truncateContent = (content) => {
 
 .search-input::placeholder {
   color: var(--text-muted);
-}
-
-.empty-state {
-  text-align: center;
-  padding: 3rem 1rem;
-  color: var(--text-muted);
-  font-style: italic;
-}
-
-.contacts-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.contact-card {
-  padding: 1rem 1.25rem;
-  background: var(--card-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.contact-card:hover {
-  border-color: var(--accent-primary);
-  box-shadow: var(--shadow-md);
-}
-
-.contact-card.primary {
-  border-left: 4px solid var(--accent-warning);
-  background: var(--status-warning-bg);
-}
-
-.contact-header {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.contact-title-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.primary-badge {
-  color: var(--accent-warning);
-  font-size: 1rem;
-}
-
-.contact-title-row strong {
-  font-size: 1rem;
-  color: var(--text-primary);
-}
-
-.role-badge {
-  padding: 0.2rem 0.6rem;
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
-.contact-details {
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-}
-
-.contact-phone::before {
-  content: '📞 ';
-}
-
-.contact-email::before {
-  content: '✉ ';
-}
-
-.contact-notes {
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-  line-height: 1.4;
-  margin-bottom: 0.75rem;
-}
-
-.contact-scopes {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.scope-badge {
-  padding: 0.2rem 0.6rem;
-  background: var(--accent-primary);
-  color: white;
-  border-radius: 12px;
-  font-size: 0.7rem;
-  font-weight: 500;
-}
-
-.btn {
-  padding: 0.6rem 1.2rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 500;
-  transition: background-color 0.2s;
-}
-
-.btn-primary {
-  background: var(--accent-primary);
-  color: white;
-}
-
-.btn-primary:hover {
-  background: var(--btn-primary-hover);
-}
-
-.btn-secondary {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-.btn-secondary:hover {
-  background: var(--bg-hover);
-}
-
-@media (max-width: 768px) {
-  .contact-details {
-    flex-direction: column;
-    gap: 0.25rem;
-  }
 }
 </style>

@@ -17,67 +17,16 @@
     </div>
 
     <div v-else-if="items.length === 0" class="empty-state">
-      <p>No checklist items for this checkpoint.</p>
+      <p>No checklist items for this {{ termsLower.checkpoint }}.</p>
     </div>
 
-    <div v-else class="checklist-items">
-      <div
-        v-for="item in itemsWithLocalState"
-        :key="`${item.itemId}-${item.completionContextId}`"
-        class="checklist-item"
-        :class="{
-          'item-completed': item.localIsCompleted,
-          'item-modified': item.isModified
-        }"
-      >
-        <div class="item-checkbox">
-          <input
-            type="checkbox"
-            :checked="item.localIsCompleted"
-            :disabled="!item.canBeCompletedByMe && !item.localIsCompleted"
-            @change="handleToggleComplete(item)"
-          />
-        </div>
-
-        <div class="item-content">
-          <div class="item-header">
-            <div class="item-text-wrapper">
-              <div class="item-text">{{ item.text }}</div>
-              <div v-if="getContextName(item)" class="item-context">
-                {{ getContextName(item) }}
-              </div>
-            </div>
-            <div class="item-scope">
-              <span class="scope-pill" :title="getScopeTooltip(item)">
-                {{ getScopeLabel(item) }}
-              </span>
-            </div>
-          </div>
-
-          <div v-if="item.localIsCompleted" class="completion-info">
-            <span v-if="item.isModified && !item.isCompleted" class="pending-text">
-              Will be marked as completed (pending save)
-            </span>
-            <template v-else>
-              <span class="completion-text">
-                Completed by {{ item.completedByActorName || 'Unknown' }}
-              </span>
-              <span class="completion-time">
-                {{ formatDateTime(item.completedAt) }}
-              </span>
-            </template>
-          </div>
-
-          <div v-if="item.isModified && item.isCompleted && !item.localIsCompleted" class="uncomplete-info">
-            <span class="pending-text">Will be marked as incomplete (pending save)</span>
-          </div>
-
-          <div v-if="!item.canBeCompletedByMe && !item.localIsCompleted" class="disabled-reason">
-            Already completed by someone else
-          </div>
-        </div>
-      </div>
-    </div>
+    <GroupedTasksList
+      v-else
+      :items="itemsWithLocalState"
+      :locations="locations"
+      :areas="areas"
+      @toggle-complete="handleToggleComplete"
+    />
   </div>
 </template>
 
@@ -85,6 +34,7 @@
 import { ref, computed, watch, defineProps, defineEmits } from 'vue';
 import { checklistApi } from '../services/api';
 import { useTerminology } from '../composables/useTerminology';
+import GroupedTasksList from './event-manage/GroupedTasksList.vue';
 
 const { terms, termsLower } = useTerminology();
 
@@ -241,72 +191,6 @@ defineExpose({
   loadChecklist,
 });
 
-const getScopeLabel = (item) => {
-  const scopeMap = {
-    'Everyone': 'Everyone',
-    'SpecificPeople': 'Assigned to you',
-    'EveryoneInAreas': `Your ${termsLower.value.areas}`,
-    'EveryoneAtCheckpoints': `Your ${termsLower.value.checkpoints}`,
-    'OnePerCheckpoint': `One per ${termsLower.value.checkpoint}`,
-    'OnePerArea': `One per ${termsLower.value.area}`,
-    'EveryAreaLead': `${terms.value.area} lead`,
-    'OneLeadPerArea': `One lead per ${termsLower.value.area}`,
-  };
-
-  return scopeMap[item.matchedScope] || item.matchedScope;
-};
-
-const getScopeTooltip = (item) => {
-  const tooltips = {
-    'Everyone': 'This item is for everyone at the event',
-    'SpecificPeople': 'This item is specifically assigned to certain people',
-    'EveryoneInAreas': `This item is for everyone in certain ${termsLower.value.areas}`,
-    'EveryoneAtCheckpoints': `This item is for everyone at certain ${termsLower.value.checkpoints}`,
-    'OnePerCheckpoint': `One person at the ${termsLower.value.checkpoint} needs to complete this`,
-    'OnePerArea': `One person in the ${termsLower.value.area} needs to complete this`,
-    'EveryAreaLead': `This item is for ${termsLower.value.area} leads only`,
-    'OneLeadPerArea': `One ${termsLower.value.area} lead needs to complete this`,
-  };
-
-  return tooltips[item.matchedScope] || '';
-};
-
-const getContextName = (item) => {
-  if (!item.completionContextType || !item.completionContextId) {
-    return null;
-  }
-
-  if (item.completionContextType === 'Checkpoint') {
-    const location = props.locations.find(l => l.id === item.completionContextId);
-    if (!location) return null;
-
-    const checkpointLabel = location.description
-      ? `${location.name} - ${location.description}`
-      : location.name;
-    return `at ${termsLower.value.checkpoint} ${checkpointLabel}`;
-  }
-
-  if (item.completionContextType === 'Area') {
-    const area = props.areas.find(a => a.id === item.completionContextId);
-    return area ? `in ${termsLower.value.area} ${area.name}` : null;
-  }
-
-  if (item.completionContextType === 'Personal') {
-    if (item.contextOwnerName) {
-      return `for ${item.contextOwnerName}`;
-    }
-    return 'assigned individually';
-  }
-
-  return null;
-};
-
-const formatDateTime = (dateString) => {
-  if (!dateString) return '';
-  const date = new Date(dateString);
-  return date.toLocaleString();
-};
-
 // Watch for changes and reload
 watch(() => [props.eventId, props.locationId, props.areaId], () => {
   loadChecklist();
@@ -332,148 +216,6 @@ watch(() => [props.eventId, props.locationId, props.areaId], () => {
 
 .error-state p {
   margin-bottom: 1rem;
-}
-
-.checklist-items {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.checklist-item {
-  display: flex;
-  gap: 0.75rem;
-  padding: 0.75rem;
-  background: var(--card-bg);
-  border: 1px solid var(--border-light);
-  border-radius: 6px;
-  transition: all 0.2s;
-}
-
-.checklist-item:hover {
-  border-color: var(--border-medium);
-  box-shadow: var(--shadow-xs);
-}
-
-.checklist-item.item-completed {
-  background: var(--bg-secondary);
-  opacity: 0.8;
-}
-
-.checklist-item.item-modified {
-  border-color: var(--warning);
-  background: var(--warning-bg-lighter);
-}
-
-.item-checkbox {
-  display: flex;
-  align-items: flex-start;
-  padding-top: 0.25rem;
-}
-
-.item-checkbox input[type="checkbox"] {
-  cursor: pointer;
-  width: 1.2rem;
-  height: 1.2rem;
-  flex-shrink: 0;
-}
-
-.item-checkbox input[type="checkbox"]:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.item-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  min-width: 0;
-}
-
-.item-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.item-text-wrapper {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  min-width: 200px;
-}
-
-.item-text {
-  font-size: 0.95rem;
-  color: var(--text-dark);
-  word-wrap: break-word;
-}
-
-.item-context {
-  font-size: 0.85rem;
-  color: var(--brand-primary);
-  font-weight: 500;
-}
-
-.item-scope {
-  flex-shrink: 0;
-  min-width: 150px;
-}
-
-.scope-pill {
-  display: inline-block;
-  padding: 0.25rem 0.65rem;
-  background: var(--info-bg);
-  color: var(--info-blue);
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.completion-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-}
-
-.completion-text {
-  font-weight: 500;
-}
-
-.completion-time {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
-.pending-info {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  font-style: italic;
-}
-
-.pending-text {
-  font-size: 0.85rem;
-  color: var(--warning-dark);
-  font-weight: 500;
-  font-style: italic;
-}
-
-.uncomplete-info {
-  font-size: 0.85rem;
-  color: var(--danger);
-}
-
-.disabled-reason {
-  font-size: 0.85rem;
-  color: var(--danger);
-  font-style: italic;
 }
 
 .help-text {

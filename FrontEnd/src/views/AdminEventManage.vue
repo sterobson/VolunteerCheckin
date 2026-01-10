@@ -183,7 +183,8 @@
       :event-default-style-size="event?.defaultCheckpointStyleSize || event?.DefaultCheckpointStyleSize || ''"
       :event-default-style-map-rotation="event?.defaultCheckpointStyleMapRotation ?? event?.DefaultCheckpointStyleMapRotation ?? ''"
       :event-people-term="event?.peopleTerm || 'Marshals'"
-      :z-index="showEditArea ? 1100 : 1000"
+      :z-index="showEditArea ? 1200 : (lockedFromMarshal ? 1100 : 1000)"
+      :locked-from-marshal="lockedFromMarshal"
       @close="closeEditLocationModal"
       @save="handleUpdateLocation"
       @delete="handleDeleteLocation"
@@ -192,6 +193,7 @@
       @open-assign-modal="openCreateMarshalModal"
       @update:isDirty="markFormDirty"
       @select-incident="handleSelectLocationIncident"
+      @select-marshal="handleSelectMarshalFromCheckpoint"
     />
 
     <ShareLinkModal
@@ -253,6 +255,8 @@
       :incidents="selectedMarshalIncidents"
       :is-dirty="formDirty"
       :validation-errors="marshalValidationErrors"
+      :locked-checkpoint-id="lockedCheckpointId"
+      :z-index="lockedCheckpointId ? 1100 : 1000"
       @close="closeEditMarshalModal"
       @save="handleSaveMarshal"
       @delete="handleDeleteMarshal"
@@ -260,6 +264,7 @@
       @assign-to-location="assignMarshalToLocation"
       @update:isDirty="markFormDirty"
       @select-incident="handleSelectMarshalIncident"
+      @select-checkpoint="handleSelectCheckpointFromMarshal"
     />
 
     <ImportMarshalsModal
@@ -299,6 +304,7 @@
     />
 
     <EditAreaModal
+      ref="editAreaModalRef"
       :show="showEditArea"
       :area="selectedArea"
       :initial-tab="areaInitialTab"
@@ -329,7 +335,8 @@
       @draw-boundary="handleDrawBoundary"
       @update:isDirty="markFormDirty"
       @select-checkpoint="selectLocation"
-      @add-area-contact="handleAddAreaContact"
+      @create-contact-from-marshal="handleCreateContactFromMarshal"
+      @create-new-contact="handleCreateNewContact"
       @edit-contact="handleEditContactFromArea"
       @select-incident="handleSelectAreaIncident"
     />
@@ -425,7 +432,9 @@
       :marshals="marshals"
       :available-roles="contactRoles"
       :is-dirty="formDirty"
-      :preselected-area="pendingAreaForContact"
+      :prefilled-name="prefilledContactName"
+      :prefilled-marshal-id="prefilledContactMarshalId"
+      :create-from-area-context="!!pendingAreaForContact"
       @close="closeEditContactModal"
       @save="handleSaveContact"
       @delete="handleDeleteContact"
@@ -609,6 +618,7 @@ const dataLastLoadedAt = ref({
   contacts: 0,
 });
 const selectedLocation = ref(null);
+const lockedFromMarshal = ref(false);
 const showAddLocation = ref(false);
 const courseAreasTab = ref(null);
 const showShareLink = ref(false);
@@ -653,6 +663,7 @@ const conflictResolveCallback = ref(null);
 const marshals = ref([]);
 const showEditMarshal = ref(false);
 const selectedMarshal = ref(null);
+const lockedCheckpointId = ref(null);
 const editMarshalModalRef = ref(null);
 const marshalValidationErrors = ref({});
 const editMarshalForm = ref({
@@ -706,6 +717,7 @@ const areas = ref([]);
 const selectedArea = ref(null);
 const showEditArea = ref(false);
 const areaInitialTab = ref('details');
+const editAreaModalRef = ref(null);
 const selectedAreaId = ref(null);
 const pendingAreaFormData = ref(null);
 // Fullscreen map - use composable state
@@ -744,6 +756,8 @@ const selectedContact = ref(null);
 const showEditContact = ref(false);
 const contactInitialTab = ref('details');
 const pendingAreaForContact = ref(null);
+const prefilledContactName = ref('');
+const prefilledContactMarshalId = ref(null);
 const userClaims = ref(null);
 
 // Mode switching
@@ -1308,8 +1322,53 @@ const handleSaveArea = async (formData) => {
           // Continue with other contacts even if one fails
         }
       }
+    }
 
-      // Reload contacts to reflect the changes
+    // Process contacts to remove - remove the area from each contact's scope
+    if (formData.contactsToRemove && formData.contactsToRemove.length > 0 && areaId) {
+      for (const contactId of formData.contactsToRemove) {
+        try {
+          // Find the contact to get current scope configurations
+          const contact = contacts.value.find(c => c.contactId === contactId);
+          if (!contact) continue;
+
+          // Clone existing scope configurations
+          const scopeConfigurations = contact.scopeConfigurations
+            ? JSON.parse(JSON.stringify(contact.scopeConfigurations))
+            : [];
+
+          // Find EveryoneInAreas scope for Area type
+          const areaScope = scopeConfigurations.find(
+            (config) => config.scope === 'EveryoneInAreas' && config.itemType === 'Area'
+          );
+
+          if (areaScope && areaScope.ids) {
+            // Remove this area ID from the list
+            areaScope.ids = areaScope.ids.filter(id => id !== areaId);
+
+            // If no areas left, remove the entire scope configuration
+            const updatedScopes = areaScope.ids.length > 0
+              ? scopeConfigurations
+              : scopeConfigurations.filter(config =>
+                  !(config.scope === 'EveryoneInAreas' && config.itemType === 'Area')
+                );
+
+            // Update the contact with the new scope configurations
+            await contactsApi.update(route.params.eventId, contactId, {
+              ...contact,
+              scopeConfigurations: updatedScopes,
+            });
+          }
+        } catch (error) {
+          console.error('Failed to remove area from contact:', contactId, error);
+          // Continue with other contacts even if one fails
+        }
+      }
+    }
+
+    // Reload contacts to reflect any scope changes
+    if ((formData.pendingContacts && formData.pendingContacts.length > 0) ||
+        (formData.contactsToRemove && formData.contactsToRemove.length > 0)) {
       await loadContacts();
     }
 
@@ -1350,13 +1409,25 @@ const closeEditAreaModal = () => {
   pendingAreaFormData.value = null;
 };
 
-const handleAddAreaContact = (area) => {
-  // Open contact modal without closing area modal - user can return to area modal after saving contact
+const handleCreateContactFromMarshal = ({ marshal, area }) => {
+  // Open contact modal with marshal pre-selected
   selectedContact.value = null;
   contactInitialTab.value = 'details';
   formDirty.value = false;
-  // Store the area to pre-populate scope configuration
   pendingAreaForContact.value = area;
+  prefilledContactName.value = '';
+  prefilledContactMarshalId.value = marshal.id;
+  showEditContact.value = true;
+};
+
+const handleCreateNewContact = ({ name, area }) => {
+  // Open contact modal with name pre-filled
+  selectedContact.value = null;
+  contactInitialTab.value = 'details';
+  formDirty.value = false;
+  pendingAreaForContact.value = area;
+  prefilledContactName.value = name;
+  prefilledContactMarshalId.value = null;
   showEditContact.value = true;
 };
 
@@ -1569,13 +1640,27 @@ const handleSelectContact = (contact) => {
 
 const handleSaveContact = async (formData) => {
   try {
+    let newContactId = null;
+    const isCreatingNew = !selectedContact.value || !selectedContact.value.contactId;
+    const hasAreaContext = !!pendingAreaForContact.value;
+
     if (selectedContact.value && selectedContact.value.contactId) {
       await contactsApi.update(route.params.eventId, selectedContact.value.contactId, formData);
     } else {
-      await contactsApi.create(route.params.eventId, formData);
+      const response = await contactsApi.create(route.params.eventId, formData);
+      newContactId = response.data?.contactId || response.data?.id;
     }
 
     await loadContacts();
+
+    // If creating a new contact from the area modal context, add it to the pending list
+    if (isCreatingNew && hasAreaContext && newContactId && editAreaModalRef.value) {
+      const newContact = contacts.value.find(c => c.contactId === newContactId);
+      if (newContact) {
+        editAreaModalRef.value.addPendingContact(newContact);
+      }
+    }
+
     closeEditContactModal();
   } catch (error) {
     console.error('Failed to save contact:', error);
@@ -1589,6 +1674,12 @@ const handleDeleteContact = async (contactId) => {
     try {
       await contactsApi.delete(route.params.eventId, contactId);
       await loadContacts();
+
+      // If area modal is open, clean up any references to this deleted contact
+      if (editAreaModalRef.value) {
+        editAreaModalRef.value.removeContactById(contactId);
+      }
+
       closeEditContactModal();
     } catch (error) {
       console.error('Failed to delete contact:', error);
@@ -1601,6 +1692,8 @@ const closeEditContactModal = () => {
   showEditContact.value = false;
   selectedContact.value = null;
   pendingAreaForContact.value = null;
+  prefilledContactName.value = '';
+  prefilledContactMarshalId.value = null;
   formDirty.value = false;
 };
 
@@ -2105,6 +2198,7 @@ const closeLocationModal = () => {
 const closeEditLocationModal = () => {
   showEditLocation.value = false;
   selectedLocation.value = null;
+  lockedFromMarshal.value = false;
   isMovingLocation.value = false;
   showAssignMarshalModal.value = false;
   preservedLocationFormData.value = null;
@@ -2558,6 +2652,7 @@ const getMarshalAssignmentsForEdit = () => {
       assignments.push({
         ...assignment,
         locationName: location.name,
+        locationDescription: location.description || '',
       });
     });
   });
@@ -2696,6 +2791,15 @@ const handleSaveMarshal = async (formData) => {
     }
 
     await loadEventData();
+
+    // Update selectedLocation if the checkpoint modal is still open (when editing marshal from checkpoint)
+    if (selectedLocation.value) {
+      const updatedLocation = locationStatuses.value.find(l => l.id === selectedLocation.value.id);
+      if (updatedLocation) {
+        selectedLocation.value = updatedLocation;
+      }
+    }
+
     closeEditMarshalModal();
 
     // Show confirmation modal with login link for newly created marshals
@@ -2791,6 +2895,7 @@ const assignMarshalToLocation = (locationId) => {
 const closeEditMarshalModal = () => {
   showEditMarshal.value = false;
   selectedMarshal.value = null;
+  lockedCheckpointId.value = null;
   marshalValidationErrors.value = {};
   editMarshalForm.value = {
     id: '',
@@ -2804,6 +2909,45 @@ const closeEditMarshalModal = () => {
   formDirty.value = false;
 };
 
+// Handle selecting a marshal from within the checkpoint/location modal
+const handleSelectMarshalFromCheckpoint = async (assignment) => {
+  // Get the full marshal data
+  const marshal = marshals.value.find(m => m.id === assignment.marshalId);
+  if (!marshal) {
+    console.error('Marshal not found:', assignment.marshalId);
+    return;
+  }
+
+  // Set the locked checkpoint ID to the current location
+  lockedCheckpointId.value = selectedLocation.value?.id || null;
+
+  // Reset dirty state before opening
+  formDirty.value = false;
+
+  // Open the marshal modal
+  selectedMarshal.value = marshal;
+  showEditMarshal.value = true;
+};
+
+// Handle selecting a checkpoint from within the marshal modal
+const handleSelectCheckpointFromMarshal = (assignment) => {
+  // Find the full location data
+  const location = locationStatuses.value.find(l => l.id === assignment.locationId);
+  if (!location) {
+    console.error('Location not found:', assignment.locationId);
+    return;
+  }
+
+  // Set locked from marshal flag
+  lockedFromMarshal.value = true;
+
+  // Reset dirty state before opening
+  formDirty.value = false;
+
+  // Open the location modal
+  selectedLocation.value = location;
+  showEditLocation.value = true;
+};
 
 const handleImportMarshalsSubmit = async ({ file }) => {
   const result = await importExport.importMarshals(file);

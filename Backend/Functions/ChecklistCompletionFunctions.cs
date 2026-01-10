@@ -120,6 +120,19 @@ public class ChecklistCompletionFunctions
                 AdminUserEntity? admin = await _adminUserRepository.GetByEmailAsync(adminEmail);
                 actorName = !string.IsNullOrWhiteSpace(admin?.Name) ? admin.Name : adminEmail;
             }
+            else if (!string.IsNullOrWhiteSpace(request.ActorMarshalId))
+            {
+                // A marshal (e.g., area lead) is completing this on behalf of another marshal
+                MarshalEntity? actorMarshal = await _marshalRepository.GetAsync(eventId, request.ActorMarshalId);
+                if (actorMarshal == null)
+                {
+                    return new NotFoundObjectResult(new { message = "Actor marshal not found" });
+                }
+
+                actorType = Constants.ActorTypeMarshal;
+                actorId = request.ActorMarshalId;
+                actorName = actorMarshal.Name;
+            }
             else
             {
                 // Marshal is completing their own task
@@ -180,12 +193,6 @@ public class ChecklistCompletionFunctions
                 return new BadRequestObjectResult(new { message = Constants.ErrorInvalidRequest });
             }
 
-            string adminEmail = req.Headers[Constants.AdminEmailHeader].ToString();
-            if (string.IsNullOrWhiteSpace(adminEmail))
-            {
-                return new BadRequestObjectResult(new { message = Constants.ErrorEmailRequired });
-            }
-
             // Get the checklist item
             ChecklistItemEntity? item = await _checklistItemRepository.GetAsync(eventId, itemId);
             if (item == null)
@@ -229,14 +236,62 @@ public class ChecklistCompletionFunctions
                 return new NotFoundObjectResult(new { message = "Completion not found" });
             }
 
+            // Determine actor (who is actually performing this action)
+            string actorType;
+            string actorId;
+            string actorName;
+            string adminEmail = req.Headers[Constants.AdminEmailHeader].ToString();
+
+            if (!string.IsNullOrWhiteSpace(adminEmail))
+            {
+                // Admin is uncompleting this
+                actorType = Constants.ActorTypeEventAdmin;
+                actorId = adminEmail;
+
+                // Try to get admin name, default to email if not found or empty
+                AdminUserEntity? admin = await _adminUserRepository.GetByEmailAsync(adminEmail);
+                actorName = !string.IsNullOrWhiteSpace(admin?.Name) ? admin.Name : adminEmail;
+            }
+            else if (!string.IsNullOrWhiteSpace(request.ActorMarshalId))
+            {
+                // A marshal (e.g., area lead) is uncompleting this
+                MarshalEntity? actorMarshal = await _marshalRepository.GetAsync(eventId, request.ActorMarshalId);
+                if (actorMarshal == null)
+                {
+                    return new NotFoundObjectResult(new { message = "Actor marshal not found" });
+                }
+
+                actorType = Constants.ActorTypeMarshal;
+                actorId = request.ActorMarshalId;
+                actorName = actorMarshal.Name;
+            }
+            else
+            {
+                // Marshal is uncompleting their own task
+                MarshalEntity? marshal = await _marshalRepository.GetAsync(eventId, request.MarshalId);
+                if (marshal == null)
+                {
+                    return new NotFoundObjectResult(new { message = Constants.ErrorMarshalNotFound });
+                }
+
+                actorType = Constants.ActorTypeMarshal;
+                actorId = request.MarshalId;
+                actorName = marshal.Name;
+            }
+
             // Soft delete the completion
             completion.IsDeleted = true;
             completion.UncompletedAt = DateTime.UtcNow;
-            completion.UncompletedByAdminEmail = adminEmail;
+            completion.UncompletedByActorType = actorType;
+            completion.UncompletedByActorId = actorId;
+            completion.UncompletedByActorName = actorName;
+#pragma warning disable CS0618 // Keep legacy field populated for backwards compatibility
+            completion.UncompletedByAdminEmail = actorType == Constants.ActorTypeEventAdmin ? actorId : string.Empty;
+#pragma warning restore CS0618
 
             await _checklistCompletionRepository.UpdateAsync(completion);
 
-            _logger.LogInformation("Checklist item {ItemId} uncompleted for marshal {MarshalId} by admin {AdminEmail}", itemId, request.MarshalId, adminEmail);
+            _logger.LogInformation("Checklist item {ItemId} uncompleted for marshal {MarshalId} by {ActorType} {ActorName}", itemId, request.MarshalId, actorType, actorName);
 
             return new NoContentResult();
         }

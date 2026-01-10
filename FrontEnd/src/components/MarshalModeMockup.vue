@@ -173,18 +173,18 @@
                 <button
                   type="button"
                   class="position-btn"
-                  :class="{ selected: effectiveLogoPosition === 'right' }"
-                  @click="updateBranding('logoPosition', 'right')"
-                >
-                  Right
-                </button>
-                <button
-                  type="button"
-                  class="position-btn"
                   :class="{ selected: effectiveLogoPosition === 'cover' }"
                   @click="updateBranding('logoPosition', 'cover')"
                 >
                   Cover
+                </button>
+                <button
+                  type="button"
+                  class="position-btn"
+                  :class="{ selected: effectiveLogoPosition === 'right' }"
+                  @click="updateBranding('logoPosition', 'right')"
+                >
+                  Right
                 </button>
               </div>
             </div>
@@ -473,12 +473,20 @@ function applyPreset(preset) {
   text-align: center;
 }
 
-.mockup-header.logo-left {
+.mockup-header.logo-left,
+.mockup-header.logo-right {
   flex-direction: row;
+  padding-top: 0;
+  padding-bottom: 0;
+  height: 100px;
+}
+
+.mockup-header.logo-left {
+  padding-left: 0;
 }
 
 .mockup-header.logo-right {
-  flex-direction: row;
+  padding-right: 0;
 }
 
 .mockup-header.logo-cover {
@@ -490,6 +498,7 @@ function applyPreset(preset) {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 0.25rem;
   position: relative;
   z-index: 1;
@@ -511,10 +520,6 @@ function applyPreset(preset) {
 }
 
 .mockup-logo {
-  width: 50px;
-  height: 40px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -522,14 +527,16 @@ function applyPreset(preset) {
   position: relative;
   overflow: hidden;
   flex-shrink: 0;
+  height: 100%;
+  aspect-ratio: 1 / 1;
 }
 
 .mockup-logo.logo-left {
-  margin-right: 0.5rem;
+  margin-right: 0;
 }
 
 .mockup-logo.logo-right {
-  margin-left: 0.5rem;
+  margin-left: 0;
 }
 
 /* Cover logo background */
@@ -552,7 +559,6 @@ function applyPreset(preset) {
   position: absolute;
   inset: 0;
   border: 2px dashed transparent;
-  border-radius: 4px;
   pointer-events: none;
   transition: border-color 0.2s;
 }
@@ -563,14 +569,17 @@ function applyPreset(preset) {
 }
 
 .logo-img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
 }
 
 .logo-placeholder {
   font-size: 0.65rem;
   color: rgba(255, 255, 255, 0.7);
+  padding: 0.5rem;
+  text-align: center;
 }
 
 .mockup-title {

@@ -1,5 +1,6 @@
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
+using VolunteerCheckin.Functions.Helpers;
 
 namespace VolunteerCheckin.Functions.Services;
 
@@ -29,6 +30,7 @@ public class BlobStorageService
 
     /// <summary>
     /// Uploads a logo image for an event and returns the public URL.
+    /// Images larger than 500KB will be resized to reduce file size.
     /// </summary>
     /// <param name="eventId">The event ID</param>
     /// <param name="imageData">The image data as a stream</param>
@@ -38,14 +40,27 @@ public class BlobStorageService
     {
         BlobContainerClient container = await GetOrCreateContainerAsync();
 
+        // Read stream into byte array for potential resizing
+        using MemoryStream ms = new();
+        await imageData.CopyToAsync(ms);
+        byte[] imageBytes = ms.ToArray();
+
+        // Resize image if needed (skip SVG and GIF)
+        string uploadContentType = contentType;
+        if (ImageResizer.CanResize(contentType))
+        {
+            (imageBytes, uploadContentType) = ImageResizer.ResizeIfNeeded(imageBytes, contentType);
+        }
+
         // Use eventId as blob name to ensure one logo per event
-        string blobName = $"{eventId}/logo{GetExtensionFromContentType(contentType)}";
+        string blobName = $"{eventId}/logo{GetExtensionFromContentType(uploadContentType)}";
         BlobClient blob = container.GetBlobClient(blobName);
 
         // Delete existing blob if it exists (to handle format changes)
         await DeleteExistingLogosAsync(container, eventId);
 
-        await blob.UploadAsync(imageData, new BlobHttpHeaders { ContentType = contentType });
+        using MemoryStream uploadStream = new(imageBytes);
+        await blob.UploadAsync(uploadStream, new BlobHttpHeaders { ContentType = uploadContentType });
 
         return blob.Uri.ToString();
     }

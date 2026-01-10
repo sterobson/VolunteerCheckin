@@ -33,7 +33,8 @@
       "Bash(start \"\" \"TestResults\\\\CoverageReport\\\\index.html\")",
       "Bash(cat:*)",
       "Bash(dotnet format:*)",
-      "Bash(dir /s /b C:UserssterosourcereposVolunteerCheckinBackend)"
+      "Bash(dir /s /b C:UserssterosourcereposVolunteerCheckinBackend)",
+      "WebSearch"
     ]
   }
 }

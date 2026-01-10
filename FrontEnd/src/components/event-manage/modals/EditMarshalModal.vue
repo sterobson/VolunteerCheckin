@@ -5,6 +5,7 @@
     size="large"
     :confirm-on-close="true"
     :is-dirty="isDirty"
+    :z-index="zIndex"
     @close="handleClose"
   >
     <!-- Tabs in header -->
@@ -33,10 +34,14 @@
       ref="checkpointsTabRef"
       :assignments="pendingAssignmentsForDisplay"
       :available-locations="availableLocationsFiltered"
+      :all-locations="allLocations"
+      :areas="areas"
       :is-new-marshal="!isEditing"
+      :locked-checkpoint-id="lockedCheckpointId"
       @input="handleInput"
       @remove-assignment="handleRemoveAssignment"
       @assign-to-location="handleAssignToLocation"
+      @select-checkpoint="handleSelectCheckpoint"
     />
 
     <!-- Checklists Tab (only when editing - checklists require saved marshal) -->
@@ -103,7 +108,7 @@
       <div class="custom-footer">
         <div class="footer-left">
           <button
-            v-if="isEditing"
+            v-if="isEditing && !lockedCheckpointId"
             type="button"
             @click="handleDelete"
             class="btn btn-danger"
@@ -195,6 +200,14 @@ const props = defineProps({
     type: Object,
     default: () => ({}),
   },
+  lockedCheckpointId: {
+    type: String,
+    default: null,
+  },
+  zIndex: {
+    type: Number,
+    default: 1000,
+  },
 });
 
 const emit = defineEmits([
@@ -206,6 +219,7 @@ const emit = defineEmits([
   'assign-to-location',
   'update:isDirty',
   'select-incident',
+  'select-checkpoint',
 ]);
 
 const activeTab = ref('details');
@@ -394,6 +408,10 @@ const handleAssignToLocation = (locationId) => {
   } else {
     emit('assign-to-location', locationId);
   }
+};
+
+const handleSelectCheckpoint = (assignment) => {
+  emit('select-checkpoint', assignment);
 };
 
 const handleClose = () => {

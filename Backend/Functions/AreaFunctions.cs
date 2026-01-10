@@ -19,6 +19,7 @@ public class AreaFunctions
     private readonly IAssignmentRepository _assignmentRepository;
     private readonly IChecklistItemRepository _checklistItemRepository;
     private readonly IChecklistCompletionRepository _checklistCompletionRepository;
+    private readonly IEventContactRepository _eventContactRepository;
     private readonly ClaimsService _claimsService;
 
     public AreaFunctions(
@@ -29,6 +30,7 @@ public class AreaFunctions
         IAssignmentRepository assignmentRepository,
         IChecklistItemRepository checklistItemRepository,
         IChecklistCompletionRepository checklistCompletionRepository,
+        IEventContactRepository eventContactRepository,
         ClaimsService claimsService)
     {
         _logger = logger;
@@ -38,6 +40,7 @@ public class AreaFunctions
         _assignmentRepository = assignmentRepository;
         _checklistItemRepository = checklistItemRepository;
         _checklistCompletionRepository = checklistCompletionRepository;
+        _eventContactRepository = eventContactRepository;
         _claimsService = claimsService;
     }
 
@@ -275,6 +278,28 @@ public class AreaFunctions
 
             await _areaRepository.UpdateAsync(areaEntity);
 
+            // Process contacts to remove (unlink from this area)
+            if (request.ContactsToRemove?.Count > 0)
+            {
+                List<Task> contactUpdateTasks = [];
+                foreach (string contactId in request.ContactsToRemove)
+                {
+                    EventContactEntity? contact = await _eventContactRepository.GetAsync(eventId, contactId);
+                    if (contact == null) continue;
+
+                    if (TryRemoveAreaFromContactScope(contact, areaId))
+                    {
+                        contactUpdateTasks.Add(_eventContactRepository.UpdateAsync(contact));
+                    }
+                }
+
+                if (contactUpdateTasks.Count > 0)
+                {
+                    await Task.WhenAll(contactUpdateTasks);
+                    _logger.LogInformation("Removed area {AreaId} from {ContactCount} contact scopes", areaId, contactUpdateTasks.Count);
+                }
+            }
+
             // Recalculate checkpoint assignments for all checkpoints in this event
             // since the area boundary may have changed
             await RecalculateCheckpointAreas(eventId);
@@ -355,6 +380,23 @@ public class AreaFunctions
                 await Task.WhenAll(updateTasks);
 
                 _logger.LogInformation("Reassigned {CheckpointCount} checkpoints from area {AreaId}", checkpointsInArea.Count(), areaId);
+            }
+
+            // Remove this area from any contact scopes
+            IEnumerable<EventContactEntity> contacts = await _eventContactRepository.GetByEventAsync(eventId);
+            List<Task> contactUpdateTasks = [];
+            foreach (EventContactEntity contact in contacts)
+            {
+                if (TryRemoveAreaFromContactScope(contact, areaId))
+                {
+                    contactUpdateTasks.Add(_eventContactRepository.UpdateAsync(contact));
+                }
+            }
+
+            if (contactUpdateTasks.Count > 0)
+            {
+                await Task.WhenAll(contactUpdateTasks);
+                _logger.LogInformation("Removed area {AreaId} from {ContactCount} contact scopes", areaId, contactUpdateTasks.Count);
             }
 
             await _areaRepository.DeleteAsync(eventId, areaId);
@@ -720,4 +762,29 @@ public class AreaFunctions
         }
     }
 #pragma warning restore MA0051
+
+    /// <summary>
+    /// Removes the specified area from a contact's scope configurations.
+    /// Returns true if the contact was modified, false otherwise.
+    /// </summary>
+    private static bool TryRemoveAreaFromContactScope(EventContactEntity contact, string areaId)
+    {
+        List<ScopeConfiguration> scopes = JsonSerializer.Deserialize<List<ScopeConfiguration>>(contact.ScopeConfigurationsJson) ?? [];
+        bool modified = false;
+
+        foreach (ScopeConfiguration scope in scopes)
+        {
+            if (scope.ItemType == "Area" && scope.Ids.Remove(areaId))
+            {
+                modified = true;
+            }
+        }
+
+        if (modified)
+        {
+            contact.ScopeConfigurationsJson = JsonSerializer.Serialize(scopes);
+        }
+
+        return modified;
+    }
 }

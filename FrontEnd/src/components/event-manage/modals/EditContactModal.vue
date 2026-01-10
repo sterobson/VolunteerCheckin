@@ -18,7 +18,8 @@
     <form @submit.prevent="handleSave" class="contact-form">
       <!-- Details Tab -->
       <div v-show="activeTab === 'details'" class="tab-content">
-        <div class="form-group">
+        <!-- Show marshal link dropdown only when creating new and not pre-linked -->
+        <div v-if="!isCreatingFromMarshal && !isEditingLinkedContact" class="form-group">
           <label for="marshalId">Link to {{ terms.person.toLowerCase() }}:</label>
           <select id="marshalId" v-model="form.marshalId" @change="handleMarshalSelect">
             <option :value="null">-- Not linked --</option>
@@ -27,6 +28,15 @@
             </option>
           </select>
           <span class="help-text">Optionally link to an existing {{ terms.person.toLowerCase() }} in the system</span>
+        </div>
+
+        <!-- Show linked marshal info when editing a linked contact -->
+        <div v-if="isEditingLinkedContact" class="form-group">
+          <label>Linked {{ terms.person.toLowerCase() }}:</label>
+          <div class="linked-marshal-info">
+            <span class="linked-marshal-name">{{ linkedMarshalName }}</span>
+            <span class="linked-marshal-hint">Contact details are synced with this {{ terms.person.toLowerCase() }}</span>
+          </div>
         </div>
 
         <div class="form-group">
@@ -220,6 +230,18 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  prefilledName: {
+    type: String,
+    default: '',
+  },
+  prefilledMarshalId: {
+    type: String,
+    default: null,
+  },
+  createFromAreaContext: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const emit = defineEmits([
@@ -250,12 +272,31 @@ const form = ref({
 
 const isEditing = computed(() => !!props.contact);
 
-const tabs = [
-  { value: 'details', label: 'Details' },
-  { value: 'visibility', label: 'Visibility' },
-];
+// Hide visibility tab when creating from area context (scope set when area is saved)
+const tabs = computed(() => {
+  if (props.createFromAreaContext) {
+    return [{ value: 'details', label: 'Details' }];
+  }
+  return [
+    { value: 'details', label: 'Details' },
+    { value: 'visibility', label: 'Visibility' },
+  ];
+});
 
 const isLinkedToMarshal = computed(() => !!form.value.marshalId);
+
+// Check if this is a "create from marshal" flow (marshal was pre-selected from previous modal)
+const isCreatingFromMarshal = computed(() => !isEditing.value && !!props.prefilledMarshalId);
+
+// Check if editing an existing contact that is linked to a marshal
+const isEditingLinkedContact = computed(() => isEditing.value && !!props.contact?.marshalId);
+
+// Get the name of the linked marshal for display
+const linkedMarshalName = computed(() => {
+  if (!props.contact?.marshalId) return '';
+  const marshal = props.marshals.find(m => m.id === props.contact.marshalId);
+  return marshal?.name || 'Unknown';
+});
 
 const sortedMarshals = computed(() => {
   return [...props.marshals].sort((a, b) => alphanumericCompare(a.name, b.name));
@@ -290,26 +331,48 @@ watch(() => props.show, (newVal) => {
       };
     } else {
       useCustomRole.value = false;
-      // Check if there's a preselected area - pre-configure scope for that area
-      const defaultScopeConfig = props.preselectedArea
-        ? [{
-            scope: 'EveryoneInAreas',
-            itemType: 'Area',
-            ids: [props.preselectedArea.id]
-          }]
-        : [{
-            scope: 'SpecificPeople',
-            itemType: 'Marshal',
-            ids: ['ALL_MARSHALS']
-          }];
+      // Determine default scope configuration:
+      // - If creating from area context, use empty scope (area scope added when area is saved)
+      // - If preselected area, pre-configure for that area
+      // - Otherwise, default to all marshals
+      let defaultScopeConfig;
+      if (props.createFromAreaContext) {
+        // Empty scope - will be set when area is saved
+        defaultScopeConfig = [];
+      } else if (props.preselectedArea) {
+        defaultScopeConfig = [{
+          scope: 'EveryoneInAreas',
+          itemType: 'Area',
+          ids: [props.preselectedArea.id]
+        }];
+      } else {
+        defaultScopeConfig = [{
+          scope: 'SpecificPeople',
+          itemType: 'Marshal',
+          ids: ['ALL_MARSHALS']
+        }];
+      }
+
+      // Check if we have a prefilled marshal - get their details
+      let prefilledDetails = { name: props.prefilledName || '', phone: '', email: '' };
+      if (props.prefilledMarshalId) {
+        const marshal = props.marshals.find(m => m.id === props.prefilledMarshalId);
+        if (marshal) {
+          prefilledDetails = {
+            name: marshal.name || '',
+            phone: marshal.phoneNumber || '',
+            email: marshal.email || '',
+          };
+        }
+      }
 
       form.value = {
         role: '',
-        name: '',
-        phone: '',
-        email: '',
+        name: prefilledDetails.name,
+        phone: prefilledDetails.phone,
+        email: prefilledDetails.email,
         notes: '',
-        marshalId: null,
+        marshalId: props.prefilledMarshalId || null,
         scopeConfigurations: defaultScopeConfig,
       };
     }
@@ -383,21 +446,24 @@ const handleSave = () => {
     return;
   }
 
-  if (!form.value.scopeConfigurations || form.value.scopeConfigurations.length === 0) {
-    showError('Please select at least one visibility scope');
-    return;
-  }
-
-  const hasValidScope = form.value.scopeConfigurations.some(config => {
-    if (config.itemType !== null && (!config.ids || config.ids.length === 0)) {
-      return false;
+  // Skip scope validation when creating from area context (scope will be set when area is saved)
+  if (!props.createFromAreaContext) {
+    if (!form.value.scopeConfigurations || form.value.scopeConfigurations.length === 0) {
+      showError('Please select at least one visibility scope');
+      return;
     }
-    return true;
-  });
 
-  if (!hasValidScope) {
-    showError('Please configure at least one scope with valid selections');
-    return;
+    const hasValidScope = form.value.scopeConfigurations.some(config => {
+      if (config.itemType !== null && (!config.ids || config.ids.length === 0)) {
+        return false;
+      }
+      return true;
+    });
+
+    if (!hasValidScope) {
+      showError('Please configure at least one scope with valid selections');
+      return;
+    }
   }
 
   const data = {
@@ -510,6 +576,27 @@ select {
 }
 
 .help-text {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.linked-marshal-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.linked-marshal-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.linked-marshal-hint {
   font-size: 0.8rem;
   color: var(--text-secondary);
   font-style: italic;

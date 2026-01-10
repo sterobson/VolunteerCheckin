@@ -63,10 +63,13 @@
       :assignments="assignments"
       :people-term="effectivePeopleTerm"
       :person-term="effectivePeopleTermSingular"
+      :checkpoint-term="effectiveCheckpointTermSingular"
+      :read-only="lockedFromMarshal"
       @update:form="updateForm"
       @input="handleInput"
       @remove-assignment="handleRemoveAssignment"
       @open-assign-modal="handleOpenAssignModal"
+      @select-marshal="handleSelectMarshal"
     />
 
     <!-- Checklists Tab (only when editing - checklists require saved location) -->
@@ -256,7 +259,7 @@
       <div class="custom-footer">
         <div class="footer-left">
           <button
-            v-if="isExistingLocation"
+            v-if="isExistingLocation && !lockedFromMarshal"
             type="button"
             @click="handleDelete"
             class="btn btn-danger"
@@ -388,6 +391,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  lockedFromMarshal: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const emit = defineEmits([
@@ -400,6 +407,7 @@ const emit = defineEmits([
   'open-assign-modal',
   'update:isDirty',
   'select-incident',
+  'select-marshal',
 ]);
 
 const activeTab = ref('details');
@@ -879,6 +887,8 @@ const handleSave = () => {
       : null,
     // Include pending check-in changes from assignments tab
     checkInChanges: assignmentsTabRef.value?.getPendingChanges?.() || [],
+    // Include assignments marked for removal
+    assignmentsToRemove: assignmentsTabRef.value?.getMarkedForRemoval?.() || [],
     // Include pending checklist changes
     checklistChanges: checklistChanges.value || [],
     // Include pending assignments for new locations (filter from props.assignments where isPending)
@@ -905,6 +915,10 @@ const handleRemoveAssignment = (assignment) => {
 
 const handleOpenAssignModal = () => {
   emit('open-assign-modal');
+};
+
+const handleSelectMarshal = (assignment) => {
+  emit('select-marshal', assignment);
 };
 
 const handleClose = () => {

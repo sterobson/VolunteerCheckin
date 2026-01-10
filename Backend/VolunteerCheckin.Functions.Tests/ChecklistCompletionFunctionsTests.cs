@@ -389,6 +389,147 @@ public class ChecklistCompletionFunctionsTests
         result.ShouldBeOfType<NotFoundObjectResult>();
     }
 
+    [TestMethod]
+    public async Task UncompleteChecklistItem_WithActorMarshalId_NoAdminEmail_ReturnsNoContent()
+    {
+        // Arrange - Area lead (Ruth) uncompleting marshal's (Andrew's) task
+        string actorMarshalId = "area-lead-ruth";
+        CompleteChecklistItemRequest request = new(MarshalId, null, null, actorMarshalId);
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request); // No admin email header
+
+        ChecklistItemEntity item = new()
+        {
+            PartitionKey = EventId,
+            RowKey = ItemId,
+            ItemId = ItemId,
+            EventId = EventId,
+            Text = "Test Item",
+            ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
+            {
+                new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [MarshalId] }
+            })
+        };
+        _mockChecklistItemRepository
+            .Setup(r => r.GetAsync(EventId, ItemId))
+            .ReturnsAsync(item);
+
+        SetupMarshalContext();
+
+        // Setup actor marshal (area lead Ruth)
+        MarshalEntity actorMarshal = new()
+        {
+            MarshalId = actorMarshalId,
+            EventId = EventId,
+            Name = "Ruth"
+        };
+        _mockMarshalRepository
+            .Setup(r => r.GetAsync(EventId, actorMarshalId))
+            .ReturnsAsync(actorMarshal);
+
+        ChecklistCompletionEntity completion = new()
+        {
+            PartitionKey = ChecklistCompletionEntity.CreatePartitionKey(EventId),
+            RowKey = ChecklistCompletionEntity.CreateRowKey(ItemId, "completion1"),
+            ChecklistItemId = ItemId,
+            ContextOwnerMarshalId = MarshalId,
+            IsDeleted = false
+        };
+        _mockChecklistCompletionRepository
+            .Setup(r => r.GetByItemAsync(EventId, ItemId))
+            .ReturnsAsync([completion]);
+
+        _mockChecklistCompletionRepository
+            .Setup(r => r.UpdateAsync(It.IsAny<ChecklistCompletionEntity>()))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        IActionResult result = await _functions.UncompleteChecklistItem(httpRequest, EventId, ItemId);
+
+        // Assert
+        result.ShouldBeOfType<NoContentResult>();
+
+        // Verify the completion was updated with correct actor info
+        _mockChecklistCompletionRepository.Verify(
+            r => r.UpdateAsync(It.Is<ChecklistCompletionEntity>(c =>
+                c.IsDeleted == true &&
+                c.UncompletedByActorType == Constants.ActorTypeMarshal &&
+                c.UncompletedByActorId == actorMarshalId &&
+                c.UncompletedByActorName == "Ruth"
+            )),
+            Times.Once
+        );
+    }
+
+    [TestMethod]
+    public async Task UncompleteChecklistItem_MarshalUncompletingOwnTask_NoAdminEmail_ReturnsNoContent()
+    {
+        // Arrange - Marshal uncompleting their own task (no actorMarshalId provided)
+        CompleteChecklistItemRequest request = new(MarshalId, null, null, null);
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request); // No admin email header
+
+        ChecklistItemEntity item = new()
+        {
+            PartitionKey = EventId,
+            RowKey = ItemId,
+            ItemId = ItemId,
+            EventId = EventId,
+            Text = "Test Item",
+            ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
+            {
+                new() { Scope = Constants.ChecklistScopeSpecificPeople, ItemType = "Marshal", Ids = [MarshalId] }
+            })
+        };
+        _mockChecklistItemRepository
+            .Setup(r => r.GetAsync(EventId, ItemId))
+            .ReturnsAsync(item);
+
+        SetupMarshalContext();
+
+        // Setup the marshal lookup for the actor (marshal uncompleting their own task)
+        MarshalEntity marshal = new()
+        {
+            MarshalId = MarshalId,
+            EventId = EventId,
+            Name = "Test Marshal"
+        };
+        _mockMarshalRepository
+            .Setup(r => r.GetAsync(EventId, MarshalId))
+            .ReturnsAsync(marshal);
+
+        ChecklistCompletionEntity completion = new()
+        {
+            PartitionKey = ChecklistCompletionEntity.CreatePartitionKey(EventId),
+            RowKey = ChecklistCompletionEntity.CreateRowKey(ItemId, "completion1"),
+            ChecklistItemId = ItemId,
+            ContextOwnerMarshalId = MarshalId,
+            IsDeleted = false
+        };
+        _mockChecklistCompletionRepository
+            .Setup(r => r.GetByItemAsync(EventId, ItemId))
+            .ReturnsAsync([completion]);
+
+        _mockChecklistCompletionRepository
+            .Setup(r => r.UpdateAsync(It.IsAny<ChecklistCompletionEntity>()))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        IActionResult result = await _functions.UncompleteChecklistItem(httpRequest, EventId, ItemId);
+
+        // Assert
+        result.ShouldBeOfType<NoContentResult>();
+
+        // Verify the completion was updated with the marshal as the actor
+        _mockChecklistCompletionRepository.Verify(
+            r => r.UpdateAsync(It.Is<ChecklistCompletionEntity>(c =>
+                c.IsDeleted == true &&
+                c.UncompletedByActorType == Constants.ActorTypeMarshal &&
+                c.UncompletedByActorId == MarshalId &&
+                c.UncompletedByActorName == "Test Marshal"
+            )),
+            Times.Once
+        );
+    }
+
     #endregion
 
     #region GetChecklistCompletionReport Tests

@@ -58,46 +58,12 @@
     </div>
 
     <!-- Row 3: Content -->
-    <div class="locations-list">
-      <div
-        v-for="location in sortedLocations"
-        :key="location.id"
-        class="location-item"
-        :style="{ borderLeftColor: getLocationBorderColor(location) }"
-        @click="$emit('select-location', location)"
-      >
-        <div class="location-info">
-          <div class="location-header">
-            <span class="checkpoint-icon" v-html="getCheckpointIconSvg(location)"></span>
-            <strong>{{ location.name }}</strong>
-            <span
-              v-for="areaId in (location.areaIds || location.AreaIds || [])"
-              :key="areaId"
-              class="area-badge"
-              :style="{ backgroundColor: getAreaColor(areaId) }"
-            >
-              {{ getAreaName(areaId) }}
-            </span>
-          </div>
-          <p v-if="location.description" class="location-description">
-            {{ location.description }}
-          </p>
-          <div class="location-stats">
-            <span class="stat-badge" :class="getStaffingClass(location)">
-              {{ location.checkedInCount }}/{{ location.requiredMarshals }} staffed
-            </span>
-            <span
-              v-for="assignment in location.assignments"
-              :key="assignment.id"
-              class="stat-badge"
-              :class="{ 'checked-in': assignment.isCheckedIn }"
-            >
-              {{ assignment.marshalName }}
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
+    <CheckpointsGrid
+      :checkpoints="sortedLocations"
+      :areas="areas"
+      :empty-message="emptyMessage"
+      @select="$emit('select-location', $event)"
+    />
   </div>
 </template>
 
@@ -105,8 +71,8 @@
 import { defineProps, defineEmits, computed, ref } from 'vue';
 import { alphanumericCompare } from '../../../utils/sortUtils';
 import { useTerminology } from '../../../composables/useTerminology';
-import { generateCheckpointSvg } from '../../../constants/checkpointIcons';
 import StatusPill from '../../StatusPill.vue';
+import CheckpointsGrid from '../CheckpointsGrid.vue';
 
 const { termsLower } = useTerminology();
 
@@ -142,6 +108,12 @@ const partialCount = computed(() => {
 const missingCount = computed(() => {
   return props.locations.filter(loc => loc.checkedInCount === 0 && loc.requiredMarshals > 0).length;
 });
+
+// Helper to get area name for search
+const getAreaName = (areaId) => {
+  const area = props.areas.find((a) => a.id === areaId);
+  return area ? area.name : null;
+};
 
 // Filtering by status pill and search query
 const filteredLocations = computed(() => {
@@ -180,72 +152,33 @@ const sortedLocations = computed(() => {
   return [...filteredLocations.value].sort((a, b) => alphanumericCompare(a.name, b.name));
 });
 
-const getAreaName = (areaId) => {
-  const area = props.areas.find((a) => a.id === areaId);
-  return area ? area.name : null;
-};
+// Empty message based on filters
+const emptyMessage = computed(() => {
+  const hasSearch = searchQuery.value.trim();
 
-const getAreaColor = (areaId) => {
-  const area = props.areas.find((a) => a.id === areaId);
-  return area ? area.color : '#999';
-};
-
-// Get border color based on checkpoint's resolved style or first area color
-const getLocationBorderColor = (location) => {
-  const resolvedBgColor = location.resolvedStyleBackgroundColor || location.ResolvedStyleBackgroundColor || location.resolvedStyleColor || location.ResolvedStyleColor;
-  if (resolvedBgColor) {
-    return resolvedBgColor;
+  if (activeFilter.value === 'full') {
+    if (hasSearch) {
+      return `No fully staffed ${termsLower.value.checkpoints} match your search.`;
+    }
+    return `No ${termsLower.value.checkpoints} are fully staffed.`;
   }
-
-  const areaIds = location.areaIds || location.AreaIds || [];
-  if (areaIds.length > 0) {
-    return getAreaColor(areaIds[0]);
+  if (activeFilter.value === 'partial') {
+    if (hasSearch) {
+      return `No partially staffed ${termsLower.value.checkpoints} match your search.`;
+    }
+    return `No ${termsLower.value.checkpoints} are partially staffed.`;
   }
-
-  return '#667eea';
-};
-
-// Get staffing status class
-const getStaffingClass = (location) => {
-  if (location.requiredMarshals === 0) return '';
-  if (location.checkedInCount >= location.requiredMarshals) return 'staffed-full';
-  if (location.checkedInCount > 0) return 'staffed-partial';
-  return 'staffed-none';
-};
-
-// Generate checkpoint icon SVG based on resolved style
-const getCheckpointIconSvg = (location) => {
-  const resolvedType = location.resolvedStyleType || location.ResolvedStyleType;
-  const resolvedBgColor = location.resolvedStyleBackgroundColor || location.ResolvedStyleBackgroundColor || location.resolvedStyleColor || location.ResolvedStyleColor;
-  const resolvedBorderColor = location.resolvedStyleBorderColor || location.ResolvedStyleBorderColor;
-  const resolvedIconColor = location.resolvedStyleIconColor || location.ResolvedStyleIconColor;
-  const resolvedShape = location.resolvedStyleBackgroundShape || location.ResolvedStyleBackgroundShape;
-
-  // Check if there's any resolved styling - type, colors, or shape
-  const hasResolvedStyle = (resolvedType && resolvedType !== 'default')
-    || resolvedBgColor
-    || resolvedBorderColor
-    || resolvedIconColor
-    || (resolvedShape && resolvedShape !== 'circle');
-
-  if (hasResolvedStyle) {
-    // Use resolved style from hierarchy
-    return generateCheckpointSvg({
-      type: resolvedType || 'circle',
-      backgroundShape: resolvedShape || 'circle',
-      backgroundColor: resolvedBgColor || '#667eea',
-      borderColor: resolvedBorderColor || '#ffffff',
-      iconColor: resolvedIconColor || '#ffffff',
-      size: '75',
-      outputSize: 24,
-    });
+  if (activeFilter.value === 'missing') {
+    if (hasSearch) {
+      return `No unstaffed ${termsLower.value.checkpoints} match your search.`;
+    }
+    return `No ${termsLower.value.checkpoints} are unstaffed.`;
   }
-
-  // Default: use neutral colored circle (not status-based)
-  return `<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="12" cy="12" r="10" fill="#667eea" stroke="#fff" stroke-width="2"/>
-  </svg>`;
-};
+  if (hasSearch) {
+    return `No ${termsLower.value.checkpoints} match your search.`;
+  }
+  return `No ${termsLower.value.checkpoints} yet. Add one to get started!`;
+});
 </script>
 
 <style scoped>
@@ -331,107 +264,5 @@ const getCheckpointIconSvg = (location) => {
 
 .search-input::placeholder {
   color: var(--text-muted);
-}
-
-.locations-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.location-item {
-  padding: 1rem;
-  border: 2px solid var(--border-color);
-  border-left: 4px solid var(--accent-primary);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.3s;
-  background: var(--card-bg);
-}
-
-.location-item:hover {
-  border-color: var(--accent-primary);
-  box-shadow: var(--shadow-md);
-}
-
-.location-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.location-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.location-header strong {
-  font-size: 1rem;
-  color: var(--text-primary);
-}
-
-.location-description {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-}
-
-.location-stats {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.stat-badge {
-  padding: 0.25rem 0.75rem;
-  background: var(--bg-tertiary);
-  border-radius: 12px;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.stat-badge.staffed-full {
-  background: var(--status-success-bg);
-  color: var(--accent-success);
-}
-
-.stat-badge.staffed-partial {
-  background: var(--status-warning-bg);
-  color: var(--warning-text, #92400e);
-}
-
-.stat-badge.staffed-none {
-  background: var(--status-danger-bg);
-  color: var(--accent-danger);
-}
-
-.stat-badge.checked-in {
-  background: var(--accent-success);
-  color: white;
-}
-
-.checkpoint-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-}
-
-.checkpoint-icon :deep(svg) {
-  width: 24px;
-  height: 24px;
-}
-
-.area-badge {
-  padding: 0.2rem 0.6rem;
-  border-radius: 12px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: white;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 </style>

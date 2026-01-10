@@ -256,9 +256,16 @@ export function useAdminLocationManagement(eventId, eventsStore) {
         }
       }
 
-      // Delete pending assignments
+      // Delete pending assignments (from old flow)
       for (const assignmentId of pendingDeleteAssignments.value) {
         await eventsStore.deleteAssignment(eventId.value, assignmentId);
+      }
+
+      // Delete assignments marked for removal (from card-based UI)
+      if (formData.assignmentsToRemove && formData.assignmentsToRemove.length > 0) {
+        for (const assignmentId of formData.assignmentsToRemove) {
+          await eventsStore.deleteAssignment(eventId.value, assignmentId);
+        }
       }
 
       // Create pending assignments

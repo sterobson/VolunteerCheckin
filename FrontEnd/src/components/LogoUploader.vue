@@ -36,7 +36,7 @@
       <div v-else class="upload-prompt">
         <div class="upload-icon">+</div>
         <span class="upload-text">Click or drag to upload logo</span>
-        <span class="upload-hint">PNG, JPEG, SVG, GIF, WebP (max 500KB)</span>
+        <span class="upload-hint">PNG, JPEG, SVG, GIF, WebP (max 5MB)</span>
       </div>
     </div>
 
@@ -87,7 +87,7 @@ const isUploading = ref(false);
 const isDragOver = ref(false);
 const errorMessage = ref('');
 
-const MAX_FILE_SIZE = 500 * 1024; // 500KB
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/gif', 'image/webp'];
 
 function triggerFileInput() {
@@ -126,7 +126,7 @@ async function uploadFile(file) {
 
   // Validate file size
   if (file.size > MAX_FILE_SIZE) {
-    errorMessage.value = `File too large. Maximum size is ${MAX_FILE_SIZE / 1024}KB.`;
+    errorMessage.value = `File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB.`;
     return;
   }
 

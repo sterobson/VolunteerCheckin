@@ -19,30 +19,32 @@
       <span v-if="validationErrors.name" class="field-error">{{ validationErrors.name }}</span>
     </div>
 
-    <div class="form-group" :class="{ 'has-error': validationErrors.email }">
-      <label>Email</label>
-      <input
-        ref="emailInputRef"
-        :value="form.email"
-        @input="handleInput('email', $event.target.value)"
-        type="email"
-        class="form-input"
-        :class="{ 'input-error': validationErrors.email }"
-      />
-      <span v-if="validationErrors.email" class="field-error">{{ validationErrors.email }}</span>
-    </div>
+    <div class="contact-row">
+      <div class="form-group contact-email" :class="{ 'has-error': validationErrors.email }">
+        <label>Email</label>
+        <input
+          ref="emailInputRef"
+          :value="form.email"
+          @input="handleInput('email', $event.target.value)"
+          type="email"
+          class="form-input"
+          :class="{ 'input-error': validationErrors.email }"
+        />
+        <span v-if="validationErrors.email" class="field-error">{{ validationErrors.email }}</span>
+      </div>
 
-    <div class="form-group" :class="{ 'has-error': validationErrors.phoneNumber }">
-      <label>Phone number</label>
-      <input
-        ref="phoneInputRef"
-        :value="form.phoneNumber"
-        @input="handleInput('phoneNumber', $event.target.value)"
-        type="tel"
-        class="form-input"
-        :class="{ 'input-error': validationErrors.phoneNumber }"
-      />
-      <span v-if="validationErrors.phoneNumber" class="field-error">{{ validationErrors.phoneNumber }}</span>
+      <div class="form-group contact-phone" :class="{ 'has-error': validationErrors.phoneNumber }">
+        <label>Phone number</label>
+        <input
+          ref="phoneInputRef"
+          :value="form.phoneNumber"
+          @input="handleInput('phoneNumber', $event.target.value)"
+          type="tel"
+          class="form-input"
+          :class="{ 'input-error': validationErrors.phoneNumber }"
+        />
+        <span v-if="validationErrors.phoneNumber" class="field-error">{{ validationErrors.phoneNumber }}</span>
+      </div>
     </div>
 
     <div class="form-group" :class="{ 'has-error': validationErrors.notes }">
@@ -433,5 +435,42 @@ textarea.form-input {
   margin-top: 0.25rem;
   color: var(--danger);
   font-size: 0.85rem;
+}
+
+/* Contact row - responsive email/phone layout */
+.contact-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.contact-row .form-group {
+  margin-bottom: 1.5rem;
+}
+
+@media (min-width: 390px) {
+  .contact-row {
+    flex-direction: row;
+    gap: 1rem;
+  }
+
+  .contact-email {
+    flex: 0 0 60%;
+    min-width: 0;
+  }
+
+  .contact-phone {
+    flex: 0 0 calc(40% - 1rem);
+    min-width: 0;
+  }
+}
+
+@media (min-width: 500px) {
+  .contact-email {
+    flex: 1 1 50%;
+  }
+
+  .contact-phone {
+    flex: 1 1 50%;
+  }
 }
 </style>

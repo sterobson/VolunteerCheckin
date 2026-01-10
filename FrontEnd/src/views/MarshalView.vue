@@ -136,10 +136,14 @@
                   :fullscreen-title="terms.course"
                   :fullscreen-header-style="headerStyle"
                   :fullscreen-header-text-color="headerTextColor"
+                  :toolbar-actions="courseMapActions"
+                  :hide-recenter-button="true"
                   :class="{ 'selecting-location': selectingLocationOnMap }"
                   height="100%"
                   @map-click="handleMapClick"
                   @location-click="handleLocationClick"
+                  @action-click="handleCourseMapAction"
+                  @visibility-change="handleCourseMapVisibilityChange"
                 >
                   <!-- Selection mode banner -->
                   <template v-if="selectingLocationOnMap" #fullscreen-banner>
@@ -160,7 +164,7 @@
             >
               <span class="accordion-title">
                 <span class="section-icon" v-html="getIcon('checkpoint')"></span>
-                Your {{ termsLower.checkpoints }} ({{ assignments.length }})
+                Your {{ assignments.length === 1 ? termsLower.checkpoint : termsLower.checkpoints }}{{ assignments.length > 1 ? ` (${assignments.length})` : '' }}
               </span>
               <span class="accordion-icon">{{ expandedSection === 'assignments' ? '−' : '+' }}</span>
             </button>
@@ -195,6 +199,7 @@
                     <!-- Mini-map for this checkpoint -->
                     <div v-if="assign.location" class="checkpoint-mini-map">
                       <CommonMap
+                        :ref="(el) => setCheckpointMapRef(assign.id, el)"
                         :locations="allLocations"
                         :route="eventRoute"
                         :center="{ lat: assign.location.latitude, lng: assign.location.longitude }"
@@ -208,9 +213,13 @@
                         :fullscreen-title="assign.location?.name || assign.locationName"
                         :fullscreen-header-style="headerStyle"
                         :fullscreen-header-text-color="headerTextColor"
+                        :toolbar-actions="getCheckpointMapActions(assign.id)"
+                        :hide-recenter-button="true"
                         height="280px"
                         @map-click="handleMapClick"
                         @location-click="handleLocationClick"
+                        @action-click="(e) => handleCheckpointMapAction(assign, e)"
+                        @visibility-change="(e) => handleCheckpointMapVisibilityChange(assign.id, e)"
                       >
                         <!-- Update location button for dynamic checkpoints -->
                         <template v-if="assign.location?.isDynamic" #fullscreen-footer>
@@ -230,7 +239,8 @@
                     <!-- Marshals on this checkpoint -->
                     <div class="checkpoint-marshals">
                       <div class="marshals-label">{{ terms.people }}:</div>
-                      <div class="marshals-list">
+                      <!-- Simple view for non-area leads -->
+                      <div v-if="!isAreaLeadForAreas(assign.areaIds)" class="marshals-list">
                         <span
                           v-for="m in assign.allMarshals"
                           :key="m.marshalId"
@@ -240,6 +250,61 @@
                           {{ m.marshalName }}{{ m.marshalId === currentMarshalId ? ' (you)' : '' }}
                           <span v-if="m.effectiveIsCheckedIn" class="check-badge">✓</span>
                         </span>
+                      </div>
+                      <!-- Expandable view for area leads -->
+                      <div v-else class="marshals-list-expanded">
+                        <div
+                          v-for="m in assign.allMarshals"
+                          :key="m.marshalId"
+                          class="marshal-card-mini"
+                          :class="{
+                            'is-you': m.marshalId === currentMarshalId,
+                            'checked-in': m.effectiveIsCheckedIn,
+                            'expanded': expandedMarshalId === m.marshalId
+                          }"
+                        >
+                          <button
+                            class="marshal-card-header"
+                            @click="toggleMarshalDetails(m.marshalId)"
+                          >
+                            <span class="marshal-name-text">
+                              {{ m.marshalName }}{{ m.marshalId === currentMarshalId ? ' (you)' : '' }}
+                            </span>
+                            <span class="marshal-status-icons">
+                              <span v-if="m.effectiveIsCheckedIn" class="check-badge">✓</span>
+                              <span class="expand-icon">{{ expandedMarshalId === m.marshalId ? '−' : '+' }}</span>
+                            </span>
+                          </button>
+                          <div v-if="expandedMarshalId === m.marshalId" class="marshal-details-panel">
+                            <div class="detail-row">
+                              <span class="detail-label">Status:</span>
+                              <span :class="m.effectiveIsCheckedIn ? 'status-checked-in' : 'status-not-checked-in'">
+                                {{ m.effectiveIsCheckedIn ? 'Checked in' : 'Not checked in' }}
+                              </span>
+                            </div>
+                            <div v-if="m.effectiveIsCheckedIn && m.checkInTime" class="detail-row">
+                              <span class="detail-label">Check-in time:</span>
+                              <span>{{ formatCheckInTime(m.checkInTime) }}</span>
+                            </div>
+                            <div v-if="m.checkInMethod" class="detail-row">
+                              <span class="detail-label">Method:</span>
+                              <span>{{ formatCheckInMethod(m.checkInMethod) }}</span>
+                            </div>
+                            <div v-if="m.email" class="detail-row">
+                              <span class="detail-label">Email:</span>
+                              <a :href="'mailto:' + m.email">{{ m.email }}</a>
+                            </div>
+                            <div v-if="m.phoneNumber" class="detail-row">
+                              <span class="detail-label">Phone:</span>
+                              <a :href="'tel:' + m.phoneNumber">{{ m.phoneNumber }}</a>
+                            </div>
+                            <div v-if="m.email || m.phoneNumber" class="contact-buttons-mini">
+                              <a v-if="m.phoneNumber" :href="'tel:' + m.phoneNumber" class="btn btn-sm btn-primary">Call</a>
+                              <a v-if="m.phoneNumber" :href="'sms:' + m.phoneNumber" class="btn btn-sm btn-secondary">Text</a>
+                              <a v-if="m.email" :href="'mailto:' + m.email" class="btn btn-sm btn-secondary">Email</a>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -362,37 +427,131 @@
               <div v-else-if="visibleChecklistItems.length === 0" class="empty-state">
                 <p>No {{ termsLower.checklists }} for you.</p>
               </div>
-              <div v-else class="checklist-items">
-                <div
-                  v-for="item in visibleChecklistItems"
-                  :key="`${item.itemId}_${item.completionContextType}_${item.completionContextId}`"
-                  class="checklist-item"
-                  :class="{ 'item-completed': item.isCompleted }"
-                >
-                  <div class="item-checkbox">
-                    <input
-                      type="checkbox"
-                      :checked="item.isCompleted"
-                      :disabled="!item.canBeCompletedByMe || savingChecklist"
-                      @change="handleToggleChecklist(item)"
-                    />
+
+              <!-- Area leads see two sections: Your jobs and Your area's jobs -->
+              <template v-else-if="isAreaLead">
+                <!-- Your jobs section (simple list) -->
+                <div class="checklist-section">
+                  <h4 class="checklist-section-title">Your jobs</h4>
+                  <div v-if="myChecklistItems.length === 0" class="empty-state small">
+                    <p>No jobs assigned to you.</p>
                   </div>
-                  <div class="item-content">
-                    <div class="item-text" :class="{ 'text-completed': item.isCompleted }">{{ item.text }}</div>
-                    <div v-if="getContextName(item)" class="item-context">
-                      {{ getContextName(item) }}
-                    </div>
-                    <div v-if="item.isCompleted" class="completion-info">
-                      <span class="completion-text">
-                        Completed by {{ item.completedByActorName || 'Unknown' }}
-                      </span>
-                      <span class="completion-time">
-                        {{ formatDateTime(item.completedAt) }}
+                  <div v-else class="my-jobs-list">
+                    <div
+                      v-for="item in myChecklistItems"
+                      :key="`${item.itemId}_${item.completionContextType}_${item.completionContextId}`"
+                      class="my-job-item"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="item.isCompleted"
+                        :disabled="savingChecklist"
+                        @change="handleToggleChecklist(item)"
+                      />
+                      <span class="my-job-text" :class="{ completed: item.isCompleted }">
+                        {{ item.text }}
                       </span>
                     </div>
                   </div>
                 </div>
-              </div>
+
+                <!-- Your area's jobs section -->
+                <div v-if="areaChecklistItems.length > 0" class="checklist-section">
+                  <h4 class="checklist-section-title">Your {{ termsLower.area }}'s jobs</h4>
+                  <GroupedTasksList
+                    :items="areaChecklistItemsWithLocalState"
+                    :locations="allLocations"
+                    :areas="areas"
+                    :marshals="areaMarshalsForChecklist"
+                    @toggle-complete="handleToggleChecklist"
+                  />
+                </div>
+              </template>
+
+              <!-- Non-leads see simple list or grouped by checkpoint -->
+              <template v-else>
+                <!-- Ungrouped view (when single checkpoint or no grouping needed) -->
+                <div v-if="effectiveChecklistGroupBy === 'none'" class="checklist-items">
+                  <div
+                    v-for="item in visibleChecklistItems"
+                    :key="`${item.itemId}_${item.completionContextType}_${item.completionContextId}`"
+                    class="checklist-item"
+                    :class="{ 'item-completed': item.isCompleted }"
+                  >
+                    <div class="item-checkbox">
+                      <input
+                        type="checkbox"
+                        :checked="item.isCompleted"
+                        :disabled="!item.canBeCompletedByMe || savingChecklist"
+                        @change="handleToggleChecklist(item)"
+                      />
+                    </div>
+                    <div class="item-content">
+                      <div class="item-text" :class="{ 'text-completed': item.isCompleted }">{{ item.text }}</div>
+                      <div v-if="getContextName(item)" class="item-context">
+                        {{ getContextName(item) }}
+                      </div>
+                      <div v-if="item.isCompleted" class="completion-info">
+                        <span class="completion-text">
+                          Completed by {{ item.completedByActorName || 'Unknown' }}
+                        </span>
+                        <span class="completion-time">
+                          {{ formatDateTime(item.completedAt) }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Grouped by checkpoint view (for non-leads with multiple checkpoints) -->
+                <div v-else class="checklist-groups">
+                  <div
+                    v-for="group in groupedChecklistItems"
+                    :key="group.key"
+                    class="checklist-group"
+                  >
+                    <button
+                      class="checklist-group-header"
+                      :class="{ expanded: expandedChecklistGroup === group.key, 'all-complete': group.completedCount === group.items.length }"
+                      @click="toggleChecklistGroup(group.key)"
+                    >
+                      <span class="group-title">{{ group.name }}</span>
+                      <span class="group-status">
+                        <span class="group-count">{{ group.completedCount }}/{{ group.items.length }}</span>
+                        <span class="group-expand-icon">{{ expandedChecklistGroup === group.key ? '−' : '+' }}</span>
+                      </span>
+                    </button>
+                    <div v-if="expandedChecklistGroup === group.key" class="checklist-group-items">
+                      <div
+                        v-for="item in group.items"
+                        :key="`${item.itemId}_${item.completionContextType}_${item.completionContextId}`"
+                        class="checklist-item"
+                        :class="{ 'item-completed': item.isCompleted }"
+                      >
+                        <div class="item-checkbox">
+                          <input
+                            type="checkbox"
+                            :checked="item.isCompleted"
+                            :disabled="!item.canBeCompletedByMe || savingChecklist"
+                            @change="handleToggleChecklist(item)"
+                          />
+                        </div>
+                        <div class="item-content">
+                          <div class="item-text" :class="{ 'text-completed': item.isCompleted }">{{ item.text }}</div>
+                          <div v-if="item.isCompleted" class="completion-info">
+                            <span class="completion-text">
+                              {{ item.completedByActorName || 'Unknown' }}
+                            </span>
+                            <span class="completion-time">
+                              {{ formatDateTime(item.completedAt) }}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </template>
             </div>
           </div>
 
@@ -405,7 +564,7 @@
             >
               <span class="accordion-title">
                 <span class="section-icon" v-html="getIcon('contacts')"></span>
-                Your contacts ({{ eventContacts.length }})
+                Your {{ eventContacts.length === 1 ? 'contact' : 'contacts' }}{{ eventContacts.length > 1 ? ` (${eventContacts.length})` : '' }}
               </span>
               <span class="accordion-icon">{{ expandedSection === 'eventContacts' ? '−' : '+' }}</span>
             </button>
@@ -417,7 +576,7 @@
                     <div class="contact-name-row">
                       <span v-if="contact.isPrimary" class="primary-badge">★</span>
                       <span class="contact-name">{{ contact.name }}</span>
-                      <span v-if="contact.role" class="contact-role-badge">{{ formatRoleName(contact.role) }}</span>
+                      <span v-if="contact.role" class="contact-role-badge" :class="{ 'emergency-role': isEmergencyRole(contact.role) }">{{ formatRoleName(contact.role) }}</span>
                     </div>
                     <div v-if="contact.notes" class="contact-notes-text">{{ contact.notes }}</div>
                     <div v-if="contact.phone" class="contact-detail">{{ contact.phone }}</div>
@@ -457,7 +616,7 @@
             >
               <span class="accordion-title">
                 <span class="section-icon" v-html="getIcon('notes')"></span>
-                Your notes ({{ notes.length }})
+                Your {{ notes.length === 1 ? 'note' : 'notes' }}{{ notes.length > 1 ? ` (${notes.length})` : '' }}
               </span>
               <span class="accordion-icon">{{ expandedSection === 'notes' ? '−' : '+' }}</span>
             </button>
@@ -484,10 +643,7 @@
             >
               <span class="accordion-title">
                 <span class="section-icon" v-html="getIcon('incidents')"></span>
-                Your incidents ({{ myIncidents.length }})
-                <span v-if="openIncidentsCount > 0" class="incidents-badge-count">
-                  {{ openIncidentsCount }} open
-                </span>
+                Your {{ myIncidents.length === 1 ? 'incident' : 'incidents' }}{{ myIncidents.length > 1 ? ` (${myIncidents.length})` : '' }}
               </span>
               <span class="accordion-icon">{{ expandedSection === 'incidents' ? '−' : '+' }}</span>
             </button>
@@ -517,30 +673,138 @@
               @click="toggleSection('areaLead')"
             >
               <span class="accordion-title">
-                <span class="section-icon" v-html="getIcon('people')"></span>
-                Your {{ termsLower.people }}
-                <span v-if="areaLeadRef?.areas?.length > 0" class="area-lead-badges">
-                  <span
-                    v-for="area in areaLeadRef.areas"
-                    :key="area.areaId"
-                    class="area-lead-badge"
-                    :style="{ backgroundColor: area.color || '#667eea' }"
-                  >
-                    {{ area.name }}
-                  </span>
-                </span>
+                <span class="section-icon" v-html="getIcon('area')"></span>
+                Your {{ areaLeadAreas.length === 1 ? termsLower.area : termsLower.areas }}{{ areaLeadAreas.length > 1 ? ` (${areaLeadAreas.length})` : '' }}
               </span>
               <span class="accordion-icon">{{ expandedSection === 'areaLead' ? '−' : '+' }}</span>
             </button>
             <div v-if="expandedSection === 'areaLead'" class="accordion-content area-lead-accordion-content">
+              <!-- Area filter pills (only show if more than one area) -->
+              <div v-if="areaLeadAreas.length > 1" class="area-filter-pills">
+                <button
+                  v-for="area in areaLeadAreas"
+                  :key="area.areaId"
+                  class="area-filter-pill"
+                  :class="{ selected: selectedAreaFilters.has(area.areaId) }"
+                  :style="selectedAreaFilters.has(area.areaId) ? { backgroundColor: area.color || '#667eea', borderColor: area.color || '#667eea' } : {}"
+                  @click="toggleAreaFilter(area.areaId)"
+                >
+                  {{ area.name }}
+                </button>
+              </div>
               <AreaLeadSection
                 ref="areaLeadRef"
                 :event-id="route.params.eventId"
-                :area-ids="areaLeadAreaIds"
+                :area-ids="filteredAreaLeadAreaIds"
                 :marshal-id="currentMarshalId"
                 :route="eventRoute"
                 @checklist-updated="loadChecklist"
               />
+            </div>
+          </div>
+
+          <!-- Your Marshals Section (for area leads with marshals at their checkpoints) -->
+          <div v-if="isAreaLead && allAreaLeadMarshals.length > 0" class="accordion-section">
+            <button
+              class="accordion-header"
+              :class="{ active: expandedSection === 'areaLeadMarshals' }"
+              @click="toggleSection('areaLeadMarshals')"
+            >
+              <span class="accordion-title">
+                <span class="section-icon" v-html="getIcon('marshal')"></span>
+                Your {{ allAreaLeadMarshals.length === 1 ? termsLower.person : termsLower.people }}{{ allAreaLeadMarshals.length > 1 ? ` (${allAreaLeadMarshals.length})` : '' }}
+              </span>
+              <span class="accordion-icon">{{ expandedSection === 'areaLeadMarshals' ? '−' : '+' }}</span>
+            </button>
+            <div v-if="expandedSection === 'areaLeadMarshals'" class="accordion-content area-lead-marshals-content">
+              <div class="area-lead-marshals-list">
+                <div
+                  v-for="marshal in allAreaLeadMarshals"
+                  :key="marshal.marshalId"
+                  class="area-lead-marshal-item"
+                >
+                  <button
+                    class="area-lead-marshal-header"
+                    :class="{ active: expandedAreaLeadMarshal === marshal.marshalId, 'is-checked-in': marshal.isCheckedIn }"
+                    @click="toggleAreaLeadMarshalExpansion(marshal.marshalId)"
+                  >
+                    <div class="marshal-header-info">
+                      <div class="marshal-name-row">
+                        <span class="marshal-name">{{ marshal.name }}</span>
+                        <span class="check-status-badge" :class="{ 'checked-in': marshal.isCheckedIn }">
+                          {{ marshal.isCheckedIn ? '✓' : '○' }}
+                        </span>
+                      </div>
+                      <div class="marshal-meta">
+                        <span class="marshal-checkpoint">
+                          {{ formatMarshalCheckpoints(marshal.checkpoints) }}
+                        </span>
+                        <span v-if="marshal.totalTaskCount > 0" class="marshal-task-count">
+                          {{ marshal.completedTaskCount }} / {{ marshal.totalTaskCount }} {{ termsLower.checklists }} complete
+                        </span>
+                      </div>
+                    </div>
+                    <span class="accordion-icon">{{ expandedAreaLeadMarshal === marshal.marshalId ? '−' : '+' }}</span>
+                  </button>
+
+                  <div v-if="expandedAreaLeadMarshal === marshal.marshalId" class="area-lead-marshal-content">
+                    <!-- Check-in status -->
+                    <div class="marshal-checkin-section">
+                      <div class="checkin-status-row">
+                        <span class="checkin-label">
+                          {{ marshal.isCheckedIn ? 'Checked in' : 'Not checked in' }}
+                          <span v-if="marshal.isCheckedIn && marshal.checkInTime" class="checkin-time">
+                            at {{ formatTime(marshal.checkInTime) }}
+                          </span>
+                        </span>
+                        <button
+                          @click="handleAreaLeadMarshalCheckIn(marshal)"
+                          class="checkin-action-btn"
+                          :class="{ 'undo-btn': marshal.isCheckedIn }"
+                          :disabled="checkingInAreaLeadMarshal === marshal.marshalId"
+                        >
+                          {{ checkingInAreaLeadMarshal === marshal.marshalId ? '...' : (marshal.isCheckedIn ? 'Undo check-in' : 'Check in') }}
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- Contact details -->
+                    <div v-if="marshal.email || marshal.phoneNumber" class="marshal-contact-section">
+                      <a v-if="marshal.phoneNumber" :href="`tel:${marshal.phoneNumber}`" class="contact-link">
+                        {{ marshal.phoneNumber }}
+                      </a>
+                      <a v-if="marshal.email" :href="`mailto:${marshal.email}`" class="contact-link">
+                        {{ marshal.email }}
+                      </a>
+                    </div>
+
+                    <!-- Tasks -->
+                    <div v-if="marshal.allTasks.length > 0" class="marshal-tasks-section">
+                      <div class="tasks-label">{{ terms.checklists }}</div>
+                      <div class="tasks-list">
+                        <div
+                          v-for="task in marshal.allTasks"
+                          :key="`${task.itemId}-${task.contextId}`"
+                          class="task-item"
+                          :class="{ 'task-completed': task.isCompleted }"
+                        >
+                          <input
+                            type="checkbox"
+                            :checked="task.isCompleted"
+                            :disabled="savingAreaLeadMarshalTask"
+                            @change="toggleAreaLeadMarshalTask(task, marshal)"
+                          />
+                          <span class="task-text">{{ task.text }}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div v-else class="no-tasks-message">
+                      No {{ termsLower.checklists }} assigned.
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -804,6 +1068,7 @@ import ReportIncidentModal from '../components/ReportIncidentModal.vue';
 import IncidentCard from '../components/IncidentCard.vue';
 import IncidentDetailModal from '../components/IncidentDetailModal.vue';
 import AreaLeadSection from '../components/AreaLeadSection.vue';
+import GroupedTasksList from '../components/event-manage/GroupedTasksList.vue';
 import NotesView from '../components/NotesView.vue';
 import OfflineIndicator from '../components/OfflineIndicator.vue';
 import { setTerminology, useTerminology } from '../composables/useTerminology';
@@ -844,6 +1109,43 @@ const areaLeadAreaIds = computed(() => {
 });
 
 const isAreaLead = computed(() => areaLeadAreaIds.value.length > 0);
+
+// Area filter state for "Your areas" section
+const selectedAreaFilters = ref(new Set());
+
+// Get area objects for the filter pills
+const areaLeadAreas = computed(() => {
+  if (!areaLeadAreaIds.value.length) return [];
+  return areas.value
+    .filter(a => areaLeadAreaIds.value.includes(a.id))
+    .map(a => ({ areaId: a.id, name: a.name, color: a.color }))
+    .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' }));
+});
+
+// Initialize selected filters when areas load
+watch(areaLeadAreas, (newAreas) => {
+  if (newAreas.length > 0 && selectedAreaFilters.value.size === 0) {
+    // Initialize with all areas selected
+    selectedAreaFilters.value = new Set(newAreas.map(a => a.areaId));
+  }
+}, { immediate: true });
+
+// Filtered area IDs based on selection
+const filteredAreaLeadAreaIds = computed(() => {
+  // Return only the selected areas (empty array if none selected)
+  return areaLeadAreaIds.value.filter(id => selectedAreaFilters.value.has(id));
+});
+
+// Toggle area filter selection
+const toggleAreaFilter = (areaId) => {
+  const newSet = new Set(selectedAreaFilters.value);
+  if (newSet.has(areaId)) {
+    newSet.delete(areaId);
+  } else {
+    newSet.add(areaId);
+  }
+  selectedAreaFilters.value = newSet;
+};
 
 // All checkpoints available for incident reporting
 // Marshals: see their assigned checkpoints
@@ -1015,6 +1317,11 @@ const checklistItems = ref([]);
 const checklistLoading = ref(false);
 const checklistError = ref(null);
 const savingChecklist = ref(false);
+const checklistGroupBy = ref('person'); // 'none', 'checkpoint', 'person', 'job'
+const expandedChecklistGroup = ref(null);
+
+// Area lead checkpoints data (for marshal name lookup in checklists)
+const areaLeadCheckpoints = ref([]);
 
 // Notes state
 const notes = ref([]);
@@ -1048,6 +1355,142 @@ let dynamicCheckpointPollInterval = null;
 // Area Lead ref
 const areaLeadRef = ref(null);
 
+// Area Lead Marshals section state
+const expandedAreaLeadMarshal = ref(null);
+const checkingInAreaLeadMarshal = ref(null);
+const savingAreaLeadMarshalTask = ref(false);
+const areaLeadMarshalDataVersion = ref(0); // Trigger for recomputing marshals
+
+// Toggle area lead marshal expansion
+const toggleAreaLeadMarshalExpansion = (marshalId) => {
+  expandedAreaLeadMarshal.value = expandedAreaLeadMarshal.value === marshalId ? null : marshalId;
+};
+
+// Aggregate all marshals from area lead checkpoints (deduplicated, sorted by name)
+const allAreaLeadMarshals = computed(() => {
+  // Access the version trigger to force recomputation when data changes
+  // eslint-disable-next-line no-unused-vars
+  const _version = areaLeadMarshalDataVersion.value;
+  const checkpoints = areaLeadRef.value?.checkpoints || areaLeadCheckpoints.value || [];
+  const marshalMap = new Map();
+
+  for (const checkpoint of checkpoints) {
+    for (const marshal of (checkpoint.marshals || [])) {
+      if (!marshalMap.has(marshal.marshalId)) {
+        marshalMap.set(marshal.marshalId, {
+          ...marshal,
+          checkpoints: [],
+          allTasks: [],
+          totalTaskCount: 0,
+          completedTaskCount: 0,
+        });
+      }
+      const m = marshalMap.get(marshal.marshalId);
+      m.checkpoints.push({
+        checkpointId: checkpoint.checkpointId,
+        name: checkpoint.name,
+        description: checkpoint.description,
+      });
+      // Add marshal's outstanding tasks
+      if (marshal.outstandingTasks) {
+        for (const task of marshal.outstandingTasks) {
+          m.allTasks.push({ ...task, isCompleted: false, checkpointName: checkpoint.name });
+          m.totalTaskCount++;
+        }
+      }
+      // Add marshal's completed tasks if available
+      if (marshal.completedTasks) {
+        for (const task of marshal.completedTasks) {
+          m.allTasks.push({ ...task, isCompleted: true, checkpointName: checkpoint.name });
+          m.totalTaskCount++;
+          m.completedTaskCount++;
+        }
+      }
+    }
+  }
+
+  return Array.from(marshalMap.values()).sort((a, b) =>
+    (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
+  );
+});
+
+// Handle check-in for area lead marshals section
+const handleAreaLeadMarshalCheckIn = async (marshal) => {
+  if (checkingInAreaLeadMarshal.value) return;
+
+  // Find a checkpoint that has this marshal
+  const checkpoints = areaLeadRef.value?.checkpoints || areaLeadCheckpoints.value || [];
+  const checkpoint = checkpoints.find(c =>
+    c.marshals?.some(m => m.marshalId === marshal.marshalId)
+  );
+  if (!checkpoint) {
+    console.error('Could not find checkpoint for marshal:', marshal);
+    return;
+  }
+
+  // Find the full marshal object from the checkpoint
+  const checkpointMarshal = checkpoint.marshals.find(m => m.marshalId === marshal.marshalId);
+  if (!checkpointMarshal) return;
+
+  // The assignment ID is on the marshal object itself
+  const assignmentId = checkpointMarshal.assignmentId || checkpointMarshal.id;
+  if (!assignmentId) {
+    console.error('No assignment ID found for marshal:', checkpointMarshal);
+    return;
+  }
+
+  checkingInAreaLeadMarshal.value = marshal.marshalId;
+
+  try {
+    await checkInApi.adminCheckIn(eventId.value, assignmentId);
+    // Reload the area lead dashboard data
+    if (areaLeadRef.value?.loadDashboard) {
+      await areaLeadRef.value.loadDashboard();
+    }
+    // Force recomputation of allAreaLeadMarshals
+    areaLeadMarshalDataVersion.value++;
+  } catch (err) {
+    console.error('Failed to check in marshal:', err);
+  } finally {
+    checkingInAreaLeadMarshal.value = null;
+  }
+};
+
+// Toggle task completion from the area lead marshals section
+const toggleAreaLeadMarshalTask = async (task, marshal) => {
+  if (savingAreaLeadMarshalTask.value) return;
+  savingAreaLeadMarshalTask.value = true;
+
+  const actionData = {
+    marshalId: marshal.marshalId,
+    contextType: task.contextType,
+    contextId: task.contextId,
+    actorMarshalId: currentMarshalId.value,
+  };
+
+  try {
+    if (task.isCompleted) {
+      // Uncomplete
+      await checklistApi.uncomplete(eventId.value, task.itemId, actionData);
+    } else {
+      // Complete
+      await checklistApi.complete(eventId.value, task.itemId, actionData);
+    }
+    // Reload the area lead dashboard data
+    if (areaLeadRef.value?.loadDashboard) {
+      await areaLeadRef.value.loadDashboard();
+    }
+    // Force recomputation of allAreaLeadMarshals
+    areaLeadMarshalDataVersion.value++;
+    // Also reload the main checklist
+    await loadChecklist(true);
+  } catch (err) {
+    console.error('Failed to toggle task:', err);
+  } finally {
+    savingAreaLeadMarshalTask.value = false;
+  }
+};
+
 // UI state
 const showEmergency = ref(false);
 const showReportIncident = ref(false);
@@ -1069,6 +1512,73 @@ const dismissedCheckInReminders = ref(new Set());
 
 // Course map ref
 const courseMapRef = ref(null);
+
+// Course map visibility tracking
+const courseMapVisibility = ref({
+  userLocationInView: true,
+  highlightedLocationInView: true,
+});
+
+// Checkpoint map visibility tracking (keyed by assignment ID)
+const checkpointMapVisibility = ref({});
+
+// Refs for checkpoint mini-maps (plain object, not reactive)
+const checkpointMapRefs = {};
+
+// Expanded marshal details (keyed by marshalId)
+const expandedMarshalId = ref(null);
+
+// Check if user is area lead for a given set of area IDs
+const isAreaLeadForAreas = (areaIds) => {
+  if (!areaIds || areaIds.length === 0) return false;
+  return areaIds.some(areaId => areaLeadAreaIds.value.includes(areaId));
+};
+
+// Toggle marshal details expansion
+const toggleMarshalDetails = (marshalId) => {
+  expandedMarshalId.value = expandedMarshalId.value === marshalId ? null : marshalId;
+};
+
+// Format check-in time for display
+const formatCheckInTime = (checkInTime) => {
+  if (!checkInTime) return '';
+  const date = new Date(checkInTime);
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
+// Format check-in method for display
+const formatCheckInMethod = (method) => {
+  if (!method) return '';
+  switch (method) {
+    case 'GPS': return 'GPS';
+    case 'Manual': return 'Manual';
+    case 'AreaLead': return 'By area lead';
+    default: return method;
+  }
+};
+
+// Format marshal checkpoints with descriptions for display
+const formatMarshalCheckpoints = (checkpoints) => {
+  if (!checkpoints || checkpoints.length === 0) return '';
+  return checkpoints.map(c => {
+    if (c.description) {
+      // Truncate description if too long
+      const maxDescLength = 40;
+      const desc = c.description.length > maxDescLength
+        ? c.description.substring(0, maxDescLength).trim() + '...'
+        : c.description;
+      return `${c.name} - ${desc}`;
+    }
+    return c.name;
+  }).join(', ');
+};
+
+// Function to set checkpoint map ref
+const setCheckpointMapRef = (assignId, el) => {
+  if (el) {
+    checkpointMapRefs[assignId] = el;
+  }
+};
 
 // Helper to check if a check-in is stale (more than 24 hours old)
 const isCheckInStale = (checkInTime) => {
@@ -1147,11 +1657,14 @@ const assignmentsWithDetails = computed(() => {
     }
 
     // Get all marshals assigned to this checkpoint, with effective check-in status
+    // Sort alphabetically by name per project guidelines
     const rawMarshals = location?.assignments || [];
-    const allMarshals = rawMarshals.map(m => ({
-      ...m,
-      effectiveIsCheckedIn: m.isCheckedIn && !isCheckInStale(m.checkInTime),
-    }));
+    const allMarshals = rawMarshals
+      .map(m => ({
+        ...m,
+        effectiveIsCheckedIn: m.isCheckedIn && !isCheckInStale(m.checkInTime),
+      }))
+      .sort((a, b) => (a.marshalName || '').localeCompare(b.marshalName || '', undefined, { sensitivity: 'base' }));
 
     // Get area contacts for this checkpoint's areas
     // Filter out self and deduplicate
@@ -1160,21 +1673,23 @@ const assignmentsWithDetails = computed(() => {
       (!contact.marshalId || contact.marshalId !== currentMarshalId.value)
     );
     const seenContacts = new Set();
-    const areaContacts = rawAreaContacts.filter(contact => {
-      const key = JSON.stringify({
-        name: contact.name || '',
-        marshalId: contact.marshalId || '',
-        role: contact.role || '',
-        phone: contact.phone || '',
-        email: contact.email || '',
-        notes: contact.notes || '',
-      });
-      if (seenContacts.has(key)) {
-        return false;
-      }
-      seenContacts.add(key);
-      return true;
-    });
+    const areaContacts = rawAreaContacts
+      .filter(contact => {
+        const key = JSON.stringify({
+          name: contact.name || '',
+          marshalId: contact.marshalId || '',
+          role: contact.role || '',
+          phone: contact.phone || '',
+          email: contact.email || '',
+          notes: contact.notes || '',
+        });
+        if (seenContacts.has(key)) {
+          return false;
+        }
+        seenContacts.add(key);
+        return true;
+      })
+      .sort((a, b) => (a.marshalName || a.name || '').localeCompare(b.marshalName || b.name || '', undefined, { sensitivity: 'base' }));
 
     // Effective check-in status (reset if checked in more than 24 hours ago)
     const effectiveIsCheckedIn = assign.isCheckedIn && !isCheckInStale(assign.checkInTime);
@@ -1304,6 +1819,198 @@ const completedChecklistCount = computed(() => {
   return visibleChecklistItems.value.filter(item => item.isCompleted).length;
 });
 
+// Separate checklist items into "your jobs" vs "your area's jobs"
+// "Your jobs" = tasks assigned specifically to you or applicable to everyone
+// "Your area's jobs" = tasks for other people in your areas (area leads only)
+const myChecklistItems = computed(() => {
+  const myAssignmentIds = assignments.value.map(a => a.locationId);
+
+  return visibleChecklistItems.value.filter(item => {
+    // Personal tasks assigned to current marshal
+    if (item.completionContextType === 'Personal') {
+      return item.contextOwnerMarshalId === currentMarshalId.value;
+    }
+    // Checkpoint tasks for checkpoints the marshal is assigned to
+    if (item.completionContextType === 'Checkpoint') {
+      return myAssignmentIds.includes(item.completionContextId);
+    }
+    // Area-scoped tasks where you're in that area
+    if (item.completionContextType === 'Area') {
+      return areaLeadAreaIds.value.includes(item.completionContextId);
+    }
+    // Everyone tasks are yours
+    return true;
+  });
+});
+
+const areaChecklistItems = computed(() => {
+  if (!isAreaLead.value) return [];
+  const myAssignmentIds = assignments.value.map(a => a.locationId);
+
+  return visibleChecklistItems.value.filter(item => {
+    // Personal tasks for OTHER marshals
+    if (item.completionContextType === 'Personal') {
+      return item.contextOwnerMarshalId !== currentMarshalId.value;
+    }
+    // Checkpoint tasks for checkpoints the marshal is NOT assigned to
+    if (item.completionContextType === 'Checkpoint') {
+      return !myAssignmentIds.includes(item.completionContextId);
+    }
+    // Area tasks not in your personal areas (shouldn't happen but filter anyway)
+    if (item.completionContextType === 'Area') {
+      return !areaLeadAreaIds.value.includes(item.completionContextId);
+    }
+    return false;
+  });
+});
+
+// Convert items to format needed by GroupedTasksList
+const myChecklistItemsWithLocalState = computed(() => {
+  return myChecklistItems.value.map(item => ({
+    ...item,
+    localIsCompleted: item.isCompleted,
+    isModified: false,
+  }));
+});
+
+const areaChecklistItemsWithLocalState = computed(() => {
+  return areaChecklistItems.value.map(item => ({
+    ...item,
+    localIsCompleted: item.isCompleted,
+    isModified: false,
+  }));
+});
+
+// Keep for backwards compatibility (combines both)
+// Checklist items with localIsCompleted for GroupedTasksList component
+const checklistItemsWithLocalState = computed(() => {
+  return visibleChecklistItems.value.map(item => ({
+    ...item,
+    localIsCompleted: item.isCompleted,
+    isModified: false, // We don't track unsaved changes in marshal view
+  }));
+});
+
+// Collect all marshals from area lead's checkpoints for name lookup
+// Uses AreaLeadSection data if available, falls back to preloaded data
+const areaMarshalsForChecklist = computed(() => {
+  // Try to get checkpoints from AreaLeadSection (most up-to-date)
+  // or fall back to preloaded area lead checkpoints
+  const checkpoints = areaLeadRef.value?.checkpoints || areaLeadCheckpoints.value || [];
+  if (checkpoints.length === 0) return [];
+
+  const marshals = [];
+  const seenIds = new Set();
+  for (const checkpoint of checkpoints) {
+    for (const marshal of (checkpoint.marshals || [])) {
+      if (!seenIds.has(marshal.marshalId)) {
+        seenIds.add(marshal.marshalId);
+        marshals.push(marshal);
+      }
+    }
+  }
+  return marshals;
+});
+
+// Check if there are multiple checkpoints or jobs (to show grouping selector)
+const hasMultipleChecklistContexts = computed(() => {
+  const items = visibleChecklistItems.value;
+  if (items.length <= 1) return false;
+
+  // Check for multiple checkpoints
+  const checkpointIds = new Set();
+  const jobTexts = new Set();
+
+  for (const item of items) {
+    if (item.completionContextType === 'Checkpoint' && item.completionContextId) {
+      checkpointIds.add(item.completionContextId);
+    }
+    jobTexts.add(item.text);
+  }
+
+  return checkpointIds.size > 1 || jobTexts.size > 1;
+});
+
+// Effective grouping mode for non-leads (checkpoint grouping if multiple checkpoints exist)
+const effectiveChecklistGroupBy = computed(() => {
+  // Area leads use GroupedTasksList component instead
+  if (isAreaLead.value) {
+    return 'none'; // Not used for leads
+  }
+
+  // For non-leads, check if there are multiple checkpoints
+  const items = visibleChecklistItems.value;
+  const checkpointIds = new Set();
+  for (const item of items) {
+    if (item.completionContextType === 'Checkpoint' && item.completionContextId) {
+      checkpointIds.add(item.completionContextId);
+    }
+  }
+
+  // If multiple checkpoints, group by checkpoint; otherwise show flat list
+  return checkpointIds.size > 1 ? 'checkpoint' : 'none';
+});
+
+// Group checklist items by checkpoint (for non-leads with multiple checkpoints)
+const groupedChecklistItems = computed(() => {
+  const items = visibleChecklistItems.value;
+  const groups = {};
+
+  for (const item of items) {
+    let key, name;
+
+    if (item.completionContextType === 'Checkpoint' && item.completionContextId) {
+      key = `checkpoint_${item.completionContextId}`;
+      const location = allLocations.value.find(l => l.id === item.completionContextId);
+      name = location?.name || 'Unknown ' + terms.value.checkpoint;
+    } else if (item.completionContextType === 'Area' && item.completionContextId) {
+      key = `area_${item.completionContextId}`;
+      const area = areas.value.find(a => a.id === item.completionContextId);
+      name = area?.name || 'Unknown ' + terms.value.area;
+    } else {
+      key = 'personal';
+      name = 'Personal';
+    }
+
+    if (!groups[key]) {
+      groups[key] = { key, name, items: [], completedCount: 0 };
+    }
+    groups[key].items.push(item);
+    if (item.isCompleted) {
+      groups[key].completedCount++;
+    }
+  }
+
+  // Sort groups by name using natural sort
+  return Object.values(groups).sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+  );
+});
+
+// Toggle checklist group expansion
+const toggleChecklistGroup = (key) => {
+  expandedChecklistGroup.value = expandedChecklistGroup.value === key ? null : key;
+};
+
+// Get short context name for grouped view (without "At checkpoint" prefix)
+const getContextNameShort = (item) => {
+  if (!item.completionContextType || !item.completionContextId) {
+    return 'Personal';
+  }
+
+  if (item.completionContextType === 'Checkpoint') {
+    const location = allLocations.value.find(l => l.id === item.completionContextId);
+    return location?.name || 'Unknown';
+  }
+
+  if (item.completionContextType === 'Area') {
+    const area = areas.value.find(a => a.id === item.completionContextId);
+    return area?.name || 'Unknown';
+  }
+
+  return 'Personal';
+};
+
 // Event contacts - loaded from new contacts API
 const myContacts = ref([]);
 const contactsLoading = ref(false);
@@ -1320,7 +2027,7 @@ const eventContacts = computed(() => {
 
   // Deduplicate contacts with same name, marshalId, role, phone, email, and notes
   const seen = new Set();
-  return filtered.filter(contact => {
+  const deduplicated = filtered.filter(contact => {
     const key = JSON.stringify({
       name: contact.name || '',
       marshalId: contact.marshalId || '',
@@ -1335,6 +2042,11 @@ const eventContacts = computed(() => {
     seen.add(key);
     return true;
   });
+
+  // Sort by name alphabetically
+  return deduplicated.sort((a, b) =>
+    (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
+  );
 });
 
 // Emergency contacts - filter for specific roles that should be shown in emergency modal
@@ -1397,7 +2109,15 @@ const areaContactsByArea = computed(() => {
     grouped[key].contacts.push(contact);
   }
 
-  return Object.values(grouped);
+  // Sort contacts within each group by name
+  const groups = Object.values(grouped);
+  for (const group of groups) {
+    group.contacts.sort((a, b) =>
+      (a.marshalName || a.name || '').localeCompare(b.marshalName || b.name || '', undefined, { sensitivity: 'base' })
+    );
+  }
+
+  return groups;
 });
 
 // Total area contacts count (after filtering and deduplication)
@@ -1440,6 +2160,116 @@ const mapCenter = computed(() => {
   }
   return { lat: 51.505, lng: -0.09 };
 });
+
+// SVG icons for course map toolbar actions (defined as constants to avoid reactivity issues)
+const ICON_MY_LOCATION = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><circle cx="12" cy="12" r="4"/><path d="M13 4.069V2h-2v2.069A8.01 8.01 0 0 0 4.069 11H2v2h2.069A8.008 8.008 0 0 0 11 19.931V22h2v-2.069A8.007 8.007 0 0 0 19.931 13H22v-2h-2.069A8.008 8.008 0 0 0 13 4.069zM12 18c-3.309 0-6-2.691-6-6s2.691-6 6-6 6 2.691 6 6-2.691 6-6 6z"/></svg>';
+const ICON_CHECKPOINT = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>';
+
+// First assignment with a valid location (for recentering)
+const firstAssignmentWithLocation = computed(() => {
+  return assignmentsWithDetails.value.find(a =>
+    a.location?.latitude && a.location?.longitude &&
+    !(a.location.latitude === 0 && a.location.longitude === 0)
+  );
+});
+
+// Course map toolbar actions for recentering (only show when location is off-screen)
+const courseMapActions = computed(() => {
+  const actions = [];
+
+  // Recenter on my location (if GPS is available AND location is off-screen)
+  if (userLocation.value && !courseMapVisibility.value.userLocationInView) {
+    actions.push({
+      id: 'recenter-user',
+      label: 'My location',
+      icon: 'custom',
+      customIcon: ICON_MY_LOCATION,
+    });
+  }
+
+  // Recenter on my checkpoint (if I have one with a location AND it's off-screen)
+  // Use highlightedLocationInView since we highlight our assignments on the course map
+  if (firstAssignmentWithLocation.value && !courseMapVisibility.value.highlightedLocationInView) {
+    actions.push({
+      id: 'recenter-checkpoint',
+      label: 'My ' + termsLower.value.checkpoint,
+      icon: 'custom',
+      customIcon: ICON_CHECKPOINT,
+    });
+  }
+
+  return actions;
+});
+
+// Handle course map visibility changes (only update if changed to avoid infinite loops)
+const handleCourseMapVisibilityChange = (visibility) => {
+  const current = courseMapVisibility.value;
+  if (current.userLocationInView !== visibility.userLocationInView ||
+      current.highlightedLocationInView !== visibility.highlightedLocationInView) {
+    courseMapVisibility.value = visibility;
+  }
+};
+
+// Handle course map toolbar actions
+const handleCourseMapAction = ({ actionId }) => {
+  if (actionId === 'recenter-user' && userLocation.value) {
+    courseMapRef.value?.recenterOnUserLocation();
+  } else if (actionId === 'recenter-checkpoint' && firstAssignmentWithLocation.value) {
+    const loc = firstAssignmentWithLocation.value.location;
+    courseMapRef.value?.recenterOnLocation(loc.latitude, loc.longitude);
+  }
+};
+
+// Get toolbar actions for a checkpoint mini-map
+const getCheckpointMapActions = (assignId) => {
+  const actions = [];
+  const visibility = checkpointMapVisibility.value[assignId] || { userLocationInView: true, highlightedLocationInView: true };
+
+  // Recenter on my location (if GPS is available AND location is off-screen)
+  if (userLocation.value && !visibility.userLocationInView) {
+    actions.push({
+      id: 'recenter-user',
+      label: 'My location',
+      icon: 'custom',
+      customIcon: ICON_MY_LOCATION,
+    });
+  }
+
+  // Recenter on this checkpoint (if it's off-screen)
+  if (!visibility.highlightedLocationInView) {
+    actions.push({
+      id: 'recenter-checkpoint',
+      label: termsLower.value.checkpoint.charAt(0).toUpperCase() + termsLower.value.checkpoint.slice(1),
+      icon: 'custom',
+      customIcon: ICON_CHECKPOINT,
+    });
+  }
+
+  return actions;
+};
+
+// Handle checkpoint map visibility changes (only update if changed to avoid infinite loops)
+const handleCheckpointMapVisibilityChange = (assignId, visibility) => {
+  const current = checkpointMapVisibility.value[assignId];
+  if (!current ||
+      current.userLocationInView !== visibility.userLocationInView ||
+      current.highlightedLocationInView !== visibility.highlightedLocationInView) {
+    checkpointMapVisibility.value = {
+      ...checkpointMapVisibility.value,
+      [assignId]: visibility,
+    };
+  }
+};
+
+// Handle checkpoint map toolbar actions
+const handleCheckpointMapAction = (assign, { actionId }) => {
+  const mapRef = checkpointMapRefs[assign.id];
+  if (actionId === 'recenter-user' && userLocation.value) {
+    mapRef?.recenterOnUserLocation();
+  } else if (actionId === 'recenter-checkpoint' && assign.location) {
+    mapRef?.recenterOnLocation(assign.location.latitude, assign.location.longitude);
+  }
+};
 
 const authenticateWithMagicCode = async (eventId, code, isReauth = false) => {
   authenticating.value = true;
@@ -1564,6 +2394,11 @@ const loadEventData = async () => {
       myContacts.value = cachedData.contacts || [];
       notes.value = cachedData.notes || [];
 
+      // Load area lead checkpoints for marshal name lookup
+      if (cachedData.areaLeadDashboard?.checkpoints) {
+        areaLeadCheckpoints.value = cachedData.areaLeadDashboard.checkpoints;
+      }
+
       // Apply terminology settings
       if (event.value) {
         setTerminology(event.value);
@@ -1687,6 +2522,9 @@ const preloadOfflineData = async () => {
   try {
     const dashboardResponse = await areasApi.getAreaLeadDashboard(eventId);
     if (dashboardResponse.data) {
+      // Store checkpoints for marshal name lookup in checklists
+      areaLeadCheckpoints.value = dashboardResponse.data.checkpoints || [];
+
       // Convert to plain object to avoid IndexedDB serialization issues
       const areaLeadDashboard = JSON.parse(JSON.stringify({
         areas: dashboardResponse.data.areas || [],
@@ -1803,26 +2641,65 @@ const loadAreaContacts = async () => {
   areaContactsRaw.value = [];
 };
 
-const loadChecklist = async () => {
+const loadChecklist = async (silent = false) => {
   if (!currentMarshalId.value) {
     console.warn('No marshal ID, skipping checklist load');
     return;
   }
 
-  checklistLoading.value = true;
+  // Only show loading state for initial load, not refreshes
+  if (!silent) {
+    checklistLoading.value = true;
+  }
   checklistError.value = null;
 
   try {
+    const eventId = route.params.eventId;
     console.log('Fetching checklist for marshal:', currentMarshalId.value);
-    const response = await checklistApi.getMarshalChecklist(route.params.eventId, currentMarshalId.value);
-    checklistItems.value = response.data || [];
+
+    // Fetch personal checklist items
+    const marshalResponse = await checklistApi.getMarshalChecklist(eventId, currentMarshalId.value);
+    let allItems = marshalResponse.data || [];
+
+    // For area leads, also fetch checklist items for their areas
+    if (isAreaLead.value && areaLeadAreaIds.value.length > 0) {
+      console.log('Fetching area checklists for areas:', areaLeadAreaIds.value);
+      const areaPromises = areaLeadAreaIds.value.map(areaId =>
+        checklistApi.getAreaChecklist(eventId, areaId).catch(err => {
+          console.warn(`Failed to fetch checklist for area ${areaId}:`, err);
+          return { data: [] };
+        })
+      );
+      const areaResponses = await Promise.all(areaPromises);
+
+      // Merge and deduplicate items
+      const itemMap = new Map();
+      for (const item of allItems) {
+        const key = `${item.itemId}_${item.completionContextType}_${item.completionContextId}`;
+        itemMap.set(key, item);
+      }
+      for (const response of areaResponses) {
+        for (const item of (response.data || [])) {
+          const key = `${item.itemId}_${item.completionContextType}_${item.completionContextId}`;
+          if (!itemMap.has(key)) {
+            itemMap.set(key, item);
+          }
+        }
+      }
+      allItems = Array.from(itemMap.values());
+      console.log('Merged checklist items:', allItems.length);
+    }
+
+    checklistItems.value = allItems;
     sectionLastLoadedAt.value.checklist = Date.now();
     console.log('Checklist loaded:', checklistItems.value.length, 'items');
   } catch (error) {
     console.error('Failed to load checklist:', error.response?.status, error.response?.data);
     checklistError.value = error.response?.data?.message || 'Failed to load checklist';
   } finally {
-    checklistLoading.value = false;
+    if (!silent) {
+      checklistLoading.value = false;
+    }
   }
 };
 
@@ -1832,10 +2709,13 @@ const handleToggleChecklist = async (item) => {
   savingChecklist.value = true;
   const eventId = route.params.eventId;
 
+  // For Personal items, use the owner's marshal ID; otherwise use current marshal
+  // Also send actorMarshalId to identify who is actually completing the task
   const actionData = {
-    marshalId: currentMarshalId.value,
+    marshalId: item.contextOwnerMarshalId || currentMarshalId.value,
     contextType: item.completionContextType,
     contextId: item.completionContextId,
+    actorMarshalId: currentMarshalId.value,
   };
 
   try {
@@ -1855,7 +2735,7 @@ const handleToggleChecklist = async (item) => {
         await updatePendingCount();
       } else {
         await checklistApi.uncomplete(eventId, item.itemId, actionData);
-        await loadChecklist();
+        await loadChecklist(true); // Silent refresh to preserve UI state
       }
     } else {
       // Complete
@@ -1873,12 +2753,12 @@ const handleToggleChecklist = async (item) => {
         await updatePendingCount();
       } else {
         await checklistApi.complete(eventId, item.itemId, actionData);
-        await loadChecklist();
+        await loadChecklist(true); // Silent refresh to preserve UI state
       }
     }
 
-    // Update cached checklist
-    await updateCachedField(eventId, 'checklist', checklistItems.value);
+    // Update cached checklist (convert to plain objects for IndexedDB)
+    await updateCachedField(eventId, 'checklist', JSON.parse(JSON.stringify(checklistItems.value)));
   } catch (error) {
     console.error('Failed to toggle checklist item:', error);
 
@@ -2684,6 +3564,11 @@ const formatRoleName = (role) => {
     .trim();
 };
 
+// Check if a role is an emergency contact (for red styling)
+const isEmergencyRole = (role) => {
+  return role === 'EmergencyContact';
+};
+
 // Generate checkpoint icon SVG based on resolved style
 const getCheckpointIconSvg = (location) => {
   if (!location) return '';
@@ -2844,6 +3729,18 @@ onUnmounted(() => {
 .header.logo-left,
 .header.logo-right {
   flex-direction: row;
+  padding-top: 0;
+  padding-bottom: 0;
+  align-items: stretch;
+  height: 120px;
+}
+
+.header.logo-left {
+  padding-left: 0;
+}
+
+.header.logo-right {
+  padding-right: 0;
 }
 
 .header.logo-cover {
@@ -2855,7 +3752,9 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
+  padding: 1rem 0;
   position: relative;
   z-index: 1;
 }
@@ -2880,22 +3779,26 @@ onUnmounted(() => {
 .header-logo {
   display: flex;
   align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  align-self: stretch;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
 }
 
 .header-logo-left {
-  margin-right: 1rem;
+  margin-right: 0;
 }
 
 .header-logo-right {
-  margin-left: 1rem;
+  margin-left: 0;
 }
 
 .header-logo-img {
-  max-height: 56px;
-  max-width: 140px;
-  object-fit: contain;
-  border-radius: 4px;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
 }
 
 /* Cover logo background */
@@ -2910,6 +3813,7 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
   opacity: 0.25;
 }
 
@@ -3071,6 +3975,11 @@ onUnmounted(() => {
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 500;
+}
+
+.contact-role-badge.emergency-role {
+  background: var(--danger);
+  color: var(--card-bg);
 }
 
 .contact-notes-text {
@@ -3329,6 +4238,60 @@ onUnmounted(() => {
 }
 
 /* Checklist styles */
+.checklist-section {
+  margin-bottom: 1.5rem;
+}
+
+.checklist-section:last-child {
+  margin-bottom: 0;
+}
+
+.checklist-section-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 0.75rem 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.checklist-section .empty-state.small {
+  padding: 1rem;
+  font-size: 0.9rem;
+}
+
+.my-jobs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.my-job-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+}
+
+.my-job-item input[type="checkbox"] {
+  width: 1.1rem;
+  height: 1.1rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.my-job-text {
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.my-job-text.completed {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
 .checklist-items {
   display: flex;
   flex-direction: column;
@@ -3410,6 +4373,125 @@ onUnmounted(() => {
   color: var(--text-muted);
 }
 
+/* Checklist grouping */
+.checklist-group-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+}
+
+.checklist-group-selector label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.checklist-group-selector select {
+  flex: 1;
+  min-width: 0;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--card-bg);
+  color: var(--text-dark);
+  font-size: 0.875rem;
+}
+
+.checklist-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.checklist-group {
+  background: var(--card-bg);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.checklist-group-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  background: var(--bg-secondary);
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-dark);
+  transition: background 0.2s;
+}
+
+.checklist-group-header:hover {
+  background: var(--bg-tertiary);
+}
+
+.checklist-group-header.expanded {
+  background: var(--brand-primary-bg);
+  color: var(--brand-primary);
+}
+
+.checklist-group-header.all-complete {
+  background: var(--checked-in-bg);
+}
+
+.checklist-group-header.all-complete .group-title {
+  color: var(--checked-in-text);
+}
+
+.group-title {
+  flex: 1;
+  min-width: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.group-status {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.group-count {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  background: var(--bg-muted);
+  padding: 0.2rem 0.5rem;
+  border-radius: 10px;
+}
+
+.checklist-group-header.all-complete .group-count {
+  background: var(--checked-in-border);
+  color: var(--checked-in-text);
+}
+
+.group-expand-icon {
+  font-size: 1.1rem;
+  color: var(--text-muted);
+}
+
+.checklist-group-items {
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-top: 1px solid var(--border-light);
+}
+
+.checklist-group-items .checklist-item {
+  padding: 0.5rem 0.75rem;
+}
+
 .empty-state {
   text-align: center;
   padding: 1.5rem;
@@ -3467,6 +4549,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.5rem;
   padding: 1.25rem 1.5rem;
   background: var(--card-bg);
   border: none;
@@ -3476,6 +4559,7 @@ onUnmounted(() => {
   font-weight: 600;
   color: var(--text-dark);
   transition: background 0.2s;
+  overflow: hidden;
 }
 
 .accordion-header:hover {
@@ -3491,6 +4575,10 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .section-icon {
@@ -3746,6 +4834,267 @@ onUnmounted(() => {
   padding: 0.5rem;
 }
 
+/* Area filter pills */
+.area-filter-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.area-filter-pill {
+  padding: 0.4rem 0.8rem;
+  border: 2px solid var(--border-light);
+  border-radius: 20px;
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.area-filter-pill:hover {
+  border-color: var(--brand-primary);
+}
+
+.area-filter-pill.selected {
+  color: white;
+  border-color: transparent;
+}
+
+/* Area Lead Marshals Section Styles */
+.area-lead-marshals-content {
+  padding: 0.75rem;
+}
+
+.area-lead-marshals-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.area-lead-marshal-item {
+  background: var(--card-bg);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.area-lead-marshal-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s;
+}
+
+.area-lead-marshal-header:hover {
+  background: var(--bg-secondary);
+}
+
+.area-lead-marshal-header.active {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.area-lead-marshal-header.is-checked-in {
+  background: var(--success-bg-lighter, #f0fdf4);
+}
+
+.area-lead-marshal-header.is-checked-in:hover {
+  background: var(--success-bg-light);
+}
+
+.area-lead-marshal-header .marshal-header-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.area-lead-marshal-header .marshal-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.area-lead-marshal-header .marshal-name {
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.area-lead-marshal-header .check-status-badge {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  background: var(--danger-bg-light);
+  color: var(--danger);
+}
+
+.area-lead-marshal-header .check-status-badge.checked-in {
+  background: var(--success-bg-light);
+  color: var(--success-dark);
+}
+
+.area-lead-marshal-header .marshal-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.area-lead-marshal-header .marshal-checkpoint {
+  color: var(--text-secondary);
+}
+
+.area-lead-marshal-header .marshal-task-count {
+  padding: 0.1rem 0.4rem;
+  background: var(--info-bg);
+  color: var(--info-blue);
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.area-lead-marshal-content {
+  padding: 1rem;
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.area-lead-marshal-content .marshal-checkin-section {
+  padding: 0.75rem;
+  background: var(--card-bg);
+  border-radius: 6px;
+}
+
+.area-lead-marshal-content .checkin-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.area-lead-marshal-content .checkin-label {
+  font-size: 0.9rem;
+  color: var(--text-dark);
+}
+
+.area-lead-marshal-content .checkin-time {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.area-lead-marshal-content .checkin-action-btn {
+  font-size: 0.8rem;
+  padding: 0.35rem 0.75rem;
+  background: var(--brand-primary);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.area-lead-marshal-content .checkin-action-btn:hover:not(:disabled) {
+  background: var(--brand-primary-hover);
+}
+
+.area-lead-marshal-content .checkin-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.area-lead-marshal-content .checkin-action-btn.undo-btn {
+  background: var(--warning-dark);
+}
+
+.area-lead-marshal-content .marshal-contact-section {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.area-lead-marshal-content .contact-link {
+  font-size: 0.85rem;
+  color: var(--brand-primary);
+  text-decoration: none;
+}
+
+.area-lead-marshal-content .contact-link:hover {
+  text-decoration: underline;
+}
+
+.area-lead-marshal-content .marshal-tasks-section {
+  background: var(--card-bg);
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+
+.area-lead-marshal-content .tasks-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.area-lead-marshal-content .tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.area-lead-marshal-content .task-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+}
+
+.area-lead-marshal-content .task-item input[type="checkbox"] {
+  cursor: pointer;
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.area-lead-marshal-content .task-text {
+  flex: 1;
+  font-size: 0.9rem;
+  color: var(--text-dark);
+}
+
+.area-lead-marshal-content .task-item.task-completed {
+  opacity: 0.7;
+}
+
+.area-lead-marshal-content .task-item.task-completed .task-text {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.area-lead-marshal-content .no-tasks-message {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 /* Checkpoint marshals list */
 .checkpoint-marshals {
   margin: 0.75rem 0;
@@ -3791,6 +5140,106 @@ onUnmounted(() => {
 
 .marshal-tag.is-you.checked-in {
   background: linear-gradient(135deg, var(--brand-primary-bg) 50%, var(--success-bg-light) 50%);
+}
+
+/* Expandable marshal cards for area leads */
+.marshals-list-expanded {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.marshal-card-mini {
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.marshal-card-mini.checked-in {
+  background: var(--success-bg-light);
+}
+
+.marshal-card-mini.is-you {
+  border: 2px solid var(--brand-primary);
+}
+
+.marshal-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.9rem;
+  color: var(--text-darker);
+}
+
+.marshal-card-header:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.marshal-name-text {
+  font-weight: 500;
+}
+
+.marshal-status-icons {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.expand-icon {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: var(--text-secondary);
+}
+
+.marshal-details-panel {
+  padding: 0.5rem 0.8rem 0.8rem;
+  border-top: 1px solid var(--border-color);
+  background: var(--card-bg);
+}
+
+.detail-row {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.3rem 0;
+  font-size: 0.85rem;
+}
+
+.detail-label {
+  color: var(--text-secondary);
+  min-width: 90px;
+}
+
+.status-checked-in {
+  color: var(--success-color);
+  font-weight: 500;
+}
+
+.status-not-checked-in {
+  color: var(--text-secondary);
+}
+
+.contact-buttons-mini {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.contact-buttons-mini .btn {
+  flex: 1;
+  text-align: center;
+}
+
+.btn-sm {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8rem;
 }
 
 .check-badge {

@@ -28,6 +28,7 @@ namespace VolunteerCheckin.Functions.Tests
         private Mock<IAssignmentRepository> _mockAssignmentRepository = null!;
         private Mock<IChecklistItemRepository> _mockChecklistItemRepository = null!;
         private Mock<IChecklistCompletionRepository> _mockChecklistCompletionRepository = null!;
+        private Mock<IEventContactRepository> _mockEventContactRepository = null!;
         private Mock<ClaimsService> _mockClaimsService = null!;
         private AreaFunctions _areaFunctions = null!;
 
@@ -41,6 +42,7 @@ namespace VolunteerCheckin.Functions.Tests
             _mockAssignmentRepository = new Mock<IAssignmentRepository>();
             _mockChecklistItemRepository = new Mock<IChecklistItemRepository>();
             _mockChecklistCompletionRepository = new Mock<IChecklistCompletionRepository>();
+            _mockEventContactRepository = new Mock<IEventContactRepository>();
             _mockClaimsService = new Mock<ClaimsService>(
                 MockBehavior.Loose,
                 new Mock<IAuthSessionRepository>().Object,
@@ -50,6 +52,11 @@ namespace VolunteerCheckin.Functions.Tests
                 new Mock<IUserEventMappingRepository>().Object
             );
 
+            // Default: return empty list for contacts (most tests don't need contacts)
+            _mockEventContactRepository
+                .Setup(r => r.GetByEventAsync(It.IsAny<string>()))
+                .ReturnsAsync(new List<EventContactEntity>());
+
             _areaFunctions = new AreaFunctions(
                 _mockLogger.Object,
                 _mockAreaRepository.Object,
@@ -58,6 +65,7 @@ namespace VolunteerCheckin.Functions.Tests
                 _mockAssignmentRepository.Object,
                 _mockChecklistItemRepository.Object,
                 _mockChecklistCompletionRepository.Object,
+                _mockEventContactRepository.Object,
                 _mockClaimsService.Object
             );
         }
@@ -423,6 +431,88 @@ namespace VolunteerCheckin.Functions.Tests
             result.ShouldBeOfType<NotFoundObjectResult>();
         }
 
+        [TestMethod]
+        public async Task UpdateArea_ContactsToRemove_RemovesAreaFromContactScopes()
+        {
+            // Arrange
+            string eventId = "event-123";
+            string areaId = "area-456";
+            string otherAreaId = "area-789";
+            string contactId = "contact-1";
+
+            AreaEntity existingArea = new()
+            {
+                RowKey = areaId,
+                EventId = eventId,
+                Name = "Test Area",
+                Description = "Description",
+                Color = "#FF5733",
+                ContactsJson = "[]",
+                PolygonJson = "[]",
+                IsDefault = false,
+                DisplayOrder = 0
+            };
+
+            EventContactEntity contact = new()
+            {
+                EventId = eventId,
+                ContactId = contactId,
+                Name = "Test Contact",
+                ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
+                {
+                    new() { Scope = "EveryoneInAreas", ItemType = "Area", Ids = [areaId, otherAreaId] }
+                })
+            };
+
+            UpdateAreaRequest request = new(
+                "Test Area",
+                "Description",
+                "#FF5733",
+                new List<AreaContact>(),
+                null,
+                0,
+                ContactsToRemove: new List<string> { contactId }
+            );
+
+            _mockAreaRepository
+                .Setup(r => r.GetAsync(eventId, areaId))
+                .ReturnsAsync(existingArea);
+
+            _mockEventContactRepository
+                .Setup(r => r.GetAsync(eventId, contactId))
+                .ReturnsAsync(contact);
+
+            _mockLocationRepository
+                .Setup(r => r.CountByAreaAsync(eventId, areaId))
+                .ReturnsAsync(0);
+
+            _mockLocationRepository
+                .Setup(r => r.GetByEventAsync(eventId))
+                .ReturnsAsync(new List<LocationEntity>());
+
+            _mockAreaRepository
+                .Setup(r => r.GetDefaultAreaAsync(eventId))
+                .ReturnsAsync(new AreaEntity { IsDefault = true });
+
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
+
+            // Act
+            IActionResult result = await _areaFunctions.UpdateArea(httpRequest, eventId, areaId);
+
+            // Assert
+            result.ShouldBeOfType<OkObjectResult>();
+
+            // Verify contact was updated with area removed from scope
+            _mockEventContactRepository.Verify(
+                r => r.UpdateAsync(It.Is<EventContactEntity>(c =>
+                    c.ContactId == contactId &&
+                    !c.ScopeConfigurationsJson.Contains(areaId) &&
+                    c.ScopeConfigurationsJson.Contains(otherAreaId)
+                )),
+                Times.Once
+            );
+        }
+
         #endregion
 
         #region DeleteArea Tests
@@ -571,6 +661,244 @@ namespace VolunteerCheckin.Functions.Tests
 
             // Assert
             result.ShouldBeOfType<NotFoundObjectResult>();
+        }
+
+        [TestMethod]
+        public async Task DeleteArea_RemovesAreaFromContactScopes()
+        {
+            // Arrange
+            string eventId = "event-123";
+            string areaId = "area-456";
+            string otherAreaId = "area-789";
+
+            AreaEntity area = new()
+            {
+                RowKey = areaId,
+                EventId = eventId,
+                IsDefault = false
+            };
+
+            // Contact with the deleted area in its scope
+            EventContactEntity contactWithArea = new()
+            {
+                EventId = eventId,
+                ContactId = "contact-1",
+                Name = "Test Contact",
+                ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
+                {
+                    new() { Scope = "EveryoneInAreas", ItemType = "Area", Ids = [areaId, otherAreaId] }
+                })
+            };
+
+            // Contact without the deleted area
+            EventContactEntity contactWithoutArea = new()
+            {
+                EventId = eventId,
+                ContactId = "contact-2",
+                Name = "Other Contact",
+                ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
+                {
+                    new() { Scope = "EveryoneInAreas", ItemType = "Area", Ids = [otherAreaId] }
+                })
+            };
+
+            _mockAreaRepository
+                .Setup(r => r.GetAsync(eventId, areaId))
+                .ReturnsAsync(area);
+
+            _mockLocationRepository
+                .Setup(r => r.GetByAreaAsync(eventId, areaId))
+                .ReturnsAsync(new List<LocationEntity>());
+
+            _mockEventContactRepository
+                .Setup(r => r.GetByEventAsync(eventId))
+                .ReturnsAsync(new List<EventContactEntity> { contactWithArea, contactWithoutArea });
+
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
+
+            // Act
+            IActionResult result = await _areaFunctions.DeleteArea(httpRequest, eventId, areaId);
+
+            // Assert
+            result.ShouldBeOfType<NoContentResult>();
+
+            // Verify only the contact with the deleted area was updated
+            _mockEventContactRepository.Verify(
+                r => r.UpdateAsync(It.Is<EventContactEntity>(c =>
+                    c.ContactId == "contact-1" &&
+                    !c.ScopeConfigurationsJson.Contains(areaId) &&
+                    c.ScopeConfigurationsJson.Contains(otherAreaId)
+                )),
+                Times.Once
+            );
+
+            // The contact without the deleted area should not be updated
+            _mockEventContactRepository.Verify(
+                r => r.UpdateAsync(It.Is<EventContactEntity>(c => c.ContactId == "contact-2")),
+                Times.Never
+            );
+        }
+
+        [TestMethod]
+        public async Task DeleteArea_ContactWithMultipleScopeConfigs_RemovesAreaFromAll()
+        {
+            // Arrange
+            string eventId = "event-123";
+            string areaId = "area-456";
+            string otherAreaId = "area-789";
+
+            AreaEntity area = new()
+            {
+                RowKey = areaId,
+                EventId = eventId,
+                IsDefault = false
+            };
+
+            // Contact with the area in multiple scope configurations
+            EventContactEntity contact = new()
+            {
+                EventId = eventId,
+                ContactId = "contact-1",
+                Name = "Test Contact",
+                ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
+                {
+                    new() { Scope = "EveryoneInAreas", ItemType = "Area", Ids = [areaId, otherAreaId] },
+                    new() { Scope = "EveryAreaLead", ItemType = "Area", Ids = [areaId] }
+                })
+            };
+
+            _mockAreaRepository
+                .Setup(r => r.GetAsync(eventId, areaId))
+                .ReturnsAsync(area);
+
+            _mockLocationRepository
+                .Setup(r => r.GetByAreaAsync(eventId, areaId))
+                .ReturnsAsync(new List<LocationEntity>());
+
+            _mockEventContactRepository
+                .Setup(r => r.GetByEventAsync(eventId))
+                .ReturnsAsync(new List<EventContactEntity> { contact });
+
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
+
+            // Act
+            IActionResult result = await _areaFunctions.DeleteArea(httpRequest, eventId, areaId);
+
+            // Assert
+            result.ShouldBeOfType<NoContentResult>();
+
+            // Verify the area was removed from all scope configurations
+            _mockEventContactRepository.Verify(
+                r => r.UpdateAsync(It.Is<EventContactEntity>(c =>
+                    c.ContactId == "contact-1" &&
+                    !c.ScopeConfigurationsJson.Contains(areaId) &&
+                    c.ScopeConfigurationsJson.Contains(otherAreaId)
+                )),
+                Times.Once
+            );
+        }
+
+        [TestMethod]
+        public async Task DeleteArea_ContactWithEmptyScopeConfig_NotUpdated()
+        {
+            // Arrange
+            string eventId = "event-123";
+            string areaId = "area-456";
+
+            AreaEntity area = new()
+            {
+                RowKey = areaId,
+                EventId = eventId,
+                IsDefault = false
+            };
+
+            // Contact with empty scope configurations
+            EventContactEntity contact = new()
+            {
+                EventId = eventId,
+                ContactId = "contact-1",
+                Name = "Test Contact",
+                ScopeConfigurationsJson = "[]"
+            };
+
+            _mockAreaRepository
+                .Setup(r => r.GetAsync(eventId, areaId))
+                .ReturnsAsync(area);
+
+            _mockLocationRepository
+                .Setup(r => r.GetByAreaAsync(eventId, areaId))
+                .ReturnsAsync(new List<LocationEntity>());
+
+            _mockEventContactRepository
+                .Setup(r => r.GetByEventAsync(eventId))
+                .ReturnsAsync(new List<EventContactEntity> { contact });
+
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
+
+            // Act
+            IActionResult result = await _areaFunctions.DeleteArea(httpRequest, eventId, areaId);
+
+            // Assert
+            result.ShouldBeOfType<NoContentResult>();
+
+            // Contact should not be updated since it has no scope configurations
+            _mockEventContactRepository.Verify(
+                r => r.UpdateAsync(It.IsAny<EventContactEntity>()),
+                Times.Never
+            );
+        }
+
+        [TestMethod]
+        public async Task DeleteArea_ContactWithCheckpointScope_NotAffected()
+        {
+            // Arrange
+            string eventId = "event-123";
+            string areaId = "area-456";
+
+            AreaEntity area = new()
+            {
+                RowKey = areaId,
+                EventId = eventId,
+                IsDefault = false
+            };
+
+            // Contact with Checkpoint scope (not Area) - should not be affected
+            EventContactEntity contact = new()
+            {
+                EventId = eventId,
+                ContactId = "contact-1",
+                Name = "Test Contact",
+                ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
+                {
+                    new() { Scope = "EveryoneAtCheckpoints", ItemType = "Checkpoint", Ids = ["checkpoint-1", "checkpoint-2"] }
+                })
+            };
+
+            _mockAreaRepository
+                .Setup(r => r.GetAsync(eventId, areaId))
+                .ReturnsAsync(area);
+
+            _mockLocationRepository
+                .Setup(r => r.GetByAreaAsync(eventId, areaId))
+                .ReturnsAsync(new List<LocationEntity>());
+
+            _mockEventContactRepository
+                .Setup(r => r.GetByEventAsync(eventId))
+                .ReturnsAsync(new List<EventContactEntity> { contact });
+
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
+
+            // Act
+            IActionResult result = await _areaFunctions.DeleteArea(httpRequest, eventId, areaId);
+
+            // Assert
+            result.ShouldBeOfType<NoContentResult>();
+
+            // Contact should not be updated since it only has Checkpoint scope, not Area
+            _mockEventContactRepository.Verify(
+                r => r.UpdateAsync(It.IsAny<EventContactEntity>()),
+                Times.Never
+            );
         }
 
         #endregion

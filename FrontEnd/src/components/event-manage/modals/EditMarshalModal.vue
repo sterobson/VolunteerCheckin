@@ -374,6 +374,8 @@ const handleSave = () => {
     ...form.value,
     // Include pending check-in changes from checkpoints tab
     checkInChanges: checkpointsTabRef.value?.getPendingChanges?.() || [],
+    // Include assignments marked for removal
+    assignmentsToRemove: checkpointsTabRef.value?.getMarkedForRemoval?.() || [],
     // Include pending checklist changes
     checklistChanges: checklistChanges.value || [],
     // Include pending assignments for new marshals

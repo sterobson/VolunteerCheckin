@@ -66,6 +66,7 @@ $config = @{
             DeployPath = "/VolunteerCheckin/testing/"
             DestinationDir = "testing"
             ApiUrl = "https://sterobson-volunteercheckin-testing.azurewebsites.net/api"
+            FrontendUrl = "https://sterobson.github.io/VolunteerCheckin/testing"
         }
         Backend = @{
             AppName = "sterobson-volunteercheckin-testing"
@@ -550,6 +551,7 @@ if ($Environment -eq "testing" -and $Frontend) {
 
                 $env:VITE_API_BASE_URL = $selectedConfig.Frontend.ApiUrl
                 $env:VITE_BASE_PATH = $selectedConfig.Frontend.DeployPath
+                $env:VITE_FRONTEND_URL = $selectedConfig.Frontend.FrontendUrl
 
                 npm run build
 
@@ -688,6 +690,7 @@ if ($Environment -eq "testing" -and $Frontend) {
             # Clean up environment variables
             Remove-Item Env:\VITE_API_BASE_URL -ErrorAction SilentlyContinue
             Remove-Item Env:\VITE_BASE_PATH -ErrorAction SilentlyContinue
+            Remove-Item Env:\VITE_FRONTEND_URL -ErrorAction SilentlyContinue
         }
     }
 }

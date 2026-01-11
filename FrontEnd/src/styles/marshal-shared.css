@@ -1,0 +1,838 @@
+/**
+ * Marshal View Shared Styles
+ *
+ * Reusable CSS classes extracted from MarshalView.vue for use across
+ * marshal-related components. Import this in main.js or individual components.
+ */
+
+/* ============================================
+   ACCORDION STYLES
+   ============================================ */
+
+.marshal-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.marshal-accordion-section {
+  background: var(--card-bg);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.marshal-accordion-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.25rem 1.5rem;
+  background: var(--card-bg);
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-dark);
+  transition: background 0.2s;
+  overflow: hidden;
+}
+
+.marshal-accordion-header:hover {
+  background: var(--bg-secondary);
+}
+
+.marshal-accordion-header.active {
+  background: var(--brand-primary-bg);
+  color: var(--brand-primary);
+}
+
+.marshal-accordion-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.marshal-accordion-icon {
+  font-size: 1.5rem;
+  font-weight: 300;
+  color: var(--brand-primary);
+}
+
+.marshal-accordion-content {
+  padding: 1rem 1.5rem 1.5rem;
+  border-top: 1px solid var(--border-light);
+}
+
+.marshal-section-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand-primary);
+}
+
+.marshal-section-icon :deep(svg) {
+  width: 18px;
+  height: 18px;
+}
+
+/* ============================================
+   CHECKPOINT ACCORDION STYLES
+   ============================================ */
+
+.checkpoint-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.checkpoint-accordion-section {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.checkpoint-accordion-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 1rem 1.25rem;
+  background: var(--bg-secondary);
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-dark);
+  transition: background 0.2s;
+  gap: 0.5rem;
+}
+
+.checkpoint-accordion-header:hover {
+  background: var(--bg-hover);
+}
+
+.checkpoint-accordion-header.active {
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.checkpoint-accordion-header.checked-in {
+  background: var(--checked-in-bg);
+}
+
+.checkpoint-accordion-header.checked-in.active {
+  background: var(--success-bg-light);
+}
+
+.checkpoint-header-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.checkpoint-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.checkpoint-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+
+.checkpoint-icon :deep(svg) {
+  width: 20px;
+  height: 20px;
+}
+
+.checkpoint-check-icon {
+  color: var(--checked-in-text);
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.checkpoint-name {
+  color: var(--text-dark);
+}
+
+.checkpoint-time-badge {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--brand-primary);
+  background: var(--bg-tertiary);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.checkpoint-accordion-header.checked-in .checkpoint-time-badge {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.checkpoint-description-preview {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.checkpoint-accordion-content {
+  padding: 1rem 1.25rem;
+  background: var(--card-bg);
+}
+
+/* ============================================
+   CONTACT STYLES
+   ============================================ */
+
+.marshal-contact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.marshal-contact-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  background: var(--bg-muted);
+  border-radius: 8px;
+  gap: 1rem;
+}
+
+.marshal-contact-item.primary-contact {
+  border-left: 3px solid var(--warning);
+  background: var(--warning-bg-lighter);
+}
+
+.marshal-contact-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.marshal-contact-name {
+  font-weight: 500;
+  color: var(--text-dark);
+}
+
+.marshal-contact-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.marshal-contact-role {
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.marshal-contact-detail {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.marshal-contact-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.marshal-contact-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--brand-primary);
+  color: white;
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.marshal-contact-link:hover {
+  background: var(--brand-primary-hover);
+}
+
+.marshal-contact-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.marshal-primary-badge {
+  color: var(--warning);
+  font-size: 0.9rem;
+}
+
+.marshal-role-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  background: var(--bg-tertiary);
+  color: var(--text-darker);
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.marshal-role-badge.emergency-role {
+  background: var(--danger);
+  color: var(--card-bg);
+}
+
+/* ============================================
+   MARSHAL TAG/CARD STYLES
+   ============================================ */
+
+.marshal-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3rem 0.6rem;
+  background: var(--bg-tertiary);
+  border-radius: 16px;
+  font-size: 0.85rem;
+  color: var(--text-dark);
+}
+
+.marshal-tag.is-you {
+  background: var(--brand-primary-bg);
+  color: var(--brand-primary);
+  font-weight: 500;
+}
+
+.marshal-tag.checked-in {
+  background: var(--checked-in-bg);
+  color: var(--checked-in-text);
+}
+
+.marshal-tag .check-badge {
+  color: var(--checked-in-text);
+  font-weight: bold;
+}
+
+.marshal-card-mini {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.marshal-card-mini.checked-in {
+  border-color: var(--checked-in-border);
+  background: var(--checked-in-bg);
+}
+
+.marshal-card-mini.is-you {
+  border-color: var(--brand-primary);
+}
+
+.marshal-card-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.9rem;
+  color: var(--text-dark);
+  transition: background 0.2s;
+}
+
+.marshal-card-header:hover {
+  background: var(--bg-hover);
+}
+
+.marshal-card-mini.expanded .marshal-card-header {
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.marshal-name-text {
+  font-weight: 500;
+}
+
+.marshal-status-icons {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.marshal-details-panel {
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.marshal-detail-row {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.marshal-detail-label {
+  color: var(--text-muted);
+  min-width: 80px;
+}
+
+/* ============================================
+   NOTE STYLES
+   ============================================ */
+
+.checkpoint-notes {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  background: var(--bg-muted);
+  border-radius: 8px;
+}
+
+.checkpoint-notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.checkpoint-note-item {
+  background: var(--card-bg);
+  border-radius: 6px;
+  padding: 0.75rem;
+  border-left: 3px solid var(--text-muted);
+}
+
+.checkpoint-note-item.emergency {
+  border-left-color: var(--danger);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.checkpoint-note-item.urgent {
+  border-left-color: var(--warning);
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.checkpoint-note-item.high {
+  border-left-color: #f97316;
+}
+
+.checkpoint-note-item.normal {
+  border-left-color: var(--accent-primary);
+}
+
+.checkpoint-note-item.low {
+  border-left-color: var(--text-muted);
+}
+
+.checkpoint-note-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.checkpoint-note-header .pin-icon {
+  font-size: 0.85rem;
+}
+
+.priority-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.priority-indicator.emergency { background: var(--danger); }
+.priority-indicator.urgent { background: var(--warning); }
+.priority-indicator.high { background: #f97316; }
+.priority-indicator.normal { background: var(--accent-primary); }
+.priority-indicator.low { background: var(--text-muted); }
+
+.checkpoint-note-title {
+  font-size: 0.9rem;
+  color: var(--text-dark);
+  flex: 1;
+}
+
+.priority-badge {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.priority-badge.emergency { background: var(--danger); color: white; }
+.priority-badge.urgent { background: var(--warning); color: white; }
+.priority-badge.high { background: #f97316; color: white; }
+.priority-badge.normal { background: var(--bg-secondary); color: var(--text-secondary); }
+.priority-badge.low { background: var(--bg-secondary); color: var(--text-muted); }
+
+.checkpoint-note-content {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+/* ============================================
+   CHECKLIST STYLES
+   ============================================ */
+
+.marshal-checklist-section {
+  margin-bottom: 1.5rem;
+}
+
+.marshal-checklist-section:last-child {
+  margin-bottom: 0;
+}
+
+.marshal-checklist-section-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 0.75rem 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.marshal-checklist-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.marshal-checklist-item {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.marshal-checklist-item.item-completed {
+  background: var(--checked-in-bg);
+  border-color: var(--checked-in-border);
+}
+
+.marshal-item-checkbox {
+  display: flex;
+  align-items: flex-start;
+  padding-top: 0.25rem;
+}
+
+.marshal-item-checkbox input[type="checkbox"] {
+  cursor: pointer;
+  width: 1.2rem;
+  height: 1.2rem;
+  flex-shrink: 0;
+}
+
+.marshal-item-checkbox input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.marshal-item-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.marshal-item-text {
+  font-size: 0.95rem;
+  color: var(--text-dark);
+}
+
+.marshal-item-text.text-completed {
+  text-decoration: line-through;
+  color: var(--text-light);
+}
+
+/* Checklist grouping */
+.marshal-checklist-group {
+  background: var(--card-bg);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.marshal-checklist-group-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  background: var(--bg-secondary);
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-dark);
+  transition: background 0.2s;
+}
+
+.marshal-checklist-group-header:hover {
+  background: var(--bg-tertiary);
+}
+
+.marshal-checklist-group-header.expanded {
+  background: var(--brand-primary-bg);
+  color: var(--brand-primary);
+}
+
+.marshal-checklist-group-header.all-complete {
+  background: var(--checked-in-bg);
+}
+
+.marshal-checklist-group-header.all-complete .group-title {
+  color: var(--checked-in-text);
+}
+
+.marshal-group-title {
+  flex: 1;
+  min-width: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.marshal-group-status {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.marshal-group-count {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  background: var(--bg-muted);
+  padding: 0.2rem 0.5rem;
+  border-radius: 10px;
+}
+
+/* ============================================
+   AREA LEAD STYLES
+   ============================================ */
+
+.area-lead-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-left: 0.5rem;
+}
+
+.area-lead-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: white;
+  border-radius: 10px;
+}
+
+.area-filter-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.area-filter-pill {
+  padding: 0.4rem 0.8rem;
+  border: 2px solid var(--border-light);
+  border-radius: 20px;
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.area-filter-pill:hover {
+  border-color: var(--brand-primary);
+}
+
+.area-filter-pill.selected {
+  color: white;
+  border-color: transparent;
+}
+
+.area-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  background: var(--brand-primary);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 12px;
+}
+
+/* ============================================
+   COMMON UTILITY STYLES
+   ============================================ */
+
+.marshal-empty-state {
+  text-align: center;
+  padding: 1.5rem;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.marshal-empty-state.small {
+  padding: 1rem;
+  font-size: 0.9rem;
+}
+
+.marshal-loading {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-secondary);
+}
+
+.marshal-error {
+  padding: 1rem;
+  background: var(--danger-bg-lighter);
+  color: var(--danger);
+  border-radius: 6px;
+  font-size: 0.875rem;
+}
+
+.marshal-location-status {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  background: var(--btn-cancel-bg);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.marshal-location-status.active {
+  background: var(--success-bg-light);
+  color: var(--checked-in-text);
+}
+
+.marshals-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.marshals-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.marshals-list-expanded {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Check-in section styling */
+.my-checkin-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.check-in-error {
+  color: var(--danger);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+/* ============================================
+   MODAL SHARED STYLES
+   ============================================ */
+
+.marshal-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--modal-overlay);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 3000;
+}
+
+.marshal-modal-content {
+  background: var(--card-bg);
+  border-radius: 12px;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-xl);
+}
+
+.marshal-modal-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.marshal-modal-body {
+  padding: 1.5rem;
+}
+
+.marshal-modal-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border-light);
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.marshal-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.marshal-modal-actions .btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+}

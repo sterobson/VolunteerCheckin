@@ -245,7 +245,7 @@
       :show="showEditMarshal"
       :marshal="selectedMarshal"
       :event-id="route.params.eventId"
-      :assignments="getMarshalAssignmentsForEdit()"
+      :assignments="marshalAssignmentsForEdit"
       :available-locations="availableMarshalLocations"
       :all-locations="locationStatuses"
       :areas="areas"
@@ -2379,6 +2379,13 @@ const handleUpdateLocation = async (formData) => {
         await eventsStore.deleteAssignment(route.params.eventId, assignmentId);
       }
 
+      // Process assignments marked for removal in the modal
+      if (formData.assignmentsToRemove && formData.assignmentsToRemove.length > 0) {
+        for (const assignmentId of formData.assignmentsToRemove) {
+          await eventsStore.deleteAssignment(route.params.eventId, assignmentId);
+        }
+      }
+
       for (const pending of pendingAssignments.value) {
         await eventsStore.createAssignment({
           eventId: route.params.eventId,
@@ -2640,13 +2647,16 @@ const selectMarshal = (marshal) => {
   showEditMarshal.value = true;
 };
 
-const getMarshalAssignmentsForEdit = () => {
+const marshalAssignmentsForEdit = computed(() => {
   if (!selectedMarshal.value) return [];
 
   const assignments = [];
+
+  // Get existing assignments, filtering out those marked for deletion
   locationStatuses.value.forEach(location => {
     const marshalAssignments = location.assignments.filter(
-      a => a.marshalName === selectedMarshal.value.name
+      a => a.marshalName === selectedMarshal.value.name &&
+           !pendingMarshalDeleteAssignments.value.includes(a.id)
     );
     marshalAssignments.forEach(assignment => {
       assignments.push({
@@ -2657,8 +2667,25 @@ const getMarshalAssignmentsForEdit = () => {
     });
   });
 
+  // Add pending new assignments
+  pendingMarshalAssignments.value.forEach((pending, index) => {
+    const location = locationStatuses.value.find(l => l.id === pending.locationId);
+    if (location) {
+      assignments.push({
+        id: `pending-${index}`,
+        locationId: pending.locationId,
+        locationName: location.name,
+        locationDescription: location.description || '',
+        marshalId: selectedMarshal.value.id,
+        marshalName: selectedMarshal.value.name,
+        isCheckedIn: false,
+        isPending: true,
+      });
+    }
+  });
+
   return assignments;
-};
+});
 
 const handleSaveMarshal = async (formData) => {
   try {
@@ -2726,6 +2753,13 @@ const handleSaveMarshal = async (formData) => {
       await eventsStore.deleteAssignment(route.params.eventId, assignmentId);
     }
 
+    // Process assignments marked for removal in the modal
+    if (formData.assignmentsToRemove && formData.assignmentsToRemove.length > 0) {
+      for (const assignmentId of formData.assignmentsToRemove) {
+        await eventsStore.deleteAssignment(route.params.eventId, assignmentId);
+      }
+    }
+
     for (const pending of pendingMarshalAssignments.value) {
       await eventsStore.createAssignment({
         eventId: route.params.eventId,
@@ -2747,7 +2781,7 @@ const handleSaveMarshal = async (formData) => {
 
     // Process check-in status changes
     if (formData.checkInChanges && formData.checkInChanges.length > 0) {
-      const marshalAssignments = getMarshalAssignmentsForEdit();
+      const marshalAssignments = marshalAssignmentsForEdit.value;
       for (const change of formData.checkInChanges) {
         // Find the current assignment to check its status
         const assignment = marshalAssignments.find(a => a.id === change.assignmentId);
@@ -2878,10 +2912,25 @@ const toggleMarshalCheckIn = async (assignment) => {
   await toggleCheckIn(assignment);
 };
 
-const handleRemoveMarshalAssignment = (assignmentId) => {
-  if (!pendingMarshalDeleteAssignments.value.includes(assignmentId)) {
-    pendingMarshalDeleteAssignments.value.push(assignmentId);
+const handleRemoveMarshalAssignment = (assignmentOrId) => {
+  const assignmentId = assignmentOrId?.id ?? assignmentOrId;
+
+  // Check if this is a pending assignment (not yet saved)
+  if (assignmentId?.toString().startsWith('pending-')) {
+    // Remove from pending assignments list using the locationId
+    const locationId = assignmentOrId?.locationId;
+    if (locationId) {
+      pendingMarshalAssignments.value = pendingMarshalAssignments.value.filter(
+        p => p.locationId !== locationId
+      );
+    }
     markFormDirty();
+  } else {
+    // For existing assignments, add to pending deletions
+    if (!pendingMarshalDeleteAssignments.value.includes(assignmentId)) {
+      pendingMarshalDeleteAssignments.value.push(assignmentId);
+      markFormDirty();
+    }
   }
 };
 

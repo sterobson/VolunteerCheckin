@@ -217,8 +217,16 @@ export const healthApi = {
   check: () => api.head('/health'),
 };
 
-// Get the frontend base URL (everything before the #)
+// Get the frontend base URL for magic links (without the /#/ - backend adds that)
+// Uses VITE_FRONTEND_URL if set at build time, otherwise detects from current URL
 const getFrontendUrl = () => {
+  // If explicitly set at build/deploy time, use that
+  if (import.meta.env.VITE_FRONTEND_URL) {
+    // Strip any trailing /#/ or / - backend will add /#/route
+    return import.meta.env.VITE_FRONTEND_URL.replace(/\/?#?\/?$/, '');
+  }
+
+  // Otherwise detect from current URL (everything before the #)
   const url = window.location.href.split('#')[0];
   return url.endsWith('/') ? url.slice(0, -1) : url;
 };

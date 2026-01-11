@@ -231,7 +231,7 @@ public class ClaimsService
     /// <param name="ipAddress">IP address for audit trail</param>
     /// <param name="marshalId">Marshal ID for marshal sessions (optional)</param>
     /// <returns>The session token (unhashed) to return to the client</returns>
-    public async Task<string> CreateSessionAsync(string personId, string authMethod, string? eventId, string ipAddress, string? marshalId = null)
+    public virtual async Task<string> CreateSessionAsync(string personId, string authMethod, string? eventId, string ipAddress, string? marshalId = null)
     {
         // Generate a cryptographically secure random session token
         string sessionToken = GenerateSecureToken(64);

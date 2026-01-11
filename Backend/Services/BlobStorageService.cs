@@ -36,7 +36,7 @@ public class BlobStorageService
     /// <param name="imageData">The image data as a stream</param>
     /// <param name="contentType">The content type (e.g., image/png)</param>
     /// <returns>The public URL of the uploaded logo</returns>
-    public async Task<string> UploadLogoAsync(string eventId, Stream imageData, string contentType)
+    public virtual async Task<string> UploadLogoAsync(string eventId, Stream imageData, string contentType)
     {
         BlobContainerClient container = await GetOrCreateContainerAsync();
 
@@ -68,7 +68,7 @@ public class BlobStorageService
     /// <summary>
     /// Deletes the logo for an event.
     /// </summary>
-    public async Task DeleteLogoAsync(string eventId)
+    public virtual async Task DeleteLogoAsync(string eventId)
     {
         BlobContainerClient container = await GetOrCreateContainerAsync();
         await DeleteExistingLogosAsync(container, eventId);

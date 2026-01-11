@@ -289,7 +289,17 @@ export const assignmentsApi = {
 
 // Check-in API
 export const checkInApi = {
+  // Legacy GPS check-in (marshal self check-in only, no toggle)
   checkIn: (data) => api.post('/checkin', data),
+  // Toggle check-in/out with optional GPS and action
+  // action: 'check-in', 'check-out', or null for toggle
+  toggleCheckIn: (eventId, assignmentId, { latitude, longitude, action } = {}) =>
+    api.post(`/checkin/${eventId}/${assignmentId}/toggle`, {
+      latitude: latitude ?? null,
+      longitude: longitude ?? null,
+      action: action ?? null,
+    }),
+  // Admin-only check-in toggle
   adminCheckIn: (eventId, assignmentId) => api.post(`/checkin/admin/${eventId}/${assignmentId}`),
 };
 

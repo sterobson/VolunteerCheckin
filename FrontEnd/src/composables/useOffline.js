@@ -163,6 +163,14 @@ async function syncAction(action) {
         await checkInApi.checkIn(action.payload);
         break;
 
+      case 'checkin_toggle':
+        await checkInApi.toggleCheckIn(
+          action.payload.eventId,
+          action.payload.assignmentId,
+          action.payload.gpsData || {}
+        );
+        break;
+
       case 'checkin_admin':
         await checkInApi.adminCheckIn(action.payload.eventId, action.payload.assignmentId);
         break;
@@ -191,6 +199,25 @@ async function syncAction(action) {
     return true;
   } catch (error) {
     console.error('Failed to sync action:', action, error);
+
+    // Check for "already completed" errors - these should be treated as success
+    // since the desired state has already been achieved
+    if (error.response && error.response.status === 400) {
+      const message = error.response.data?.message || error.response.data || '';
+      const messageStr = typeof message === 'string' ? message.toLowerCase() : '';
+
+      // Check-in already completed
+      if (messageStr.includes('already checked in')) {
+        console.log('Action already completed (already checked in), treating as success');
+        return true;
+      }
+
+      // Checklist item already in desired state
+      if (messageStr.includes('already completed') || messageStr.includes('already uncompleted')) {
+        console.log('Action already completed (checklist state), treating as success');
+        return true;
+      }
+    }
 
     // Check if it's a permanent failure (4xx) or temporary (5xx/network)
     if (error.response && error.response.status >= 400 && error.response.status < 500) {

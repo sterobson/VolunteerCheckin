@@ -80,7 +80,7 @@ public static class Constants
 
     // Authentication Settings
     public const int MagicLinkExpiryMinutes = 15;
-    public const int AdminSessionExpiryHours = 24;
+    public const int AdminSessionExpiryHours = 168; // 7 days, with sliding expiration on activity
     public const int MagicCodeLength = 6;
 
     // Rate Limiting

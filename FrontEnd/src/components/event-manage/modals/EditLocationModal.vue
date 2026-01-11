@@ -264,7 +264,7 @@
             @click="handleDelete"
             class="btn btn-danger"
           >
-            Delete {{ effectiveCheckpointTermSingularLower }}
+            Delete
           </button>
           <button
             v-if="!isExistingLocation && !isLastTab"

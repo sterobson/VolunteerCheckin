@@ -99,62 +99,6 @@
 
         <!-- Accordion Sections -->
         <div class="accordion">
-          <!-- Event Details Section -->
-          <!-- Route/Map Section -->
-          <div class="accordion-section">
-            <button
-              class="accordion-header"
-              :class="{ active: expandedSection === 'map' }"
-              @click="toggleSection('map')"
-            >
-              <span class="accordion-title">
-                <span class="section-icon" v-html="getIcon('course')"></span>
-                {{ terms.course }}
-                <span v-if="userLocation" class="location-status active">GPS Active</span>
-                <span v-else class="location-status">GPS Inactive</span>
-              </span>
-              <span class="accordion-icon">{{ expandedSection === 'map' ? '−' : '+' }}</span>
-            </button>
-            <div v-if="expandedSection === 'map'" class="accordion-content map-content">
-              <!-- Map selection mode banner -->
-              <div v-if="selectingLocationOnMap" class="map-selection-banner">
-                <span>Click on the map to set the new location for <strong>{{ updatingLocationFor?.location?.name }}</strong></span>
-                <button @click="cancelMapLocationSelect" class="btn btn-secondary btn-sm">Cancel</button>
-              </div>
-              <div class="map-wrapper">
-                <CommonMap
-                  ref="courseMapRef"
-                  :locations="allLocations"
-                  :route="eventRoute"
-                  :center="mapCenter"
-                  :zoom="15"
-                  :user-location="userLocation"
-                  :highlight-location-ids="assignmentLocationIds"
-                  :marshal-mode="true"
-                  :clickable="selectingLocationOnMap || hasDynamicAssignment"
-                  :show-fullscreen="true"
-                  :fullscreen-title="terms.course"
-                  :fullscreen-header-style="headerStyle"
-                  :fullscreen-header-text-color="headerTextColor"
-                  :toolbar-actions="courseMapActions"
-                  :hide-recenter-button="true"
-                  :class="{ 'selecting-location': selectingLocationOnMap }"
-                  height="100%"
-                  @map-click="handleMapClick"
-                  @location-click="handleLocationClick"
-                  @action-click="handleCourseMapAction"
-                  @visibility-change="handleCourseMapVisibilityChange"
-                >
-                  <!-- Selection mode banner -->
-                  <template v-if="selectingLocationOnMap" #fullscreen-banner>
-                    <span>Click on the map to set the new location for <strong>{{ updatingLocationFor?.location?.name }}</strong></span>
-                    <button @click="cancelMapLocationSelect" class="btn btn-secondary btn-sm">Cancel</button>
-                  </template>
-                </CommonMap>
-              </div>
-            </div>
-          </div>
-
           <!-- Assignments Section -->
           <div class="accordion-section">
             <button
@@ -236,6 +180,20 @@
                       </CommonMap>
                     </div>
 
+                    <!-- My check-in toggle button -->
+                    <div class="my-checkin-section">
+                      <CheckInToggleButton
+                        :is-checked-in="assign.effectiveIsCheckedIn"
+                        :check-in-time="assign.checkInTime"
+                        :check-in-method="assign.checkInMethod"
+                        :checked-in-by="assign.checkedInBy"
+                        :marshal-name="currentMarshalName"
+                        :is-loading="checkingIn === assign.id"
+                        @toggle="handleCheckInToggle(assign, true)"
+                      />
+                      <div v-if="checkInError && checkingInAssignment === assign.id" class="check-in-error">{{ checkInError }}</div>
+                    </div>
+
                     <!-- Marshals on this checkpoint -->
                     <div class="checkpoint-marshals">
                       <div class="marshals-label">{{ terms.people }}:</div>
@@ -303,6 +261,18 @@
                               <a v-if="m.phoneNumber" :href="'sms:' + m.phoneNumber" class="btn btn-sm btn-secondary">Text</a>
                               <a v-if="m.email" :href="'mailto:' + m.email" class="btn btn-sm btn-secondary">Email</a>
                             </div>
+                            <!-- Check-in/check-out button for area leads (not for yourself) -->
+                            <div v-if="m.marshalId !== currentMarshalId" class="checkpoint-marshal-checkin">
+                              <CheckInToggleButton
+                                :is-checked-in="m.effectiveIsCheckedIn"
+                                :check-in-time="m.checkInTime"
+                                :check-in-method="m.checkInMethod"
+                                :checked-in-by="m.checkedInBy"
+                                :marshal-name="m.marshalName"
+                                :is-loading="checkingIn === m.id"
+                                @toggle="handleCheckInToggle(m, false, assign.locationId)"
+                              />
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -343,32 +313,30 @@
                       </div>
                     </div>
 
-                    <!-- Check-in status and actions -->
-                    <div v-if="assign.effectiveIsCheckedIn" class="checked-in-status">
-                      <span class="check-icon">✓</span>
-                      <div>
-                        <strong>Checked In</strong>
-                        <p class="check-time">{{ formatTime(assign.checkInTime) }}</p>
+                    <!-- Notes for this checkpoint -->
+                    <div v-if="getNotesForCheckpoint(assign.locationId, assign.areaIds).length > 0" class="checkpoint-notes">
+                      <div class="marshals-label">Notes:</div>
+                      <div class="checkpoint-notes-list">
+                        <div
+                          v-for="note in getNotesForCheckpoint(assign.locationId, assign.areaIds)"
+                          :key="note.noteId"
+                          class="checkpoint-note-item"
+                          :class="[(note.priority || 'Normal').toLowerCase()]"
+                        >
+                          <div class="checkpoint-note-header">
+                            <span v-if="note.isPinned" class="pin-icon" title="Pinned">📌</span>
+                            <span class="priority-indicator" :class="(note.priority || 'Normal').toLowerCase()"></span>
+                            <strong class="checkpoint-note-title">{{ note.title }}</strong>
+                            <span class="priority-badge" :class="(note.priority || 'Normal').toLowerCase()">
+                              {{ note.priority || 'Normal' }}
+                            </span>
+                          </div>
+                          <div v-if="note.content" class="checkpoint-note-content">
+                            {{ note.content }}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <div v-else class="check-in-actions">
-                      <button
-                        @click="handleCheckIn(assign)"
-                        class="btn btn-primary"
-                        :disabled="checkingIn === assign.id"
-                        :style="accentButtonStyle"
-                      >
-                        {{ checkingIn === assign.id ? 'Checking in...' : 'GPS Check-In' }}
-                      </button>
-                      <button
-                        @click="handleManualCheckIn(assign)"
-                        class="btn btn-secondary"
-                        :disabled="checkingIn === assign.id"
-                      >
-                        Manual
-                      </button>
-                    </div>
-                    <div v-if="checkInError && checkingInAssignment === assign.id" class="error">{{ checkInError }}</div>
 
                     <!-- Dynamic checkpoint location update -->
                     <div v-if="isDynamicCheckpoint(assign.location)" class="dynamic-location-section">
@@ -555,6 +523,33 @@
             </div>
           </div>
 
+          <!-- Notes Section -->
+          <div class="accordion-section">
+            <button
+              class="accordion-header"
+              :class="{ active: expandedSection === 'notes' }"
+              @click="toggleSection('notes')"
+            >
+              <span class="accordion-title">
+                <span class="section-icon" v-html="getIcon('notes')"></span>
+                Your {{ notes.length === 1 ? 'note' : 'notes' }}{{ notes.length > 1 ? ` (${notes.length})` : '' }}
+              </span>
+              <span class="accordion-icon">{{ expandedSection === 'notes' ? '−' : '+' }}</span>
+            </button>
+            <div v-if="expandedSection === 'notes'" class="accordion-content">
+              <!-- Notes are pre-filtered by getMyNotes API, so don't pass marshal-id to avoid re-filtering -->
+              <NotesView
+                :event-id="route.params.eventId"
+                :all-notes="notes"
+                :locations="allLocations"
+                :areas="areas"
+                :assignments="assignments"
+                :show-scope="false"
+                @notes-changed="loadNotes"
+              />
+            </div>
+          </div>
+
           <!-- Contacts Section -->
           <div v-if="eventContacts.length > 0 || contactsLoading" class="accordion-section">
             <button
@@ -604,33 +599,6 @@
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-
-          <!-- Notes Section -->
-          <div class="accordion-section">
-            <button
-              class="accordion-header"
-              :class="{ active: expandedSection === 'notes' }"
-              @click="toggleSection('notes')"
-            >
-              <span class="accordion-title">
-                <span class="section-icon" v-html="getIcon('notes')"></span>
-                Your {{ notes.length === 1 ? 'note' : 'notes' }}{{ notes.length > 1 ? ` (${notes.length})` : '' }}
-              </span>
-              <span class="accordion-icon">{{ expandedSection === 'notes' ? '−' : '+' }}</span>
-            </button>
-            <div v-if="expandedSection === 'notes'" class="accordion-content">
-              <!-- Notes are pre-filtered by getMyNotes API, so don't pass marshal-id to avoid re-filtering -->
-              <NotesView
-                :event-id="route.params.eventId"
-                :all-notes="notes"
-                :locations="allLocations"
-                :areas="areas"
-                :assignments="assignments"
-                :show-scope="false"
-                @notes-changed="loadNotes"
-              />
             </div>
           </div>
 
@@ -750,22 +718,15 @@
                   <div v-if="expandedAreaLeadMarshal === marshal.marshalId" class="area-lead-marshal-content">
                     <!-- Check-in status -->
                     <div class="marshal-checkin-section">
-                      <div class="checkin-status-row">
-                        <span class="checkin-label">
-                          {{ marshal.isCheckedIn ? 'Checked in' : 'Not checked in' }}
-                          <span v-if="marshal.isCheckedIn && marshal.checkInTime" class="checkin-time">
-                            at {{ formatTime(marshal.checkInTime) }}
-                          </span>
-                        </span>
-                        <button
-                          @click="handleAreaLeadMarshalCheckIn(marshal)"
-                          class="checkin-action-btn"
-                          :class="{ 'undo-btn': marshal.isCheckedIn }"
-                          :disabled="checkingInAreaLeadMarshal === marshal.marshalId"
-                        >
-                          {{ checkingInAreaLeadMarshal === marshal.marshalId ? '...' : (marshal.isCheckedIn ? 'Undo check-in' : 'Check in') }}
-                        </button>
-                      </div>
+                      <CheckInToggleButton
+                        :is-checked-in="marshal.isCheckedIn"
+                        :check-in-time="marshal.checkInTime"
+                        :check-in-method="marshal.checkInMethod"
+                        :checked-in-by="marshal.checkedInBy"
+                        :marshal-name="marshal.marshalName"
+                        :is-loading="checkingIn === marshal.id"
+                        @toggle="handleAreaLeadMarshalCheckIn(marshal)"
+                      />
                     </div>
 
                     <!-- Contact details -->
@@ -804,6 +765,61 @@
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Route/Map Section -->
+          <div class="accordion-section">
+            <button
+              class="accordion-header"
+              :class="{ active: expandedSection === 'map' }"
+              @click="toggleSection('map')"
+            >
+              <span class="accordion-title">
+                <span class="section-icon" v-html="getIcon('course')"></span>
+                {{ terms.course }}
+                <span v-if="userLocation" class="location-status active">GPS Active</span>
+                <span v-else class="location-status">GPS Inactive</span>
+              </span>
+              <span class="accordion-icon">{{ expandedSection === 'map' ? '−' : '+' }}</span>
+            </button>
+            <div v-if="expandedSection === 'map'" class="accordion-content map-content">
+              <!-- Map selection mode banner -->
+              <div v-if="selectingLocationOnMap" class="map-selection-banner">
+                <span>Click on the map to set the new location for <strong>{{ updatingLocationFor?.location?.name }}</strong></span>
+                <button @click="cancelMapLocationSelect" class="btn btn-secondary btn-sm">Cancel</button>
+              </div>
+              <div class="map-wrapper">
+                <CommonMap
+                  ref="courseMapRef"
+                  :locations="allLocations"
+                  :route="eventRoute"
+                  :center="mapCenter"
+                  :zoom="15"
+                  :user-location="userLocation"
+                  :highlight-location-ids="assignmentLocationIds"
+                  :marshal-mode="true"
+                  :clickable="selectingLocationOnMap || hasDynamicAssignment"
+                  :show-fullscreen="true"
+                  :fullscreen-title="terms.course"
+                  :fullscreen-header-style="headerStyle"
+                  :fullscreen-header-text-color="headerTextColor"
+                  :toolbar-actions="courseMapActions"
+                  :hide-recenter-button="true"
+                  :class="{ 'selecting-location': selectingLocationOnMap }"
+                  height="100%"
+                  @map-click="handleMapClick"
+                  @location-click="handleLocationClick"
+                  @action-click="handleCourseMapAction"
+                  @visibility-change="handleCourseMapVisibilityChange"
+                >
+                  <!-- Selection mode banner -->
+                  <template v-if="selectingLocationOnMap" #fullscreen-banner>
+                    <span>Click on the map to set the new location for <strong>{{ updatingLocationFor?.location?.name }}</strong></span>
+                    <button @click="cancelMapLocationSelect" class="btn btn-secondary btn-sm">Cancel</button>
+                  </template>
+                </CommonMap>
               </div>
             </div>
           </div>
@@ -1071,6 +1087,7 @@ import AreaLeadSection from '../components/AreaLeadSection.vue';
 import GroupedTasksList from '../components/event-manage/GroupedTasksList.vue';
 import NotesView from '../components/NotesView.vue';
 import OfflineIndicator from '../components/OfflineIndicator.vue';
+import CheckInToggleButton from '../components/common/CheckInToggleButton.vue';
 import { setTerminology, useTerminology } from '../composables/useTerminology';
 import { getIcon } from '../utils/icons';
 import { getContrastTextColor, getGradientContrastTextColor, DEFAULT_COLORS } from '../utils/colorContrast';
@@ -1100,6 +1117,9 @@ const loginError = ref(null);
 const currentPerson = ref(null);
 const currentMarshalId = ref(null);
 const userClaims = ref(null);
+
+// Current marshal name for check-in display
+const currentMarshalName = computed(() => currentPerson.value?.name || null);
 
 // Area lead state
 const areaLeadAreaIds = computed(() => {
@@ -1357,7 +1377,6 @@ const areaLeadRef = ref(null);
 
 // Area Lead Marshals section state
 const expandedAreaLeadMarshal = ref(null);
-const checkingInAreaLeadMarshal = ref(null);
 const savingAreaLeadMarshalTask = ref(false);
 const areaLeadMarshalDataVersion = ref(0); // Trigger for recomputing marshals
 
@@ -1414,11 +1433,9 @@ const allAreaLeadMarshals = computed(() => {
   );
 });
 
-// Handle check-in for area lead marshals section
+// Handle check-in for area lead marshals section (uses unified handleCheckInToggle)
 const handleAreaLeadMarshalCheckIn = async (marshal) => {
-  if (checkingInAreaLeadMarshal.value) return;
-
-  // Find a checkpoint that has this marshal
+  // Find a checkpoint that has this marshal to get the assignment ID
   const checkpoints = areaLeadRef.value?.checkpoints || areaLeadCheckpoints.value || [];
   const checkpoint = checkpoints.find(c =>
     c.marshals?.some(m => m.marshalId === marshal.marshalId)
@@ -1432,28 +1449,22 @@ const handleAreaLeadMarshalCheckIn = async (marshal) => {
   const checkpointMarshal = checkpoint.marshals.find(m => m.marshalId === marshal.marshalId);
   if (!checkpointMarshal) return;
 
-  // The assignment ID is on the marshal object itself
+  // Build an assignment-like object for handleCheckInToggle
   const assignmentId = checkpointMarshal.assignmentId || checkpointMarshal.id;
   if (!assignmentId) {
     console.error('No assignment ID found for marshal:', checkpointMarshal);
     return;
   }
 
-  checkingInAreaLeadMarshal.value = marshal.marshalId;
+  const assignmentLike = {
+    id: assignmentId,
+    marshalId: marshal.marshalId,
+    isCheckedIn: marshal.isCheckedIn,
+    effectiveIsCheckedIn: marshal.isCheckedIn,
+  };
 
-  try {
-    await checkInApi.adminCheckIn(eventId.value, assignmentId);
-    // Reload the area lead dashboard data
-    if (areaLeadRef.value?.loadDashboard) {
-      await areaLeadRef.value.loadDashboard();
-    }
-    // Force recomputation of allAreaLeadMarshals
-    areaLeadMarshalDataVersion.value++;
-  } catch (err) {
-    console.error('Failed to check in marshal:', err);
-  } finally {
-    checkingInAreaLeadMarshal.value = null;
-  }
+  // Use unified toggle (no GPS for checking in others)
+  await handleCheckInToggle(assignmentLike, false, checkpoint.locationId);
 };
 
 // Toggle task completion from the area lead marshals section
@@ -1513,10 +1524,10 @@ const dismissedCheckInReminders = ref(new Set());
 // Course map ref
 const courseMapRef = ref(null);
 
-// Course map visibility tracking
+// Course map visibility tracking (default to false so buttons show initially)
 const courseMapVisibility = ref({
-  userLocationInView: true,
-  highlightedLocationInView: true,
+  userLocationInView: false,
+  highlightedLocationInView: false,
 });
 
 // Checkpoint map visibility tracking (keyed by assignment ID)
@@ -2064,6 +2075,97 @@ const emergencyNotes = computed(() => {
   });
 });
 
+// Get notes that are scoped to a specific checkpoint (area and checkpoint scopes only, not marshal scopes)
+const getNotesForCheckpoint = (locationId, passedAreaIds = []) => {
+  if (!notes.value || notes.value.length === 0) return [];
+
+  // Get area IDs from the location directly as a fallback (matching NotesView behavior)
+  const location = allLocations.value.find(l => l.id === locationId);
+  const locationAreaIds = location?.areaIds || location?.AreaIds || [];
+  // Use passed areaIds if available, otherwise use location's areaIds
+  const areaIds = passedAreaIds.length > 0 ? passedAreaIds : locationAreaIds;
+
+  const matchedNotes = [];
+  const seenNoteIds = new Set();
+
+  for (const note of notes.value) {
+    const noteId = note.noteId || note.NoteId || note.id;
+    if (seenNoteIds.has(noteId)) continue;
+
+    // Handle both camelCase and PascalCase from backend
+    const scopeConfigurations = note.scopeConfigurations || note.ScopeConfigurations || [];
+    let matched = false;
+
+    // First try scopeConfigurations if available
+    if (scopeConfigurations.length > 0) {
+      for (const config of scopeConfigurations) {
+        const itemType = config.itemType || config.ItemType;
+        const ids = config.ids || config.Ids || [];
+
+        // Check checkpoint-specific scope
+        if (itemType === 'Checkpoint') {
+          if (ids.includes(locationId) || ids.includes('ALL_CHECKPOINTS')) {
+            matched = true;
+            break;
+          }
+        }
+
+        // Check area-based scope (notes scoped to area apply to checkpoints in that area)
+        if (itemType === 'Area') {
+          const areaMatch = ids.includes('ALL_AREAS') || (areaIds.length > 0 && areaIds.some(areaId => ids.includes(areaId)));
+          if (areaMatch) {
+            matched = true;
+            break;
+          }
+        }
+      }
+    } else {
+      // Fallback: use matchedScope from my-notes API to determine if note applies to checkpoint/area
+      // matchedScope indicates why the note was included for this marshal
+      const matchedScope = note.matchedScope || note.MatchedScope || '';
+
+      // Area and checkpoint scopes should show in checkpoint section
+      // Marshal-specific scopes (SpecificPeople, AllMarshals) should NOT show in checkpoint section
+      const areaOrCheckpointScopes = [
+        'EveryoneInAreas',
+        'EveryAreaLead',
+        'EveryoneAtCheckpoints',
+        'Area',
+        'Checkpoint',
+      ];
+
+      if (areaOrCheckpointScopes.some(scope => matchedScope.includes(scope) || matchedScope === scope)) {
+        matched = true;
+      }
+    }
+
+    if (matched) {
+      seenNoteIds.add(noteId);
+      matchedNotes.push(note);
+    }
+  }
+
+  // Sort by priority (Emergency > Urgent > High > Normal > Low), then pinned, then by date
+  const priorityOrder = { 'Emergency': 0, 'Urgent': 1, 'High': 2, 'Normal': 3, 'Low': 4 };
+  return matchedNotes.sort((a, b) => {
+    // Pinned notes first
+    const aPinned = a.isPinned || a.IsPinned;
+    const bPinned = b.isPinned || b.IsPinned;
+    if (aPinned && !bPinned) return -1;
+    if (!aPinned && bPinned) return 1;
+
+    // Then by priority
+    const priorityA = priorityOrder[a.priority || a.Priority || 'Normal'] ?? 3;
+    const priorityB = priorityOrder[b.priority || b.Priority || 'Normal'] ?? 3;
+    if (priorityA !== priorityB) return priorityA - priorityB;
+
+    // Then by date (newest first)
+    const dateA = a.createdAt || a.CreatedAt;
+    const dateB = b.createdAt || b.CreatedAt;
+    return new Date(dateB) - new Date(dateA);
+  });
+};
+
 // Area contacts - loaded from API, grouped by area
 const areaContactsRaw = ref([]);
 
@@ -2223,7 +2325,7 @@ const handleCourseMapAction = ({ actionId }) => {
 // Get toolbar actions for a checkpoint mini-map
 const getCheckpointMapActions = (assignId) => {
   const actions = [];
-  const visibility = checkpointMapVisibility.value[assignId] || { userLocationInView: true, highlightedLocationInView: true };
+  const visibility = checkpointMapVisibility.value[assignId] || { userLocationInView: false, highlightedLocationInView: false };
 
   // Recenter on my location (if GPS is available AND location is off-screen)
   if (userLocation.value && !visibility.userLocationInView) {
@@ -2850,80 +2952,125 @@ const stopLocationTracking = () => {
   }
 };
 
-const handleCheckIn = async (assign) => {
+/**
+ * Unified check-in/check-out toggle handler
+ * @param {Object} assign - The assignment object
+ * @param {boolean} tryGps - Whether to attempt GPS (true for self, false for checking in others)
+ * @param {string} locationId - Optional location ID for updating location assignments
+ */
+const handleCheckInToggle = async (assign, tryGps = true, locationId = null) => {
   checkingIn.value = assign.id;
   checkingInAssignment.value = assign.id;
   checkInError.value = null;
 
   const eventId = route.params.eventId;
+  const isCurrentlyCheckedIn = assign.effectiveIsCheckedIn || assign.isCheckedIn;
+  const action = isCurrentlyCheckedIn ? 'check-out' : 'check-in';
+  const newIsCheckedIn = !isCurrentlyCheckedIn;
+
+  // Try to get GPS coordinates if requested (for self check-in, not check-out)
+  let latitude = null;
+  let longitude = null;
+  let method = 'Manual';
+
+  if (tryGps && !isCurrentlyCheckedIn && 'geolocation' in navigator) {
+    try {
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 5000, // Shorter timeout - fall back to manual quickly
+        });
+      });
+      latitude = position.coords.latitude;
+      longitude = position.coords.longitude;
+      method = 'GPS';
+    } catch (gpsError) {
+      // GPS failed, fall back to manual silently
+      console.log('GPS unavailable, using manual check-in:', gpsError.message);
+    }
+  }
+
+  const gpsData = { latitude, longitude, action };
 
   try {
-    if (!('geolocation' in navigator)) {
-      throw new Error('Geolocation is not supported by your browser');
-    }
-
-    const position = await new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 10000,
-      });
-    });
-
-    const checkInData = {
-      eventId,
-      assignmentId: assign.id,
-      latitude: position.coords.latitude,
-      longitude: position.coords.longitude,
-      manualCheckIn: false,
-    };
-
     if (getOfflineMode()) {
       // Queue for offline sync
-      await queueOfflineAction('checkin', checkInData);
+      await queueOfflineAction('checkin_toggle', {
+        eventId,
+        assignmentId: assign.id,
+        gpsData,
+      });
 
-      // Optimistic update
+      // Optimistic update for own assignments
       const index = assignments.value.findIndex(a => a.id === assign.id);
       if (index !== -1) {
         assignments.value[index] = {
           ...assignments.value[index],
-          isCheckedIn: true,
-          checkInTime: new Date().toISOString(),
-          checkInMethod: 'GPS (pending)',
-          checkInLatitude: position.coords.latitude,
-          checkInLongitude: position.coords.longitude,
+          isCheckedIn: newIsCheckedIn,
+          checkInTime: newIsCheckedIn ? new Date().toISOString() : null,
+          checkInMethod: newIsCheckedIn ? `${method} (pending)` : null,
+          checkInLatitude: latitude,
+          checkInLongitude: longitude,
         };
       }
+
+      // Also update in location assignments if checking in another marshal
+      if (locationId) {
+        const location = allLocations.value.find(l => l.id === locationId);
+        if (location?.assignments) {
+          const locAssign = location.assignments.find(a => a.id === assign.id || a.marshalId === assign.marshalId);
+          if (locAssign) {
+            locAssign.isCheckedIn = newIsCheckedIn;
+            locAssign.checkInTime = newIsCheckedIn ? new Date().toISOString() : null;
+          }
+        }
+      }
+
       await updatePendingCount();
       await updateCachedField(eventId, 'locations', allLocations.value);
     } else {
-      const response = await checkInApi.checkIn(checkInData);
+      const response = await checkInApi.toggleCheckIn(eventId, assign.id, gpsData);
 
       // Update the assignment in the list
       const index = assignments.value.findIndex(a => a.id === assign.id);
       if (index !== -1) {
         assignments.value[index] = response.data;
       }
+
+      // Also update in location assignments if checking in another marshal
+      if (locationId) {
+        const location = allLocations.value.find(l => l.id === locationId);
+        if (location?.assignments) {
+          const locAssign = location.assignments.find(a => a.id === assign.id || a.marshalId === assign.marshalId);
+          if (locAssign) {
+            Object.assign(locAssign, response.data);
+          }
+        }
+      }
     }
+
+    // Refresh area lead dashboard if applicable
+    if (locationId && areaLeadRef.value?.loadDashboard) {
+      await areaLeadRef.value.loadDashboard();
+    }
+    areaLeadMarshalDataVersion.value++;
   } catch (error) {
     // Check if it's a network error - queue for offline
     if (getOfflineMode() || !error.response) {
-      const checkInData = {
+      await queueOfflineAction('checkin_toggle', {
         eventId,
         assignmentId: assign.id,
-        latitude: userLocation.value?.lat || null,
-        longitude: userLocation.value?.lng || null,
-        manualCheckIn: true,
-      };
-      await queueOfflineAction('checkin', checkInData);
+        gpsData,
+      });
 
       // Optimistic update
       const index = assignments.value.findIndex(a => a.id === assign.id);
       if (index !== -1) {
         assignments.value[index] = {
           ...assignments.value[index],
-          isCheckedIn: true,
-          checkInTime: new Date().toISOString(),
-          checkInMethod: 'Manual (pending)',
+          isCheckedIn: newIsCheckedIn,
+          checkInTime: newIsCheckedIn ? new Date().toISOString() : null,
+          checkInMethod: newIsCheckedIn ? 'Manual (pending)' : null,
         };
       }
       await updatePendingCount();
@@ -2932,82 +3079,12 @@ const handleCheckIn = async (assign) => {
     } else if (error.message) {
       checkInError.value = error.message;
     } else {
-      checkInError.value = 'Failed to check in. Please try manual check-in.';
+      checkInError.value = `Failed to ${action}. Please try again.`;
     }
   } finally {
     checkingIn.value = null;
     checkingInAssignment.value = null;
   }
-};
-
-const handleManualCheckIn = (assign) => {
-  confirmModalTitle.value = 'Manual Check-In';
-  confirmModalMessage.value = 'Are you sure you want to check in manually? This should only be used if GPS is not available.';
-  confirmModalCallback.value = async () => {
-    checkingIn.value = assign.id;
-    checkingInAssignment.value = assign.id;
-    checkInError.value = null;
-
-    const eventId = route.params.eventId;
-    const checkInData = {
-      eventId,
-      assignmentId: assign.id,
-      latitude: null,
-      longitude: null,
-      manualCheckIn: true,
-    };
-
-    try {
-      if (getOfflineMode()) {
-        // Queue for offline sync
-        await queueOfflineAction('checkin', checkInData);
-
-        // Optimistic update
-        const index = assignments.value.findIndex(a => a.id === assign.id);
-        if (index !== -1) {
-          assignments.value[index] = {
-            ...assignments.value[index],
-            isCheckedIn: true,
-            checkInTime: new Date().toISOString(),
-            checkInMethod: 'Manual (pending)',
-          };
-        }
-        await updatePendingCount();
-        await updateCachedField(eventId, 'locations', allLocations.value);
-      } else {
-        const response = await checkInApi.checkIn(checkInData);
-
-        // Update the assignment in the list
-        const index = assignments.value.findIndex(a => a.id === assign.id);
-        if (index !== -1) {
-          assignments.value[index] = response.data;
-        }
-      }
-    } catch (error) {
-      // If network error, queue for offline
-      if (getOfflineMode() || !error.response) {
-        await queueOfflineAction('checkin', checkInData);
-
-        // Optimistic update
-        const index = assignments.value.findIndex(a => a.id === assign.id);
-        if (index !== -1) {
-          assignments.value[index] = {
-            ...assignments.value[index],
-            isCheckedIn: true,
-            checkInTime: new Date().toISOString(),
-            checkInMethod: 'Manual (pending)',
-          };
-        }
-        await updatePendingCount();
-      } else {
-        checkInError.value = 'Failed to check in manually. Please contact the admin.';
-      }
-    } finally {
-      checkingIn.value = null;
-      checkingInAssignment.value = null;
-    }
-  };
-  showConfirmModal.value = true;
 };
 
 const handleConfirmModalConfirm = () => {
@@ -4754,6 +4831,17 @@ onUnmounted(() => {
   background: var(--card-bg);
 }
 
+.my-checkin-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
 .checkpoint-area-contacts {
   margin: 0.75rem 0;
   padding: 0.75rem;
@@ -4767,6 +4855,135 @@ onUnmounted(() => {
 
 .checkpoint-area-contacts .contact-item {
   background: var(--card-bg);
+}
+
+/* Checkpoint notes styles */
+.checkpoint-notes {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  background: var(--bg-muted);
+  border-radius: 8px;
+}
+
+.checkpoint-notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.checkpoint-note-item {
+  background: var(--card-bg);
+  border-radius: 6px;
+  padding: 0.75rem;
+  border-left: 3px solid var(--text-muted);
+}
+
+.checkpoint-note-item.emergency {
+  border-left-color: var(--danger);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.checkpoint-note-item.urgent {
+  border-left-color: var(--warning);
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.checkpoint-note-item.high {
+  border-left-color: #f97316;
+}
+
+.checkpoint-note-item.normal {
+  border-left-color: var(--accent-primary);
+}
+
+.checkpoint-note-item.low {
+  border-left-color: var(--text-muted);
+}
+
+.checkpoint-note-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.checkpoint-note-header .pin-icon {
+  font-size: 0.85rem;
+}
+
+.checkpoint-note-header .priority-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.checkpoint-note-header .priority-indicator.emergency {
+  background: var(--danger);
+}
+
+.checkpoint-note-header .priority-indicator.urgent {
+  background: var(--warning);
+}
+
+.checkpoint-note-header .priority-indicator.high {
+  background: #f97316;
+}
+
+.checkpoint-note-header .priority-indicator.normal {
+  background: var(--accent-primary);
+}
+
+.checkpoint-note-header .priority-indicator.low {
+  background: var(--text-muted);
+}
+
+.checkpoint-note-title {
+  font-size: 0.9rem;
+  color: var(--text-dark);
+  flex: 1;
+}
+
+.checkpoint-note-header .priority-badge {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.checkpoint-note-header .priority-badge.emergency {
+  background: var(--danger);
+  color: white;
+}
+
+.checkpoint-note-header .priority-badge.urgent {
+  background: var(--warning);
+  color: white;
+}
+
+.checkpoint-note-header .priority-badge.high {
+  background: #f97316;
+  color: white;
+}
+
+.checkpoint-note-header .priority-badge.normal {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.checkpoint-note-header .priority-badge.low {
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+}
+
+.checkpoint-note-content {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  white-space: pre-wrap;
 }
 
 /* Assignment list styles */
@@ -5242,6 +5459,37 @@ onUnmounted(() => {
   font-size: 0.8rem;
 }
 
+.btn-success {
+  background: var(--success-color, #22c55e);
+  color: white;
+  border: 1px solid var(--success-color, #22c55e);
+}
+
+.btn-success:hover:not(:disabled) {
+  background: var(--success-dark, #16a34a);
+  border-color: var(--success-dark, #16a34a);
+}
+
+.btn-outline-secondary {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-outline-secondary:hover:not(:disabled) {
+  background: var(--bg-secondary);
+}
+
+.checkpoint-marshal-checkin {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.checkpoint-marshal-checkin .btn {
+  width: 100%;
+}
+
 .check-badge {
   font-size: 0.75rem;
 }
@@ -5653,6 +5901,35 @@ onUnmounted(() => {
 
 .selecting-location :deep(.leaflet-container) {
   cursor: crosshair !important;
+}
+
+/* Wide screen layout - multi-column checkpoints */
+@media (min-width: 1200px) {
+  .container {
+    max-width: 1400px;
+  }
+
+  .checkpoint-accordion {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  /* Expanded checkpoint spans full width */
+  .checkpoint-accordion-section:has(.checkpoint-accordion-header.active) {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Extra wide screens - 3 columns */
+@media (min-width: 1600px) {
+  .container {
+    max-width: 1800px;
+  }
+
+  .checkpoint-accordion {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 @media (max-width: 768px) {

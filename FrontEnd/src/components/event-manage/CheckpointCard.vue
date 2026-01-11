@@ -35,8 +35,8 @@
       <span class="stat-badge staffing-badge" :class="staffingClass">
         {{ checkpoint.checkedInCount }}/{{ checkpoint.requiredMarshals }} staffed
       </span>
-      <span v-if="assignedCount > 0" class="stat-badge">
-        {{ checkedInAssignedCount }}/{{ assignedCount }} assigned checked in
+      <span v-if="assignedCount > 0" class="stat-badge" :class="checkInStatusClass">
+        {{ checkedInAssignedCount }}/{{ assignedCount }} checked in
       </span>
     </div>
 
@@ -132,6 +132,16 @@ const checkedInAssignedCount = computed(() => {
 const staffingClass = computed(() => {
   if (!staffingStatus.value) return '';
   return `staffing-${staffingStatus.value}`;
+});
+
+// Check-in status class for assigned marshals
+const checkInStatusClass = computed(() => {
+  const total = assignedCount.value;
+  const checkedIn = checkedInAssignedCount.value;
+  if (total === 0) return '';
+  if (checkedIn === 0) return 'checkin-none';
+  if (checkedIn >= total) return 'checkin-full';
+  return 'checkin-partial';
 });
 
 // Generate checkpoint icon SVG based on resolved style
@@ -282,6 +292,21 @@ const handleClick = () => {
 }
 
 .staffing-badge.staffing-none {
+  background: var(--status-danger-bg);
+  color: var(--accent-danger);
+}
+
+.stat-badge.checkin-full {
+  background: var(--status-success-bg);
+  color: var(--accent-success);
+}
+
+.stat-badge.checkin-partial {
+  background: var(--status-warning-bg);
+  color: var(--warning-text, #92400e);
+}
+
+.stat-badge.checkin-none {
   background: var(--status-danger-bg);
   color: var(--accent-danger);
 }

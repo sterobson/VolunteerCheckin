@@ -140,7 +140,7 @@
         Cancel
       </button>
       <button type="button" @click="handleSubmit" class="btn btn-primary">
-        Add location
+        Add {{ termsLower.checkpoint }}
       </button>
     </template>
   </BaseModal>
@@ -149,6 +149,9 @@
 <script setup>
 import { ref, defineProps, defineEmits, watch } from 'vue';
 import BaseModal from '../../BaseModal.vue';
+import { useTerminology } from '../../../composables/useTerminology';
+
+const { termsLower } = useTerminology();
 
 const props = defineProps({
   show: {

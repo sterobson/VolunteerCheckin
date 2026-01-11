@@ -14,7 +14,10 @@
       "Bash(npm run lint:fix:*)",
       "Bash(find:*)",
       "WebSearch",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(tree:*)",
+      "Bash(dir \"C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\" /b)",
+      "Bash(ls:*)"
     ]
   }
 }

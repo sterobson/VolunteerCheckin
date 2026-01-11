@@ -448,7 +448,7 @@ const handleCheckIn = async (marshal, checkpoint) => {
   try {
     if (getOfflineMode()) {
       // Queue for offline sync
-      await queueOfflineAction('checkin_admin', {
+      await queueOfflineAction('checkin_toggle', {
         eventId: props.eventId,
         assignmentId: assignmentId
       });
@@ -461,7 +461,7 @@ const handleCheckIn = async (marshal, checkpoint) => {
       await updatePendingCount();
       emit('checkin-updated');
     } else {
-      await checkInApi.adminCheckIn(props.eventId, assignmentId);
+      await checkInApi.toggleCheckIn(props.eventId, assignmentId);
 
       // Reload the dashboard to get updated data
       await loadDashboard();
@@ -483,7 +483,7 @@ const handleCheckIn = async (marshal, checkpoint) => {
 
     // If network error, queue for offline
     if (getOfflineMode() || !err.response) {
-      await queueOfflineAction('checkin_admin', {
+      await queueOfflineAction('checkin_toggle', {
         eventId: props.eventId,
         assignmentId: assignmentId
       });

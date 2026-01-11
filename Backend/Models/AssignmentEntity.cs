@@ -19,5 +19,6 @@ public class AssignmentEntity : ITableEntity
     public DateTime? CheckInTime { get; set; }
     public double? CheckInLatitude { get; set; }
     public double? CheckInLongitude { get; set; }
-    public string CheckInMethod { get; set; } = string.Empty; // "GPS", "Manual", "Admin"
+    public string CheckInMethod { get; set; } = string.Empty; // "GPS", "Manual", "Admin", "AreaLead"
+    public string CheckedInBy { get; set; } = string.Empty; // Name or email of who performed the check-in
 }

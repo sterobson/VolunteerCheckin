@@ -50,8 +50,8 @@
       <button type="button" @click="handleClose" class="btn btn-secondary">
         Cancel
       </button>
-      <button type="button" @click="handleSubmit" class="btn btn-primary">
-        Save changes
+      <button type="button" @click="handleSubmit" class="btn btn-success">
+        Save
       </button>
     </template>
   </BaseModal>

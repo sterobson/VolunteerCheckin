@@ -191,6 +191,8 @@ defineExpose({
 <style scoped>
 .tab-content {
   padding-top: 0.5rem;
+  width: max-content;
+  min-width: 100%;
 }
 
 .form-group {

@@ -163,7 +163,8 @@ public static class EntityExtensions
             entity.CheckInTime,
             entity.CheckInLatitude,
             entity.CheckInLongitude,
-            entity.CheckInMethod
+            entity.CheckInMethod,
+            entity.CheckedInBy
         );
     }
 

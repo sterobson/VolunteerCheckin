@@ -279,7 +279,8 @@ public record AssignmentResponse(
     DateTime? CheckInTime,
     double? CheckInLatitude,
     double? CheckInLongitude,
-    string CheckInMethod
+    string CheckInMethod,
+    string CheckedInBy
 );
 
 public record CheckInRequest(
@@ -288,6 +289,12 @@ public record CheckInRequest(
     double? Latitude,
     double? Longitude,
     bool ManualCheckIn
+);
+
+public record ToggleCheckInRequest(
+    double? Latitude,
+    double? Longitude,
+    string? Action // "check-in", "check-out", or null for toggle
 );
 
 public record InstantLoginRequest(

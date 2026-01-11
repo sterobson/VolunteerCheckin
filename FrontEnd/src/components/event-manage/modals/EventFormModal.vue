@@ -153,8 +153,8 @@
       <button type="button" @click="handleClose" class="btn btn-secondary">
         Cancel
       </button>
-      <button type="button" @click="handleSubmit" class="btn btn-primary">
-        {{ isEditing ? 'Update' : 'Create' }}
+      <button type="button" @click="handleSubmit" class="btn btn-success">
+        Save
       </button>
     </template>
   </BaseModal>

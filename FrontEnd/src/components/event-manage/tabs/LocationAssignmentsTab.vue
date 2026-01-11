@@ -32,6 +32,7 @@
         :has-unsaved-changes="pendingCheckInChanges.has(assignment.id)"
         :is-marked-for-removal="isAssignmentMarkedForRemoval(assignment.id)"
         :read-only="readOnly"
+        :location="form"
         @click="handleSelectMarshal"
         @toggle-check-in="handleToggleCheckIn"
         @remove="handleMarkForRemoval"
@@ -174,6 +175,8 @@ defineExpose({
 <style scoped>
 .tab-content {
   padding-top: 0.5rem;
+  width: max-content;
+  min-width: 100%;
 }
 
 .form-group {

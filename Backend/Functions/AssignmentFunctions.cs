@@ -111,18 +111,7 @@ public class AssignmentFunctions
 
             await _assignmentRepository.AddAsync(assignmentEntity);
 
-            AssignmentResponse response = new(
-                assignmentEntity.RowKey,
-                assignmentEntity.EventId,
-                assignmentEntity.LocationId,
-                assignmentEntity.MarshalId,
-                assignmentEntity.MarshalName,
-                assignmentEntity.IsCheckedIn,
-                assignmentEntity.CheckInTime,
-                assignmentEntity.CheckInLatitude,
-                assignmentEntity.CheckInLongitude,
-                assignmentEntity.CheckInMethod
-            );
+            AssignmentResponse response = assignmentEntity.ToResponse();
 
             _logger.LogInformation("Assignment created: {AssignmentId}", assignmentEntity.RowKey);
 
@@ -152,18 +141,7 @@ public class AssignmentFunctions
                 return new NotFoundObjectResult(new { message = "Assignment not found" });
             }
 
-            AssignmentResponse response = new(
-                assignmentEntity.RowKey,
-                assignmentEntity.EventId,
-                assignmentEntity.LocationId,
-                assignmentEntity.MarshalId,
-                assignmentEntity.MarshalName,
-                assignmentEntity.IsCheckedIn,
-                assignmentEntity.CheckInTime,
-                assignmentEntity.CheckInLatitude,
-                assignmentEntity.CheckInLongitude,
-                assignmentEntity.CheckInMethod
-            );
+            AssignmentResponse response = assignmentEntity.ToResponse();
 
             return new OkObjectResult(response);
         }

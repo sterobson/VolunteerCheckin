@@ -378,7 +378,7 @@
             @click="handleDelete"
             class="btn btn-danger"
           >
-            Delete {{ termsLower.area }}
+            Delete
           </button>
           <button
             v-if="!isExistingArea && !isLastTab"

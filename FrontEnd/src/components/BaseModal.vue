@@ -290,7 +290,7 @@ const handleConfirmCloseCancel = () => {
 
 .base-modal--large {
   width: fit-content;
-  min-width: min(500px, 95vw);
+  min-width: min(400px, 95vw);
   max-width: 95vw;
 }
 
@@ -368,13 +368,16 @@ const handleConfirmCloseCancel = () => {
 .base-modal-body {
   flex: 1;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: auto;
   padding: 1.5rem 2rem;
+  width: max-content;
+  min-width: 100%;
 }
 
 /* Inner content wrapper for height animation */
 .base-modal-body-content {
-  /* No special styling needed, just acts as measurement wrapper */
+  width: max-content;
+  min-width: 100%;
 }
 
 /* Fixed Footer */
@@ -416,5 +419,46 @@ const handleConfirmCloseCancel = () => {
 .modal-enter-from .base-modal,
 .modal-leave-to .base-modal {
   transform: translateY(100vh);
+}
+
+/* Cards grid sizing inside modals - push modal wider based on item count */
+.base-modal--large :deep(.cards-grid) {
+  max-width: 95vw;
+}
+
+/* 2 items: 280*2 + 12 gap = 572px */
+.base-modal--large :deep(.cards-grid:has(:nth-child(2):last-child)) {
+  min-width: min(572px, 95vw);
+}
+
+/* 3 items: 280*3 + 24 gaps = 864px */
+.base-modal--large :deep(.cards-grid:has(:nth-child(3):last-child)) {
+  min-width: min(864px, 95vw);
+}
+
+/* 4 items: 280*4 + 36 gaps = 1156px */
+.base-modal--large :deep(.cards-grid:has(:nth-child(4):last-child)) {
+  min-width: min(1156px, 95vw);
+}
+
+/* 5 items: 280*5 + 48 gaps = 1448px */
+.base-modal--large :deep(.cards-grid:has(:nth-child(5):last-child)) {
+  min-width: min(1448px, 95vw);
+}
+
+/* 6+ items: request width for 6 columns */
+.base-modal--large :deep(.cards-grid:has(:nth-child(6))) {
+  min-width: min(1740px, 95vw);
+}
+
+@media (max-width: 640px) {
+  .base-modal--large :deep(.cards-grid),
+  .base-modal--large :deep(.cards-grid:has(:nth-child(2):last-child)),
+  .base-modal--large :deep(.cards-grid:has(:nth-child(3):last-child)),
+  .base-modal--large :deep(.cards-grid:has(:nth-child(4):last-child)),
+  .base-modal--large :deep(.cards-grid:has(:nth-child(5):last-child)),
+  .base-modal--large :deep(.cards-grid:has(:nth-child(6))) {
+    min-width: 0;
+  }
 }
 </style>

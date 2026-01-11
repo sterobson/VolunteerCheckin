@@ -5,10 +5,12 @@
       'is-checked-in': effectiveCheckInStatus && !isMarkedForRemoval,
       'is-pending': assignment.isPending,
       'is-marked-for-removal': isMarkedForRemoval,
+      'is-clickable': isClickable,
     }"
+    @click="handleSelectMarshal"
   >
     <div class="card-main">
-      <div class="card-title" @click="handleSelectMarshal">
+      <div class="card-title">
         <span class="marshal-name">{{ assignment.marshalName }}</span>
       </div>
 
@@ -17,14 +19,15 @@
         <button
           class="check-in-toggle"
           :class="{ 'is-checked-in': effectiveCheckInStatus }"
-          @click="$emit('toggle-check-in', assignment)"
+          @click.stop="$emit('toggle-check-in', assignment)"
         >
           <span class="toggle-icon">{{ effectiveCheckInStatus ? '✓' : '' }}</span>
           <span class="toggle-label">{{ effectiveCheckInStatus ? 'Checked in' : 'Check in' }}</span>
         </button>
         <span v-if="effectiveCheckInStatus && assignment.checkInTime && !hasUnsavedChanges" class="check-in-time">
           {{ formatTime(assignment.checkInTime) }}
-          <span v-if="assignment.checkInMethod" class="check-in-method">({{ assignment.checkInMethod }})</span>
+          <span v-if="checkInByDisplay" class="check-in-method">({{ checkInByDisplay }})</span>
+          <span v-if="formattedDistance" class="check-in-distance" :class="distanceClass">{{ formattedDistance }}</span>
         </span>
         <span v-else-if="hasUnsavedChanges" class="unsaved-indicator">
           Unsaved
@@ -39,7 +42,8 @@
         </span>
         <span v-if="effectiveCheckInStatus && assignment.checkInTime" class="check-in-time">
           {{ formatTime(assignment.checkInTime) }}
-          <span v-if="assignment.checkInMethod" class="check-in-method">({{ assignment.checkInMethod }})</span>
+          <span v-if="checkInByDisplay" class="check-in-method">({{ checkInByDisplay }})</span>
+          <span v-if="formattedDistance" class="check-in-distance" :class="distanceClass">{{ formattedDistance }}</span>
         </span>
       </div>
 
@@ -75,7 +79,8 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits } from 'vue';
+import { defineProps, defineEmits, computed } from 'vue';
+import { calculateDistance, formatDistance } from '../../utils/coordinateUtils';
 
 const props = defineProps({
   assignment: {
@@ -98,6 +103,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  location: {
+    type: Object,
+    default: null,
+  },
 });
 
 const emit = defineEmits(['click', 'toggle-check-in', 'remove', 'undo-remove']);
@@ -108,8 +117,69 @@ const formatTime = (timeString) => {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
+/**
+ * Display who checked in the marshal:
+ * - If checkedInBy differs from marshal name, show who checked them in
+ * - Otherwise show the check-in method (GPS, Manual)
+ */
+const checkInByDisplay = computed(() => {
+  const { checkedInBy, checkInMethod, marshalName } = props.assignment;
+
+  // If someone else checked them in, show who
+  if (checkedInBy && checkedInBy !== marshalName) {
+    return checkedInBy;
+  }
+
+  // Otherwise show the method if available
+  return checkInMethod || '';
+});
+
+const isClickable = computed(() => {
+  return !props.assignment.isPending && !props.isMarkedForRemoval && !props.readOnly;
+});
+
+/**
+ * Calculate distance from check-in location to checkpoint
+ * Returns null if GPS data is not available
+ */
+const checkInDistance = computed(() => {
+  const { checkInLatitude, checkInLongitude } = props.assignment;
+  const location = props.location;
+
+  // Need both check-in coordinates and location coordinates
+  if (!checkInLatitude || !checkInLongitude || !location?.latitude || !location?.longitude) {
+    return null;
+  }
+
+  return calculateDistance(
+    checkInLatitude,
+    checkInLongitude,
+    location.latitude,
+    location.longitude
+  );
+});
+
+/**
+ * Format the distance for display
+ */
+const formattedDistance = computed(() => {
+  if (checkInDistance.value === null) return null;
+  return formatDistance(checkInDistance.value);
+});
+
+/**
+ * Get CSS class for distance color coding
+ * ≤50m: green, ≤100m: orange, >100m: red
+ */
+const distanceClass = computed(() => {
+  if (checkInDistance.value === null) return '';
+  if (checkInDistance.value <= 50) return 'distance-close';
+  if (checkInDistance.value <= 100) return 'distance-medium';
+  return 'distance-far';
+});
+
 const handleSelectMarshal = () => {
-  if (!props.assignment.isPending && !props.isMarkedForRemoval && !props.readOnly) {
+  if (isClickable.value) {
     emit('click', props.assignment);
   }
 };
@@ -179,21 +249,21 @@ const handleSelectMarshal = () => {
   color: var(--text-muted);
 }
 
-.card-title {
+.marshal-assignment-card.is-clickable {
   cursor: pointer;
 }
 
-.card-title:hover .marshal-name {
+.marshal-assignment-card.is-clickable:hover {
+  border-color: var(--accent-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.marshal-assignment-card.is-clickable:hover .marshal-name {
   color: var(--accent-primary);
 }
 
-.marshal-assignment-card.is-marked-for-removal .card-title,
-.marshal-assignment-card .card-title[readonly] {
-  cursor: default;
-}
-
-.marshal-assignment-card.is-marked-for-removal .card-title:hover .marshal-name {
-  color: var(--text-muted);
+.marshal-assignment-card.is-clickable.is-checked-in:hover {
+  border-color: var(--accent-success-hover);
 }
 
 .marshal-name {
@@ -333,6 +403,29 @@ const handleSelectMarshal = () => {
 
 .check-in-method {
   color: var(--text-muted);
+}
+
+.check-in-distance {
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.check-in-distance.distance-close {
+  background: var(--status-success-bg);
+  color: var(--accent-success);
+}
+
+.check-in-distance.distance-medium {
+  background: var(--status-warning-bg);
+  color: var(--warning-text, #92400e);
+}
+
+.check-in-distance.distance-far {
+  background: var(--status-danger-bg);
+  color: var(--accent-danger);
 }
 
 .unsaved-indicator {

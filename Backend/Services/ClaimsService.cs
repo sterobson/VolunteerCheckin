@@ -82,6 +82,7 @@ public class ClaimsService
 
     /// <summary>
     /// Validate session token and update last accessed time.
+    /// For admin sessions, also implements sliding expiration to extend the session on activity.
     /// </summary>
     private async Task<AuthSessionEntity?> GetAndUpdateSessionAsync(string sessionToken)
     {
@@ -95,6 +96,14 @@ public class ClaimsService
 
         // Update last accessed time (use unconditional update to avoid race conditions)
         session.LastAccessedAt = DateTime.UtcNow;
+
+        // Sliding expiration: extend admin sessions on activity
+        // Only extend if this is an admin session (has ExpiresAt set) and not a marshal session
+        if (session.ExpiresAt.HasValue && session.AuthMethod == Constants.AuthMethodSecureEmailLink)
+        {
+            session.ExpiresAt = DateTime.UtcNow.AddHours(Constants.AdminSessionExpiryHours);
+        }
+
         await _sessionRepository.UpdateUnconditionalAsync(session);
 
         return session;

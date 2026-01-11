@@ -110,6 +110,7 @@ public class CheckInFunctions
             assignment.CheckInLatitude = request.Latitude;
             assignment.CheckInLongitude = request.Longitude;
             assignment.CheckInMethod = checkInMethod;
+            assignment.CheckedInBy = assignment.MarshalName; // Self check-in via marshal link
 
             // Update assignment first
             await _assignmentRepository.UpdateAsync(assignment);
@@ -131,6 +132,7 @@ public class CheckInFunctions
                 assignment.CheckInLatitude = null;
                 assignment.CheckInLongitude = null;
                 assignment.CheckInMethod = string.Empty;
+                assignment.CheckedInBy = string.Empty;
 
                 bool rollbackSucceeded = await FunctionHelpers.ExecuteWithRetryAsync(
                     () => _assignmentRepository.UpdateAsync(assignment),
@@ -148,13 +150,235 @@ public class CheckInFunctions
 
             AssignmentResponse response = assignment.ToResponse();
 
-            _logger.LogInformation("Check-in successful: {AssignmentId} ({CheckInMethod})", assignment.RowKey, checkInMethod);
+            _logger.LogInformation("Check-in successful: {AssignmentId} ({CheckInMethod}) by {CheckedInBy}",
+                assignment.RowKey, checkInMethod, assignment.CheckedInBy);
 
             return new OkObjectResult(response);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during check-in");
+            return new StatusCodeResult(500);
+        }
+    }
+#pragma warning restore MA0051
+
+/// <summary>
+    /// Toggle check-in status for marshals (self) and area leads (marshals in their area).
+    /// POST /api/checkin/{eventId}/{assignmentId}/toggle
+    /// Optionally accepts GPS coordinates in request body for GPS-based check-in.
+    /// </summary>
+#pragma warning disable MA0051
+    [Function("ToggleCheckIn")]
+    public async Task<IActionResult> ToggleCheckIn(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "checkin/{eventId}/{assignmentId}/toggle")] HttpRequest req,
+        string eventId,
+        string assignmentId)
+    {
+        try
+        {
+            // Parse optional request body for GPS coordinates
+            ToggleCheckInRequest? request = null;
+            try
+            {
+                string body = await new StreamReader(req.Body).ReadToEndAsync();
+                if (!string.IsNullOrWhiteSpace(body))
+                {
+                    request = JsonSerializer.Deserialize<ToggleCheckInRequest>(body, FunctionHelpers.JsonOptions);
+                }
+            }
+            catch
+            {
+                // Ignore parse errors - body is optional
+            }
+
+            // Require authentication
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+            if (string.IsNullOrWhiteSpace(sessionToken))
+            {
+                return new UnauthorizedObjectResult(new { message = "Authentication required" });
+            }
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
+            }
+
+            // Find the assignment
+            AssignmentEntity? assignment = await _assignmentRepository.GetAsync(eventId, assignmentId);
+            if (assignment == null)
+            {
+                return new NotFoundObjectResult(new { message = Constants.ErrorAssignmentNotFound });
+            }
+
+            // Get the location to update count and validate GPS
+            LocationEntity? location = await _locationRepository.GetAsync(assignment.EventId, assignment.LocationId);
+            if (location == null)
+            {
+                return new NotFoundObjectResult(new { message = Constants.ErrorLocationNotFound });
+            }
+
+            // Check authorization: must be the marshal themselves OR an area lead for this checkpoint's area
+            bool isAuthorized = false;
+            bool isSelfCheckIn = false;
+            string checkInMethod = Constants.CheckInMethodManual;
+
+            // Check if this is the marshal's own assignment
+            if (!string.IsNullOrEmpty(claims.MarshalId) && assignment.MarshalId == claims.MarshalId)
+            {
+                isAuthorized = true;
+                isSelfCheckIn = true;
+                checkInMethod = Constants.CheckInMethodManual;
+            }
+            else
+            {
+                // Check if user is an area lead for this checkpoint's area
+                List<string> areaLeadAreaIds = [.. claims.EventRoles
+                    .Where(r => r.Role == Constants.RoleEventAreaLead)
+                    .SelectMany(r => r.AreaIds)];
+
+                if (areaLeadAreaIds.Count > 0 && !string.IsNullOrEmpty(location.AreaIdsJson))
+                {
+                    List<string> checkpointAreaIds = System.Text.Json.JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson) ?? [];
+                    isAuthorized = checkpointAreaIds.Any(areaId => areaLeadAreaIds.Contains(areaId));
+                    if (isAuthorized)
+                    {
+                        checkInMethod = Constants.CheckInMethodAreaLead;
+                    }
+                }
+            }
+
+            if (!isAuthorized)
+            {
+                return new ForbidResult();
+            }
+
+            // For self check-in with GPS coordinates, validate distance
+            double? checkInLatitude = null;
+            double? checkInLongitude = null;
+
+            if (isSelfCheckIn && !assignment.IsCheckedIn && request?.Latitude != null && request?.Longitude != null)
+            {
+                double distance = _gpsService.CalculateDistance(
+                    location.Latitude,
+                    location.Longitude,
+                    request.Latitude.Value,
+                    request.Longitude.Value
+                );
+
+                if (distance > Constants.CheckInRadiusMeters)
+                {
+                    _logger.LogWarning("Toggle check-in rejected: {Distance}m away from location (max {MaxDistance}m) - Assignment: {AssignmentId}",
+                        Math.Round(distance), Constants.CheckInRadiusMeters, assignmentId);
+                    return new BadRequestObjectResult(new
+                    {
+                        message = $"You are {Math.Round(distance)}m away from the location. You must be within {Constants.CheckInRadiusMeters}m to check in.",
+                        distance = Math.Round(distance),
+                        allowedRadius = Constants.CheckInRadiusMeters
+                    });
+                }
+
+                checkInMethod = Constants.CheckInMethodGps;
+                checkInLatitude = request.Latitude;
+                checkInLongitude = request.Longitude;
+            }
+
+            // Determine desired action: explicit action or toggle
+            string? requestedAction = request?.Action?.ToLowerInvariant();
+            bool wantToCheckIn = requestedAction switch
+            {
+                "check-in" or "checkin" => true,
+                "check-out" or "checkout" => false,
+                _ => !assignment.IsCheckedIn // Toggle: do the opposite of current state
+            };
+
+            // If already in desired state, return success without changes (idempotent)
+            if (assignment.IsCheckedIn == wantToCheckIn)
+            {
+                _logger.LogInformation("Toggle check-in: {AssignmentId} already in desired state ({State})",
+                    assignment.RowKey, wantToCheckIn ? "checked in" : "checked out");
+                return new OkObjectResult(assignment.ToResponse());
+            }
+
+            // Determine who is performing the check-in (name if available, else email)
+            string checkedInBy = !string.IsNullOrEmpty(claims.PersonName) ? claims.PersonName : claims.PersonEmail;
+
+            // Store original state for rollback
+            bool wasCheckedIn = assignment.IsCheckedIn;
+            DateTime? originalCheckInTime = assignment.CheckInTime;
+            double? originalLat = assignment.CheckInLatitude;
+            double? originalLon = assignment.CheckInLongitude;
+            string originalMethod = assignment.CheckInMethod;
+            string originalCheckedInBy = assignment.CheckedInBy;
+
+            // Apply the state change
+            if (wantToCheckIn)
+            {
+                assignment.IsCheckedIn = true;
+                assignment.CheckInTime = DateTime.UtcNow;
+                assignment.CheckInLatitude = checkInLatitude;
+                assignment.CheckInLongitude = checkInLongitude;
+                assignment.CheckInMethod = checkInMethod;
+                assignment.CheckedInBy = checkedInBy;
+                location.CheckedInCount++;
+            }
+            else
+            {
+                assignment.IsCheckedIn = false;
+                assignment.CheckInTime = null;
+                assignment.CheckInLatitude = null;
+                assignment.CheckInLongitude = null;
+                assignment.CheckInMethod = string.Empty;
+                assignment.CheckedInBy = string.Empty;
+                location.CheckedInCount--;
+            }
+
+            // Update assignment first
+            await _assignmentRepository.UpdateAsync(assignment);
+
+            // Update location with retry logic
+            bool locationUpdated = await FunctionHelpers.ExecuteWithRetryAsync(
+                () => _locationRepository.UpdateAsync(location),
+                maxRetries: 3,
+                baseDelayMs: 100
+            );
+
+            if (!locationUpdated)
+            {
+                // Rollback assignment
+                _logger.LogError("Failed to update location count in toggle check-in after retries, attempting rollback");
+                assignment.IsCheckedIn = wasCheckedIn;
+                assignment.CheckInTime = originalCheckInTime;
+                assignment.CheckInLatitude = originalLat;
+                assignment.CheckInLongitude = originalLon;
+                assignment.CheckInMethod = originalMethod;
+                assignment.CheckedInBy = originalCheckedInBy;
+
+                bool rollbackSucceeded = await FunctionHelpers.ExecuteWithRetryAsync(
+                    () => _assignmentRepository.UpdateAsync(assignment),
+                    maxRetries: 3,
+                    baseDelayMs: 100
+                );
+
+                if (!rollbackSucceeded)
+                {
+                    _logger.LogCritical("CRITICAL: Failed to rollback assignment in toggle check-in. Data inconsistency for assignment {AssignmentId}", assignment.RowKey);
+                }
+
+                return new StatusCodeResult(500);
+            }
+
+            AssignmentResponse response = assignment.ToResponse();
+
+            _logger.LogInformation("Toggle check-in: {AssignmentId} by {Method} - Now {CheckInStatus}",
+                assignment.RowKey, checkInMethod, assignment.IsCheckedIn ? "checked in" : "checked out");
+
+            return new OkObjectResult(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during toggle check-in");
             return new StatusCodeResult(500);
         }
     }
@@ -234,12 +458,16 @@ public class CheckInFunctions
                 return new ForbidResult();
             }
 
+            // Determine who is performing the check-in (name if available, else email)
+            string checkedInBy = !string.IsNullOrEmpty(claims.PersonName) ? claims.PersonName : claims.PersonEmail;
+
             // Store original state for rollback
             bool wasCheckedIn = assignment.IsCheckedIn;
             DateTime? originalCheckInTime = assignment.CheckInTime;
             double? originalLat = assignment.CheckInLatitude;
             double? originalLon = assignment.CheckInLongitude;
             string originalMethod = assignment.CheckInMethod;
+            string originalCheckedInBy = assignment.CheckedInBy;
 
             // If already checked in, undo the check-in
             if (assignment.IsCheckedIn)
@@ -249,6 +477,7 @@ public class CheckInFunctions
                 assignment.CheckInLatitude = null;
                 assignment.CheckInLongitude = null;
                 assignment.CheckInMethod = string.Empty;
+                assignment.CheckedInBy = string.Empty;
                 location.CheckedInCount--;
             }
             else
@@ -257,6 +486,7 @@ public class CheckInFunctions
                 assignment.IsCheckedIn = true;
                 assignment.CheckInTime = DateTime.UtcNow;
                 assignment.CheckInMethod = checkInMethod;
+                assignment.CheckedInBy = checkedInBy;
                 location.CheckedInCount++;
             }
 
@@ -279,6 +509,7 @@ public class CheckInFunctions
                 assignment.CheckInLatitude = originalLat;
                 assignment.CheckInLongitude = originalLon;
                 assignment.CheckInMethod = originalMethod;
+                assignment.CheckedInBy = originalCheckedInBy;
 
                 bool rollbackSucceeded = await FunctionHelpers.ExecuteWithRetryAsync(
                     () => _assignmentRepository.UpdateAsync(assignment),
@@ -296,7 +527,8 @@ public class CheckInFunctions
 
             AssignmentResponse response = assignment.ToResponse();
 
-            _logger.LogInformation("Admin check-in toggle: {AssignmentId} - Now {CheckInStatus}", assignment.RowKey, assignment.IsCheckedIn ? "checked in" : "checked out");
+            _logger.LogInformation("Admin check-in toggle: {AssignmentId} by {CheckedInBy} - Now {CheckInStatus}",
+                assignment.RowKey, checkedInBy, assignment.IsCheckedIn ? "checked in" : "checked out");
 
             return new OkObjectResult(response);
         }

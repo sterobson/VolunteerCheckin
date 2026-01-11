@@ -5,6 +5,7 @@
       'is-checked-in': effectiveCheckInStatus && !isMarkedForRemoval,
       'is-pending': assignment.isPending,
       'is-marked-for-removal': isMarkedForRemoval,
+      'is-locked': isLocked,
     }"
     :style="{ borderLeftColor: isMarkedForRemoval ? undefined : borderColor }"
   >
@@ -54,12 +55,15 @@
         :class="{ 'is-checked-in': effectiveCheckInStatus }"
         @click="$emit('toggle-check-in', assignment)"
       >
-        <span class="toggle-icon">{{ effectiveCheckInStatus ? '✓' : '' }}</span>
-        <span class="toggle-label">{{ effectiveCheckInStatus ? 'Checked in' : 'Check in' }}</span>
+        <span class="toggle-icon">✓</span>
+        <span class="toggle-label-wrapper">
+          <span class="toggle-label toggle-label-check-in">Check in</span>
+          <span class="toggle-label toggle-label-checked-in">Checked in</span>
+        </span>
       </button>
       <span v-if="effectiveCheckInStatus && assignment.checkInTime && !hasUnsavedChanges" class="check-in-time">
         {{ formatTime(assignment.checkInTime) }}
-        <span v-if="assignment.checkInMethod" class="check-in-method">({{ assignment.checkInMethod }})</span>
+        <span v-if="checkInByDisplay" class="check-in-method">({{ checkInByDisplay }})</span>
       </span>
       <span v-else-if="hasUnsavedChanges" class="unsaved-indicator">
         Unsaved
@@ -209,8 +213,25 @@ const formatTime = (timeString) => {
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
+/**
+ * Display who checked in the marshal:
+ * - If checkedInBy differs from marshal name, show who checked them in
+ * - Otherwise show the check-in method (GPS, Manual)
+ */
+const checkInByDisplay = computed(() => {
+  const { checkedInBy, checkInMethod, marshalName } = props.assignment;
+
+  // If someone else checked them in, show who
+  if (checkedInBy && checkedInBy !== marshalName) {
+    return checkedInBy;
+  }
+
+  // Otherwise show the method if available
+  return checkInMethod || '';
+});
+
 const handleSelectCheckpoint = () => {
-  if (!props.assignment.isPending && !props.isMarkedForRemoval) {
+  if (!props.assignment.isPending && !props.isMarkedForRemoval && !props.isLocked) {
     emit('click', props.assignment);
   }
 };
@@ -271,12 +292,17 @@ const handleSelectCheckpoint = () => {
   color: var(--accent-primary);
 }
 
-.marshal-checkpoint-card.is-marked-for-removal .card-title {
+.marshal-checkpoint-card.is-marked-for-removal .card-title,
+.marshal-checkpoint-card.is-locked .card-title {
   cursor: default;
 }
 
 .marshal-checkpoint-card.is-marked-for-removal .card-title:hover .checkpoint-name {
   color: var(--text-muted);
+}
+
+.marshal-checkpoint-card.is-locked .card-title:hover .checkpoint-name {
+  color: var(--text-primary);
 }
 
 .checkpoint-name-row {
@@ -383,12 +409,13 @@ const handleSelectCheckpoint = () => {
   font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.5s, border-color 0.5s;
 }
 
 .check-in-toggle:hover {
   background: var(--accent-primary-hover);
   border-color: var(--accent-primary-hover);
+  transition: background-color 0.15s, border-color 0.15s;
 }
 
 .check-in-toggle.is-checked-in {
@@ -401,11 +428,50 @@ const handleSelectCheckpoint = () => {
   background: var(--accent-success-hover);
   border-color: var(--accent-success-hover);
   color: white;
+  transition: background-color 0.15s, border-color 0.15s;
 }
 
 .toggle-icon {
   font-size: 0.9rem;
-  min-width: 0.9rem;
+  width: 0;
+  overflow: hidden;
+  transition: width 0.5s;
+}
+
+.check-in-toggle.is-checked-in .toggle-icon {
+  width: 0.9rem;
+}
+
+.toggle-label-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.toggle-label {
+  transition: opacity 0.5s;
+  white-space: nowrap;
+}
+
+/* "Checked in" is longer, so it determines the width */
+.toggle-label-checked-in {
+  opacity: 0;
+}
+
+/* "Check in" is positioned on top */
+.toggle-label-check-in {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 1;
+}
+
+.check-in-toggle.is-checked-in .toggle-label-check-in {
+  opacity: 0;
+}
+
+.check-in-toggle.is-checked-in .toggle-label-checked-in {
+  opacity: 1;
 }
 
 .check-in-time {

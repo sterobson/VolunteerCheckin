@@ -113,7 +113,7 @@
             @click="handleDelete"
             class="btn btn-danger"
           >
-            Delete {{ termsLower.person }}
+            Delete
           </button>
           <button
             v-if="!isEditing && !isLastTab"

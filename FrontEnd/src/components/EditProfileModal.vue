@@ -3,6 +3,7 @@
     :show="show"
     title="Edit profile"
     size="medium"
+    :z-index="zIndex"
     :confirm-on-close="true"
     :is-dirty="isDirty"
     @close="handleClose"
@@ -47,9 +48,11 @@
 
     <!-- Action buttons -->
     <template #actions>
-      <button type="button" @click="handleClose" class="btn btn-secondary">
-        Cancel
-      </button>
+      <div class="actions-left">
+        <button v-if="showLogout" type="button" @click="handleLogout" class="btn btn-danger">
+          Log out
+        </button>
+      </div>
       <button type="button" @click="handleSubmit" class="btn btn-success">
         Save
       </button>
@@ -58,7 +61,7 @@
 </template>
 
 <script setup>
-import { ref, defineProps, defineEmits, watch } from 'vue';
+import { ref, watch } from 'vue';
 import BaseModal from './BaseModal.vue';
 
 const props = defineProps({
@@ -74,9 +77,17 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  zIndex: {
+    type: Number,
+    default: 1000,
+  },
+  showLogout: {
+    type: Boolean,
+    default: false,
+  },
 });
 
-const emit = defineEmits(['close', 'submit', 'update:isDirty']);
+const emit = defineEmits(['close', 'submit', 'update:isDirty', 'logout']);
 
 const form = ref({
   name: '',
@@ -129,6 +140,10 @@ const handleSubmit = () => {
 const handleClose = () => {
   emit('close');
 };
+
+const handleLogout = () => {
+  emit('logout');
+};
 </script>
 
 <style scoped>
@@ -154,30 +169,16 @@ const handleClose = () => {
   color: var(--text-primary);
 }
 
-.btn {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: background-color 0.2s;
+.btn-danger {
+  background: var(--danger, #dc3545);
+  color: white;
 }
 
-.btn-primary {
-  background: var(--btn-primary-bg);
-  color: var(--btn-primary-text);
+.btn-danger:hover {
+  background: #c82333;
 }
 
-.btn-primary:hover {
-  background: var(--btn-primary-hover);
-}
-
-.btn-secondary {
-  background: var(--btn-secondary-bg);
-  color: var(--btn-secondary-text);
-}
-
-.btn-secondary:hover {
-  background: var(--btn-secondary-hover);
+.actions-left {
+  margin-right: auto;
 }
 </style>

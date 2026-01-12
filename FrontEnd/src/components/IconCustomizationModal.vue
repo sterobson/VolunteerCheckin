@@ -182,6 +182,56 @@
               <div class="popup-item-preview" v-html="getBackgroundColorPopupPreview(color.hex)"></div>
               <span v-if="color.showLabel">{{ color.name }}</span>
             </button>
+            <!-- Custom hex option -->
+            <button
+              type="button"
+              class="popup-grid-item custom-color-option"
+              :class="{ selected: isBackgroundColorCustom }"
+              :style="isBackgroundColorCustom ? { '--custom-color': localBackgroundColor } : {}"
+              title="Custom colour"
+              @click="toggleCustomBgColorInput"
+            >
+              <div class="popup-item-preview custom-color-preview" :style="isBackgroundColorCustom ? { backgroundColor: localBackgroundColor } : {}">
+                <svg v-if="!isBackgroundColorCustom" class="custom-color-icon" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17.66 5.41l.92.92-2.69 2.69-.92-.92 2.69-2.69M17.67 3c-.26 0-.51.1-.71.29l-3.12 3.12-1.93-1.91-1.41 1.41 1.42 1.42L3 16.25V21h4.75l8.92-8.92 1.42 1.42 1.41-1.41-1.92-1.92 3.12-3.12c.4-.4.4-1.03.01-1.42l-2.34-2.34c-.2-.19-.45-.29-.7-.29zM6.92 19L5 17.08l8.06-8.06 1.92 1.92L6.92 19z"/>
+                </svg>
+                <span v-if="isBackgroundColorCustom" class="custom-check-mark">✓</span>
+              </div>
+              <span>Custom</span>
+            </button>
+          </div>
+          <!-- Custom hex input -->
+          <div v-if="showCustomBgColorInput" class="custom-hex-input">
+            <label>Enter hex code</label>
+            <div class="hex-input-row">
+              <span class="hex-prefix">#</span>
+              <input
+                ref="bgHexInput"
+                v-model="customBgColorHex"
+                type="text"
+                maxlength="6"
+                placeholder="000000"
+                class="hex-input"
+                :class="{ invalid: customBgColorHex && !isValidBgHex }"
+                @input="onBgHexInput"
+                @keydown.enter="applyCustomBgColor"
+              />
+              <div
+                class="hex-preview"
+                :style="{ backgroundColor: isValidBgHex ? '#' + customBgColorHex : '#ccc' }"
+              ></div>
+              <button
+                type="button"
+                class="hex-apply-btn"
+                :disabled="!isValidBgHex"
+                @click="applyCustomBgColor"
+              >
+                Apply
+              </button>
+            </div>
+            <span v-if="customBgColorHex && !isValidBgHex" class="hex-error">
+              Invalid hex code
+            </span>
           </div>
         </div>
 
@@ -204,6 +254,56 @@
               <div class="popup-item-preview" v-html="getBorderColorPopupPreview(color.hex)"></div>
               <span v-if="color.showLabel">{{ color.name }}</span>
             </button>
+            <!-- Custom hex option -->
+            <button
+              type="button"
+              class="popup-grid-item custom-color-option"
+              :class="{ selected: isBorderColorCustom }"
+              :style="isBorderColorCustom ? { '--custom-color': localBorderColor } : {}"
+              title="Custom colour"
+              @click="toggleCustomBorderColorInput"
+            >
+              <div class="popup-item-preview custom-color-preview" :style="isBorderColorCustom ? { backgroundColor: localBorderColor } : {}">
+                <svg v-if="!isBorderColorCustom" class="custom-color-icon" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17.66 5.41l.92.92-2.69 2.69-.92-.92 2.69-2.69M17.67 3c-.26 0-.51.1-.71.29l-3.12 3.12-1.93-1.91-1.41 1.41 1.42 1.42L3 16.25V21h4.75l8.92-8.92 1.42 1.42 1.41-1.41-1.92-1.92 3.12-3.12c.4-.4.4-1.03.01-1.42l-2.34-2.34c-.2-.19-.45-.29-.7-.29zM6.92 19L5 17.08l8.06-8.06 1.92 1.92L6.92 19z"/>
+                </svg>
+                <span v-if="isBorderColorCustom" class="custom-check-mark">✓</span>
+              </div>
+              <span>Custom</span>
+            </button>
+          </div>
+          <!-- Custom hex input -->
+          <div v-if="showCustomBorderColorInput" class="custom-hex-input">
+            <label>Enter hex code</label>
+            <div class="hex-input-row">
+              <span class="hex-prefix">#</span>
+              <input
+                ref="borderHexInput"
+                v-model="customBorderColorHex"
+                type="text"
+                maxlength="6"
+                placeholder="000000"
+                class="hex-input"
+                :class="{ invalid: customBorderColorHex && !isValidBorderHex }"
+                @input="onBorderHexInput"
+                @keydown.enter="applyCustomBorderColor"
+              />
+              <div
+                class="hex-preview"
+                :style="{ backgroundColor: isValidBorderHex ? '#' + customBorderColorHex : '#ccc' }"
+              ></div>
+              <button
+                type="button"
+                class="hex-apply-btn"
+                :disabled="!isValidBorderHex"
+                @click="applyCustomBorderColor"
+              >
+                Apply
+              </button>
+            </div>
+            <span v-if="customBorderColorHex && !isValidBorderHex" class="hex-error">
+              Invalid hex code
+            </span>
           </div>
         </div>
 
@@ -215,15 +315,15 @@
           </div>
           <div class="popup-grid">
             <button
-              v-for="iconType in availableContentIcons"
-              :key="iconType.value"
+              v-for="iconOption in availableContentIcons"
+              :key="iconOption.value"
               type="button"
               class="popup-grid-item"
-              :class="{ selected: localIconType === iconType.value }"
-              @click="selectIcon(iconType.value)"
+              :class="{ selected: localIconType === iconOption.value }"
+              @click="selectIcon(iconOption.value)"
             >
-              <div class="popup-item-preview" v-html="getIconPopupPreview(iconType.value)"></div>
-              <span v-if="iconType.showLabel">{{ iconType.label }}</span>
+              <div class="popup-item-preview" v-html="getIconPopupPreview(iconOption.value)"></div>
+              <span v-if="iconOption.showLabel">{{ iconOption.label }}</span>
             </button>
           </div>
         </div>
@@ -247,6 +347,56 @@
               <div class="popup-item-preview" v-html="getIconColorPopupPreview(color.hex)"></div>
               <span v-if="color.showLabel">{{ color.name }}</span>
             </button>
+            <!-- Custom hex option -->
+            <button
+              type="button"
+              class="popup-grid-item custom-color-option"
+              :class="{ selected: isIconColorCustom }"
+              :style="isIconColorCustom ? { '--custom-color': localIconColor } : {}"
+              title="Custom colour"
+              @click="toggleCustomIconColorInput"
+            >
+              <div class="popup-item-preview custom-color-preview" :style="isIconColorCustom ? { backgroundColor: localIconColor } : {}">
+                <svg v-if="!isIconColorCustom" class="custom-color-icon" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17.66 5.41l.92.92-2.69 2.69-.92-.92 2.69-2.69M17.67 3c-.26 0-.51.1-.71.29l-3.12 3.12-1.93-1.91-1.41 1.41 1.42 1.42L3 16.25V21h4.75l8.92-8.92 1.42 1.42 1.41-1.41-1.92-1.92 3.12-3.12c.4-.4.4-1.03.01-1.42l-2.34-2.34c-.2-.19-.45-.29-.7-.29zM6.92 19L5 17.08l8.06-8.06 1.92 1.92L6.92 19z"/>
+                </svg>
+                <span v-if="isIconColorCustom" class="custom-check-mark">✓</span>
+              </div>
+              <span>Custom</span>
+            </button>
+          </div>
+          <!-- Custom hex input -->
+          <div v-if="showCustomIconColorInput" class="custom-hex-input">
+            <label>Enter hex code</label>
+            <div class="hex-input-row">
+              <span class="hex-prefix">#</span>
+              <input
+                ref="iconHexInput"
+                v-model="customIconColorHex"
+                type="text"
+                maxlength="6"
+                placeholder="000000"
+                class="hex-input"
+                :class="{ invalid: customIconColorHex && !isValidIconHex }"
+                @input="onIconHexInput"
+                @keydown.enter="applyCustomIconColor"
+              />
+              <div
+                class="hex-preview"
+                :style="{ backgroundColor: isValidIconHex ? '#' + customIconColorHex : '#ccc' }"
+              ></div>
+              <button
+                type="button"
+                class="hex-apply-btn"
+                :disabled="!isValidIconHex"
+                @click="applyCustomIconColor"
+              >
+                Apply
+              </button>
+            </div>
+            <span v-if="customIconColorHex && !isValidIconHex" class="hex-error">
+              Invalid hex code
+            </span>
           </div>
         </div>
 
@@ -330,7 +480,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, defineProps, defineEmits } from 'vue';
+import { ref, computed, watch, defineProps, defineEmits, nextTick } from 'vue';
 import { AREA_COLORS } from '../constants/areaColors';
 import {
   BACKGROUND_SHAPES,
@@ -374,6 +524,17 @@ const localMapRotation = ref(props.mapRotation ?? '');
 
 // Popup state
 const activePopup = ref(null);
+
+// Custom hex input state
+const showCustomBgColorInput = ref(false);
+const showCustomBorderColorInput = ref(false);
+const showCustomIconColorInput = ref(false);
+const customBgColorHex = ref('');
+const customBorderColorHex = ref('');
+const customIconColorHex = ref('');
+const bgHexInput = ref(null);
+const borderHexInput = ref(null);
+const iconHexInput = ref(null);
 
 // Helper to get the effective/resolved value for each property
 const getEffectiveShape = (shapeValue) => {
@@ -591,6 +752,48 @@ const isIconColorSelected = (hex) => {
   }
   return localIconColor.value === hex;
 };
+
+// Check if current values are custom colors (not in palette)
+const isBackgroundColorCustom = computed(() => {
+  const val = localBackgroundColor.value;
+  if (!val || val === 'default' || val === 'none') return false;
+  return !AREA_COLORS.some(c => c.hex.toLowerCase() === val.toLowerCase());
+});
+
+const isBorderColorCustom = computed(() => {
+  const val = localBorderColor.value;
+  if (!val || val === 'default' || val === 'none') return false;
+  // Check built-in white/black
+  if (val === '#ffffff' || val === '#000000') return false;
+  return !AREA_COLORS.some(c => c.hex.toLowerCase() === val.toLowerCase());
+});
+
+const isIconColorCustom = computed(() => {
+  const val = localIconColor.value;
+  if (!val || val === 'default' || val === 'none') return false;
+  // Check built-in white/black
+  if (val === '#ffffff' || val === '#000000') return false;
+  return !AREA_COLORS.some(c => c.hex.toLowerCase() === val.toLowerCase());
+});
+
+// Hex validation helpers
+const isValidBgHex = computed(() => {
+  if (!customBgColorHex.value) return false;
+  const hex = customBgColorHex.value.replace(/^#/, '');
+  return /^[0-9A-Fa-f]{6}$/.test(hex) || /^[0-9A-Fa-f]{3}$/.test(hex);
+});
+
+const isValidBorderHex = computed(() => {
+  if (!customBorderColorHex.value) return false;
+  const hex = customBorderColorHex.value.replace(/^#/, '');
+  return /^[0-9A-Fa-f]{6}$/.test(hex) || /^[0-9A-Fa-f]{3}$/.test(hex);
+});
+
+const isValidIconHex = computed(() => {
+  if (!customIconColorHex.value) return false;
+  const hex = customIconColorHex.value.replace(/^#/, '');
+  return /^[0-9A-Fa-f]{6}$/.test(hex) || /^[0-9A-Fa-f]{3}$/.test(hex);
+});
 
 // Get labels
 const getShapeLabel = (value) => {
@@ -948,6 +1151,9 @@ const togglePopup = (popup) => {
 
 const closePopups = () => {
   activePopup.value = null;
+  showCustomBgColorInput.value = false;
+  showCustomBorderColorInput.value = false;
+  showCustomIconColorInput.value = false;
 };
 
 // Selection handlers
@@ -983,6 +1189,86 @@ const selectSize = (value) => {
 
 const selectMapRotation = (value) => {
   localMapRotation.value = value;
+  closePopups();
+};
+
+// Custom hex input handlers
+const toggleCustomBgColorInput = () => {
+  showCustomBgColorInput.value = !showCustomBgColorInput.value;
+  if (showCustomBgColorInput.value) {
+    if (isBackgroundColorCustom.value) {
+      customBgColorHex.value = localBackgroundColor.value.replace(/^#/, '');
+    } else {
+      customBgColorHex.value = '';
+    }
+    nextTick(() => bgHexInput.value?.focus());
+  }
+};
+
+const toggleCustomBorderColorInput = () => {
+  showCustomBorderColorInput.value = !showCustomBorderColorInput.value;
+  if (showCustomBorderColorInput.value) {
+    if (isBorderColorCustom.value) {
+      customBorderColorHex.value = localBorderColor.value.replace(/^#/, '');
+    } else {
+      customBorderColorHex.value = '';
+    }
+    nextTick(() => borderHexInput.value?.focus());
+  }
+};
+
+const toggleCustomIconColorInput = () => {
+  showCustomIconColorInput.value = !showCustomIconColorInput.value;
+  if (showCustomIconColorInput.value) {
+    if (isIconColorCustom.value) {
+      customIconColorHex.value = localIconColor.value.replace(/^#/, '');
+    } else {
+      customIconColorHex.value = '';
+    }
+    nextTick(() => iconHexInput.value?.focus());
+  }
+};
+
+const onBgHexInput = () => {
+  customBgColorHex.value = customBgColorHex.value.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+};
+
+const onBorderHexInput = () => {
+  customBorderColorHex.value = customBorderColorHex.value.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+};
+
+const onIconHexInput = () => {
+  customIconColorHex.value = customIconColorHex.value.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+};
+
+const expandHex = (hex) => {
+  if (hex.length === 3) {
+    return hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+  }
+  return hex;
+};
+
+const applyCustomBgColor = () => {
+  if (!isValidBgHex.value) return;
+  const hex = expandHex(customBgColorHex.value);
+  localBackgroundColor.value = '#' + hex;
+  showCustomBgColorInput.value = false;
+  closePopups();
+};
+
+const applyCustomBorderColor = () => {
+  if (!isValidBorderHex.value) return;
+  const hex = expandHex(customBorderColorHex.value);
+  localBorderColor.value = '#' + hex;
+  showCustomBorderColorInput.value = false;
+  closePopups();
+};
+
+const applyCustomIconColor = () => {
+  if (!isValidIconHex.value) return;
+  const hex = expandHex(customIconColorHex.value);
+  localIconColor.value = '#' + hex;
+  showCustomIconColorInput.value = false;
   closePopups();
 };
 
@@ -1377,68 +1663,6 @@ const apply = () => {
   justify-content: center;
 }
 
-/* Color Grid */
-.color-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  flex: 1;
-  align-content: start;
-  overflow-y: auto;
-}
-
-.color-option {
-  width: 36px;
-  height: 36px;
-  border-radius: 6px;
-  border: 2px solid var(--border-color);
-  cursor: pointer;
-  transition: all 0.15s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.color-option:hover {
-  transform: scale(1.1);
-  border-color: var(--border-color);
-}
-
-.color-option.selected {
-  border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px var(--bg-active);
-}
-
-.color-option.none-option {
-  background: var(--card-bg);
-}
-
-.none-icon {
-  width: 16px;
-  height: 16px;
-  border: 2px dashed var(--border-color);
-  border-radius: 3px;
-  position: relative;
-}
-
-.none-icon::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: -2px;
-  right: -2px;
-  height: 2px;
-  background: var(--danger-light);
-  transform: rotate(-45deg);
-}
-
-.default-indicator {
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
 /* Icon Popup - Larger overlay */
 .icon-popup {
   position: fixed;
@@ -1450,59 +1674,6 @@ const apply = () => {
   max-height: 80vh;
   bottom: auto;
   right: auto;
-}
-
-/* Icon Grid */
-.icon-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.5rem;
-  padding: 0.75rem;
-  flex: 1;
-  align-content: start;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-.icon-grid-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.375rem;
-  border: 2px solid transparent;
-  border-radius: 6px;
-  background: var(--card-bg);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.icon-grid-item:hover {
-  background: var(--bg-tertiary);
-}
-
-.icon-grid-item.selected {
-  border-color: var(--accent-primary);
-  background: var(--bg-active);
-}
-
-.icon-grid-preview {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.icon-grid-label {
-  font-size: 0.6rem;
-  color: var(--text-secondary);
-  text-align: center;
-  line-height: 1.1;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* Size Grid */
@@ -1730,5 +1901,112 @@ const apply = () => {
   border-color: var(--accent-primary);
   background: var(--bg-active);
   color: var(--accent-primary);
+}
+
+/* Custom color option */
+.custom-color-option .custom-color-preview {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #ff6b6b 0%, #ffd93d 25%, #6bcb77 50%, #4d96ff 75%, #9b59b6 100%);
+}
+
+.custom-color-option .custom-color-icon {
+  width: 20px;
+  height: 20px;
+  color: white;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
+}
+
+.custom-color-option .custom-check-mark {
+  color: white;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+  font-weight: bold;
+  font-size: 1rem;
+}
+
+/* Custom hex input */
+.custom-hex-input {
+  padding: 0.75rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.custom-hex-input label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.hex-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.hex-prefix {
+  font-family: monospace;
+  font-size: 1rem;
+  color: var(--text-secondary);
+}
+
+.hex-input {
+  flex: 1;
+  font-family: monospace;
+  font-size: 0.9rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--input-bg, var(--card-bg));
+  color: var(--text-primary);
+  text-transform: uppercase;
+  max-width: 80px;
+}
+
+.hex-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.hex-input.invalid {
+  border-color: var(--danger, #dc3545);
+}
+
+.hex-preview {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+}
+
+.hex-apply-btn {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  background: var(--accent-primary);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.hex-apply-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.hex-apply-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.hex-error {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--danger, #dc3545);
+  margin-top: 0.25rem;
 }
 </style>

@@ -343,7 +343,7 @@ public class NoteFunctions
             foreach (NoteEntity note in allNotes)
             {
                 List<ScopeConfiguration> configs = JsonSerializer.Deserialize<List<ScopeConfiguration>>(
-                    note.ScopeConfigurationsJson) ?? [];
+                    note.ScopeConfigurationsJson, FunctionHelpers.JsonOptions) ?? [];
 
                 ScopeEvaluator.ScopeMatchResult result = ScopeEvaluator.EvaluateScopeConfigurations(
                     configs, marshalContext, checkpointLookup);
@@ -564,7 +564,7 @@ public class NoteFunctions
     private static NoteResponse ToNoteResponse(NoteEntity note, Dictionary<string, string>? personNameLookup = null)
     {
         List<ScopeConfiguration> configs = JsonSerializer.Deserialize<List<ScopeConfiguration>>(
-            note.ScopeConfigurationsJson) ?? [];
+            note.ScopeConfigurationsJson, FunctionHelpers.JsonOptions) ?? [];
 
         // Look up current name if lookup is provided, otherwise fall back to stored name
         string createdByName = note.CreatedByName;

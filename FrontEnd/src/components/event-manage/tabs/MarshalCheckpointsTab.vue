@@ -195,6 +195,12 @@ defineExpose({
   min-width: 100%;
 }
 
+@media (max-width: 640px) {
+  .tab-content {
+    width: 100%;
+  }
+}
+
 .form-group {
   margin-bottom: 1.5rem;
 }

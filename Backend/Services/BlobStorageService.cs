@@ -62,7 +62,8 @@ public class BlobStorageService
         using MemoryStream uploadStream = new(imageBytes);
         await blob.UploadAsync(uploadStream, new BlobHttpHeaders { ContentType = uploadContentType });
 
-        return blob.Uri.ToString();
+        // Add cache-busting query parameter to prevent browser caching issues
+        return $"{blob.Uri}?v={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
     }
 
     /// <summary>

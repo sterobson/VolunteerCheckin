@@ -26,7 +26,7 @@ public class LogoFunctions
         "image/webp"
     };
 
-    private const long MaxFileSizeBytes = 500 * 1024; // 500KB
+    private const long MaxFileSizeBytes = 5 * 1024 * 1024; // 5MB
 
     public LogoFunctions(
         ILogger<LogoFunctions> logger,
@@ -87,7 +87,7 @@ public class LogoFunctions
             {
                 return new BadRequestObjectResult(new
                 {
-                    message = $"File too large. Maximum size is {MaxFileSizeBytes / 1024}KB"
+                    message = $"File too large. Maximum size is {MaxFileSizeBytes / (1024 * 1024)}MB"
                 });
             }
 
@@ -109,7 +109,10 @@ public class LogoFunctions
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error uploading logo for event {EventId}", eventId);
-            return new StatusCodeResult(500);
+            return new ObjectResult(new { message = $"Failed to upload logo: {ex.Message}" })
+            {
+                StatusCode = 500
+            };
         }
     }
 
@@ -153,7 +156,10 @@ public class LogoFunctions
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deleting logo for event {EventId}", eventId);
-            return new StatusCodeResult(500);
+            return new ObjectResult(new { message = $"Failed to delete logo: {ex.Message}" })
+            {
+                StatusCode = 500
+            };
         }
     }
 }

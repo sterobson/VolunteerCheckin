@@ -801,7 +801,7 @@ public class LocationFunctions
         }
 
         // Parse the scope configurations
-        List<ScopeConfiguration> scopeConfigs = JsonSerializer.Deserialize<List<ScopeConfiguration>>(checkpoint.LocationUpdateScopeJson) ?? [];
+        List<ScopeConfiguration> scopeConfigs = JsonSerializer.Deserialize<List<ScopeConfiguration>>(checkpoint.LocationUpdateScopeJson, FunctionHelpers.JsonOptions) ?? [];
 
         // If no scopes configured, no one can update (except admins, handled above)
         if (scopeConfigs.Count == 0)

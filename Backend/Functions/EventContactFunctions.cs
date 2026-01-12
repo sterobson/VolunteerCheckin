@@ -410,7 +410,7 @@ public class EventContactFunctions
             foreach (EventContactEntity contact in allContacts)
             {
                 List<ScopeConfiguration> configs = JsonSerializer.Deserialize<List<ScopeConfiguration>>(
-                    contact.ScopeConfigurationsJson) ?? [];
+                    contact.ScopeConfigurationsJson, FunctionHelpers.JsonOptions) ?? [];
 
                 ScopeEvaluator.ScopeMatchResult result = ScopeEvaluator.EvaluateScopeConfigurations(
                     configs, marshalContext, checkpointLookup);
@@ -607,7 +607,7 @@ public class EventContactFunctions
     private static EventContactResponse ToContactResponse(EventContactEntity contact, string? marshalName)
     {
         List<ScopeConfiguration> configs = JsonSerializer.Deserialize<List<ScopeConfiguration>>(
-            contact.ScopeConfigurationsJson) ?? [];
+            contact.ScopeConfigurationsJson, FunctionHelpers.JsonOptions) ?? [];
 
         return new EventContactResponse(
             ContactId: contact.ContactId,

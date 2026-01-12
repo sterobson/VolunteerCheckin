@@ -1986,4 +1986,222 @@ public class ChecklistScopeHelperTests
     }
 
     #endregion
+
+    #region Case-Insensitive JSON Deserialization Tests
+
+    /// <summary>
+    /// Helper to create a checklist item with raw JSON (bypasses normal serialization).
+    /// This allows testing with camelCase JSON as might be stored in the database.
+    /// </summary>
+    private ChecklistItemEntity CreateChecklistItemWithRawJson(string scopeConfigurationsJson)
+    {
+        return new ChecklistItemEntity
+        {
+            PartitionKey = EventId,
+            RowKey = ItemId,
+            EventId = EventId,
+            ItemId = ItemId,
+            Text = "Test item",
+            ScopeConfigurationsJson = scopeConfigurationsJson,
+            DisplayOrder = 1,
+            IsRequired = true,
+            CreatedByAdminEmail = "admin@test.com",
+            CreatedDate = DateTime.UtcNow
+        };
+    }
+
+    [TestMethod]
+    public void IsItemRelevantToMarshal_CamelCaseJson_AllMarshals_ReturnsTrue()
+    {
+        // Arrange - Use camelCase JSON as might be stored in database
+        string camelCaseJson = """[{"scope":"SpecificPeople","itemType":"Marshal","ids":["ALL_MARSHALS"]}]""";
+        ChecklistItemEntity item = CreateChecklistItemWithRawJson(camelCaseJson);
+        ChecklistScopeHelper.MarshalContext context = CreateMarshalContext();
+        Dictionary<string, LocationEntity> checkpointLookup = CreateCheckpointLookup();
+
+        // Act
+        bool result = ChecklistScopeHelper.IsItemRelevantToMarshal(item, context, checkpointLookup);
+
+        // Assert
+        result.ShouldBeTrue("Item with camelCase JSON and ALL_MARSHALS should be relevant to any marshal");
+    }
+
+    [TestMethod]
+    public void IsItemRelevantToMarshal_PascalCaseJson_AllMarshals_ReturnsTrue()
+    {
+        // Arrange - Use PascalCase JSON (default C# serialization)
+        string pascalCaseJson = """[{"Scope":"SpecificPeople","ItemType":"Marshal","Ids":["ALL_MARSHALS"]}]""";
+        ChecklistItemEntity item = CreateChecklistItemWithRawJson(pascalCaseJson);
+        ChecklistScopeHelper.MarshalContext context = CreateMarshalContext();
+        Dictionary<string, LocationEntity> checkpointLookup = CreateCheckpointLookup();
+
+        // Act
+        bool result = ChecklistScopeHelper.IsItemRelevantToMarshal(item, context, checkpointLookup);
+
+        // Assert
+        result.ShouldBeTrue("Item with PascalCase JSON and ALL_MARSHALS should be relevant to any marshal");
+    }
+
+    [TestMethod]
+    public void IsItemRelevantToMarshal_MixedCaseJson_AllMarshals_ReturnsTrue()
+    {
+        // Arrange - Use mixed case JSON (edge case)
+        string mixedCaseJson = """[{"Scope":"SpecificPeople","itemType":"Marshal","Ids":["ALL_MARSHALS"]}]""";
+        ChecklistItemEntity item = CreateChecklistItemWithRawJson(mixedCaseJson);
+        ChecklistScopeHelper.MarshalContext context = CreateMarshalContext();
+        Dictionary<string, LocationEntity> checkpointLookup = CreateCheckpointLookup();
+
+        // Act
+        bool result = ChecklistScopeHelper.IsItemRelevantToMarshal(item, context, checkpointLookup);
+
+        // Assert
+        result.ShouldBeTrue("Item with mixed case JSON and ALL_MARSHALS should be relevant to any marshal");
+    }
+
+    [TestMethod]
+    public void IsItemRelevantToMarshal_CamelCaseJson_SpecificMarshal_ReturnsTrue()
+    {
+        // Arrange - Use camelCase JSON with specific marshal ID
+        string camelCaseJson = $$"""[{"scope":"SpecificPeople","itemType":"Marshal","ids":["{{MarshalId}}"]}]""";
+        ChecklistItemEntity item = CreateChecklistItemWithRawJson(camelCaseJson);
+        ChecklistScopeHelper.MarshalContext context = CreateMarshalContext();
+        Dictionary<string, LocationEntity> checkpointLookup = CreateCheckpointLookup();
+
+        // Act
+        bool result = ChecklistScopeHelper.IsItemRelevantToMarshal(item, context, checkpointLookup);
+
+        // Assert
+        result.ShouldBeTrue("Item with camelCase JSON targeting specific marshal should be relevant");
+    }
+
+    [TestMethod]
+    public void IsItemRelevantToMarshal_CamelCaseJson_DifferentMarshal_ReturnsFalse()
+    {
+        // Arrange - Use camelCase JSON with different marshal ID
+        string camelCaseJson = """[{"scope":"SpecificPeople","itemType":"Marshal","ids":["other-marshal-id"]}]""";
+        ChecklistItemEntity item = CreateChecklistItemWithRawJson(camelCaseJson);
+        ChecklistScopeHelper.MarshalContext context = CreateMarshalContext();
+        Dictionary<string, LocationEntity> checkpointLookup = CreateCheckpointLookup();
+
+        // Act
+        bool result = ChecklistScopeHelper.IsItemRelevantToMarshal(item, context, checkpointLookup);
+
+        // Assert
+        result.ShouldBeFalse("Item targeting different marshal should not be relevant");
+    }
+
+    [TestMethod]
+    public void IsItemRelevantToMarshal_CamelCaseJson_EveryoneAtCheckpoints_ReturnsTrue()
+    {
+        // Arrange - Use camelCase JSON for checkpoint scope
+        string camelCaseJson = $$"""[{"scope":"EveryoneAtCheckpoints","itemType":"Checkpoint","ids":["{{LocationId1}}"]}]""";
+        ChecklistItemEntity item = CreateChecklistItemWithRawJson(camelCaseJson);
+        ChecklistScopeHelper.MarshalContext context = CreateMarshalContext(
+            assignedLocationIds: [LocationId1]);
+        Dictionary<string, LocationEntity> checkpointLookup = CreateCheckpointLookup();
+
+        // Act
+        bool result = ChecklistScopeHelper.IsItemRelevantToMarshal(item, context, checkpointLookup);
+
+        // Assert
+        result.ShouldBeTrue("Item with camelCase JSON for assigned checkpoint should be relevant");
+    }
+
+    [TestMethod]
+    public void GetAllRelevantContexts_CamelCaseJson_AllMarshals_ReturnsPersonalContext()
+    {
+        // Arrange - Use camelCase JSON
+        string camelCaseJson = """[{"scope":"SpecificPeople","itemType":"Marshal","ids":["ALL_MARSHALS"]}]""";
+        ChecklistItemEntity item = CreateChecklistItemWithRawJson(camelCaseJson);
+        ChecklistScopeHelper.MarshalContext context = CreateMarshalContext();
+        Dictionary<string, LocationEntity> checkpointLookup = CreateCheckpointLookup();
+
+        // Act
+        List<ChecklistScopeHelper.ScopeMatchResult> results = ChecklistScopeHelper.GetAllRelevantContexts(item, context, checkpointLookup);
+
+        // Assert
+        results.Count.ShouldBe(1);
+        results[0].IsRelevant.ShouldBeTrue();
+        results[0].ContextType.ShouldBe(Constants.ChecklistContextPersonal);
+        results[0].ContextId.ShouldBe(MarshalId);
+        results[0].WinningConfig.ShouldNotBeNull();
+        results[0].WinningConfig!.Scope.ShouldBe(Constants.ChecklistScopeSpecificPeople);
+    }
+
+    [TestMethod]
+    public void DetermineCompletionContext_CamelCaseJson_AllMarshals_ReturnsPersonalContext()
+    {
+        // Arrange - Use camelCase JSON
+        string camelCaseJson = """[{"scope":"SpecificPeople","itemType":"Marshal","ids":["ALL_MARSHALS"]}]""";
+        ChecklistItemEntity item = CreateChecklistItemWithRawJson(camelCaseJson);
+        ChecklistScopeHelper.MarshalContext context = CreateMarshalContext();
+        Dictionary<string, LocationEntity> checkpointLookup = CreateCheckpointLookup();
+
+        // Act
+        (string contextType, string contextId, string matchedScope) =
+            ChecklistScopeHelper.DetermineCompletionContext(item, context, checkpointLookup);
+
+        // Assert
+        contextType.ShouldBe(Constants.ChecklistContextPersonal);
+        contextId.ShouldBe(MarshalId);
+        matchedScope.ShouldBe(Constants.ChecklistScopeSpecificPeople);
+    }
+
+    [TestMethod]
+    public void IsItemRelevantToMarshal_LegacyEveryoneScope_ReturnsTrue()
+    {
+        // Arrange - Use legacy "Everyone" scope as stored in older data
+        string legacyJson = """[{"Scope":"Everyone","ItemType":null,"Ids":[]}]""";
+        ChecklistItemEntity item = CreateChecklistItemWithRawJson(legacyJson);
+        ChecklistScopeHelper.MarshalContext context = CreateMarshalContext();
+        Dictionary<string, LocationEntity> checkpointLookup = CreateCheckpointLookup();
+
+        // Act
+        bool result = ChecklistScopeHelper.IsItemRelevantToMarshal(item, context, checkpointLookup);
+
+        // Assert
+        result.ShouldBeTrue("Item with legacy 'Everyone' scope should be relevant to any marshal");
+    }
+
+    [TestMethod]
+    public void GetAllRelevantContexts_LegacyEveryoneScope_ReturnsPersonalContext()
+    {
+        // Arrange - Use legacy "Everyone" scope
+        string legacyJson = """[{"Scope":"Everyone","ItemType":null,"Ids":[]}]""";
+        ChecklistItemEntity item = CreateChecklistItemWithRawJson(legacyJson);
+        ChecklistScopeHelper.MarshalContext context = CreateMarshalContext();
+        Dictionary<string, LocationEntity> checkpointLookup = CreateCheckpointLookup();
+
+        // Act
+        List<ChecklistScopeHelper.ScopeMatchResult> results = ChecklistScopeHelper.GetAllRelevantContexts(item, context, checkpointLookup);
+
+        // Assert
+        results.Count.ShouldBe(1);
+        results[0].IsRelevant.ShouldBeTrue();
+        results[0].ContextType.ShouldBe(Constants.ChecklistContextPersonal);
+        results[0].ContextId.ShouldBe(MarshalId);
+        results[0].WinningConfig.ShouldNotBeNull();
+        results[0].WinningConfig!.Scope.ShouldBe("Everyone");
+    }
+
+    [TestMethod]
+    public void DetermineCompletionContext_LegacyEveryoneScope_ReturnsPersonalContext()
+    {
+        // Arrange - Use legacy "Everyone" scope
+        string legacyJson = """[{"Scope":"Everyone","ItemType":null,"Ids":[]}]""";
+        ChecklistItemEntity item = CreateChecklistItemWithRawJson(legacyJson);
+        ChecklistScopeHelper.MarshalContext context = CreateMarshalContext();
+        Dictionary<string, LocationEntity> checkpointLookup = CreateCheckpointLookup();
+
+        // Act
+        (string contextType, string contextId, string matchedScope) =
+            ChecklistScopeHelper.DetermineCompletionContext(item, context, checkpointLookup);
+
+        // Assert
+        contextType.ShouldBe(Constants.ChecklistContextPersonal);
+        contextId.ShouldBe(MarshalId);
+        matchedScope.ShouldBe("Everyone");
+    }
+
+    #endregion
 }

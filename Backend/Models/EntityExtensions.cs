@@ -79,7 +79,7 @@ public static class EntityExtensions
 
         // Parse location update scope configurations
         List<ScopeConfiguration> locationUpdateScopeConfigs =
-            JsonSerializer.Deserialize<List<ScopeConfiguration>>(entity.LocationUpdateScopeJson) ?? [];
+            JsonSerializer.Deserialize<List<ScopeConfiguration>>(entity.LocationUpdateScopeJson, Helpers.FunctionHelpers.JsonOptions) ?? [];
 
         return new LocationResponse(
             entity.RowKey,
@@ -181,7 +181,7 @@ public static class EntityExtensions
     public static ChecklistItemResponse ToResponse(this ChecklistItemEntity entity)
     {
         List<ScopeConfiguration> scopeConfigurations =
-            JsonSerializer.Deserialize<List<ScopeConfiguration>>(entity.ScopeConfigurationsJson) ?? [];
+            JsonSerializer.Deserialize<List<ScopeConfiguration>>(entity.ScopeConfigurationsJson, Helpers.FunctionHelpers.JsonOptions) ?? [];
 
         return new ChecklistItemResponse(
             entity.ItemId,

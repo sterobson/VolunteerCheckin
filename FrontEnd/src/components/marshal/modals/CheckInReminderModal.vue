@@ -9,11 +9,11 @@
         <div class="modal-body">
           <div class="reminder-icon">&#9888;&#65039;</div>
           <p class="reminder-message">
-            You have not checked in yet to {{ checkpointTerm.toLowerCase() }}
+            You have not checked in yet to {{ termsLower.checkpoint }}
             <strong>{{ checkpoint.location?.name }}</strong><span v-if="checkpoint.location?.description"> - {{ checkpoint.location.description }}</span>.
           </p>
           <p class="reminder-hint">
-            Please check in when you arrive at your {{ checkpointTerm.toLowerCase() }}.
+            Please check in when you arrive at your {{ termsLower.checkpoint }}.
           </p>
         </div>
         <div class="modal-footer">
@@ -25,7 +25,7 @@
             class="btn btn-primary"
             :style="accentButtonStyle"
           >
-            Go to {{ checkpointTerm }}
+            Go to {{ termsLower.checkpoint }}
           </button>
         </div>
       </div>
@@ -35,6 +35,9 @@
 
 <script setup>
 import { defineProps, defineEmits } from 'vue';
+import { useTerminology } from '../../../composables/useTerminology';
+
+const { terms, termsLower } = useTerminology();
 
 defineProps({
   show: {
@@ -44,10 +47,6 @@ defineProps({
   checkpoint: {
     type: Object,
     default: null,
-  },
-  checkpointTerm: {
-    type: String,
-    default: 'Checkpoint',
   },
   accentButtonStyle: {
     type: Object,

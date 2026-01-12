@@ -89,6 +89,12 @@ public static class ScopeEvaluator
         MarshalContext marshalContext,
         Dictionary<string, LocationEntity> checkpointLookup)
     {
+        // Handle legacy "Everyone" scope (from older data) - matches all marshals
+        if (config.Scope == "Everyone")
+        {
+            return (config, SpecificityLevel.Marshal, marshalContext.MarshalId);
+        }
+
         switch (config.ItemType)
         {
             case "Marshal":
@@ -308,6 +314,7 @@ public static class ScopeEvaluator
     {
         return scope switch
         {
+            "Everyone" or  // Legacy scope - treat as personal
             Constants.ChecklistScopeEveryoneInAreas or
             Constants.ChecklistScopeEveryoneAtCheckpoints or
             Constants.ChecklistScopeSpecificPeople or
@@ -339,6 +346,7 @@ public static class ScopeEvaluator
     public static bool IsPersonalScope(string scope)
     {
         return scope is
+            "Everyone" or  // Legacy scope - treat as personal
             Constants.ChecklistScopeEveryoneInAreas or
             Constants.ChecklistScopeEveryoneAtCheckpoints or
             Constants.ChecklistScopeSpecificPeople or

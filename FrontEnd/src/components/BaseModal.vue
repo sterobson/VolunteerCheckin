@@ -368,14 +368,23 @@ const handleConfirmCloseCancel = () => {
 .base-modal-body {
   flex: 1;
   overflow-y: auto;
-  overflow-x: auto;
+  overflow-x: hidden;
   padding: 1.5rem 2rem;
-  width: max-content;
-  min-width: 100%;
 }
 
 /* Inner content wrapper for height animation */
 .base-modal-body-content {
+  width: 100%;
+}
+
+/* Large variant allows content-driven width */
+.base-modal--large .base-modal-body {
+  overflow-x: auto;
+  width: max-content;
+  min-width: 100%;
+}
+
+.base-modal--large .base-modal-body-content {
   width: max-content;
   min-width: 100%;
 }
@@ -459,6 +468,12 @@ const handleConfirmCloseCancel = () => {
   .base-modal--large :deep(.cards-grid:has(:nth-child(5):last-child)),
   .base-modal--large :deep(.cards-grid:has(:nth-child(6))) {
     min-width: 0;
+  }
+
+  /* On mobile, constrain large variant body width to modal width */
+  .base-modal--large .base-modal-body,
+  .base-modal--large .base-modal-body-content {
+    width: 100%;
   }
 }
 </style>

@@ -7,7 +7,7 @@
     >
       <span class="accordion-title">
         <span class="section-icon" v-html="getIcon('area')"></span>
-        Your {{ areas.length === 1 ? areaTerm : areaTermPlural }}{{ areas.length > 1 ? ` (${areas.length})` : '' }}
+        Your {{ areas.length === 1 ? termsLower.area : termsLower.areas }}{{ areas.length > 1 ? ` (${areas.length})` : '' }}
       </span>
       <span class="accordion-icon">{{ isExpanded ? '−' : '+' }}</span>
     </button>
@@ -40,7 +40,10 @@
 <script setup>
 import { defineProps, defineEmits, ref, defineExpose } from 'vue';
 import { getIcon } from '../../utils/icons';
+import { useTerminology } from '../../composables/useTerminology';
 import AreaLeadSection from '../AreaLeadSection.vue';
+
+const { terms, termsLower } = useTerminology();
 
 defineProps({
   isAreaLead: {
@@ -54,14 +57,6 @@ defineProps({
   areas: {
     type: Array,
     default: () => [],
-  },
-  areaTerm: {
-    type: String,
-    default: 'area',
-  },
-  areaTermPlural: {
-    type: String,
-    default: 'areas',
   },
   selectedFilters: {
     type: Set,

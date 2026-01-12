@@ -3,7 +3,7 @@
     <svg
       viewBox="0 0 400 350"
       class="hero-map-svg"
-      :class="{ 'animate': shouldAnimate }"
+      :class="{ 'animate': shouldAnimate && animate, 'no-animate': shouldAnimate && !animate }"
     >
       <defs>
         <!-- Clip path for the perspective map shape (more extreme) -->
@@ -181,13 +181,25 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 
+const props = defineProps({
+  animate: {
+    type: Boolean,
+    default: true,
+  },
+});
+
 const shouldAnimate = ref(false);
 
 onMounted(() => {
-  // Small delay to ensure CSS is ready, then trigger animation
-  requestAnimationFrame(() => {
+  if (props.animate) {
+    // Small delay to ensure CSS is ready, then trigger animation
+    requestAnimationFrame(() => {
+      shouldAnimate.value = true;
+    });
+  } else {
+    // Skip animation, show final state immediately
     shouldAnimate.value = true;
-  });
+  }
 });
 </script>
 
@@ -403,5 +415,50 @@ onMounted(() => {
     transform: translate(280px, 100px) translateY(0);
     opacity: 1;
   }
+}
+
+/* No animation - show final state immediately */
+.no-animate .map-group {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.no-animate .trail-seg {
+  stroke-dashoffset: 0;
+  opacity: 1;
+}
+
+.no-animate .arrow-head-group {
+  opacity: 1;
+}
+
+.no-animate .checkpoint-1 {
+  transform: translate(200px, 250px) scale(1);
+  opacity: 1;
+}
+
+.no-animate .checkpoint-2 {
+  transform: translate(150px, 150px) scale(1);
+  opacity: 1;
+}
+
+.no-animate .checkpoint-3 {
+  transform: translate(280px, 100px) scale(1);
+  opacity: 1;
+}
+
+.no-animate .marshal-1 {
+  transform: translate(200px, 250px) translateY(0);
+  opacity: 1;
+}
+
+.no-animate .marshal-2 {
+  transform: translate(150px, 150px) translateY(0);
+  opacity: 1;
+}
+
+.no-animate .marshal-3 {
+  transform: translate(280px, 100px) translateY(0);
+  opacity: 1;
 }
 </style>

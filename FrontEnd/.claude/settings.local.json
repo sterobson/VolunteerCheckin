@@ -17,7 +17,16 @@
       "Bash(grep:*)",
       "Bash(tree:*)",
       "Bash(dir \"C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\" /b)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(npm init:*)",
+      "Bash(npm run test:*)",
+      "Bash(comm -23:*)",
+      "Bash(npm run lint:*)",
+      "Bash(dir /b /o-d \"%USERPROFILE%\\\\AppData\\\\Local\\\\Temp\\\\*.png\")",
+      "Bash(dir \"C:\\\\Users\\\\stero\\\\Pictures\\\\Screenshots\" /b /o-d)",
+      "Bash(az storage entity query:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(dotnet run:*)"
     ]
   }
 }

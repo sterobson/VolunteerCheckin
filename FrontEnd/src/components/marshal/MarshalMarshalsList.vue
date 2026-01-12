@@ -7,7 +7,7 @@
     >
       <span class="accordion-title">
         <span class="section-icon" v-html="getIcon('marshal')"></span>
-        Your {{ marshals.length === 1 ? personTerm : peopleTerm }}{{ marshals.length > 1 ? ` (${marshals.length})` : '' }}
+        Your {{ marshals.length === 1 ? termsLower.person : termsLower.people }}{{ marshals.length > 1 ? ` (${marshals.length})` : '' }}
       </span>
       <span class="accordion-icon">{{ isExpanded ? '−' : '+' }}</span>
     </button>
@@ -35,7 +35,7 @@
                   {{ formatMarshalCheckpoints(marshal.checkpoints) }}
                 </span>
                 <span v-if="marshal.totalTaskCount > 0" class="marshal-task-count">
-                  {{ marshal.completedTaskCount }} / {{ marshal.totalTaskCount }} {{ checklistTermLower }} complete
+                  {{ marshal.completedTaskCount }} / {{ marshal.totalTaskCount }} {{ termsLower.checklists }} complete
                 </span>
               </div>
             </div>
@@ -68,7 +68,7 @@
 
             <!-- Tasks -->
             <div v-if="marshal.allTasks.length > 0" class="marshal-tasks-section">
-              <div class="tasks-label">{{ checklistTerm }}</div>
+              <div class="tasks-label">{{ terms.checklists }}</div>
               <div class="tasks-list">
                 <div
                   v-for="task in marshal.allTasks"
@@ -88,7 +88,7 @@
             </div>
 
             <div v-else class="no-tasks-message">
-              No {{ checklistTermLower }} assigned.
+              No {{ termsLower.checklists }} assigned.
             </div>
           </div>
         </div>
@@ -100,7 +100,10 @@
 <script setup>
 import { defineProps, defineEmits } from 'vue';
 import { getIcon } from '../../utils/icons';
+import { useTerminology } from '../../composables/useTerminology';
 import CheckInToggleButton from '../common/CheckInToggleButton.vue';
+
+const { terms, termsLower } = useTerminology();
 
 defineProps({
   isAreaLead: {
@@ -118,22 +121,6 @@ defineProps({
   expandedMarshalId: {
     type: String,
     default: null,
-  },
-  personTerm: {
-    type: String,
-    default: 'person',
-  },
-  peopleTerm: {
-    type: String,
-    default: 'people',
-  },
-  checklistTerm: {
-    type: String,
-    default: 'Checklists',
-  },
-  checklistTermLower: {
-    type: String,
-    default: 'checklists',
   },
   checkingInMarshalId: {
     type: String,

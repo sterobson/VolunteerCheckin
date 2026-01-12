@@ -3,8 +3,8 @@
     <label class="uploader-label">Event Logo</label>
 
     <!-- Current Logo Preview -->
-    <div v-if="modelValue" class="logo-preview">
-      <img :src="modelValue" alt="Event logo" class="logo-image" />
+    <div v-if="hasLogo" class="logo-preview">
+      <img :src="displayUrl" alt="Event logo" class="logo-image" />
       <button type="button" class="remove-btn" @click="removeLogo" :disabled="isUploading">
         Remove
       </button>
@@ -48,7 +48,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, computed, onUnmounted } from 'vue';
 import { API_BASE_URL } from '../config';
 
 const props = defineProps({
@@ -63,6 +63,11 @@ const props = defineProps({
   adminEmail: {
     type: String,
     required: true,
+  },
+  // When staged=true, don't upload immediately - store file locally for later upload
+  staged: {
+    type: Boolean,
+    default: false,
   },
 });
 
@@ -80,12 +85,65 @@ function getAuthHeaders() {
   return headers;
 }
 
-const emit = defineEmits(['update:modelValue']);
+// Emit staged-change with detailed state object
+const emit = defineEmits(['update:modelValue', 'staged-change']);
+
+function emitStagedChange() {
+  emit('staged-change', {
+    hasPendingChanges: stagedFile.value !== null || pendingDelete.value,
+    isPendingDelete: pendingDelete.value,
+    displayUrl: stagedPreviewUrl.value || (pendingDelete.value ? '' : props.modelValue) || '',
+  });
+}
 
 const fileInput = ref(null);
 const isUploading = ref(false);
 const isDragOver = ref(false);
 const errorMessage = ref('');
+
+// Cache-busting key that changes on each upload
+const uploadKey = ref(Date.now());
+
+// Staged mode: store the file and its local preview URL
+const stagedFile = ref(null);
+const stagedPreviewUrl = ref('');
+// Track if we need to delete existing logo when saving (staged mode)
+const pendingDelete = ref(false);
+
+// Check if we have a logo to display (either staged or server URL)
+const hasLogo = computed(() => {
+  // In staged mode, check for staged file or valid server URL (not marked for deletion)
+  if (props.staged) {
+    if (stagedPreviewUrl.value) return true;
+    if (pendingDelete.value) return false;
+  }
+  return !!props.modelValue;
+});
+
+// Display URL with cache-busting to prevent showing stale images
+const displayUrl = computed(() => {
+  // Don't return URL if pending deletion
+  if (props.staged && pendingDelete.value) return '';
+  // In staged mode, show the staged preview if available
+  if (props.staged && stagedPreviewUrl.value) {
+    return stagedPreviewUrl.value;
+  }
+  if (!props.modelValue) return '';
+  const separator = props.modelValue.includes('?') ? '&' : '?';
+  return `${props.modelValue}${separator}_t=${uploadKey.value}`;
+});
+
+// Cleanup blob URLs when component unmounts or when new file is staged
+function cleanupStagedPreview() {
+  if (stagedPreviewUrl.value) {
+    URL.revokeObjectURL(stagedPreviewUrl.value);
+    stagedPreviewUrl.value = '';
+  }
+}
+
+onUnmounted(() => {
+  cleanupStagedPreview();
+});
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/gif', 'image/webp'];
@@ -130,6 +188,18 @@ async function uploadFile(file) {
     return;
   }
 
+  // Staged mode: store file locally, don't upload yet
+  if (props.staged) {
+    cleanupStagedPreview();
+    stagedFile.value = file;
+    stagedPreviewUrl.value = URL.createObjectURL(file);
+    pendingDelete.value = false;
+    // Notify parent that staged state changed
+    emitStagedChange();
+    return;
+  }
+
+  // Immediate mode: upload now
   isUploading.value = true;
 
   try {
@@ -143,17 +213,28 @@ async function uploadFile(file) {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || 'Upload failed');
+      const errorText = await response.text().catch(() => '');
+      let errorMsg = `Upload failed (${response.status})`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMsg = errorJson.message || errorMsg;
+      } catch {
+        if (errorText) errorMsg = errorText;
+      }
+      throw new Error(errorMsg);
     }
 
     const result = await response.json();
+    // Update cache-busting key to force image refresh
+    uploadKey.value = Date.now();
     emit('update:modelValue', result.logoUrl);
   } catch (error) {
     console.error('Logo upload error:', error);
     // Provide more helpful error message for network errors
     if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
-      errorMessage.value = 'Network error. The file may be too large or the server is unavailable.';
+      errorMessage.value = 'Network error. Check your connection or try a smaller file.';
+    } else if (error.message?.includes('401') || error.message?.includes('403')) {
+      errorMessage.value = 'Not authorized. Please refresh the page and try again.';
     } else {
       errorMessage.value = error.message || 'Failed to upload logo. Please try again.';
     }
@@ -164,6 +245,23 @@ async function uploadFile(file) {
 
 async function removeLogo() {
   errorMessage.value = '';
+
+  // Staged mode: just clear the staged file, mark for deletion if there was a server logo
+  if (props.staged) {
+    // If we have a staged file, just clear it
+    if (stagedFile.value) {
+      cleanupStagedPreview();
+      stagedFile.value = null;
+    } else if (props.modelValue) {
+      // Otherwise mark the existing server logo for deletion
+      pendingDelete.value = true;
+    }
+    // Notify parent with detailed state
+    emitStagedChange();
+    return;
+  }
+
+  // Immediate mode: delete from server now
   isUploading.value = true;
 
   try {
@@ -185,6 +283,123 @@ async function removeLogo() {
     isUploading.value = false;
   }
 }
+
+// Methods for parent to access staged file and upload it
+async function uploadStagedFile() {
+  if (!stagedFile.value) {
+    // If pending delete, return empty URL; otherwise return current URL
+    return { success: true, logoUrl: pendingDelete.value ? '' : props.modelValue };
+  }
+
+  isUploading.value = true;
+  errorMessage.value = '';
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/events/${props.eventId}/logo`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': stagedFile.value.type,
+        ...getAuthHeaders(),
+      },
+      body: stagedFile.value,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      let errorMsg = `Upload failed (${response.status})`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMsg = errorJson.message || errorMsg;
+      } catch {
+        if (errorText) errorMsg = errorText;
+      }
+      throw new Error(errorMsg);
+    }
+
+    const result = await response.json();
+    uploadKey.value = Date.now();
+    cleanupStagedPreview();
+    stagedFile.value = null;
+    pendingDelete.value = false;
+    return { success: true, logoUrl: result.logoUrl };
+  } catch (error) {
+    console.error('Logo upload error:', error);
+    errorMessage.value = error.message || 'Failed to upload logo. Please try again.';
+    return { success: false, error: error.message };
+  } finally {
+    isUploading.value = false;
+  }
+}
+
+async function deleteStagedLogo() {
+  if (!pendingDelete.value) {
+    return { success: true };
+  }
+
+  isUploading.value = true;
+  errorMessage.value = '';
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/events/${props.eventId}/logo`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || 'Delete failed');
+    }
+
+    pendingDelete.value = false;
+    return { success: true };
+  } catch (error) {
+    console.error('Logo delete error:', error);
+    errorMessage.value = error.message || 'Failed to remove logo. Please try again.';
+    return { success: false, error: error.message };
+  } finally {
+    isUploading.value = false;
+  }
+}
+
+// Check if there are pending changes
+function hasPendingChanges() {
+  return stagedFile.value !== null || pendingDelete.value;
+}
+
+// Get the staged file for external use
+function getStagedFile() {
+  return stagedFile.value;
+}
+
+// Check if pending delete
+function isPendingDelete() {
+  return pendingDelete.value;
+}
+
+// Get the current display URL (staged or server, empty if pending delete)
+function getDisplayUrl() {
+  if (stagedPreviewUrl.value) return stagedPreviewUrl.value;
+  if (pendingDelete.value) return '';
+  return props.modelValue || '';
+}
+
+// Reset all staged state (for when branding is reset)
+function resetStagedState() {
+  cleanupStagedPreview();
+  stagedFile.value = null;
+  pendingDelete.value = false;
+}
+
+// Expose methods for parent component
+defineExpose({
+  uploadStagedFile,
+  deleteStagedLogo,
+  hasPendingChanges,
+  getStagedFile,
+  isPendingDelete,
+  getDisplayUrl,
+  resetStagedState,
+});
 </script>
 
 <style scoped>

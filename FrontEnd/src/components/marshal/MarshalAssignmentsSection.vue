@@ -7,13 +7,13 @@
     >
       <span class="accordion-title">
         <span class="section-icon" v-html="getIcon('checkpoint')"></span>
-        Your {{ assignments.length === 1 ? checkpointTerm : checkpointTermPlural }}{{ assignments.length > 1 ? ` (${assignments.length})` : '' }}
+        Your {{ assignments.length === 1 ? termsLower.checkpoint : termsLower.checkpoints }}{{ assignments.length > 1 ? ` (${assignments.length})` : '' }}
       </span>
       <span class="accordion-icon">{{ isExpanded ? '−' : '+' }}</span>
     </button>
     <div v-if="isExpanded" class="accordion-content assignments-accordion-content">
       <div v-if="assignments.length === 0" class="empty-state">
-        <p>You don't have any {{ checkpointTerm }} assignments yet.</p>
+        <p>You don't have any {{ termsLower.checkpoint }} assignments yet.</p>
       </div>
       <div v-else class="checkpoint-accordion">
         <CheckpointCard
@@ -25,8 +25,6 @@
           :all-locations="allLocations"
           :route="route"
           :user-location="userLocation"
-          :header-style="headerStyle"
-          :header-text-color="headerTextColor"
           :toolbar-actions="getToolbarActions(assign.id)"
           :has-dynamic-assignment="hasDynamicAssignment"
           :current-marshal-id="currentMarshalId"
@@ -39,9 +37,6 @@
           :notes="getNotesForCheckpoint(assign.locationId, assign.areaIds)"
           :updating-location="updatingLocation"
           :auto-update-enabled="autoUpdateEnabled"
-          :people-term="peopleTerm"
-          :area-term="areaTerm"
-          :checkpoint-term="checkpointTerm"
           @toggle="$emit('toggle-checkpoint', assign.id)"
           @map-click="(e) => $emit('map-click', e)"
           @location-click="(e) => $emit('location-click', e)"
@@ -61,7 +56,10 @@
 <script setup>
 import { defineProps, defineEmits, defineExpose } from 'vue';
 import { getIcon } from '../../utils/icons';
+import { useTerminology } from '../../composables/useTerminology';
 import CheckpointCard from './CheckpointCard.vue';
+
+const { terms, termsLower } = useTerminology();
 
 const props = defineProps({
   isExpanded: {
@@ -87,14 +85,6 @@ const props = defineProps({
   userLocation: {
     type: Object,
     default: null,
-  },
-  headerStyle: {
-    type: Object,
-    default: () => ({}),
-  },
-  headerTextColor: {
-    type: String,
-    default: '',
   },
   hasDynamicAssignment: {
     type: Boolean,
@@ -135,22 +125,6 @@ const props = defineProps({
   autoUpdateEnabled: {
     type: Boolean,
     default: false,
-  },
-  checkpointTerm: {
-    type: String,
-    default: 'checkpoint',
-  },
-  checkpointTermPlural: {
-    type: String,
-    default: 'checkpoints',
-  },
-  peopleTerm: {
-    type: String,
-    default: 'People',
-  },
-  areaTerm: {
-    type: String,
-    default: 'Area',
   },
   getToolbarActions: {
     type: Function,

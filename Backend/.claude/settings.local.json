@@ -42,7 +42,9 @@
       "Bash(Measure-Object -Line)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\FrontEnd\" -Recurse -Include *.vue,*.ts,*.js -File)",
       "Bash(Where-Object { $_FullName -notmatch '\\\\\\\\\\(node_modules|dist\\)\\\\\\\\' })",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(xargs:*)",
+      "Bash(powershell \"\\(Get-Content TableStorageServiceTests.cs\\) -replace ''\\\\[TestCategory\\\\\\(\"\"Integration\"\"\\\\\\)\\\\]'', ''[Ignore\\(\"\"Requires Azure Storage \\(Azurite\\) to run\"\"\\)]'' | Set-Content TableStorageServiceTests.cs\")"
     ]
   }
 }

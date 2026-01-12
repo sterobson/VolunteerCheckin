@@ -119,7 +119,7 @@ export function getDefaultBranding() {
 }
 
 /**
- * Applies a preset to branding values, resetting all branding including logo.
+ * Applies a preset to branding values, preserving logo settings.
  * @param {Object} currentBranding - Current branding values
  * @param {Object} preset - Preset to apply
  * @returns {Object} Updated branding values
@@ -132,7 +132,8 @@ export function applyPreset(currentBranding, preset) {
     accentColor: preset.accentColor,
     pageGradientStart: preset.pageGradientStart,
     pageGradientEnd: preset.pageGradientEnd,
-    logoUrl: '',
-    logoPosition: '',
+    // Preserve logo settings when changing theme
+    logoUrl: currentBranding.logoUrl || '',
+    logoPosition: currentBranding.logoPosition || '',
   };
 }

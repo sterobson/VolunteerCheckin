@@ -38,7 +38,7 @@ public class EventContactEntity : ITableEntity
     /// <summary>
     /// Phone number for the contact
     /// </summary>
-    public string Phone { get; set; } = string.Empty;
+    public string? Phone { get; set; }
 
     /// <summary>
     /// Optional email address

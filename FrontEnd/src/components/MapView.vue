@@ -27,7 +27,6 @@ import { truncateText, calculateVisibleDescriptions } from '../utils/labelOverla
 import {
   getCheckpointMarkerHtml,
   getStatusBadgeHtml,
-  getCheckpointStatus,
   generateCheckpointSvg,
 } from '../constants/checkpointIcons';
 
@@ -256,33 +255,52 @@ const showRecenterButton = computed(() => {
   return !highlightedLocationInView.value;
 });
 
+// Track visibility of each highlighted location (keyed by location ID)
+const highlightedLocationsVisibility = ref({});
+
 // Function to check if highlighted location is in current map bounds
 const checkHighlightedInView = () => {
+  const newVisibility = {};
+
   // Check single highlighted location first
   if (props.highlightLocationId) {
     const highlightedLocation = props.locations.find(loc => loc.id === props.highlightLocationId);
     if (highlightedLocation?.latitude && highlightedLocation?.longitude) {
-      highlightedLocationInView.value = isLocationInView(highlightedLocation.latitude, highlightedLocation.longitude);
+      const inView = isLocationInView(highlightedLocation.latitude, highlightedLocation.longitude);
+      highlightedLocationInView.value = inView;
+      newVisibility[props.highlightLocationId] = inView;
+      highlightedLocationsVisibility.value = newVisibility;
       return;
     }
   }
 
-  // Fall back to checking first item in highlightLocationIds array
+  // Check all items in highlightLocationIds array
   if (props.highlightLocationIds && props.highlightLocationIds.length > 0) {
-    const firstHighlightedId = props.highlightLocationIds[0];
-    const firstHighlightedLocation = props.locations.find(loc => loc.id === firstHighlightedId);
-    if (firstHighlightedLocation?.latitude && firstHighlightedLocation?.longitude) {
-      highlightedLocationInView.value = isLocationInView(firstHighlightedLocation.latitude, firstHighlightedLocation.longitude);
-      return;
+    let allInView = true;
+    for (const locId of props.highlightLocationIds) {
+      const location = props.locations.find(loc => loc.id === locId);
+      if (location?.latitude && location?.longitude) {
+        const inView = isLocationInView(location.latitude, location.longitude);
+        newVisibility[locId] = inView;
+        if (!inView) allInView = false;
+      } else {
+        newVisibility[locId] = true; // No coords, consider it "in view" to avoid showing button
+      }
     }
+    // highlightedLocationInView is true only when ALL are in view (so button shows when any is out of view)
+    highlightedLocationInView.value = allInView;
+    highlightedLocationsVisibility.value = newVisibility;
+    return;
   }
 
   // No highlighted location to track
   if (!map) {
     highlightedLocationInView.value = true;
+    highlightedLocationsVisibility.value = {};
     return;
   }
   highlightedLocationInView.value = true;
+  highlightedLocationsVisibility.value = {};
 };
 
 // Function to check if user location is in current map bounds
@@ -299,10 +317,11 @@ const checkLocationsInView = () => {
   checkHighlightedInView();
   checkUserLocationInView();
 
-  // Emit visibility change event
+  // Emit visibility change event with detailed info for each highlighted location
   emit('visibility-change', {
     userLocationInView: userLocationInView.value,
     highlightedLocationInView: highlightedLocationInView.value,
+    highlightedLocationsVisibility: highlightedLocationsVisibility.value,
   });
 };
 
@@ -510,6 +529,11 @@ const initMap = () => {
   updateUserLocationMarker();
   initDrawingMode();
   initEditingMode();
+
+  // Check visibility after map is fully initialized (use whenReady to ensure tiles are loaded)
+  map.whenReady(() => {
+    checkLocationsInView();
+  });
 };
 
 const updateRoute = () => {
@@ -1057,7 +1081,6 @@ const updateMarkers = () => {
       // Use the new composable SVG generator with all resolved style fields
       const baseSize = isHighlighted ? 40 : 32;
       const sizePercent = location.resolvedStyleSize || location.ResolvedStyleSize || '100';
-      const actualSize = Math.round(baseSize * (parseInt(sizePercent, 10) / 100));
 
       const customSvg = generateCheckpointSvg({
         type: location.resolvedStyleType || location.ResolvedStyleType,
@@ -1260,6 +1283,11 @@ watch(
       hasCenteredOnCheckpoints.value = true;
       isInitialLoad.value = false;
     }
+
+    // Check visibility after markers update (with slight delay to ensure map has rendered)
+    if (map) {
+      setTimeout(() => checkLocationsInView(), 50);
+    }
   },
   { deep: true }
 );
@@ -1355,6 +1383,10 @@ watch(
   () => props.highlightLocationIds,
   () => {
     updateMarkers();
+    // Check visibility when highlighted locations change
+    if (map) {
+      setTimeout(() => checkLocationsInView(), 50);
+    }
   },
   { deep: true }
 );

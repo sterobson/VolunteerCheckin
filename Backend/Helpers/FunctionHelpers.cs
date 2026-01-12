@@ -37,23 +37,21 @@ public static class FunctionHelpers
     }
 
     /// <summary>
-    /// Extracts the session token from either the session cookie or Authorization header.
-    /// Supports both cookie-based auth (browser) and Bearer token auth (API clients).
+    /// Extracts the session token from either the Authorization header or session cookie.
+    /// Prefers Authorization header to allow frontend to explicitly select which token to use
+    /// (important when user has both admin and marshal sessions).
     /// </summary>
     public static string? GetSessionToken(HttpRequest req)
     {
-        // Try cookie first (browser sessions)
-        string? sessionToken = req.Cookies["session"];
-
-        // Fall back to Authorization header (API clients)
-        if (string.IsNullOrEmpty(sessionToken))
+        // Try Authorization header first (allows frontend to explicitly select token)
+        string? authHeader = req.Headers.Authorization.FirstOrDefault();
+        if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
-            string? authHeader = req.Headers.Authorization.FirstOrDefault();
-            if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            {
-                sessionToken = authHeader["Bearer ".Length..];
-            }
+            return authHeader["Bearer ".Length..];
         }
+
+        // Fall back to cookie (for browser sessions without explicit header)
+        string? sessionToken = req.Cookies["session"];
 
         return string.IsNullOrWhiteSpace(sessionToken) ? null : sessionToken;
     }

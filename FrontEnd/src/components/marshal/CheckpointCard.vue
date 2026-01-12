@@ -37,8 +37,8 @@
           :clickable="hasDynamicAssignment"
           :show-fullscreen="true"
           :fullscreen-title="assignment.location?.name || assignment.locationName"
-          :fullscreen-header-style="headerStyle"
-          :fullscreen-header-text-color="headerTextColor"
+          :fullscreen-header-style="branding.headerStyle"
+          :fullscreen-header-text-color="branding.headerTextColor"
           :toolbar-actions="toolbarActions"
           :hide-recenter-button="true"
           height="280px"
@@ -78,7 +78,7 @@
 
       <!-- Marshals on this checkpoint -->
       <div class="checkpoint-marshals">
-        <div class="marshals-label">{{ peopleTerm }}:</div>
+        <div class="marshals-label">{{ terms.people }}:</div>
         <!-- Simple view for non-area leads -->
         <div v-if="!isAreaLeadForCheckpoint" class="marshals-list">
           <span
@@ -162,7 +162,7 @@
 
       <!-- Area Contacts for this checkpoint -->
       <div v-if="assignment.areaContacts.length > 0" class="checkpoint-area-contacts">
-        <div class="marshals-label">{{ areaTerm }} contacts:</div>
+        <div class="marshals-label">{{ terms.area }} contacts:</div>
         <div class="contact-list">
           <ContactCard
             v-for="contact in assignment.areaContacts"
@@ -193,7 +193,7 @@
       <!-- Dynamic checkpoint location update -->
       <div v-if="isDynamic" class="dynamic-location-section">
         <div class="dynamic-location-header">
-          <span class="dynamic-badge">Dynamic {{ assignment.location.resolvedCheckpointTerm || checkpointTerm }}</span>
+          <span class="dynamic-badge">Dynamic {{ assignment.location.resolvedCheckpointTerm || termsLower.checkpoint }}</span>
           <span v-if="assignment.location.lastLocationUpdate" class="last-update">
             Last updated: {{ formatDateTime(assignment.location.lastLocationUpdate) }}
           </span>
@@ -227,11 +227,25 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits, ref, computed, defineExpose } from 'vue';
+import { defineProps, defineEmits, ref, computed, defineExpose, inject, toValue, reactive } from 'vue';
 import CommonMap from '../common/CommonMap.vue';
 import CheckInToggleButton from '../common/CheckInToggleButton.vue';
 import ContactCard from './ContactCard.vue';
 import NoteCard from './NoteCard.vue';
+import { useTerminology } from '../../composables/useTerminology';
+
+const { terms, termsLower } = useTerminology();
+const injectedBranding = inject('marshalBranding', {
+  headerStyle: {},
+  headerTextColor: '',
+});
+
+// Unwrap refs from injected branding (they may be computed refs or plain values)
+// Use reactive() so Vue auto-unwraps the computed refs in templates
+const branding = reactive({
+  headerStyle: computed(() => toValue(injectedBranding.headerStyle)),
+  headerTextColor: computed(() => toValue(injectedBranding.headerTextColor)),
+});
 
 const props = defineProps({
   assignment: {
@@ -253,14 +267,6 @@ const props = defineProps({
   userLocation: {
     type: Object,
     default: null,
-  },
-  headerStyle: {
-    type: Object,
-    default: () => ({}),
-  },
-  headerTextColor: {
-    type: String,
-    default: '',
   },
   toolbarActions: {
     type: Array,
@@ -309,18 +315,6 @@ const props = defineProps({
   autoUpdateEnabled: {
     type: Boolean,
     default: false,
-  },
-  peopleTerm: {
-    type: String,
-    default: 'People',
-  },
-  areaTerm: {
-    type: String,
-    default: 'Area',
-  },
-  checkpointTerm: {
-    type: String,
-    default: 'checkpoint',
   },
 });
 

@@ -2,7 +2,7 @@
   <BaseModal
     :show="show"
     :title="isEditing ? 'Edit contact' : 'Create contact'"
-    size="large"
+    size="medium"
     :confirm-on-close="true"
     :is-dirty="isDirty"
     @close="handleClose"

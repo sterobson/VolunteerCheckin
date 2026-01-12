@@ -84,7 +84,7 @@ public class TableStorageEventContactRepository : IEventContactRepository
 
     public async Task UpdateAsync(EventContactEntity contact)
     {
-        await _table.UpdateEntityAsync(contact, contact.ETag);
+        await _table.UpdateEntityAsync(contact, contact.ETag, TableUpdateMode.Replace);
     }
 
     public async Task DeleteAsync(string eventId, string contactId)

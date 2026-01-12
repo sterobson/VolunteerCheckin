@@ -7,7 +7,7 @@
     >
       <span class="accordion-title">
         <span class="section-icon" v-html="getIcon('checklist')"></span>
-        Your {{ checklistTerm }} ({{ completedCount }} of {{ totalCount }} complete)
+        Your {{ termsLower.checklists }} ({{ completedCount }} of {{ totalCount }} complete)
       </span>
       <span class="accordion-icon">{{ isExpanded ? '−' : '+' }}</span>
     </button>
@@ -15,7 +15,7 @@
       <div v-if="loading" class="loading">Loading checklist...</div>
       <div v-else-if="error" class="error">{{ error }}</div>
       <div v-else-if="totalCount === 0" class="empty-state">
-        <p>No {{ checklistTerm }} for you.</p>
+        <p>No {{ termsLower.checklists }} for you.</p>
       </div>
 
       <!-- Area leads see two sections: Your jobs and Your area's jobs -->
@@ -47,7 +47,7 @@
 
         <!-- Your area's jobs section -->
         <div v-if="areaItems.length > 0" class="checklist-section">
-          <h4 class="checklist-section-title">Your {{ areaTerm }}'s jobs</h4>
+          <h4 class="checklist-section-title">Your {{ termsLower.area }}'s jobs</h4>
           <GroupedTasksList
             :items="areaItemsWithLocalState"
             :locations="locations"
@@ -149,7 +149,10 @@
 <script setup>
 import { defineProps, defineEmits, computed } from 'vue';
 import { getIcon } from '../../utils/icons';
+import { useTerminology } from '../../composables/useTerminology';
 import GroupedTasksList from '../event-manage/GroupedTasksList.vue';
+
+const { terms, termsLower } = useTerminology();
 
 const props = defineProps({
   loading: {
@@ -163,14 +166,6 @@ const props = defineProps({
   isExpanded: {
     type: Boolean,
     default: false,
-  },
-  checklistTerm: {
-    type: String,
-    default: 'checklists',
-  },
-  areaTerm: {
-    type: String,
-    default: 'area',
   },
   isAreaLead: {
     type: Boolean,

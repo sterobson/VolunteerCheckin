@@ -627,7 +627,7 @@ public class AreaFunctions
 
             foreach (ChecklistItemEntity item in checklistItems)
             {
-                List<ScopeConfiguration> configs = JsonSerializer.Deserialize<List<ScopeConfiguration>>(item.ScopeConfigurationsJson) ?? [];
+                List<ScopeConfiguration> configs = JsonSerializer.Deserialize<List<ScopeConfiguration>>(item.ScopeConfigurationsJson, FunctionHelpers.JsonOptions) ?? [];
 
                 foreach (ScopeConfiguration config in configs)
                 {
@@ -769,7 +769,7 @@ public class AreaFunctions
     /// </summary>
     private static bool TryRemoveAreaFromContactScope(EventContactEntity contact, string areaId)
     {
-        List<ScopeConfiguration> scopes = JsonSerializer.Deserialize<List<ScopeConfiguration>>(contact.ScopeConfigurationsJson) ?? [];
+        List<ScopeConfiguration> scopes = JsonSerializer.Deserialize<List<ScopeConfiguration>>(contact.ScopeConfigurationsJson, FunctionHelpers.JsonOptions) ?? [];
         bool modified = false;
 
         foreach (ScopeConfiguration scope in scopes)

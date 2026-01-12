@@ -198,7 +198,7 @@ public class ChecklistContextHelper
         ChecklistScopeHelper.ScopeMatchResult? scopeMatchResult = null)
     {
         List<ScopeConfiguration> scopeConfigurations =
-            JsonSerializer.Deserialize<List<ScopeConfiguration>>(item.ScopeConfigurationsJson) ?? [];
+            JsonSerializer.Deserialize<List<ScopeConfiguration>>(item.ScopeConfigurationsJson, FunctionHelpers.JsonOptions) ?? [];
 
         // Use provided scope match result if available, otherwise determine it
         string contextType;

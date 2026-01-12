@@ -346,7 +346,7 @@ public class AssignmentFunctions
 
                 // Parse location update scope configurations
                 List<ScopeConfiguration> locationUpdateScopeConfigs =
-                    JsonSerializer.Deserialize<List<ScopeConfiguration>>(location.LocationUpdateScopeJson ?? "[]") ?? [];
+                    JsonSerializer.Deserialize<List<ScopeConfiguration>>(location.LocationUpdateScopeJson ?? "[]", FunctionHelpers.JsonOptions) ?? [];
 
                 locationStatuses.Add(new LocationStatusResponse(
                     location.RowKey,

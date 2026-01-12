@@ -17,7 +17,7 @@
 
       <div v-else class="status success">
         <h2>Login successful!</h2>
-        <p>Redirecting to dashboard...</p>
+        <p>Redirecting to your sessions...</p>
       </div>
     </div>
   </div>
@@ -49,7 +49,7 @@ onMounted(async () => {
     if (response.success) {
       // Small delay so user sees success message
       setTimeout(() => {
-        router.push({ name: 'AdminDashboard' });
+        router.push({ name: 'Sessions' });
       }, 1000);
     } else {
       error.value = response.message || 'Invalid or expired login link. Please request a new one.';

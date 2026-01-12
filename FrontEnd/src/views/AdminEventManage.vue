@@ -2,7 +2,7 @@
   <div class="admin-event-manage" :style="{ colorScheme }">
     <header class="header">
       <div class="header-left">
-        <button @click="goBack" class="btn-back" title="Back to Dashboard">
+        <button @click="goBack" class="btn-back" title="Back to sessions">
           <AppLogo :size="48" animate />
         </button>
         <div v-if="event">
@@ -76,6 +76,7 @@
 
         <MarshalsTab
           v-if="activeTab === 'marshals'"
+          ref="marshalsTabRef"
           :marshals="marshals"
           :assignments="allAssignments"
           :locations="locationStatuses"
@@ -83,7 +84,7 @@
           @import-marshals="showImportMarshals = true"
           @select-marshal="selectMarshal"
           @delete-marshal="handleDeleteMarshalFromGrid"
-          @change-assignment-status="changeAssignmentStatus"
+          @toggle-check-in="toggleCheckIn"
         />
 
         <ChecklistsTab
@@ -456,6 +457,7 @@
       :selected-area-id="selectedAreaId"
       :center="savedMapCenter"
       :zoom="savedMapZoom"
+      :highlight-location-id="fullscreenHighlightLocationId"
       @map-click="handleFullscreenMapClick"
       @polygon-complete="handlePolygonComplete"
       @polygon-drawing="handlePolygonDrawing"
@@ -621,6 +623,7 @@ const selectedLocation = ref(null);
 const lockedFromMarshal = ref(false);
 const showAddLocation = ref(false);
 const courseAreasTab = ref(null);
+const marshalsTabRef = ref(null);
 const showShareLink = ref(false);
 const showMarshalCreated = ref(false);
 const newlyCreatedMarshalId = ref(null);
@@ -821,6 +824,14 @@ const canCompleteFullscreen = computed(() => {
   return fullscreenMap.canCompleteFullscreen.value;
 });
 
+// Highlight the location being moved in fullscreen mode
+const fullscreenHighlightLocationId = computed(() => {
+  if (fullscreenMode.value === 'move-checkpoint' && selectedLocation.value?.id) {
+    return selectedLocation.value.id;
+  }
+  return null;
+});
+
 // Combine real checkpoints with temporary ones for display
 const displayCheckpoints = computed(() => {
   const checkpoints = [...locationStatuses.value];
@@ -944,7 +955,7 @@ const handleSelectAreaIncident = (incident) => {
 
 // Methods
 const goBack = () => {
-  router.push('/admin/dashboard');
+  router.push('/sessions');
 };
 
 
@@ -1698,20 +1709,60 @@ const closeEditContactModal = () => {
 };
 
 const handleDrawBoundary = (formData) => {
-  // Store form data (but clear polygon so old boundary doesn't show while redrawing)
-  const formWithoutPolygon = { ...formData, polygon: [] };
-  pendingAreaFormData.value = formWithoutPolygon;
-  // Also set selectedArea so displayAreas uses version without polygon
+  // Store ORIGINAL form data (with polygon AND id) for restoration if canceled
+  // formData from modal doesn't include id, so preserve it from selectedArea
+  pendingAreaFormData.value = { ...formData, id: selectedArea.value?.id };
+  // Clear polygon from selectedArea so old boundary doesn't show while redrawing
+  const formWithoutPolygon = { ...formData, id: selectedArea.value?.id, polygon: [] };
   selectedArea.value = formWithoutPolygon;
-  // Close modal
-  showEditArea.value = false;
+  // Keep modal open - fullscreen map will appear over top of it
 
-  // Capture current map state before entering fullscreen
-  if (courseAreasTab.value) {
+  // Try to zoom to the area's extent
+  let foundBounds = false;
+
+  // First, try to use the existing polygon bounds
+  if (formData.polygon && formData.polygon.length > 0) {
+    const lats = formData.polygon.map(p => p.lat || p[0]);
+    const lngs = formData.polygon.map(p => p.lng || p[1]);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+    savedMapCenter.value = { lat: (minLat + maxLat) / 2, lng: (minLng + maxLng) / 2 };
+    // Calculate zoom based on extent (rough approximation)
+    const latDiff = maxLat - minLat;
+    const lngDiff = maxLng - minLng;
+    const maxDiff = Math.max(latDiff, lngDiff);
+    // Approximate zoom: smaller diff = higher zoom
+    savedMapZoom.value = maxDiff < 0.005 ? 17 : maxDiff < 0.01 ? 16 : maxDiff < 0.02 ? 15 : maxDiff < 0.05 ? 14 : 13;
+    foundBounds = true;
+  }
+
+  // If no polygon, try to use the area's checkpoints
+  if (!foundBounds && formData.checkpointIds && formData.checkpointIds.length > 0) {
+    const areaCheckpoints = locationStatuses.value.filter(loc => formData.checkpointIds.includes(loc.id));
+    if (areaCheckpoints.length > 0) {
+      const lats = areaCheckpoints.map(c => c.latitude).filter(Boolean);
+      const lngs = areaCheckpoints.map(c => c.longitude).filter(Boolean);
+      if (lats.length > 0 && lngs.length > 0) {
+        const minLat = Math.min(...lats);
+        const maxLat = Math.max(...lats);
+        const minLng = Math.min(...lngs);
+        const maxLng = Math.max(...lngs);
+        savedMapCenter.value = { lat: (minLat + maxLat) / 2, lng: (minLng + maxLng) / 2 };
+        const latDiff = maxLat - minLat;
+        const lngDiff = maxLng - minLng;
+        const maxDiff = Math.max(latDiff, lngDiff);
+        savedMapZoom.value = maxDiff < 0.005 ? 16 : maxDiff < 0.01 ? 15 : maxDiff < 0.02 ? 14 : maxDiff < 0.05 ? 13 : 12;
+        foundBounds = true;
+      }
+    }
+  }
+
+  // Fallback to current map state if no area bounds found
+  if (!foundBounds && courseAreasTab.value) {
     const center = courseAreasTab.value.getMapCenter();
     const zoom = courseAreasTab.value.getMapZoom();
-
-    // Only use captured values if they're valid, otherwise keep null for auto-fit
     if (center && zoom !== null) {
       savedMapCenter.value = center;
       savedMapZoom.value = zoom;
@@ -2054,7 +2105,7 @@ const handleFullscreenDone = () => {
     showEditLocation.value = true;
 
   } else if (fullscreenMode.value === 'draw-area') {
-    // Complete the polygon and exit
+    // Complete the polygon and exit - modal stays open behind fullscreen
     const coordinates = fullscreenMap.getCompletedPolygon();
     if (coordinates) {
       // If there's pending form data, merge it; otherwise just update polygon
@@ -2072,10 +2123,8 @@ const handleFullscreenDone = () => {
       }
     }
 
-    exitFullscreen();
-    areaInitialTab.value = 'boundary';
-    showEditArea.value = true;
     pendingAreaFormData.value = null;
+    exitFullscreen();
 
   } else if (fullscreenMode.value === 'add-multiple') {
     // Save all temporary checkpoints
@@ -2114,10 +2163,9 @@ const saveTempCheckpoints = async () => {
 
 const handleFullscreenCancel = () => {
   if (fullscreenMode.value === 'draw-area') {
-    // Restore modal if there was pending data
+    // Restore original data - modal is still open behind fullscreen
     if (pendingAreaFormData.value) {
       selectedArea.value = pendingAreaFormData.value;
-      showEditArea.value = true;
       pendingAreaFormData.value = null;
     }
   } else if (fullscreenMode.value === 'move-checkpoint') {
@@ -2237,8 +2285,14 @@ const startMoveLocation = (payload) => {
   // Reset temp coordinates
   tempLocationCoords.value = null;
 
-  // Capture current map state before entering fullscreen
-  if (courseAreasTab.value) {
+  // Center on the location being moved (use form data or selectedLocation)
+  const lat = preservedLocationFormData.value?.latitude ?? selectedLocation.value?.latitude;
+  const lng = preservedLocationFormData.value?.longitude ?? selectedLocation.value?.longitude;
+  if (lat && lng) {
+    savedMapCenter.value = { lat, lng };
+    savedMapZoom.value = 16; // Zoom in on the checkpoint
+  } else if (courseAreasTab.value) {
+    // Fallback to current map state if no coordinates
     const center = courseAreasTab.value.getMapCenter();
     const zoom = courseAreasTab.value.getMapZoom();
     if (center && zoom !== null) {
@@ -2458,6 +2512,11 @@ const handleDeleteLocation = async (locationId) => {
 
 const toggleCheckIn = async (assignment) => {
   try {
+    // Set loading state for marshals tab
+    if (marshalsTabRef.value) {
+      marshalsTabRef.value.setCheckingIn(assignment.id);
+    }
+
     await checkInApi.adminCheckIn(route.params.eventId, assignment.id);
     await reloadStatusOnly();
 
@@ -2471,6 +2530,11 @@ const toggleCheckIn = async (assignment) => {
   } catch (error) {
     console.error('Failed to toggle check-in:', error);
     alert('Failed to toggle check-in. Please try again.');
+  } finally {
+    // Clear loading state
+    if (marshalsTabRef.value) {
+      marshalsTabRef.value.setCheckingIn(null);
+    }
   }
 };
 
@@ -3021,33 +3085,6 @@ const handleConflictChoice = (choice) => {
     conflictResolveCallback.value = null;
   }
   showAssignmentConflict.value = false;
-};
-
-const changeAssignmentStatus = async ({ assignment, status }) => {
-  try {
-    if (status === 'not-checked-in') {
-      if (assignment.isCheckedIn) {
-        await checkInApi.adminCheckIn(route.params.eventId, assignment.id);
-      }
-    } else {
-      if (!assignment.isCheckedIn) {
-        await checkInApi.adminCheckIn(route.params.eventId, assignment.id);
-      }
-    }
-
-    await reloadStatusOnly();
-
-    // Update selectedLocation if the modal is open
-    if (selectedLocation.value) {
-      const updatedLocation = locationStatuses.value.find(l => l.id === selectedLocation.value.id);
-      if (updatedLocation) {
-        selectedLocation.value = updatedLocation;
-      }
-    }
-  } catch (error) {
-    console.error('Failed to change assignment status:', error);
-    alert('Failed to change status. Please try again.');
-  }
 };
 
 const getLocationName = (locationId) => {

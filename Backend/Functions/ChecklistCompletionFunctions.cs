@@ -328,7 +328,7 @@ public class ChecklistCompletionFunctions
                 {
                     ItemId = item.ItemId,
                     Text = item.Text,
-                    ScopeConfigurations = JsonSerializer.Deserialize<List<ScopeConfiguration>>(item.ScopeConfigurationsJson) ?? [],
+                    ScopeConfigurations = JsonSerializer.Deserialize<List<ScopeConfiguration>>(item.ScopeConfigurationsJson, FunctionHelpers.JsonOptions) ?? [],
                     CompletionCount = completions.Count(c => c.ChecklistItemId == item.ItemId),
                     IsRequired = item.IsRequired
                 }),

@@ -790,7 +790,7 @@ public record NoteForMarshalResponse(
 public record CreateEventContactRequest(
     string Role,
     string Name,
-    string Phone,
+    string? Phone = null,
     string? Email = null,
     string? Notes = null,
     string? MarshalId = null,
@@ -805,7 +805,7 @@ public record CreateEventContactRequest(
 public record UpdateEventContactRequest(
     string Role,
     string Name,
-    string Phone,
+    string? Phone = null,
     string? Email = null,
     string? Notes = null,
     string? MarshalId = null,

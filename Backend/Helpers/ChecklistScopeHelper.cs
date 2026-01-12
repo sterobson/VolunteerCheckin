@@ -69,7 +69,7 @@ public static class ChecklistScopeHelper
         Dictionary<string, LocationEntity> checkpointLookup)
     {
         List<ScopeConfiguration> configs = JsonSerializer.Deserialize<List<ScopeConfiguration>>(
-            item.ScopeConfigurationsJson) ?? [];
+            item.ScopeConfigurationsJson, FunctionHelpers.JsonOptions) ?? [];
 
         ScopeMatchResult result = EvaluateScopeConfigurations(configs, context, checkpointLookup);
         return result.IsRelevant;
@@ -97,7 +97,7 @@ public static class ChecklistScopeHelper
         Dictionary<string, LocationEntity> checkpointLookup)
     {
         List<ScopeConfiguration> configs = JsonSerializer.Deserialize<List<ScopeConfiguration>>(
-            item.ScopeConfigurationsJson) ?? [];
+            item.ScopeConfigurationsJson, FunctionHelpers.JsonOptions) ?? [];
 
         ScopeMatchResult result = EvaluateScopeConfigurations(configs, context, checkpointLookup);
 
@@ -192,7 +192,7 @@ public static class ChecklistScopeHelper
         Dictionary<string, LocationEntity> checkpointLookup)
     {
         List<ScopeConfiguration> configs = JsonSerializer.Deserialize<List<ScopeConfiguration>>(
-            item.ScopeConfigurationsJson) ?? [];
+            item.ScopeConfigurationsJson, FunctionHelpers.JsonOptions) ?? [];
 
         // First, find the most specific scope that matches (using existing logic)
         ScopeMatchResult bestMatch = EvaluateScopeConfigurations(configs, marshalContext, checkpointLookup);

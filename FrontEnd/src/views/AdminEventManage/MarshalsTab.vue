@@ -106,21 +106,16 @@
                     {{ getLocationDescription(assignment.locationId) }}
                   </div>
                 </td>
-                <td @click.stop>
-                  <select
-                    :value="getAssignmentStatusValue(assignment)"
-                    @change="$emit('change-assignment-status', { assignment, status: $event.target.value })"
-                    class="status-select hide-on-mobile"
-                    :class="getStatusClass(assignment)"
-                  >
-                    <option value="not-checked-in">Not checked-in</option>
-                    <option value="checked-in">Checked-in</option>
-                    <option value="admin-checked-in">Admin checked-in</option>
-                    <option value="wrong-location">Checked-in but not at correct location</option>
-                  </select>
-                  <span class="status-icon show-on-mobile" :class="getStatusClass(assignment)">
-                    {{ getStatusIcon(assignment) }}
-                  </span>
+                <td @click.stop class="check-in-cell">
+                  <CheckInToggleButton
+                    :is-checked-in="assignment.isCheckedIn"
+                    :check-in-time="assignment.checkInTime"
+                    :check-in-method="assignment.checkInMethod"
+                    :checked-in-by="assignment.checkedInBy"
+                    :marshal-name="getMarshalName(assignment.marshalId)"
+                    :is-loading="checkingInAssignmentId === assignment.id"
+                    @toggle="$emit('toggle-check-in', assignment)"
+                  />
                 </td>
                 <td v-if="index === 0" :rowspan="getMarshalAssignments(marshal.id).length" class="hide-on-mobile last-active-cell">
                   <span v-if="marshal.lastAccessedDate" class="last-active-text">
@@ -154,9 +149,9 @@
 <script setup>
 import { ref, computed, defineProps, defineEmits } from 'vue';
 import { sortAlphanumeric } from '../../utils/sortingHelpers';
-import { getStatusIcon } from '../../utils/statusHelpers';
 import { useTerminology } from '../../composables/useTerminology';
 import StatusPill from '../../components/StatusPill.vue';
+import CheckInToggleButton from '../../components/common/CheckInToggleButton.vue';
 
 const { terms } = useTerminology();
 
@@ -180,8 +175,16 @@ const emit = defineEmits([
   'import-marshals',
   'select-marshal',
   'delete-marshal',
-  'change-assignment-status',
+  'toggle-check-in',
 ]);
+
+const checkingInAssignmentId = ref(null);
+
+const setCheckingIn = (assignmentId) => {
+  checkingInAssignmentId.value = assignmentId;
+};
+
+defineExpose({ setCheckingIn });
 
 const sortBy = ref('name');
 const sortOrder = ref('asc');
@@ -243,6 +246,11 @@ const getLocationName = (locationId) => {
 const getLocationDescription = (locationId) => {
   const location = getLocation(locationId);
   return location ? location.description : '';
+};
+
+const getMarshalName = (marshalId) => {
+  const marshal = props.marshals.find(m => m.id === marshalId);
+  return marshal ? marshal.name : '';
 };
 
 const formatRelativeTime = (dateString) => {
@@ -331,18 +339,6 @@ const sortedMarshals = computed(() => {
 
   return sorted;
 });
-
-const getAssignmentStatusValue = (assignment) => {
-  if (assignment.isAdminCheckedIn) return 'admin-checked-in';
-  if (assignment.isWrongLocation) return 'wrong-location';
-  if (assignment.isCheckedIn) return 'checked-in';
-  return 'not-checked-in';
-};
-
-const getStatusClass = (assignment) => {
-  if (assignment.isCheckedIn) return 'status-checked-in';
-  return 'status-not-checked-in';
-};
 </script>
 
 <style scoped>
@@ -508,27 +504,8 @@ const getStatusClass = (assignment) => {
   max-width: 100%;
 }
 
-.status-select {
-  padding: 0.25rem 0.5rem;
-  border: 1px solid var(--input-border);
-  border-radius: 4px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  background: var(--input-bg);
-  color: var(--text-primary);
-}
-
-.status-select.status-checked-in {
-  color: var(--accent-success);
-  border-color: var(--accent-success);
-}
-
-.status-select.status-not-checked-in {
-  color: var(--text-secondary);
-}
-
-.status-icon {
-  font-size: 1.25rem;
+.check-in-cell {
+  min-width: 120px;
 }
 
 .last-active-cell {

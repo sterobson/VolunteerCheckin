@@ -172,20 +172,22 @@
           </p>
 
           <MarshalModeMockup
+            ref="brandingMockupRef"
             :branding="brandingData"
             :event-name="localForm.name"
             :event-date="formatEventDate(localForm.eventDate)"
             :event-id="eventId"
             :admin-email="adminEmail"
             @update:branding="handleBrandingChange"
+            @logo-staged-change="handleLogoStagedChange"
           />
 
           <div class="form-actions">
-            <button @click="resetBranding" class="btn btn-secondary">
+            <button @click="resetBranding" class="btn btn-secondary" :disabled="isSaving">
               Reset to default
             </button>
-            <button @click="handleSubmit" class="btn btn-primary" :disabled="!formDirty">
-              Save
+            <button @click="handleSubmit" class="btn btn-primary" :disabled="(!formDirty && !hasLogoChanges) || isSaving">
+              {{ isSaving ? 'Saving...' : 'Save' }}
             </button>
           </div>
         </div>
@@ -235,6 +237,8 @@ const emit = defineEmits([
 ]);
 
 const localForm = ref({ ...props.eventData });
+const brandingMockupRef = ref(null);
+const isSaving = ref(false);
 
 // Accordion state persistence
 const ACCORDION_STORAGE_KEY = 'admin_settings_accordion';
@@ -272,6 +276,8 @@ const toggleSection = (section) => {
 
 watch(() => props.eventData, (newVal) => {
   localForm.value = { ...newVal };
+  // Reset staged logo changes when form data is refreshed
+  hasLogoChanges.value = false;
 }, { deep: true });
 
 const emitFormChange = () => {
@@ -294,6 +300,13 @@ const brandingData = computed(() => ({
   pageGradientEnd: localForm.value.brandingPageGradientEnd || '',
 }));
 
+// Track if there are staged logo changes
+const hasLogoChanges = ref(false);
+
+const handleLogoStagedChange = (hasStagedChanges) => {
+  hasLogoChanges.value = hasStagedChanges;
+};
+
 const handleBrandingChange = (branding) => {
   localForm.value.brandingHeaderGradientStart = branding.headerGradientStart;
   localForm.value.brandingHeaderGradientEnd = branding.headerGradientEnd;
@@ -314,11 +327,53 @@ const resetBranding = () => {
   localForm.value.brandingAccentColor = '';
   localForm.value.brandingPageGradientStart = '';
   localForm.value.brandingPageGradientEnd = '';
+  // Reset staged logo changes when branding is reset
+  hasLogoChanges.value = false;
+  // Reset the logo uploader's staged state
+  brandingMockupRef.value?.resetLogo();
   emitFormChange();
 };
 
-const handleSubmit = () => {
-  emit('submit', { ...localForm.value });
+const handleSubmit = async () => {
+  if (isSaving.value) return;
+  isSaving.value = true;
+
+  try {
+    // Handle staged logo upload/delete before submitting the form
+    if (hasLogoChanges.value && brandingMockupRef.value) {
+      // Check if we're deleting the logo (not uploading a new one)
+      const isPendingDelete = brandingMockupRef.value.isLogoPendingDelete();
+
+      if (isPendingDelete) {
+        // Handle logo deletion
+        const deleteResult = await brandingMockupRef.value.deleteStagedLogo();
+        if (!deleteResult.success) {
+          console.error('Failed to delete logo:', deleteResult.error);
+          return;
+        }
+        // Clear the URL in the form
+        localForm.value.brandingLogoUrl = '';
+      } else {
+        // Handle staged logo upload
+        const uploadResult = await brandingMockupRef.value.uploadStagedLogo();
+        if (!uploadResult.success) {
+          console.error('Failed to upload logo:', uploadResult.error);
+          return;
+        }
+        // Update the logo URL with the server URL if we uploaded a new logo
+        if (uploadResult.logoUrl && !uploadResult.logoUrl.startsWith('blob:')) {
+          localForm.value.brandingLogoUrl = uploadResult.logoUrl;
+        }
+      }
+
+      // Clear the logo changes flag after successful operation
+      hasLogoChanges.value = false;
+    }
+
+    emit('submit', { ...localForm.value });
+  } finally {
+    isSaving.value = false;
+  }
 };
 </script>
 

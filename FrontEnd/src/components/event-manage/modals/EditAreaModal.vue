@@ -54,8 +54,6 @@
             :route="route"
             :locations="checkpoints"
             :areas="otherAreas"
-            :highlight-location-ids="areaCheckpointIds"
-            :simplify-non-highlighted="true"
             :all-locations-for-bounds="polygonBoundsLocations"
             height="300px"
             @polygon-update="handlePolygonUpdate"
@@ -425,10 +423,6 @@ const getEffectivePeopleTerm = () => {
   return props.eventPeopleTerm || 'Marshals';
 };
 
-// Get effective people term singular
-const getEffectivePeopleTermSingular = () => {
-  return getSingularTerm('people', getEffectivePeopleTerm());
-};
 
 // Get effective checkpoint term for this area (resolves "Person points" dynamically)
 const getAreaCheckpointTerm = (plural = true) => {
@@ -446,23 +440,6 @@ const getAreaCheckpointTermLower = (plural = true) => {
   return getAreaCheckpointTerm(plural).toLowerCase();
 };
 
-// Get effective people term for a specific checkpoint (checkpoint → area → event)
-const getCheckpointPeopleTerm = (checkpoint) => {
-  // Use checkpoint's resolved term if available (from backend)
-  if (checkpoint.resolvedPeopleTerm) {
-    return checkpoint.resolvedPeopleTerm;
-  }
-  // Fall back to checkpoint's own term
-  if (checkpoint.peopleTerm) {
-    return checkpoint.peopleTerm;
-  }
-  // Fall back to area's term
-  if (form.value.peopleTerm) {
-    return form.value.peopleTerm;
-  }
-  // Fall back to event's term
-  return props.eventPeopleTerm || 'Marshals';
-};
 
 const props = defineProps({
   show: {
@@ -605,6 +582,26 @@ const form = ref({
   checkpointTerm: '',
 });
 
+// Helper to create empty form for new area
+const getEmptyForm = () => ({
+  name: '',
+  description: '',
+  color: getNextAvailableColor(props.areas),
+  displayOrder: props.areas.length,
+  isDefault: false,
+  polygon: [],
+  checkpointStyleType: 'default',
+  checkpointStyleColor: '',
+  checkpointStyleBackgroundShape: '',
+  checkpointStyleBackgroundColor: '',
+  checkpointStyleBorderColor: '',
+  checkpointStyleIconColor: '',
+  checkpointStyleSize: '',
+  checkpointStyleMapRotation: '',
+  peopleTerm: '',
+  checkpointTerm: '',
+});
+
 // Accordion expanded state - with persistence
 const ACCORDION_STORAGE_KEY = 'edit_area_accordion';
 const getAccordionStorageKey = () => props.eventId ? `${ACCORDION_STORAGE_KEY}_${props.eventId}` : ACCORDION_STORAGE_KEY;
@@ -623,7 +620,7 @@ onMounted(() => {
     try {
       const parsed = JSON.parse(saved);
       expandedSections.value = { ...expandedSections.value, ...parsed };
-    } catch (e) {
+    } catch {
       // Ignore parse errors
     }
   }
@@ -721,19 +718,6 @@ const iconStylePreviewSvg = computed(() => {
 // Computed property for whether this is an existing area
 const isExistingArea = computed(() => {
   return props.area && props.area.id;
-});
-
-// Calculate center of polygon for map preview
-const polygonCenter = computed(() => {
-  if (!form.value.polygon || form.value.polygon.length === 0) {
-    return { lat: 0, lng: 0 };
-  }
-  const lats = form.value.polygon.map(p => p.lat);
-  const lngs = form.value.polygon.map(p => p.lng);
-  return {
-    lat: lats.reduce((a, b) => a + b, 0) / lats.length,
-    lng: lngs.reduce((a, b) => a + b, 0) / lngs.length,
-  };
 });
 
 // Convert polygon points to locations for auto-fit bounds
@@ -884,69 +868,6 @@ const excludeContactIds = computed(() => {
   return [...scopedIds, ...pendingIds];
 });
 
-// Get assignments for a specific checkpoint
-const getCheckpointAssignments = (checkpointId) => {
-  return props.assignments.filter(a => a.locationId === checkpointId);
-};
-
-// Get assignments sorted alphabetically by name
-const getSortedAssignments = (checkpointId) => {
-  const assignments = getCheckpointAssignments(checkpointId);
-  return [...assignments].sort((a, b) =>
-    (a.marshalName || '').localeCompare(b.marshalName || '', undefined, { sensitivity: 'base' })
-  );
-};
-
-// Get number of checked in marshals for a checkpoint
-const getCheckedInCount = (checkpoint) => {
-  const assignments = getCheckpointAssignments(checkpoint.id);
-  return assignments.filter(a => a.isCheckedIn).length;
-};
-
-// Get check-in status class
-const getCheckInStatusClass = (checkpoint) => {
-  const assignments = getCheckpointAssignments(checkpoint.id);
-  if (assignments.length === 0) return 'status-none';
-
-  const checkedInCount = assignments.filter(a => a.isCheckedIn).length;
-  if (checkedInCount === 0) return 'status-none';
-  if (checkedInCount === assignments.length) return 'status-complete';
-  return 'status-partial';
-};
-
-// Get check-in status text
-const getCheckInStatusText = (checkpoint) => {
-  const assignments = getCheckpointAssignments(checkpoint.id);
-  const peopleTerm = getCheckpointPeopleTerm(checkpoint).toLowerCase();
-  if (assignments.length === 0) return `No ${peopleTerm}`;
-
-  const checkedInCount = assignments.filter(a => a.isCheckedIn).length;
-  if (checkedInCount === 0) return 'Not checked in';
-  if (checkedInCount === assignments.length) return 'Fully checked in';
-  return `Partially checked in (${checkedInCount}/${assignments.length})`;
-};
-
-// Get checklist status class
-const getChecklistStatusClass = (checkpointId) => {
-  const status = checkpointChecklistStatus.value[checkpointId];
-  if (!status) return '';
-
-  if (status.total === 0) return '';
-  if (status.completed === status.total) return 'status-complete';
-  if (status.completed === 0) return 'status-none';
-  return 'status-partial';
-};
-
-// Get checklist status text
-const getChecklistStatusText = (checkpointId) => {
-  const status = checkpointChecklistStatus.value[checkpointId];
-  if (!status) return '';
-
-  if (status.total === 0) return 'No tasks';
-  if (status.completed === status.total) return 'All tasks completed';
-  return `${status.completed}/${status.total} completed`;
-};
-
 // Lazy load checklist status when checkpoints tab is viewed
 const loadChecklistStatus = async (checkpointId) => {
   if (checkpointChecklistStatus.value[checkpointId] || loadingChecklistStatus.value[checkpointId]) {
@@ -998,24 +919,7 @@ watch(() => props.area, (newVal) => {
     };
   } else {
     // Creating new area
-    form.value = {
-      name: '',
-      description: '',
-      color: getNextAvailableColor(props.areas),
-      displayOrder: props.areas.length,
-      isDefault: false,
-      polygon: [],
-      checkpointStyleType: 'default',
-      checkpointStyleColor: '',
-      checkpointStyleBackgroundShape: '',
-      checkpointStyleBackgroundColor: '',
-      checkpointStyleBorderColor: '',
-      checkpointStyleIconColor: '',
-      checkpointStyleSize: '',
-      checkpointStyleMapRotation: '',
-      peopleTerm: '',
-      checkpointTerm: '',
-    };
+    form.value = getEmptyForm();
   }
 }, { immediate: true, deep: true });
 
@@ -1030,24 +934,7 @@ watch(() => props.show, (newVal) => {
     showAddContactModal.value = false;
     // Reset form when opening for a new area
     if (!isExistingArea.value) {
-      form.value = {
-        name: '',
-        description: '',
-        color: getNextAvailableColor(props.areas),
-        displayOrder: props.areas.length,
-        isDefault: false,
-        polygon: [],
-        checkpointStyleType: 'default',
-        checkpointStyleColor: '',
-        checkpointStyleBackgroundShape: '',
-        checkpointStyleBackgroundColor: '',
-        checkpointStyleBorderColor: '',
-        checkpointStyleIconColor: '',
-        checkpointStyleSize: '',
-        checkpointStyleMapRotation: '',
-        peopleTerm: '',
-        checkpointTerm: '',
-      };
+      form.value = getEmptyForm();
     }
     // Clear pending changes in checklist tab if it exists
     if (checklistTabRef.value?.resetLocalState) {
@@ -1147,14 +1034,6 @@ const handleUndoRemove = (contactId) => {
   handleInput();
 };
 
-const formatRoleName = (role) => {
-  if (!role) return '';
-  return role
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/^./, str => str.toUpperCase())
-    .trim();
-};
-
 const handleChecklistChange = (changes) => {
   checklistChanges.value = changes;
   handleInput();
@@ -1227,39 +1106,6 @@ const handleClose = () => {
   emit('close');
 };
 
-// Generate checkpoint icon SVG based on resolved style
-const getCheckpointIconSvg = (checkpoint) => {
-  const resolvedType = checkpoint.resolvedStyleType || checkpoint.ResolvedStyleType;
-  const resolvedBgColor = checkpoint.resolvedStyleBackgroundColor || checkpoint.ResolvedStyleBackgroundColor || checkpoint.resolvedStyleColor || checkpoint.ResolvedStyleColor;
-  const resolvedBorderColor = checkpoint.resolvedStyleBorderColor || checkpoint.ResolvedStyleBorderColor;
-  const resolvedIconColor = checkpoint.resolvedStyleIconColor || checkpoint.ResolvedStyleIconColor;
-  const resolvedShape = checkpoint.resolvedStyleBackgroundShape || checkpoint.ResolvedStyleBackgroundShape;
-
-  // Check if there's any resolved styling
-  const hasResolvedStyle = (resolvedType && resolvedType !== 'default')
-    || resolvedBgColor
-    || resolvedBorderColor
-    || resolvedIconColor
-    || (resolvedShape && resolvedShape !== 'circle');
-
-  if (hasResolvedStyle) {
-    return generateCheckpointSvg({
-      type: resolvedType || 'circle',
-      backgroundShape: resolvedShape || 'circle',
-      backgroundColor: resolvedBgColor || '#667eea',
-      borderColor: resolvedBorderColor || '#ffffff',
-      iconColor: resolvedIconColor || '#ffffff',
-      size: '75',
-      outputSize: 20,
-    });
-  }
-
-  // Default: use neutral colored circle
-  return `<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="10" cy="10" r="8" fill="#667eea" stroke="#fff" stroke-width="1.5"/>
-  </svg>`;
-};
-
 // Expose methods for parent component to manage contacts
 defineExpose({
   addPendingContact: (contact) => {
@@ -1314,29 +1160,6 @@ defineExpose({
   cursor: not-allowed;
 }
 
-.form-help {
-  display: block;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  margin-top: 0.25rem;
-  font-weight: normal;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.checkbox-label input[type="checkbox"] {
-  cursor: pointer;
-  width: 1.1rem;
-  height: 1.1rem;
-}
-
 .color-picker {
   display: flex;
   gap: 0.75rem;
@@ -1368,72 +1191,6 @@ defineExpose({
   color: var(--text-primary);
 }
 
-.checkpoints-list,
-.contacts-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-top: 1rem;
-}
-
-.checkpoint-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem;
-  background: var(--card-bg);
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
-  gap: 1rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.checkpoint-item:hover {
-  background: var(--bg-hover);
-  border-color: var(--accent-primary);
-}
-
-.checkpoint-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  flex: 1;
-}
-
-.checkpoint-description {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-}
-
-.checkpoint-meta {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
-.contact-role {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.25rem;
-}
-
-.contact-role label {
-  font-size: 0.85rem;
-  font-weight: normal;
-  color: var(--text-secondary);
-  margin: 0;
-}
-
-.role-select {
-  padding: 0.25rem 0.5rem;
-  border: 1px solid var(--input-border);
-  border-radius: 4px;
-  font-size: 0.85rem;
-  background: var(--input-bg);
-  color: var(--text-primary);
-}
-
 .boundary-section {
   display: flex;
   flex-direction: column;
@@ -1446,11 +1203,6 @@ defineExpose({
   border: 1px solid var(--border-color);
 }
 
-.boundary-map {
-  height: 300px;
-  width: 100%;
-}
-
 .boundary-actions {
   display: flex;
   gap: 1rem;
@@ -1461,37 +1213,6 @@ defineExpose({
   font-size: 0.85rem;
   color: var(--text-secondary);
   text-align: center;
-}
-
-.boundary-info {
-  background: var(--status-success-bg);
-  padding: 0.75rem;
-  border-radius: 6px;
-  border: 1px solid var(--accent-success);
-  color: var(--accent-success);
-  font-size: 0.9rem;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 2rem;
-  color: var(--text-muted);
-}
-
-.empty-state p {
-  margin: 0;
-  font-size: 0.9rem;
-}
-
-.auto-assign-notice {
-  background: var(--status-success-bg);
-  border: 1px solid var(--accent-success);
-  color: var(--accent-success);
-  padding: 0.75rem 1rem;
-  border-radius: 4px;
-  margin-bottom: 1rem;
-  font-size: 0.9rem;
-  line-height: 1.5;
 }
 
 .custom-footer {
@@ -1568,169 +1289,6 @@ defineExpose({
 
 .btn-danger:hover {
   background: var(--danger-hover);
-}
-
-.checkpoint-card {
-  padding: 1rem;
-  background: var(--card-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.checkpoint-card:hover {
-  background: var(--bg-hover);
-  border-color: var(--accent-primary);
-  box-shadow: var(--shadow-sm);
-}
-
-.checkpoint-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-}
-
-.checkpoint-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-}
-
-.checkpoint-icon :deep(svg) {
-  width: 20px;
-  height: 20px;
-}
-
-.checkpoint-name-section {
-  flex: 1;
-  min-width: 0;
-}
-
-.checkpoint-name-section h4 {
-  margin: 0;
-  font-size: 1rem;
-  color: var(--text-primary);
-}
-
-.checkpoint-description {
-  font-weight: normal;
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-}
-
-.checkpoint-stats {
-  flex-shrink: 0;
-  margin-left: auto;
-}
-
-.stat-badge {
-  padding: 0.375rem 0.75rem;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.stat-badge.status-complete {
-  background: var(--status-success-bg);
-  color: var(--accent-success);
-}
-
-.stat-badge.status-partial {
-  background: var(--status-warning-bg);
-  color: var(--accent-warning);
-}
-
-.stat-badge.status-none {
-  background: var(--status-danger-bg);
-  color: var(--accent-danger);
-}
-
-.checkpoint-details {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.detail-row.with-pills {
-  flex-wrap: wrap;
-}
-
-.marshal-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.375rem;
-  flex: 1;
-  justify-content: flex-end;
-}
-
-.marshal-pill {
-  display: inline-block;
-  padding: 0.2rem 0.5rem;
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.marshal-pill.checked-in {
-  background: var(--status-success-bg);
-  color: var(--accent-success);
-}
-
-.detail-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.875rem;
-}
-
-.detail-label {
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.detail-value {
-  color: var(--text-primary);
-}
-
-.detail-value.status-complete {
-  color: var(--accent-success);
-  font-weight: 500;
-}
-
-.detail-value.status-partial {
-  color: var(--accent-warning);
-  font-weight: 500;
-}
-
-.detail-value.status-none {
-  color: var(--accent-danger);
-  font-weight: 500;
-}
-
-.detail-value.loading-text {
-  color: var(--text-muted);
-  font-style: italic;
-}
-
-.warning-text {
-  color: var(--accent-danger);
-  font-weight: 500;
-}
-
-/* Contacts section */
-.contacts-actions {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
 }
 
 /* Contacts Tab Styles */

@@ -7,7 +7,7 @@
     >
       <span class="accordion-title">
         <span class="section-icon" v-html="getIcon('course')"></span>
-        {{ courseTerm }}
+        {{ terms.course }}
         <span v-if="userLocation" class="location-status active">GPS Active</span>
         <span v-else class="location-status">GPS Inactive</span>
       </span>
@@ -31,9 +31,9 @@
           :marshal-mode="true"
           :clickable="clickable"
           :show-fullscreen="true"
-          :fullscreen-title="courseTerm"
-          :fullscreen-header-style="headerStyle"
-          :fullscreen-header-text-color="headerTextColor"
+          :fullscreen-title="terms.course"
+          :fullscreen-header-style="branding.headerStyle"
+          :fullscreen-header-text-color="branding.headerTextColor"
           :toolbar-actions="toolbarActions"
           :hide-recenter-button="true"
           :class="{ 'selecting-location': selectingLocation }"
@@ -55,18 +55,28 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits, ref, defineExpose } from 'vue';
+import { defineProps, defineEmits, ref, computed, defineExpose, inject, toValue, reactive } from 'vue';
 import { getIcon } from '../../utils/icons';
+import { useTerminology } from '../../composables/useTerminology';
 import CommonMap from '../common/CommonMap.vue';
+
+const { terms } = useTerminology();
+const injectedBranding = inject('marshalBranding', {
+  headerStyle: {},
+  headerTextColor: '',
+});
+
+// Unwrap refs from injected branding (they may be computed refs or plain values)
+// Use reactive() so Vue auto-unwraps the computed refs in templates
+const branding = reactive({
+  headerStyle: computed(() => toValue(injectedBranding.headerStyle)),
+  headerTextColor: computed(() => toValue(injectedBranding.headerTextColor)),
+});
 
 defineProps({
   isExpanded: {
     type: Boolean,
     default: false,
-  },
-  courseTerm: {
-    type: String,
-    default: 'Course',
   },
   userLocation: {
     type: Object,
@@ -100,14 +110,6 @@ defineProps({
     type: Boolean,
     default: false,
   },
-  headerStyle: {
-    type: Object,
-    default: () => ({}),
-  },
-  headerTextColor: {
-    type: String,
-    default: '',
-  },
   toolbarActions: {
     type: Array,
     default: () => [],
@@ -118,9 +120,11 @@ defineEmits(['toggle', 'cancel-select', 'map-click', 'location-click', 'action-c
 
 const mapRef = ref(null);
 
-// Expose the map ref for parent to access map methods
+// Expose map methods directly for parent to access
 defineExpose({
   mapRef,
+  recenterOnLocation: (lat, lng, zoom) => mapRef.value?.recenterOnLocation?.(lat, lng, zoom),
+  recenterOnUserLocation: () => mapRef.value?.recenterOnUserLocation?.(),
 });
 </script>
 

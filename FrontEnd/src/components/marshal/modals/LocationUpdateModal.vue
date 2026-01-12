@@ -3,7 +3,7 @@
     <div v-if="show" class="modal-overlay" @click.self="$emit('close')">
       <div class="modal-content location-update-modal">
         <div class="modal-header">
-          <h3>Update {{ checkpointTermLower }} location</h3>
+          <h3>Update {{ termsLower.checkpoint }} location</h3>
           <button class="modal-close" @click="$emit('close')">&times;</button>
         </div>
 
@@ -54,7 +54,7 @@
                 />
                 <span>Auto-update every 60 seconds</span>
               </label>
-              <p class="option-hint">Automatically updates the {{ checkpointTermLower }} location using your GPS every minute.</p>
+              <p class="option-hint">Automatically updates the {{ termsLower.checkpoint }} location using your GPS every minute.</p>
             </div>
 
             <!-- Select on Map Option -->
@@ -73,7 +73,7 @@
 
             <!-- Copy from Checkpoint Option -->
             <div class="update-option">
-              <label class="option-label">Or copy location from another {{ checkpointTermLower }}:</label>
+              <label class="option-label">Or copy location from another {{ termsLower.checkpoint }}:</label>
               <div class="checkpoint-list" v-if="availableCheckpoints.length > 0">
                 <button
                   v-for="loc in availableCheckpoints"
@@ -86,7 +86,7 @@
                 </button>
               </div>
               <p v-else class="no-checkpoints">
-                No other {{ checkpointTermPluralLower }} available to copy from.
+                No other {{ termsLower.checkpoints }} available to copy from.
               </p>
             </div>
 
@@ -105,7 +105,10 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits, computed } from 'vue';
+import { defineProps, defineEmits } from 'vue';
+import { useTerminology } from '../../../composables/useTerminology';
+
+const { termsLower } = useTerminology();
 
 const props = defineProps({
   show: {
@@ -140,14 +143,6 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
-  checkpointTerm: {
-    type: String,
-    default: 'Checkpoint',
-  },
-  checkpointTermPlural: {
-    type: String,
-    default: 'Checkpoints',
-  },
   accentButtonStyle: {
     type: Object,
     default: () => ({}),
@@ -155,9 +150,6 @@ const props = defineProps({
 });
 
 defineEmits(['close', 'update-gps', 'toggle-auto-update', 'select-on-map', 'copy-from-checkpoint']);
-
-const checkpointTermLower = computed(() => props.checkpointTerm.toLowerCase());
-const checkpointTermPluralLower = computed(() => props.checkpointTermPlural.toLowerCase());
 
 const formatDateTime = (dateString) => {
   if (!dateString) return '';

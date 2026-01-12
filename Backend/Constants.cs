@@ -84,7 +84,7 @@ public static class Constants
     public const int MagicCodeLength = 6;
 
     // Rate Limiting
-    public const int MaxMagicLinkRequestsPerEmailPerHour = 5;
+    public const int MaxMagicLinkRequestsPerEmailPerHour = 10;
     public const int MaxMarshalCodeAttemptsPerIpPerMinute = 10;
     public const int MaxMarshalCodeAttemptsPerEventPerHour = 100;
 

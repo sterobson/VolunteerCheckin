@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { authApi } from '../services/api';
+import { authApi, setAuthContext } from '../services/api';
 
 export const useAuthStore = defineStore('auth', () => {
   const adminEmail = ref(localStorage.getItem('adminEmail') || null);
@@ -25,6 +25,8 @@ export const useAuthStore = defineStore('auth', () => {
       loginPending.value = false;
       localStorage.setItem('adminEmail', response.data.person?.email);
       localStorage.setItem('sessionToken', response.data.sessionToken);
+      // Set auth context to admin
+      setAuthContext('admin');
     }
     return response.data;
   };
@@ -39,6 +41,8 @@ export const useAuthStore = defineStore('auth', () => {
       if (response.data.sessionToken) {
         localStorage.setItem('sessionToken', response.data.sessionToken);
       }
+      // Set auth context to admin
+      setAuthContext('admin');
     }
     return response.data;
   };
@@ -54,6 +58,8 @@ export const useAuthStore = defineStore('auth', () => {
     loginPending.value = false;
     localStorage.removeItem('adminEmail');
     localStorage.removeItem('sessionToken');
+    // Clear auth context
+    setAuthContext(null);
   };
 
   return {

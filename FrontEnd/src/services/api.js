@@ -6,6 +6,7 @@ import {
   queueAction,
   getPendingActionsCount
 } from './offlineDb';
+import { getSession } from './marshalSessionService';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -18,6 +19,32 @@ const api = axios.create({
 // Offline state tracking
 let isOfflineMode = false;
 let pendingActionsCallback = null;
+
+// Auth context tracking - determines which token to use for API calls
+// type: 'admin' | 'marshal' | null
+// eventId: only relevant when type is 'marshal'
+let currentAuthContext = {
+  type: null,
+  eventId: null
+};
+
+/**
+ * Set the current authentication context
+ * Call this when entering admin or marshal views
+ * @param {'admin'|'marshal'|null} type
+ * @param {string|null} eventId - Required when type is 'marshal'
+ */
+export function setAuthContext(type, eventId = null) {
+  currentAuthContext = { type, eventId };
+}
+
+/**
+ * Get the current authentication context
+ * @returns {{type: string|null, eventId: string|null}}
+ */
+export function getAuthContext() {
+  return { ...currentAuthContext };
+}
 
 /**
  * Set callback for when pending actions count changes
@@ -81,16 +108,78 @@ function isServerOrNetworkError(error) {
   return false;
 }
 
+/**
+ * Detect auth context from current URL hash
+ * This is more reliable than the context variable for edge cases
+ */
+function detectAuthContextFromUrl() {
+  const hash = window.location.hash || '';
+
+  // Check if on admin routes
+  if (hash.includes('/admin/')) {
+    return { type: 'admin', eventId: null };
+  }
+
+  // Check if on marshal routes - extract eventId from /event/{eventId}
+  const marshalMatch = hash.match(/#\/event\/([^/?]+)/);
+  if (marshalMatch) {
+    return { type: 'marshal', eventId: marshalMatch[1] };
+  }
+
+  // Check if on marshal selector
+  if (hash.includes('/marshal')) {
+    return { type: null, eventId: null };
+  }
+
+  // Default to stored context or null
+  return currentAuthContext;
+}
+
+// Endpoints that should NOT include auth headers (login endpoints use their own auth)
+const NO_AUTH_ENDPOINTS = [
+  '/auth/marshal-login',
+  '/auth/request-login',
+  '/auth/verify-token',
+  '/auth/instant-login',
+];
+
 // Add interceptor to include auth headers
 api.interceptors.request.use((config) => {
+  // Skip auth headers for login endpoints
+  const isLoginEndpoint = NO_AUTH_ENDPOINTS.some(endpoint => config.url?.includes(endpoint));
+  if (isLoginEndpoint) {
+    return config;
+  }
+
+  // Always include admin email header if present (for backend role resolution)
   const adminEmail = localStorage.getItem('adminEmail');
   if (adminEmail) {
     config.headers['X-Admin-Email'] = adminEmail;
   }
-  const sessionToken = localStorage.getItem('sessionToken');
-  if (sessionToken) {
-    config.headers['Authorization'] = `Bearer ${sessionToken}`;
+
+  // Detect context from URL (more reliable than stored context)
+  const context = detectAuthContextFromUrl();
+
+  // Determine which token to use based on auth context
+  let token = null;
+
+  if (context.type === 'marshal' && context.eventId) {
+    // Use marshal token for this specific event
+    const session = getSession(context.eventId);
+    if (session?.token) {
+      token = session.token;
+    }
   }
+
+  // Fall back to admin session token if no marshal token or admin context
+  if (!token) {
+    token = localStorage.getItem('sessionToken');
+  }
+
+  if (token) {
+    config.headers['Authorization'] = `Bearer ${token}`;
+  }
+
   return config;
 });
 
@@ -99,22 +188,33 @@ let authErrorCount = 0;
 const AUTH_ERROR_THRESHOLD = 2; // Redirect after this many consecutive auth errors
 
 /**
- * Handle authentication errors by redirecting to login
+ * Handle authentication errors
+ * For admin context: redirects to login after threshold
+ * For marshal context: handled by useMarshalAuth (re-auth with magic code)
  */
 function handleAuthError() {
   authErrorCount++;
 
   if (authErrorCount >= AUTH_ERROR_THRESHOLD) {
-    // Clear auth data
-    localStorage.removeItem('adminEmail');
-    localStorage.removeItem('sessionToken');
+    // Detect context from URL (more reliable than stored context)
+    const context = detectAuthContextFromUrl();
 
-    // Redirect to home with login modal (avoid redirect loop if already on home)
-    // Use hash check since app uses hash-based routing
-    const currentHash = window.location.hash || '';
-    if (!currentHash.includes('login') && !currentHash.includes('/verify')) {
-      window.location.href = `${import.meta.env.BASE_URL}#/?login=true`;
+    // Only auto-redirect for admin context
+    // Marshal auth errors are handled by useMarshalAuth which can attempt re-auth
+    if (context.type !== 'marshal') {
+      // Clear admin auth data
+      localStorage.removeItem('adminEmail');
+      localStorage.removeItem('sessionToken');
+
+      // Redirect to home with login modal (avoid redirect loop if already on home)
+      // Use hash check since app uses hash-based routing
+      const currentHash = window.location.hash || '';
+      if (!currentHash.includes('login') && !currentHash.includes('/verify')) {
+        window.location.href = `${import.meta.env.BASE_URL}#/?login=true`;
+      }
     }
+    // For marshal context, the error will propagate to useMarshalAuth
+    // which will handle re-auth or redirect to selector
   }
 }
 
@@ -123,6 +223,54 @@ function handleAuthError() {
  */
 function resetAuthErrorCount() {
   authErrorCount = 0;
+}
+
+/**
+ * Explicitly reset auth error count (e.g., before re-authentication attempts)
+ */
+export function clearAuthErrorCount() {
+  authErrorCount = 0;
+}
+
+/**
+ * Determine if a request URL is for a marshal-specific endpoint
+ * Used to avoid clearing admin credentials for marshal request failures
+ */
+function isMarshalRequest(config) {
+  if (!config?.url) return false;
+
+  // Check if this request was sent with a marshal token by looking at the Authorization header
+  // and comparing with the admin token
+  const adminToken = localStorage.getItem('sessionToken');
+  const authHeader = config.headers?.Authorization || config.headers?.authorization;
+
+  if (authHeader && adminToken) {
+    const requestToken = authHeader.replace('Bearer ', '');
+    // If the request token differs from admin token, it must be a marshal token
+    if (requestToken !== adminToken) {
+      return true;
+    }
+  }
+
+  // Check if this is a login-related request (these don't have auth headers)
+  const url = config.url || '';
+  if (url.includes('/auth/marshal-login')) {
+    return true;
+  }
+
+  // Check if the request was made while on a marshal route
+  // This handles cases where the request was initiated from marshal context
+  const hash = window.location.hash || '';
+  if (hash.match(/#\/event\/[^/?]+/)) {
+    return true;
+  }
+
+  // Check if we're on the marshal selector page
+  if (hash === '#/marshal' || hash.startsWith('#/marshal?')) {
+    return true;
+  }
+
+  return false;
 }
 
 // Response interceptor to cache successful responses
@@ -150,7 +298,11 @@ api.interceptors.response.use(
 
     // Handle authentication errors (401 Unauthorized, 403 Forbidden)
     if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-      handleAuthError();
+      // Only call handleAuthError if this was NOT a marshal request
+      // This prevents admin logout when marshal requests fail
+      if (!isMarshalRequest(config)) {
+        handleAuthError();
+      }
       return Promise.reject(error);
     }
 

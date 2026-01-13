@@ -800,6 +800,7 @@ public record CreateEventContactRequest(
     string? MarshalId = null,
     List<ScopeConfiguration>? ScopeConfigurations = null,
     int DisplayOrder = 0,
+    bool IsPinned = false,
     bool IsPrimary = false,
     bool ShowInEmergencyInfo = false
 );
@@ -816,6 +817,7 @@ public record UpdateEventContactRequest(
     string? MarshalId = null,
     List<ScopeConfiguration>? ScopeConfigurations = null,
     int DisplayOrder = 0,
+    bool IsPinned = false,
     bool IsPrimary = false,
     bool ShowInEmergencyInfo = false
 );
@@ -835,6 +837,7 @@ public record EventContactResponse(
     string? MarshalName,
     List<ScopeConfiguration> ScopeConfigurations,
     int DisplayOrder,
+    bool IsPinned,
     bool IsPrimary,
     bool ShowInEmergencyInfo,
     DateTime CreatedAt,
@@ -851,6 +854,8 @@ public record EventContactForMarshalResponse(
     string Phone,
     string? Email,
     string? Notes,
+    int DisplayOrder,
+    bool IsPinned,
     bool IsPrimary,
     bool ShowInEmergencyInfo,
     string MatchedScope  // Which scope configuration matched for this marshal

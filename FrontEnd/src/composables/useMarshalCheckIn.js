@@ -1,5 +1,7 @@
 import { ref } from 'vue';
 import { checkInApi, queueOfflineAction, getOfflineMode } from '../services/api';
+import { calculateDistance } from '../utils/coordinateUtils';
+import { useTerminology } from './useTerminology';
 
 /**
  * Composable for managing marshal check-in functionality
@@ -14,6 +16,8 @@ export function useMarshalCheckIn({
   updatePendingCount,
   updateCachedField,
 }) {
+  const { termsLower } = useTerminology();
+
   // State
   const checkingIn = ref(null);
   const checkingInAssignment = ref(null);
@@ -23,6 +27,10 @@ export function useMarshalCheckIn({
   const showCheckInReminderModal = ref(false);
   const checkInReminderCheckpoint = ref(null);
   const dismissedCheckInReminders = ref(new Set());
+
+  // Distance warning state (shown after check-in if too far from checkpoint)
+  const showDistanceWarning = ref(false);
+  const distanceWarningMessage = ref('');
 
   // Helper to check if a check-in is stale (more than 24 hours old)
   const isCheckInStale = (checkInTime) => {
@@ -58,6 +66,45 @@ export function useMarshalCheckIn({
     checkInReminderCheckpoint.value = null;
   };
 
+  // Dismiss distance warning
+  const dismissDistanceWarning = () => {
+    showDistanceWarning.value = false;
+    distanceWarningMessage.value = '';
+  };
+
+  // Format distance: < 1000m = round to nearest 10m, >= 1000m = round to nearest 0.1km
+  const formatDistanceForWarning = (meters) => {
+    if (meters < 1000) {
+      return `${Math.round(meters / 10) * 10} m`;
+    }
+    return `${(Math.round(meters / 100) / 10).toFixed(1)} km`;
+  };
+
+  // Check distance from checkpoint and show warning if too far
+  const checkDistanceWarning = (gpsLat, gpsLon, locationId) => {
+    // Only check if we have GPS coordinates
+    if (gpsLat == null || gpsLon == null) return;
+
+    // Find the checkpoint location
+    const location = allLocations.value?.find(l => l.id === locationId);
+    if (!location) return;
+
+    // Check if checkpoint has coordinates
+    const checkpointLat = location.latitude;
+    const checkpointLon = location.longitude;
+    if (checkpointLat == null || checkpointLon == null) return;
+
+    // Calculate distance
+    const distance = calculateDistance(gpsLat, gpsLon, checkpointLat, checkpointLon);
+
+    // Show warning if more than 50m away
+    if (distance > 50) {
+      const formattedDistance = formatDistanceForWarning(distance);
+      distanceWarningMessage.value = `Thanks for checking in. Just so you know, it's possible you are more than ${formattedDistance} from your ${termsLower.value.checkpoint} area.`;
+      showDistanceWarning.value = true;
+    }
+  };
+
   /**
    * Unified check-in/check-out toggle handler
    * @param {Object} assign - The assignment object
@@ -65,17 +112,33 @@ export function useMarshalCheckIn({
    * @param {string} locationId - Optional location ID for updating location assignments
    */
   const handleCheckInToggle = async (assign, tryGps = true, locationId = null) => {
+    if (!assign?.id) {
+      checkInError.value = 'Cannot check in: Assignment ID is missing';
+      return;
+    }
+
     checkingIn.value = assign.id;
     checkingInAssignment.value = assign.id;
     checkInError.value = null;
 
     const evtId = eventId.value;
+
+    if (!evtId) {
+      checkInError.value = 'Cannot check in: Event ID is missing';
+      checkingIn.value = null;
+      checkingInAssignment.value = null;
+      return;
+    }
     // Use effectiveIsCheckedIn if available, otherwise compute it
     // This ensures stale check-ins (>24h old) are treated as not checked in
     const isCurrentlyCheckedIn = assign.effectiveIsCheckedIn !== undefined
       ? assign.effectiveIsCheckedIn
       : (assign.isCheckedIn && !isCheckInStale(assign.checkInTime));
-    const action = isCurrentlyCheckedIn ? 'check-out' : 'check-in';
+
+    // If the check-in is stale (isCheckedIn true but effectiveIsCheckedIn false),
+    // we need to check out first, then check in to refresh the timestamp
+    const isStaleCheckIn = assign.isCheckedIn && !isCurrentlyCheckedIn;
+    const action = isCurrentlyCheckedIn ? 'check-out' : (isStaleCheckIn ? 'refresh' : 'check-in');
     const newIsCheckedIn = !isCurrentlyCheckedIn;
 
     // Try to get GPS coordinates if requested (for self check-in, not check-out)
@@ -166,6 +229,15 @@ export function useMarshalCheckIn({
       if (areaLeadMarshalDataVersion) {
         areaLeadMarshalDataVersion.value++;
       }
+
+      // Check distance warning if this was a check-in (not check-out) with GPS
+      if (newIsCheckedIn && latitude != null && longitude != null) {
+        // Get locationId from assignment if not passed as parameter
+        const checkpointLocationId = locationId || assign.locationId;
+        if (checkpointLocationId) {
+          checkDistanceWarning(latitude, longitude, checkpointLocationId);
+        }
+      }
     } catch (error) {
       // Check if it's a network error - queue for offline
       if (getOfflineMode() || !error.response) {
@@ -241,6 +313,8 @@ export function useMarshalCheckIn({
     showCheckInReminderModal,
     checkInReminderCheckpoint,
     dismissedCheckInReminders,
+    showDistanceWarning,
+    distanceWarningMessage,
 
     // Functions
     isCheckInStale,
@@ -249,5 +323,6 @@ export function useMarshalCheckIn({
     handleCheckInToggle,
     handleAreaLeadMarshalCheckIn,
     dismissCheckInReminder,
+    dismissDistanceWarning,
   };
 }

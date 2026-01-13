@@ -64,6 +64,12 @@
       <span v-if="effectiveCheckInStatus && assignment.checkInTime && !hasUnsavedChanges" class="check-in-time">
         {{ formatTime(assignment.checkInTime) }}
         <span v-if="checkInByDisplay" class="check-in-method">({{ checkInByDisplay }})</span>
+        <span
+          v-if="formattedDistance"
+          class="check-in-distance"
+          :class="distanceClass"
+          @click.stop="handleDistanceClick"
+        >{{ formattedDistance }}</span>
       </span>
       <span v-else-if="hasUnsavedChanges" class="unsaved-indicator">
         Unsaved
@@ -89,6 +95,7 @@
 <script setup>
 import { computed, defineProps, defineEmits } from 'vue';
 import { generateCheckpointSvg } from '../../constants/checkpointIcons';
+import { calculateDistance } from '../../utils/coordinateUtils';
 import { useTerminology } from '../../composables/useTerminology';
 
 const { termsLower } = useTerminology();
@@ -124,7 +131,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['click', 'toggle-check-in', 'remove', 'undo-remove']);
+const emit = defineEmits(['click', 'toggle-check-in', 'remove', 'undo-remove', 'distance-click']);
 
 // Get area IDs from location
 const areaIds = computed(() => {
@@ -230,10 +237,54 @@ const checkInByDisplay = computed(() => {
   return checkInMethod || '';
 });
 
+/**
+ * Calculate distance from check-in location to checkpoint
+ */
+const checkInDistance = computed(() => {
+  const { checkInLatitude, checkInLongitude } = props.assignment;
+  const location = props.location;
+
+  if (!checkInLatitude || !checkInLongitude || !location?.latitude || !location?.longitude) {
+    return null;
+  }
+
+  return calculateDistance(
+    checkInLatitude,
+    checkInLongitude,
+    location.latitude,
+    location.longitude
+  );
+});
+
+/**
+ * Format distance for display
+ */
+const formattedDistance = computed(() => {
+  if (checkInDistance.value === null) return null;
+  if (checkInDistance.value < 1000) {
+    return `${Math.round(checkInDistance.value)} m`;
+  }
+  return `${(checkInDistance.value / 1000).toFixed(2)} km`;
+});
+
+/**
+ * Get CSS class for distance color coding
+ */
+const distanceClass = computed(() => {
+  if (checkInDistance.value === null) return '';
+  if (checkInDistance.value <= 50) return 'distance-close';
+  if (checkInDistance.value <= 100) return 'distance-medium';
+  return 'distance-far';
+});
+
 const handleSelectCheckpoint = () => {
   if (!props.assignment.isPending && !props.isMarkedForRemoval && !props.isLocked) {
     emit('click', props.assignment);
   }
+};
+
+const handleDistanceClick = () => {
+  emit('distance-click', props.assignment);
 };
 </script>
 
@@ -513,5 +564,34 @@ const handleSelectCheckpoint = () => {
   font-size: 0.75rem;
   color: var(--danger);
   font-style: italic;
+}
+
+.check-in-distance {
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.check-in-distance:hover {
+  opacity: 0.8;
+}
+
+.check-in-distance.distance-close {
+  background: var(--status-success-bg);
+  color: var(--accent-success);
+}
+
+.check-in-distance.distance-medium {
+  background: var(--status-warning-bg);
+  color: var(--warning-text, #92400e);
+}
+
+.check-in-distance.distance-far {
+  background: var(--status-danger-bg);
+  color: var(--accent-danger);
 }
 </style>

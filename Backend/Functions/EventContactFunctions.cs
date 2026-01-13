@@ -133,6 +133,7 @@ public class EventContactFunctions
                 MarshalId = request.MarshalId,
                 ScopeConfigurationsJson = JsonSerializer.Serialize(scopeConfigs),
                 DisplayOrder = request.DisplayOrder,
+                IsPinned = request.IsPinned,
                 IsPrimary = request.IsPrimary,
                 ShowInEmergencyInfo = request.ShowInEmergencyInfo,
                 CreatedByPersonId = claims.PersonId,
@@ -309,6 +310,7 @@ public class EventContactFunctions
             contact.MarshalId = request.MarshalId;
             contact.ScopeConfigurationsJson = JsonSerializer.Serialize(request.ScopeConfigurations ?? []);
             contact.DisplayOrder = request.DisplayOrder;
+            contact.IsPinned = request.IsPinned;
             contact.IsPrimary = request.IsPrimary;
             contact.ShowInEmergencyInfo = request.ShowInEmergencyInfo;
             contact.UpdatedAt = DateTime.UtcNow;
@@ -426,6 +428,8 @@ public class EventContactFunctions
                         Phone: contact.Phone,
                         Email: contact.Email,
                         Notes: contact.Notes,
+                        DisplayOrder: contact.DisplayOrder,
+                        IsPinned: contact.IsPinned,
                         IsPrimary: contact.IsPrimary,
                         ShowInEmergencyInfo: contact.ShowInEmergencyInfo,
                         MatchedScope: result.WinningConfig?.Scope ?? string.Empty
@@ -433,11 +437,11 @@ public class EventContactFunctions
                 }
             }
 
-            // Sort: primary first, then by role, then by display order
+            // Sort: pinned first, then by display order, then by name
             relevantContacts = [.. relevantContacts
-                .OrderByDescending(c => c.IsPrimary)
-                .ThenBy(c => c.Role)
-                .ThenBy(c => allContacts.First(contact => contact.ContactId == c.ContactId).DisplayOrder)];
+                .OrderByDescending(c => c.IsPinned)
+                .ThenBy(c => c.DisplayOrder)
+                .ThenBy(c => c.Name)];
 
             return new OkObjectResult(relevantContacts);
         }
@@ -472,7 +476,11 @@ public class EventContactFunctions
                 if (claims.IsEventAdmin)
                 {
                     IEnumerable<EventContactEntity> allContacts = await _contactRepository.GetByEventAsync(eventId);
-                    List<EventContactForMarshalResponse> allContactsResponse = [.. allContacts.Select(c =>
+                    List<EventContactForMarshalResponse> allContactsResponse = [.. allContacts
+                        .OrderByDescending(c => c.IsPinned)
+                        .ThenBy(c => c.DisplayOrder)
+                        .ThenBy(c => c.Name)
+                        .Select(c =>
                         new EventContactForMarshalResponse(
                             ContactId: c.ContactId,
                             Role: c.Role,
@@ -480,6 +488,8 @@ public class EventContactFunctions
                             Phone: c.Phone,
                             Email: c.Email,
                             Notes: c.Notes,
+                            DisplayOrder: c.DisplayOrder,
+                            IsPinned: c.IsPinned,
                             IsPrimary: c.IsPrimary,
                             ShowInEmergencyInfo: c.ShowInEmergencyInfo,
                             MatchedScope: "Admin"
@@ -625,6 +635,7 @@ public class EventContactFunctions
             MarshalName: marshalName,
             ScopeConfigurations: configs,
             DisplayOrder: contact.DisplayOrder,
+            IsPinned: contact.IsPinned,
             IsPrimary: contact.IsPrimary,
             ShowInEmergencyInfo: contact.ShowInEmergencyInfo,
             CreatedAt: contact.CreatedAt,

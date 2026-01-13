@@ -70,6 +70,7 @@
       @remove-assignment="handleRemoveAssignment"
       @open-assign-modal="handleOpenAssignModal"
       @select-marshal="handleSelectMarshal"
+      @distance-click="handleDistanceClick"
     />
 
     <!-- Checklists Tab (only when editing - checklists require saved location) -->
@@ -280,6 +281,18 @@
         </button>
       </div>
     </template>
+
+    <!-- Check-in location map modal -->
+    <CheckInLocationMapModal
+      :show="showMapModal"
+      :marshal-name="mapModalMarshalName"
+      :checkpoint-name="mapModalCheckpointName"
+      :check-in-location="mapModalCheckInLocation"
+      :checkpoint-location="mapModalCheckpointLocation"
+      :distance="mapModalDistance"
+      :z-index="zIndex + 100"
+      @close="closeMapModal"
+    />
   </BaseModal>
 </template>
 
@@ -296,7 +309,9 @@ import ChecklistPreviewForLocation from '../../ChecklistPreviewForLocation.vue';
 import NotesPreviewForLocation from '../../NotesPreviewForLocation.vue';
 import CheckpointStylePicker from '../../CheckpointStylePicker.vue';
 import IncidentCard from '../../IncidentCard.vue';
+import CheckInLocationMapModal from '../../common/CheckInLocationMapModal.vue';
 import { generateCheckpointSvg } from '../../../constants/checkpointIcons';
+import { calculateDistance } from '../../../utils/coordinateUtils';
 import { formatDateForInput } from '../../../utils/dateFormatters';
 import { useTerminology, terminologyOptions, getSingularTerm, getPluralTerm } from '../../../composables/useTerminology';
 
@@ -441,6 +456,55 @@ const form = ref({
   checkpointTerm: '',
   isDynamic: false,
   locationUpdateScopeConfigurations: [],
+});
+
+// Map modal state for distance click
+const showMapModal = ref(false);
+const selectedAssignmentForMap = ref(null);
+
+const handleDistanceClick = (assignment) => {
+  selectedAssignmentForMap.value = assignment;
+  showMapModal.value = true;
+};
+
+const closeMapModal = () => {
+  showMapModal.value = false;
+  selectedAssignmentForMap.value = null;
+};
+
+// Computed values for map modal
+const mapModalMarshalName = computed(() => {
+  if (!selectedAssignmentForMap.value) return '';
+  return selectedAssignmentForMap.value.marshalName || '';
+});
+
+const mapModalCheckpointName = computed(() => {
+  return form.value.name || props.location?.name || '';
+});
+
+const mapModalCheckInLocation = computed(() => {
+  if (!selectedAssignmentForMap.value) return null;
+  const { checkInLatitude, checkInLongitude } = selectedAssignmentForMap.value;
+  if (!checkInLatitude || !checkInLongitude) return null;
+  return { lat: checkInLatitude, lng: checkInLongitude };
+});
+
+const mapModalCheckpointLocation = computed(() => {
+  const lat = form.value.latitude;
+  const lng = form.value.longitude;
+  if (!lat || !lng) return null;
+  return { lat, lng };
+});
+
+const mapModalDistance = computed(() => {
+  if (!selectedAssignmentForMap.value) return null;
+  const { checkInLatitude, checkInLongitude } = selectedAssignmentForMap.value;
+  const lat = form.value.latitude;
+  const lng = form.value.longitude;
+  if (!checkInLatitude || !checkInLongitude || !lat || !lng) {
+    return null;
+  }
+  return calculateDistance(checkInLatitude, checkInLongitude, lat, lng);
 });
 
 // Accordion expanded state for appearance tab - with persistence

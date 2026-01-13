@@ -74,6 +74,11 @@ public class EventContactEntity : ITableEntity
     public int DisplayOrder { get; set; }
 
     /// <summary>
+    /// Whether this contact should be pinned to the top of lists
+    /// </summary>
+    public bool IsPinned { get; set; }
+
+    /// <summary>
     /// Whether this contact is the primary contact for their role
     /// </summary>
     public bool IsPrimary { get; set; }

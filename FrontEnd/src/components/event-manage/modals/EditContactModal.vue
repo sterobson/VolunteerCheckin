@@ -132,6 +132,32 @@
           />
         </div>
 
+        <div class="form-row">
+          <div class="form-group">
+            <label for="displayOrder">Display order:</label>
+            <input
+              id="displayOrder"
+              v-model.number="form.displayOrder"
+              type="number"
+              @input="handleInput"
+              min="0"
+            />
+            <span class="help-text">Lower numbers appear first</span>
+          </div>
+
+          <div class="form-group checkbox-group-inline">
+            <label class="checkbox-label-inline">
+              <input
+                type="checkbox"
+                v-model="form.isPinned"
+                @change="handleInput"
+              />
+              <span>Pin to top</span>
+            </label>
+            <span class="help-text">Pinned contacts always appear at the top</span>
+          </div>
+        </div>
+
       </div>
 
       <!-- Visibility Tab -->
@@ -271,6 +297,8 @@ const form = ref({
   notes: '',
   marshalId: null,
   showInEmergencyInfo: false,
+  displayOrder: 0,
+  isPinned: false,
   scopeConfigurations: [{
     scope: 'SpecificPeople',
     itemType: 'Marshal',
@@ -335,6 +363,8 @@ watch(() => props.show, (newVal) => {
         notes: props.contact.notes || '',
         marshalId: props.contact.marshalId || null,
         showInEmergencyInfo: props.contact.showInEmergencyInfo ?? isEmergencyRole(props.contact.role),
+        displayOrder: props.contact.displayOrder || 0,
+        isPinned: props.contact.isPinned || false,
         scopeConfigurations: props.contact.scopeConfigurations
           ? JSON.parse(JSON.stringify(props.contact.scopeConfigurations))
           : [{
@@ -388,6 +418,8 @@ watch(() => props.show, (newVal) => {
         notes: '',
         marshalId: props.prefilledMarshalId || null,
         showInEmergencyInfo: false,
+        displayOrder: 0,
+        isPinned: false,
         scopeConfigurations: defaultScopeConfig,
       };
     }
@@ -502,6 +534,8 @@ const handleSave = () => {
     notes: form.value.notes?.trim() || null,
     marshalId: form.value.marshalId || null,
     showInEmergencyInfo: form.value.showInEmergencyInfo,
+    displayOrder: form.value.displayOrder || 0,
+    isPinned: form.value.isPinned || false,
     scopeConfigurations: form.value.scopeConfigurations,
   };
 

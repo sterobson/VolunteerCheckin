@@ -161,8 +161,8 @@ onUnmounted(() => {
 
 <style scoped>
 .home {
-  height: 100vh;
-  overflow: hidden;
+  min-height: 100vh;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
@@ -197,6 +197,7 @@ onUnmounted(() => {
 /* Content Section */
 .content-section {
   padding: 1rem 1.5rem 1.5rem;
+  flex-shrink: 0;
 }
 
 .container {

@@ -148,9 +148,22 @@ const filteredContacts = computed(() => {
   return result;
 });
 
-// Sort alphabetically by name
+// Sort: pinned first, then by display order, then alphabetically by name
 const sortedContacts = computed(() => {
   return [...filteredContacts.value].sort((a, b) => {
+    // Pinned first
+    if (a.isPinned !== b.isPinned) {
+      return a.isPinned ? -1 : 1;
+    }
+
+    // Then by display order
+    const orderA = a.displayOrder || 0;
+    const orderB = b.displayOrder || 0;
+    if (orderA !== orderB) {
+      return orderA - orderB;
+    }
+
+    // Then alphabetically by name
     return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
   });
 });

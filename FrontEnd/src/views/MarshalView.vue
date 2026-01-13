@@ -664,10 +664,13 @@ const {
   showCheckInReminderModal,
   checkInReminderCheckpoint,
   dismissedCheckInReminders,
+  showDistanceWarning,
+  distanceWarningMessage,
   isCheckInStale,
   handleCheckInToggle,
   handleAreaLeadMarshalCheckIn,
   dismissCheckInReminder,
+  dismissDistanceWarning,
 } = useMarshalCheckIn({
   eventId,
   assignments,
@@ -934,6 +937,14 @@ watch(overdueCheckpoints, (overdue) => {
   }
 }, { immediate: true });
 
+// Watch for distance warning after check-in
+watch(showDistanceWarning, (show) => {
+  if (show) {
+    showMessage('Distance notice', distanceWarningMessage.value);
+    dismissDistanceWarning();
+  }
+});
+
 // Handle "Go to checkpoint" from check-in reminder modal
 const handleGoToCheckpoint = () => {
   const checkpoint = checkInReminderCheckpoint.value;
@@ -991,10 +1002,23 @@ const eventContacts = computed(() => {
     return true;
   });
 
-  // Sort by name alphabetically
-  return deduplicated.sort((a, b) =>
-    (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
-  );
+  // Sort by: pinned first, then display order, then name alphabetically
+  return deduplicated.sort((a, b) => {
+    // Pinned first
+    if (a.isPinned !== b.isPinned) {
+      return a.isPinned ? -1 : 1;
+    }
+
+    // Then by display order
+    const orderA = a.displayOrder || 0;
+    const orderB = b.displayOrder || 0;
+    if (orderA !== orderB) {
+      return orderA - orderB;
+    }
+
+    // Then by name
+    return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+  });
 });
 
 // Emergency contacts - filter by showInEmergencyInfo flag

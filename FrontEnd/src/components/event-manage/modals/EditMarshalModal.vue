@@ -42,6 +42,7 @@
       @remove-assignment="handleRemoveAssignment"
       @assign-to-location="handleAssignToLocation"
       @select-checkpoint="handleSelectCheckpoint"
+      @distance-click="handleDistanceClick"
     />
 
     <!-- Checklists Tab (only when editing - checklists require saved marshal) -->
@@ -129,6 +130,18 @@
         </button>
       </div>
     </template>
+
+    <!-- Check-in location map modal -->
+    <CheckInLocationMapModal
+      :show="showMapModal"
+      :marshal-name="mapModalMarshalName"
+      :checkpoint-name="mapModalCheckpointName"
+      :check-in-location="mapModalCheckInLocation"
+      :checkpoint-location="mapModalCheckpointLocation"
+      :distance="mapModalDistance"
+      :z-index="zIndex + 100"
+      @close="closeMapModal"
+    />
   </BaseModal>
 </template>
 
@@ -143,6 +156,8 @@ import ChecklistPreview from '../../ChecklistPreview.vue';
 import NotesView from '../../NotesView.vue';
 import NotesPreview from '../../NotesPreview.vue';
 import IncidentCard from '../../IncidentCard.vue';
+import CheckInLocationMapModal from '../../common/CheckInLocationMapModal.vue';
+import { calculateDistance } from '../../../utils/coordinateUtils';
 import { useTerminology } from '../../../composables/useTerminology';
 
 const { terms, termsLower } = useTerminology();
@@ -235,6 +250,60 @@ const form = ref({
   email: '',
   phoneNumber: '',
   notes: '',
+});
+
+// Map modal state for distance click
+const showMapModal = ref(false);
+const selectedAssignmentForMap = ref(null);
+
+const handleDistanceClick = (assignment) => {
+  selectedAssignmentForMap.value = assignment;
+  showMapModal.value = true;
+};
+
+const closeMapModal = () => {
+  showMapModal.value = false;
+  selectedAssignmentForMap.value = null;
+};
+
+// Helper to get location object
+const getLocation = (locationId) => {
+  return props.allLocations.find(l => l.id === locationId);
+};
+
+// Computed values for map modal
+const mapModalMarshalName = computed(() => {
+  return form.value.name || props.marshal?.name || '';
+});
+
+const mapModalCheckpointName = computed(() => {
+  if (!selectedAssignmentForMap.value) return '';
+  const location = getLocation(selectedAssignmentForMap.value.locationId);
+  return location?.name || '';
+});
+
+const mapModalCheckInLocation = computed(() => {
+  if (!selectedAssignmentForMap.value) return null;
+  const { checkInLatitude, checkInLongitude } = selectedAssignmentForMap.value;
+  if (!checkInLatitude || !checkInLongitude) return null;
+  return { lat: checkInLatitude, lng: checkInLongitude };
+});
+
+const mapModalCheckpointLocation = computed(() => {
+  if (!selectedAssignmentForMap.value) return null;
+  const location = getLocation(selectedAssignmentForMap.value.locationId);
+  if (!location?.latitude || !location?.longitude) return null;
+  return { lat: location.latitude, lng: location.longitude };
+});
+
+const mapModalDistance = computed(() => {
+  if (!selectedAssignmentForMap.value) return null;
+  const { checkInLatitude, checkInLongitude, locationId } = selectedAssignmentForMap.value;
+  const location = getLocation(locationId);
+  if (!checkInLatitude || !checkInLongitude || !location?.latitude || !location?.longitude) {
+    return null;
+  }
+  return calculateDistance(checkInLatitude, checkInLongitude, location.latitude, location.longitude);
 });
 
 const modalTitle = computed(() => {

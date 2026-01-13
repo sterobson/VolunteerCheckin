@@ -14,6 +14,9 @@
           <span v-if="assignment.location?.startTime || assignment.location?.endTime" class="checkpoint-time-badge">
             {{ formatTimeRange(assignment.location.startTime, assignment.location.endTime) }}
           </span>
+          <span v-if="formattedDistance" class="checkpoint-distance-badge">
+            {{ formattedDistance }}
+          </span>
         </div>
         <div v-if="assignment.location?.description" class="checkpoint-description-preview">
           {{ assignment.location.description }}
@@ -233,6 +236,7 @@ import CheckInToggleButton from '../common/CheckInToggleButton.vue';
 import ContactCard from './ContactCard.vue';
 import NoteCard from './NoteCard.vue';
 import { useTerminology } from '../../composables/useTerminology';
+import { calculateDistance } from '../../utils/coordinateUtils';
 
 const { terms, termsLower } = useTerminology();
 const injectedBranding = inject('marshalBranding', {
@@ -335,6 +339,24 @@ const mapRef = ref(null);
 
 const isDynamic = computed(() => {
   return props.assignment.location?.isDynamic;
+});
+
+// Calculate distance from user location to checkpoint
+const distanceToCheckpoint = computed(() => {
+  if (!props.userLocation?.lat || !props.userLocation?.lng) return null;
+  const loc = props.assignment.location;
+  if (!loc?.latitude || !loc?.longitude) return null;
+  return calculateDistance(props.userLocation.lat, props.userLocation.lng, loc.latitude, loc.longitude);
+});
+
+// Format distance: < 1000m = round to nearest 10m, >= 1000m = round to nearest 0.1km
+const formattedDistance = computed(() => {
+  const dist = distanceToCheckpoint.value;
+  if (dist == null) return null;
+  if (dist < 1000) {
+    return `${Math.round(dist / 10) * 10} m`;
+  }
+  return `${(Math.round(dist / 100) / 10).toFixed(1)} km`;
 });
 
 defineExpose({
@@ -479,6 +501,15 @@ const formatDateTime = (dateString) => {
   padding: 0.15rem 0.5rem;
   background: var(--info-bg);
   color: var(--info-blue);
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.checkpoint-distance-badge {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  background: var(--bg-muted);
+  color: var(--text-secondary);
   border-radius: 10px;
   font-weight: 500;
 }

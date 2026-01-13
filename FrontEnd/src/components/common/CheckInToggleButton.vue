@@ -13,6 +13,12 @@
     <span v-if="isCheckedIn && checkInTime && !isLoading" class="check-in-details">
       {{ formatTime(checkInTime) }}
       <span v-if="detailsDisplay" class="check-in-method">({{ detailsDisplay }})</span>
+      <span
+        v-if="formattedDistance"
+        class="check-in-distance"
+        :class="distanceClass"
+        @click.stop="$emit('distance-click')"
+      >{{ formattedDistance }}</span>
     </span>
   </div>
 </template>
@@ -49,9 +55,35 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  distance: {
+    type: Number,
+    default: null,
+  },
 });
 
-defineEmits(['toggle']);
+defineEmits(['toggle', 'distance-click']);
+
+/**
+ * Format distance for display
+ */
+const formattedDistance = computed(() => {
+  if (props.distance === null || props.distance === undefined) return null;
+  if (props.distance < 1000) {
+    return `${Math.round(props.distance)} m`;
+  }
+  return `${(props.distance / 1000).toFixed(2)} km`;
+});
+
+/**
+ * Get CSS class for distance color coding
+ * ≤50m: green, ≤100m: orange, >100m: red
+ */
+const distanceClass = computed(() => {
+  if (props.distance === null || props.distance === undefined) return '';
+  if (props.distance <= 50) return 'distance-close';
+  if (props.distance <= 100) return 'distance-medium';
+  return 'distance-far';
+});
 
 const buttonLabel = computed(() => {
   if (props.isLoading) {
@@ -157,5 +189,34 @@ const formatTime = (timeString) => {
 
 .check-in-method {
   color: var(--text-muted);
+}
+
+.check-in-distance {
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.check-in-distance:hover {
+  opacity: 0.8;
+}
+
+.check-in-distance.distance-close {
+  background: var(--status-success-bg);
+  color: var(--accent-success);
+}
+
+.check-in-distance.distance-medium {
+  background: var(--status-warning-bg);
+  color: var(--warning-text, #92400e);
+}
+
+.check-in-distance.distance-far {
+  background: var(--status-danger-bg);
+  color: var(--accent-danger);
 }
 </style>

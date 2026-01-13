@@ -26,6 +26,7 @@
         @toggle-check-in="handleToggleCheckIn"
         @remove="handleMarkForRemoval"
         @undo-remove="handleUndoRemoval"
+        @distance-click="$emit('distance-click', $event)"
       />
     </CardsGrid>
 
@@ -43,6 +44,17 @@
         </option>
       </select>
     </div>
+
+    <!-- Checkout confirmation modal -->
+    <ConfirmModal
+      :show="showCheckoutConfirm"
+      title="Confirm check-out"
+      :message="checkoutConfirmMessage"
+      confirm-text="Check out"
+      :is-danger="true"
+      @confirm="confirmCheckout"
+      @cancel="cancelCheckout"
+    />
   </div>
 </template>
 
@@ -52,6 +64,7 @@ import { useCheckInManagement } from '../../../composables/useCheckInManagement'
 import { useTerminology } from '../../../composables/useTerminology';
 import CardsGrid from '../../common/CardsGrid.vue';
 import MarshalCheckpointCard from '../MarshalCheckpointCard.vue';
+import ConfirmModal from '../../ConfirmModal.vue';
 
 const { termsLower } = useTerminology();
 
@@ -82,7 +95,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['input', 'remove-assignment', 'assign-to-location', 'select-checkpoint']);
+const emit = defineEmits(['input', 'remove-assignment', 'assign-to-location', 'select-checkpoint', 'distance-click']);
 
 // Use check-in management composable
 const {
@@ -128,10 +141,43 @@ const handleSelectCheckpoint = (assignment) => {
   }
 };
 
+// Checkout confirmation state
+const showCheckoutConfirm = ref(false);
+const pendingCheckoutAssignment = ref(null);
+
 // Handle toggle check-in
 const handleToggleCheckIn = (assignment) => {
-  toggleCheckIn(assignment);
+  // Check if this is a checkout (currently checked in, either actually or pending)
+  const isCurrentlyCheckedIn = getEffectiveCheckInStatus(assignment);
+
+  if (isCurrentlyCheckedIn) {
+    // Show confirmation for checkout
+    pendingCheckoutAssignment.value = assignment;
+    showCheckoutConfirm.value = true;
+  } else {
+    // Checking in - proceed directly
+    toggleCheckIn(assignment);
+  }
 };
+
+const confirmCheckout = () => {
+  if (pendingCheckoutAssignment.value) {
+    toggleCheckIn(pendingCheckoutAssignment.value);
+  }
+  showCheckoutConfirm.value = false;
+  pendingCheckoutAssignment.value = null;
+};
+
+const cancelCheckout = () => {
+  showCheckoutConfirm.value = false;
+  pendingCheckoutAssignment.value = null;
+};
+
+const checkoutConfirmMessage = computed(() => {
+  if (!pendingCheckoutAssignment.value) return '';
+  const marshalName = pendingCheckoutAssignment.value.marshalName || 'this marshal';
+  return `Are you sure you want to undo ${marshalName}'s check-in?`;
+});
 
 // Handle marking for removal (pending assignments are removed immediately)
 const handleMarkForRemoval = (assignment) => {

@@ -114,7 +114,9 @@
                     :checked-in-by="assignment.checkedInBy"
                     :marshal-name="getMarshalName(assignment.marshalId)"
                     :is-loading="checkingInAssignmentId === assignment.id"
-                    @toggle="$emit('toggle-check-in', assignment)"
+                    :distance="getCheckInDistance(assignment)"
+                    @toggle="handleToggleCheckIn(assignment)"
+                    @distance-click="handleDistanceClick(assignment)"
                   />
                 </td>
                 <td v-if="index === 0" :rowspan="getMarshalAssignments(marshal.id).length" class="hide-on-mobile last-active-cell">
@@ -143,15 +145,40 @@
         </tbody>
       </table>
     </div>
+
+    <!-- Check-in location map modal -->
+    <CheckInLocationMapModal
+      :show="showMapModal"
+      :marshal-name="mapModalMarshalName"
+      :checkpoint-name="mapModalCheckpointName"
+      :check-in-location="mapModalCheckInLocation"
+      :checkpoint-location="mapModalCheckpointLocation"
+      :distance="mapModalDistance"
+      @close="closeMapModal"
+    />
+
+    <!-- Checkout confirmation modal -->
+    <ConfirmModal
+      :show="showCheckoutConfirm"
+      title="Confirm check-out"
+      :message="checkoutConfirmMessage"
+      confirm-text="Check out"
+      :is-danger="true"
+      @confirm="confirmCheckout"
+      @cancel="cancelCheckout"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, defineProps, defineEmits } from 'vue';
 import { sortAlphanumeric } from '../../utils/sortingHelpers';
+import { calculateDistance } from '../../utils/coordinateUtils';
 import { useTerminology } from '../../composables/useTerminology';
 import StatusPill from '../../components/StatusPill.vue';
 import CheckInToggleButton from '../../components/common/CheckInToggleButton.vue';
+import CheckInLocationMapModal from '../../components/common/CheckInLocationMapModal.vue';
+import ConfirmModal from '../../components/ConfirmModal.vue';
 
 const { terms } = useTerminology();
 
@@ -180,9 +207,87 @@ const emit = defineEmits([
 
 const checkingInAssignmentId = ref(null);
 
+// Map modal state
+const showMapModal = ref(false);
+const selectedAssignmentForMap = ref(null);
+
 const setCheckingIn = (assignmentId) => {
   checkingInAssignmentId.value = assignmentId;
 };
+
+const handleDistanceClick = (assignment) => {
+  selectedAssignmentForMap.value = assignment;
+  showMapModal.value = true;
+};
+
+const closeMapModal = () => {
+  showMapModal.value = false;
+  selectedAssignmentForMap.value = null;
+};
+
+// Computed values for map modal
+const mapModalMarshalName = computed(() => {
+  if (!selectedAssignmentForMap.value) return '';
+  return getMarshalName(selectedAssignmentForMap.value.marshalId);
+});
+
+const mapModalCheckpointName = computed(() => {
+  if (!selectedAssignmentForMap.value) return '';
+  return getLocationName(selectedAssignmentForMap.value.locationId);
+});
+
+const mapModalCheckInLocation = computed(() => {
+  if (!selectedAssignmentForMap.value) return null;
+  const { checkInLatitude, checkInLongitude } = selectedAssignmentForMap.value;
+  if (!checkInLatitude || !checkInLongitude) return null;
+  return { lat: checkInLatitude, lng: checkInLongitude };
+});
+
+const mapModalCheckpointLocation = computed(() => {
+  if (!selectedAssignmentForMap.value) return null;
+  const location = getLocation(selectedAssignmentForMap.value.locationId);
+  if (!location?.latitude || !location?.longitude) return null;
+  return { lat: location.latitude, lng: location.longitude };
+});
+
+const mapModalDistance = computed(() => {
+  if (!selectedAssignmentForMap.value) return null;
+  return getCheckInDistance(selectedAssignmentForMap.value);
+});
+
+// Checkout confirmation state
+const showCheckoutConfirm = ref(false);
+const pendingCheckoutAssignment = ref(null);
+
+const handleToggleCheckIn = (assignment) => {
+  // If checking out (already checked in), show confirmation
+  if (assignment.isCheckedIn) {
+    pendingCheckoutAssignment.value = assignment;
+    showCheckoutConfirm.value = true;
+  } else {
+    // Checking in - proceed directly
+    emit('toggle-check-in', assignment);
+  }
+};
+
+const confirmCheckout = () => {
+  if (pendingCheckoutAssignment.value) {
+    emit('toggle-check-in', pendingCheckoutAssignment.value);
+  }
+  showCheckoutConfirm.value = false;
+  pendingCheckoutAssignment.value = null;
+};
+
+const cancelCheckout = () => {
+  showCheckoutConfirm.value = false;
+  pendingCheckoutAssignment.value = null;
+};
+
+const checkoutConfirmMessage = computed(() => {
+  if (!pendingCheckoutAssignment.value) return '';
+  const marshalName = getMarshalName(pendingCheckoutAssignment.value.marshalId);
+  return `Are you sure you want to undo ${marshalName}'s check-in?`;
+});
 
 defineExpose({ setCheckingIn });
 
@@ -251,6 +356,26 @@ const getLocationDescription = (locationId) => {
 const getMarshalName = (marshalId) => {
   const marshal = props.marshals.find(m => m.id === marshalId);
   return marshal ? marshal.name : '';
+};
+
+/**
+ * Calculate distance from check-in location to checkpoint
+ * Returns null if GPS data is not available
+ */
+const getCheckInDistance = (assignment) => {
+  const { checkInLatitude, checkInLongitude, locationId } = assignment;
+  const location = getLocation(locationId);
+
+  if (!checkInLatitude || !checkInLongitude || !location?.latitude || !location?.longitude) {
+    return null;
+  }
+
+  return calculateDistance(
+    checkInLatitude,
+    checkInLongitude,
+    location.latitude,
+    location.longitude
+  );
 };
 
 const formatRelativeTime = (dateString) => {
@@ -506,6 +631,10 @@ const sortedMarshals = computed(() => {
 
 .check-in-cell {
   min-width: 120px;
+}
+
+.check-in-cell :deep(.check-in-toggle-container) {
+  align-items: flex-start;
 }
 
 .last-active-cell {

@@ -251,34 +251,17 @@ public class CheckInFunctions
 
             if (!isAuthorized)
             {
-                return new ForbidResult();
+                _logger.LogWarning("Toggle check-in unauthorized: ClaimsMarshalId={ClaimsMarshalId}, AssignmentMarshalId={AssignmentMarshalId}, AssignmentId={AssignmentId}",
+                    claims.MarshalId ?? "(null)", assignment.MarshalId, assignmentId);
+                return new UnauthorizedObjectResult(new { message = "You are not authorized to check in this assignment. The assignment may belong to a different marshal." });
             }
 
-            // For self check-in with GPS coordinates, validate distance
+            // For self check-in with GPS coordinates, record them but don't enforce distance
             double? checkInLatitude = null;
             double? checkInLongitude = null;
 
             if (isSelfCheckIn && !assignment.IsCheckedIn && request?.Latitude != null && request?.Longitude != null)
             {
-                double distance = _gpsService.CalculateDistance(
-                    location.Latitude,
-                    location.Longitude,
-                    request.Latitude.Value,
-                    request.Longitude.Value
-                );
-
-                if (distance > Constants.CheckInRadiusMeters)
-                {
-                    _logger.LogWarning("Toggle check-in rejected: {Distance}m away from location (max {MaxDistance}m) - Assignment: {AssignmentId}",
-                        Math.Round(distance), Constants.CheckInRadiusMeters, assignmentId);
-                    return new BadRequestObjectResult(new
-                    {
-                        message = $"You are {Math.Round(distance)}m away from the location. You must be within {Constants.CheckInRadiusMeters}m to check in.",
-                        distance = Math.Round(distance),
-                        allowedRadius = Constants.CheckInRadiusMeters
-                    });
-                }
-
                 checkInMethod = Constants.CheckInMethodGps;
                 checkInLatitude = request.Latitude;
                 checkInLongitude = request.Longitude;
@@ -286,9 +269,26 @@ public class CheckInFunctions
 
             // Determine desired action: explicit action or toggle
             string? requestedAction = request?.Action?.ToLowerInvariant();
+
+            // Handle 'refresh' action - re-check-in to update timestamp (for stale check-ins)
+            bool isRefresh = requestedAction == "refresh";
+            if (isRefresh && assignment.IsCheckedIn)
+            {
+                _logger.LogInformation("Refreshing stale check-in for assignment {AssignmentId}", assignmentId);
+                // Update the check-in time and GPS data
+                assignment.CheckInTime = DateTime.UtcNow;
+                assignment.CheckInLatitude = checkInLatitude;
+                assignment.CheckInLongitude = checkInLongitude;
+                assignment.CheckInMethod = checkInMethod;
+                assignment.CheckedInBy = !string.IsNullOrEmpty(claims.PersonName) ? claims.PersonName : claims.PersonEmail;
+
+                await _assignmentRepository.UpdateAsync(assignment);
+                return new OkObjectResult(assignment.ToResponse());
+            }
+
             bool wantToCheckIn = requestedAction switch
             {
-                "check-in" or "checkin" => true,
+                "check-in" or "checkin" or "refresh" => true,
                 "check-out" or "checkout" => false,
                 _ => !assignment.IsCheckedIn // Toggle: do the opposite of current state
             };

@@ -5,6 +5,7 @@
       'is-pending': isPending,
       'is-marked-for-removal': isMarkedForRemoval,
       'is-primary': contact.isPrimary && !isMarkedForRemoval,
+      'is-pinned': contact.isPinned && !isMarkedForRemoval && !contact.isPrimary,
       'is-clickable': clickable && !isMarkedForRemoval
     }"
     @click="handleClick"
@@ -12,6 +13,7 @@
     <div class="contact-card-header">
       <div class="contact-card-title" :class="{ clickable: clickable && !isMarkedForRemoval }">
         <div class="contact-name-row">
+          <span v-if="contact.isPinned && !isMarkedForRemoval" class="pin-icon" title="Pinned">📌</span>
           <span v-if="contact.isPrimary && !isMarkedForRemoval" class="primary-badge" title="Primary contact">★</span>
           <span class="contact-name">{{ contact.name }}</span>
         </div>
@@ -236,6 +238,11 @@ const truncateContent = (content) => {
   background: var(--status-warning-bg);
 }
 
+.contact-card.is-pinned {
+  border-left: 4px solid var(--accent-primary);
+  background: var(--bg-secondary);
+}
+
 .contact-card-header {
   display: flex;
   justify-content: space-between;
@@ -259,6 +266,10 @@ const truncateContent = (content) => {
   display: flex;
   align-items: center;
   gap: 0.375rem;
+}
+
+.pin-icon {
+  font-size: 0.9rem;
 }
 
 .primary-badge {

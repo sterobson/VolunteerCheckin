@@ -101,25 +101,62 @@ const props = defineProps({
 
 const emit = defineEmits(['close']);
 
-// Filter and sort notes: only show those with showInEmergencyInfo, Emergency first, then Urgent
+// Filter and sort notes: only show those with showInEmergencyInfo
+// Sort by: pinned first, then display order, then priority (Emergency first)
 const sortedNotes = computed(() => {
   if (!props.notes) return [];
   return [...props.notes]
     .filter(n => n.showInEmergencyInfo || n.ShowInEmergencyInfo)
     .sort((a, b) => {
+      // Pinned first
+      const aPinned = a.isPinned || a.IsPinned;
+      const bPinned = b.isPinned || b.IsPinned;
+      if (aPinned !== bPinned) {
+        return aPinned ? -1 : 1;
+      }
+
+      // Then by display order
+      const orderA = a.displayOrder || a.DisplayOrder || 0;
+      const orderB = b.displayOrder || b.DisplayOrder || 0;
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+
+      // Then by priority (Emergency comes before Urgent)
       const aPriority = a.priority || a.Priority;
       const bPriority = b.priority || b.Priority;
-      // Emergency comes before Urgent
       if (aPriority === 'Emergency' && bPriority !== 'Emergency') return -1;
       if (bPriority === 'Emergency' && aPriority !== 'Emergency') return 1;
       return 0;
     });
 });
 
-// Filter contacts: only show those with showInEmergencyInfo
+// Filter and sort contacts: only show those with showInEmergencyInfo
+// Sort by: pinned first, then display order, then name
 const filteredContacts = computed(() => {
   if (!props.contacts) return [];
-  return props.contacts.filter(c => c.showInEmergencyInfo || c.ShowInEmergencyInfo);
+  return props.contacts
+    .filter(c => c.showInEmergencyInfo || c.ShowInEmergencyInfo)
+    .sort((a, b) => {
+      // Pinned first
+      const aPinned = a.isPinned || a.IsPinned;
+      const bPinned = b.isPinned || b.IsPinned;
+      if (aPinned !== bPinned) {
+        return aPinned ? -1 : 1;
+      }
+
+      // Then by display order
+      const orderA = a.displayOrder || a.DisplayOrder || 0;
+      const orderB = b.displayOrder || b.DisplayOrder || 0;
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+
+      // Then by name
+      const nameA = a.name || a.Name || '';
+      const nameB = b.name || b.Name || '';
+      return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
+    });
 });
 
 const handleClose = () => {

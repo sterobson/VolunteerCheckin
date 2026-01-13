@@ -27,7 +27,12 @@
         <span v-if="effectiveCheckInStatus && assignment.checkInTime && !hasUnsavedChanges" class="check-in-time">
           {{ formatTime(assignment.checkInTime) }}
           <span v-if="checkInByDisplay" class="check-in-method">({{ checkInByDisplay }})</span>
-          <span v-if="formattedDistance" class="check-in-distance" :class="distanceClass">{{ formattedDistance }}</span>
+          <span
+            v-if="formattedDistance"
+            class="check-in-distance"
+            :class="distanceClass"
+            @click.stop="handleDistanceClick"
+          >{{ formattedDistance }}</span>
         </span>
         <span v-else-if="hasUnsavedChanges" class="unsaved-indicator">
           Unsaved
@@ -43,7 +48,12 @@
         <span v-if="effectiveCheckInStatus && assignment.checkInTime" class="check-in-time">
           {{ formatTime(assignment.checkInTime) }}
           <span v-if="checkInByDisplay" class="check-in-method">({{ checkInByDisplay }})</span>
-          <span v-if="formattedDistance" class="check-in-distance" :class="distanceClass">{{ formattedDistance }}</span>
+          <span
+            v-if="formattedDistance"
+            class="check-in-distance"
+            :class="distanceClass"
+            @click.stop="handleDistanceClick"
+          >{{ formattedDistance }}</span>
         </span>
       </div>
 
@@ -109,7 +119,11 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['click', 'toggle-check-in', 'remove', 'undo-remove']);
+const emit = defineEmits(['click', 'toggle-check-in', 'remove', 'undo-remove', 'distance-click']);
+
+const handleDistanceClick = () => {
+  emit('distance-click', props.assignment);
+};
 
 const formatTime = (timeString) => {
   if (!timeString) return '';
@@ -411,6 +425,12 @@ const handleSelectMarshal = () => {
   border-radius: 8px;
   font-size: 0.7rem;
   font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.check-in-distance:hover {
+  opacity: 0.8;
 }
 
 .check-in-distance.distance-close {

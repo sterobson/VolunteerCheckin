@@ -37,6 +37,7 @@
         @toggle-check-in="handleToggleCheckIn"
         @remove="handleMarkForRemoval"
         @undo-remove="handleUndoRemoval"
+        @distance-click="$emit('distance-click', $event)"
       />
     </CardsGrid>
 
@@ -50,6 +51,17 @@
         + Assign {{ personTermLower }}...
       </button>
     </div>
+
+    <!-- Checkout confirmation modal -->
+    <ConfirmModal
+      :show="showCheckoutConfirm"
+      title="Confirm check-out"
+      :message="checkoutConfirmMessage"
+      confirm-text="Check out"
+      :is-danger="true"
+      @confirm="confirmCheckout"
+      @cancel="cancelCheckout"
+    />
   </div>
 </template>
 
@@ -58,6 +70,7 @@ import { ref, computed, defineProps, defineEmits } from 'vue';
 import { useCheckInManagement } from '../../../composables/useCheckInManagement';
 import CardsGrid from '../../common/CardsGrid.vue';
 import MarshalAssignmentCard from '../MarshalAssignmentCard.vue';
+import ConfirmModal from '../../ConfirmModal.vue';
 
 const props = defineProps({
   form: {
@@ -91,7 +104,7 @@ const peopleTermLower = computed(() => props.peopleTerm.toLowerCase());
 const personTermLower = computed(() => props.personTerm.toLowerCase());
 const checkpointTermLower = computed(() => props.checkpointTerm.toLowerCase());
 
-const emit = defineEmits(['update:form', 'input', 'remove-assignment', 'open-assign-modal', 'select-marshal']);
+const emit = defineEmits(['update:form', 'input', 'remove-assignment', 'open-assign-modal', 'select-marshal', 'distance-click']);
 
 // Use check-in management composable
 const {
@@ -125,10 +138,43 @@ const handleSelectMarshal = (assignment) => {
   }
 };
 
+// Checkout confirmation state
+const showCheckoutConfirm = ref(false);
+const pendingCheckoutAssignment = ref(null);
+
 // Handle toggle check-in
 const handleToggleCheckIn = (assignment) => {
-  toggleCheckIn(assignment);
+  // Check if this is a checkout (currently checked in, either actually or pending)
+  const isCurrentlyCheckedIn = getEffectiveCheckInStatus(assignment);
+
+  if (isCurrentlyCheckedIn) {
+    // Show confirmation for checkout
+    pendingCheckoutAssignment.value = assignment;
+    showCheckoutConfirm.value = true;
+  } else {
+    // Checking in - proceed directly
+    toggleCheckIn(assignment);
+  }
 };
+
+const confirmCheckout = () => {
+  if (pendingCheckoutAssignment.value) {
+    toggleCheckIn(pendingCheckoutAssignment.value);
+  }
+  showCheckoutConfirm.value = false;
+  pendingCheckoutAssignment.value = null;
+};
+
+const cancelCheckout = () => {
+  showCheckoutConfirm.value = false;
+  pendingCheckoutAssignment.value = null;
+};
+
+const checkoutConfirmMessage = computed(() => {
+  if (!pendingCheckoutAssignment.value) return '';
+  const marshalName = pendingCheckoutAssignment.value.marshalName || 'this marshal';
+  return `Are you sure you want to undo ${marshalName}'s check-in?`;
+});
 
 // Handle marking for removal (pending assignments are removed immediately)
 const handleMarkForRemoval = (assignment) => {

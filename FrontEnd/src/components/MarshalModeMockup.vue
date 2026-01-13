@@ -564,6 +564,16 @@ import LogoUploader from './LogoUploader.vue';
 import { BRANDING_PRESETS, applyPreset as applyPresetUtil } from '../constants/brandingPresets';
 import { getContrastTextColor, getGradientContrastTextColor, DEFAULT_COLORS } from '../utils/colorContrast';
 import { AREA_COLORS } from '../constants/areaColors';
+import { API_BASE_URL } from '../config';
+
+// Resolve /api URLs to the actual API base URL (for cross-origin deployments)
+const resolveApiUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('/api')) {
+    return API_BASE_URL + url.substring(4);
+  }
+  return url;
+};
 
 const colors = AREA_COLORS;
 
@@ -823,13 +833,15 @@ const displayLogoUrl = computed(() => {
     if (stagedLogoUrl.value.startsWith('blob:')) {
       return stagedLogoUrl.value;
     }
-    const separator = stagedLogoUrl.value.includes('?') ? '&' : '?';
-    return `${stagedLogoUrl.value}${separator}_t=${logoCacheKey.value}`;
+    const resolvedUrl = resolveApiUrl(stagedLogoUrl.value);
+    const separator = resolvedUrl.includes('?') ? '&' : '?';
+    return `${resolvedUrl}${separator}_t=${logoCacheKey.value}`;
   }
   // Fall back to server URL
   if (!props.branding.logoUrl) return '';
-  const separator = props.branding.logoUrl.includes('?') ? '&' : '?';
-  return `${props.branding.logoUrl}${separator}_t=${logoCacheKey.value}`;
+  const resolvedUrl = resolveApiUrl(props.branding.logoUrl);
+  const separator = resolvedUrl.includes('?') ? '&' : '?';
+  return `${resolvedUrl}${separator}_t=${logoCacheKey.value}`;
 });
 
 const headerStyle = computed(() => ({

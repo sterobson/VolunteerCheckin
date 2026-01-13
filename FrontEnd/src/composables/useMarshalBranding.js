@@ -1,5 +1,6 @@
 import { computed } from 'vue';
 import { getContrastTextColor, getGradientContrastTextColor, DEFAULT_COLORS } from '../utils/colorContrast';
+import { API_BASE_URL } from '../config';
 
 /**
  * Composable for managing marshal view branding/theming
@@ -46,8 +47,18 @@ export function useMarshalBranding(event) {
     color: accentTextColor.value,
   }));
 
-  // Logo URL
-  const brandingLogoUrl = computed(() => event.value?.brandingLogoUrl || '');
+  // Logo URL - resolve relative /api URLs to the actual API base URL
+  const brandingLogoUrl = computed(() => {
+    const url = event.value?.brandingLogoUrl || '';
+    if (!url) return '';
+    // If URL starts with /api, replace with the actual API base URL
+    if (url.startsWith('/api')) {
+      // API_BASE_URL might be '/api' (dev) or 'https://xxx.azurewebsites.net/api' (prod)
+      // Remove the /api prefix from the stored URL and append to API_BASE_URL
+      return API_BASE_URL + url.substring(4); // Remove '/api' prefix
+    }
+    return url;
+  });
 
   // Logo position: 'left', 'right', or 'cover'
   const brandingLogoPosition = computed(() => event.value?.brandingLogoPosition || 'left');

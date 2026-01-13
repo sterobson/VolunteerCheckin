@@ -51,6 +51,15 @@
 import { ref, computed, onUnmounted } from 'vue';
 import { API_BASE_URL } from '../config';
 
+// Resolve /api URLs to the actual API base URL (for cross-origin deployments)
+const resolveApiUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('/api')) {
+    return API_BASE_URL + url.substring(4);
+  }
+  return url;
+};
+
 const props = defineProps({
   modelValue: {
     type: String,
@@ -129,8 +138,9 @@ const displayUrl = computed(() => {
     return stagedPreviewUrl.value;
   }
   if (!props.modelValue) return '';
-  const separator = props.modelValue.includes('?') ? '&' : '?';
-  return `${props.modelValue}${separator}_t=${uploadKey.value}`;
+  const resolvedUrl = resolveApiUrl(props.modelValue);
+  const separator = resolvedUrl.includes('?') ? '&' : '?';
+  return `${resolvedUrl}${separator}_t=${uploadKey.value}`;
 });
 
 // Cleanup blob URLs when component unmounts or when new file is staged
@@ -380,7 +390,7 @@ function isPendingDelete() {
 function getDisplayUrl() {
   if (stagedPreviewUrl.value) return stagedPreviewUrl.value;
   if (pendingDelete.value) return '';
-  return props.modelValue || '';
+  return resolveApiUrl(props.modelValue) || '';
 }
 
 // Reset all staged state (for when branding is reset)

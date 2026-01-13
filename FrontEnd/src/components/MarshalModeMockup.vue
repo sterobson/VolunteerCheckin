@@ -72,7 +72,7 @@
             v-if="!hasLogoToShow"
             class="logo-add-area logo-add-left"
             :class="{ 'region-active': activeRegion === 'logo' }"
-            @click.stop="selectRegion('logo')"
+            @click.stop="selectLogoRegion('left')"
           >
             <span class="logo-add-text">+ Logo</span>
           </div>
@@ -111,7 +111,7 @@
             v-if="!hasLogoToShow"
             class="logo-add-area logo-add-right"
             :class="{ 'region-active': activeRegion === 'logo' }"
-            @click.stop="selectRegion('logo')"
+            @click.stop="selectLogoRegion('right')"
           >
             <span class="logo-add-text">+ Logo</span>
           </div>
@@ -851,6 +851,15 @@ const pageBackgroundStyle = computed(() => ({
 
 function selectRegion(region) {
   activeRegion.value = activeRegion.value === region ? null : region;
+}
+
+// Select logo region with a default position hint (for when clicking empty logo areas)
+function selectLogoRegion(defaultPosition) {
+  // Only set the default position if there's no logo yet
+  if (!hasLogoToShow.value && defaultPosition) {
+    updateBranding('logoPosition', defaultPosition);
+  }
+  selectRegion('logo');
 }
 
 function updateBranding(key, value) {

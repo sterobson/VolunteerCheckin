@@ -387,7 +387,7 @@ const effectiveHeaderText = computed(() => {
   if (props.intent === 'location-update') {
     return 'Who can update this location?';
   }
-  return 'Who can see and complete this item?';
+  return `Who can see and complete this ${termsLower.value.checklist}?`;
 });
 
 const getScopeHelp = (scope) => {

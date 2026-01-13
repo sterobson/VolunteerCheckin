@@ -79,6 +79,12 @@ public class EventContactEntity : ITableEntity
     public bool IsPrimary { get; set; }
 
     /// <summary>
+    /// Whether this contact should appear in the emergency info section.
+    /// Defaults to true for EmergencyContact role.
+    /// </summary>
+    public bool ShowInEmergencyInfo { get; set; }
+
+    /// <summary>
     /// Who created this contact
     /// </summary>
     public string CreatedByPersonId { get; set; } = string.Empty;

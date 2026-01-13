@@ -1,8 +1,8 @@
 <template>
   <BaseModal
     :show="show"
-    :title="isEditing ? `Edit checklist item` : 'Create checklist item'"
-    size="large"
+    :title="isEditing ? `Edit ${termsLower.checklist}` : `Create ${termsLower.checklist}`"
+    size="medium"
     :confirm-on-close="true"
     :is-dirty="isDirty"
     @close="handleClose"
@@ -19,14 +19,14 @@
       <!-- Details Tab -->
       <div v-show="activeTab === 'details'" class="tab-content">
         <div class="form-group">
-          <label for="text">Checklist text: *</label>
+          <label for="text">{{ termsSentence.checklist }} text: *</label>
           <textarea
             id="text"
             v-model="form.text"
             @input="handleInput"
             required
             rows="3"
-            :placeholder="form.createSeparateItems ? 'Enter checklist items, one per line...' : 'Enter the checklist item text...'"
+            :placeholder="form.createSeparateItems ? `Enter ${termsLower.checklists}, one per line...` : `Enter the ${termsLower.checklist} text...`"
           />
           <label v-if="!isEditing" class="checkbox-label-inline create-separate-items">
             <input
@@ -93,6 +93,9 @@ import BaseModal from '../../BaseModal.vue';
 import TabHeader from '../../TabHeader.vue';
 import ScopeConfigurationEditor from '../ScopeConfigurationEditor.vue';
 import InfoModal from '../../InfoModal.vue';
+import { useTerminology } from '../../../composables/useTerminology';
+
+const { termsLower, termsSentence } = useTerminology();
 
 const props = defineProps({
   show: {
@@ -244,7 +247,7 @@ const showError = (message) => {
 const handleSave = () => {
   // Validate text
   if (!form.value.text || !form.value.text.trim()) {
-    showError('Please enter checklist item text');
+    showError(`Please enter ${termsLower.value.checklist} text`);
     return;
   }
 

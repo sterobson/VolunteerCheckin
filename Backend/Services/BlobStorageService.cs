@@ -21,7 +21,7 @@ public class BlobStorageService
 
         if (!_containerInitialized)
         {
-            await container.CreateIfNotExistsAsync(PublicAccessType.Blob);
+            await container.CreateIfNotExistsAsync(PublicAccessType.None);
             _containerInitialized = true;
         }
 
@@ -29,13 +29,13 @@ public class BlobStorageService
     }
 
     /// <summary>
-    /// Uploads a logo image for an event and returns the public URL.
+    /// Uploads a logo image for an event and returns a cache-busting version string.
     /// Images larger than 500KB will be resized to reduce file size.
     /// </summary>
     /// <param name="eventId">The event ID</param>
     /// <param name="imageData">The image data as a stream</param>
     /// <param name="contentType">The content type (e.g., image/png)</param>
-    /// <returns>The public URL of the uploaded logo</returns>
+    /// <returns>A version string for cache-busting</returns>
     public virtual async Task<string> UploadLogoAsync(string eventId, Stream imageData, string contentType)
     {
         BlobContainerClient container = await GetOrCreateContainerAsync();
@@ -62,8 +62,28 @@ public class BlobStorageService
         using MemoryStream uploadStream = new(imageBytes);
         await blob.UploadAsync(uploadStream, new BlobHttpHeaders { ContentType = uploadContentType });
 
-        // Add cache-busting query parameter to prevent browser caching issues
-        return $"{blob.Uri}?v={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+        // Return a version string for cache-busting
+        return DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+    }
+
+    /// <summary>
+    /// Downloads a logo image for an event.
+    /// </summary>
+    /// <param name="eventId">The event ID</param>
+    /// <returns>Tuple of (image bytes, content type) or (null, null) if not found</returns>
+    public virtual async Task<(byte[]? Data, string? ContentType)> GetLogoAsync(string eventId)
+    {
+        BlobContainerClient container = await GetOrCreateContainerAsync();
+
+        // Find the logo blob for this event (handles different extensions)
+        await foreach (BlobItem blobItem in container.GetBlobsAsync(prefix: $"{eventId}/"))
+        {
+            BlobClient blob = container.GetBlobClient(blobItem.Name);
+            BlobDownloadResult download = await blob.DownloadContentAsync();
+            return (download.Content.ToArray(), download.Details.ContentType);
+        }
+
+        return (null, null);
     }
 
     /// <summary>

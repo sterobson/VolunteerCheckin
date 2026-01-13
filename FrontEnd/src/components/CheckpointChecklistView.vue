@@ -12,8 +12,8 @@
     </div>
 
     <div v-else-if="noMarshalsAssigned" class="empty-state">
-      <p>No marshals assigned to this checkpoint yet.</p>
-      <p class="help-text">Assign marshals to enable checklist completion.</p>
+      <p>No {{ termsLower.peoplePlural }} assigned to this {{ termsLower.checkpoint }} yet.</p>
+      <p class="help-text">Assign {{ termsLower.peoplePlural }} to enable {{ termsLower.checklist }} completion.</p>
     </div>
 
     <div v-else-if="items.length === 0" class="empty-state">

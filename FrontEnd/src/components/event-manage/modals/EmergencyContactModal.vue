@@ -6,7 +6,7 @@
     @close="handleClose"
   >
     <!-- Emergency/Urgent notes -->
-    <div v-if="notes && notes.length > 0" class="emergency-notes-section">
+    <div v-if="sortedNotes.length > 0" class="emergency-notes-section">
       <h2 class="section-header">Emergency notes</h2>
       <div class="emergency-notes-list">
         <div
@@ -27,11 +27,11 @@
     </div>
 
     <!-- Emergency contacts list -->
-    <div v-if="contacts && contacts.length > 0" class="emergency-contacts-section">
+    <div v-if="filteredContacts && filteredContacts.length > 0" class="emergency-contacts-section">
       <h2 class="section-header">Emergency contacts</h2>
       <div class="emergency-contacts-list">
         <div
-          v-for="contact in contacts"
+          v-for="contact in filteredContacts"
           :key="contact.contactId || contact.name"
           class="emergency-contact-item"
         >
@@ -69,7 +69,7 @@
     </div>
 
     <!-- No contacts or notes message -->
-    <div v-if="(!contacts || contacts.length === 0) && (!notes || notes.length === 0)" class="no-contacts">
+    <div v-if="filteredContacts.length === 0 && sortedNotes.length === 0" class="no-contacts">
       <p>No emergency information has been set up for this event.</p>
     </div>
 
@@ -101,17 +101,25 @@ const props = defineProps({
 
 const emit = defineEmits(['close']);
 
-// Sort notes: Emergency first, then Urgent
+// Filter and sort notes: only show those with showInEmergencyInfo, Emergency first, then Urgent
 const sortedNotes = computed(() => {
   if (!props.notes) return [];
-  return [...props.notes].sort((a, b) => {
-    const aPriority = a.priority || a.Priority;
-    const bPriority = b.priority || b.Priority;
-    // Emergency comes before Urgent
-    if (aPriority === 'Emergency' && bPriority !== 'Emergency') return -1;
-    if (bPriority === 'Emergency' && aPriority !== 'Emergency') return 1;
-    return 0;
-  });
+  return [...props.notes]
+    .filter(n => n.showInEmergencyInfo || n.ShowInEmergencyInfo)
+    .sort((a, b) => {
+      const aPriority = a.priority || a.Priority;
+      const bPriority = b.priority || b.Priority;
+      // Emergency comes before Urgent
+      if (aPriority === 'Emergency' && bPriority !== 'Emergency') return -1;
+      if (bPriority === 'Emergency' && aPriority !== 'Emergency') return 1;
+      return 0;
+    });
+});
+
+// Filter contacts: only show those with showInEmergencyInfo
+const filteredContacts = computed(() => {
+  if (!props.contacts) return [];
+  return props.contacts.filter(c => c.showInEmergencyInfo || c.ShowInEmergencyInfo);
 });
 
 const handleClose = () => {

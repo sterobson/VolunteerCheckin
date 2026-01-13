@@ -39,15 +39,13 @@
           </div>
         </div>
 
-        <div class="form-group">
+        <div v-if="!isLinkedToMarshal" class="form-group">
           <label for="name">Name: *</label>
           <input
             id="name"
             v-model="form.name"
             type="text"
             @input="handleInput"
-            :disabled="isLinkedToMarshal"
-            :class="{ 'input-disabled': isLinkedToMarshal }"
             placeholder="Contact name..."
           />
         </div>
@@ -89,6 +87,14 @@
               {{ useCustomRole ? 'Use existing' : 'Custom' }}
             </button>
           </div>
+          <label class="checkbox-label-inline show-emergency-checkbox">
+            <input
+              type="checkbox"
+              v-model="form.showInEmergencyInfo"
+              @change="handleInput"
+            />
+            <span>Show in emergency info</span>
+          </label>
         </div>
 
         <div class="form-row">
@@ -125,6 +131,7 @@
             placeholder="Additional notes or instructions for when to contact..."
           />
         </div>
+
       </div>
 
       <!-- Visibility Tab -->
@@ -263,12 +270,18 @@ const form = ref({
   email: '',
   notes: '',
   marshalId: null,
+  showInEmergencyInfo: false,
   scopeConfigurations: [{
     scope: 'SpecificPeople',
     itemType: 'Marshal',
     ids: ['ALL_MARSHALS']
   }],
 });
+
+// Helper to check if a role should default to showing in emergency info
+const isEmergencyRole = (role) => {
+  return role === 'EmergencyContact';
+};
 
 const isEditing = computed(() => !!props.contact);
 
@@ -321,6 +334,7 @@ watch(() => props.show, (newVal) => {
         email: props.contact.email || '',
         notes: props.contact.notes || '',
         marshalId: props.contact.marshalId || null,
+        showInEmergencyInfo: props.contact.showInEmergencyInfo ?? isEmergencyRole(props.contact.role),
         scopeConfigurations: props.contact.scopeConfigurations
           ? JSON.parse(JSON.stringify(props.contact.scopeConfigurations))
           : [{
@@ -373,11 +387,25 @@ watch(() => props.show, (newVal) => {
         email: prefilledDetails.email,
         notes: '',
         marshalId: props.prefilledMarshalId || null,
+        showInEmergencyInfo: false,
         scopeConfigurations: defaultScopeConfig,
       };
     }
 
     emit('update:isDirty', false);
+  }
+});
+
+// Auto-update showInEmergencyInfo when role changes to Emergency Contact (only when creating new)
+watch(() => form.value.role, (newRole, oldRole) => {
+  // Only auto-update when creating new contact and checkbox hasn't been manually changed
+  if (!isEditing.value && newRole !== oldRole) {
+    if (isEmergencyRole(newRole)) {
+      form.value.showInEmergencyInfo = true;
+    } else if (isEmergencyRole(oldRole)) {
+      // If switching away from emergency role, turn it off
+      form.value.showInEmergencyInfo = false;
+    }
   }
 });
 
@@ -473,6 +501,7 @@ const handleSave = () => {
     email: form.value.email?.trim() || null,
     notes: form.value.notes?.trim() || null,
     marshalId: form.value.marshalId || null,
+    showInEmergencyInfo: form.value.showInEmergencyInfo,
     scopeConfigurations: form.value.scopeConfigurations,
   };
 
@@ -687,6 +716,10 @@ select {
 
 .btn-danger:hover {
   background: var(--danger-hover);
+}
+
+.show-emergency-checkbox {
+  margin-top: 0.5rem;
 }
 
 @media (max-width: 768px) {

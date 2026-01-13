@@ -443,7 +443,8 @@ public class NoteFunctionsTests
             DisplayOrder: 5,
             Priority: Constants.NotePriorityUrgent,
             Category: "Updated Category",
-            IsPinned: true
+            IsPinned: true,
+            ShowInEmergencyInfo: true
         );
 
         _mockNoteRepository
@@ -491,7 +492,8 @@ public class NoteFunctionsTests
             DisplayOrder: 1,
             Priority: Constants.NotePriorityNormal,
             Category: null,
-            IsPinned: false
+            IsPinned: false,
+            ShowInEmergencyInfo: false
         );
 
         _mockNoteRepository
@@ -522,7 +524,8 @@ public class NoteFunctionsTests
             DisplayOrder: 1,
             Priority: Constants.NotePriorityNormal,
             Category: null,
-            IsPinned: false
+            IsPinned: false,
+            ShowInEmergencyInfo: false
         );
 
         _mockNoteRepository
@@ -553,7 +556,8 @@ public class NoteFunctionsTests
             DisplayOrder: 1,
             Priority: Constants.NotePriorityNormal,
             Category: null,
-            IsPinned: false
+            IsPinned: false,
+            ShowInEmergencyInfo: false
         );
 
         _mockNoteRepository

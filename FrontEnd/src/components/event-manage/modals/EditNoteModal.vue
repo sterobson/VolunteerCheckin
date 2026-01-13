@@ -51,6 +51,14 @@
               <option value="Normal">Normal</option>
               <option value="Low">Low</option>
             </select>
+            <label class="checkbox-label-inline show-emergency-checkbox">
+              <input
+                type="checkbox"
+                v-model="form.showInEmergencyInfo"
+                @change="handleInput"
+              />
+              <span>Show in emergency info</span>
+            </label>
           </div>
 
           <div class="form-group">
@@ -90,6 +98,7 @@
             <span class="help-text">Pinned notes always appear at the top</span>
           </div>
         </div>
+
       </div>
 
       <!-- Visibility Tab -->
@@ -203,7 +212,13 @@ const form = ref({
   priority: 'Normal',
   category: '',
   isPinned: false,
+  showInEmergencyInfo: false,
 });
+
+// Helper to check if a priority should default to showing in emergency info
+const isEmergencyPriority = (priority) => {
+  return priority === 'Urgent' || priority === 'Emergency';
+};
 
 const isEditing = computed(() => !!props.note);
 
@@ -238,6 +253,7 @@ watch(() => props.show, (newVal) => {
         priority: props.note.priority || 'Normal',
         category: props.note.category || '',
         isPinned: props.note.isPinned || false,
+        showInEmergencyInfo: props.note.showInEmergencyInfo ?? isEmergencyPriority(props.note.priority),
       };
     } else {
       form.value = {
@@ -252,10 +268,24 @@ watch(() => props.show, (newVal) => {
         priority: 'Normal',
         category: '',
         isPinned: false,
+        showInEmergencyInfo: false,
       };
     }
 
     emit('update:isDirty', false);
+  }
+});
+
+// Auto-update showInEmergencyInfo when priority changes to Urgent/Emergency (only when creating new)
+watch(() => form.value.priority, (newPriority, oldPriority) => {
+  // Only auto-update when creating new note
+  if (!isEditing.value && newPriority !== oldPriority) {
+    if (isEmergencyPriority(newPriority)) {
+      form.value.showInEmergencyInfo = true;
+    } else if (isEmergencyPriority(oldPriority)) {
+      // If switching away from emergency priority, turn it off
+      form.value.showInEmergencyInfo = false;
+    }
   }
 });
 
@@ -309,6 +339,7 @@ const handleSave = () => {
     priority: form.value.priority || 'Normal',
     category: form.value.category?.trim() || null,
     isPinned: form.value.isPinned || false,
+    showInEmergencyInfo: form.value.showInEmergencyInfo,
   };
 
   emit('save', data);
@@ -331,6 +362,13 @@ const handleDelete = () => {
   flex-direction: column;
   gap: 1.5rem;
   padding: 1rem 0;
+  min-width: 450px;
+}
+
+@media (max-width: 520px) {
+  .note-form {
+    min-width: 0;
+  }
 }
 
 .form-group {
@@ -457,6 +495,10 @@ select {
 
 .btn-danger:hover {
   background: var(--danger-hover);
+}
+
+.show-emergency-checkbox {
+  margin-top: 0.5rem;
 }
 
 @media (max-width: 768px) {

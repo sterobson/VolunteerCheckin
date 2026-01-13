@@ -729,7 +729,8 @@ public record CreateNoteRequest(
     int DisplayOrder = 0,
     string Priority = Constants.NotePriorityNormal,
     string? Category = null,
-    bool IsPinned = false
+    bool IsPinned = false,
+    bool ShowInEmergencyInfo = false
 );
 
 /// <summary>
@@ -742,7 +743,8 @@ public record UpdateNoteRequest(
     int DisplayOrder,
     string Priority,
     string? Category,
-    bool IsPinned
+    bool IsPinned,
+    bool ShowInEmergencyInfo
 );
 
 /// <summary>
@@ -758,6 +760,7 @@ public record NoteResponse(
     string Priority,
     string? Category,
     bool IsPinned,
+    bool ShowInEmergencyInfo,
     string CreatedByPersonId,
     string CreatedByName,
     DateTime CreatedAt,
@@ -777,6 +780,7 @@ public record NoteForMarshalResponse(
     string Priority,
     string? Category,
     bool IsPinned,
+    bool ShowInEmergencyInfo,
     DateTime CreatedAt,
     string CreatedByName,
     string MatchedScope  // Which scope configuration matched for this marshal
@@ -796,7 +800,8 @@ public record CreateEventContactRequest(
     string? MarshalId = null,
     List<ScopeConfiguration>? ScopeConfigurations = null,
     int DisplayOrder = 0,
-    bool IsPrimary = false
+    bool IsPrimary = false,
+    bool ShowInEmergencyInfo = false
 );
 
 /// <summary>
@@ -811,7 +816,8 @@ public record UpdateEventContactRequest(
     string? MarshalId = null,
     List<ScopeConfiguration>? ScopeConfigurations = null,
     int DisplayOrder = 0,
-    bool IsPrimary = false
+    bool IsPrimary = false,
+    bool ShowInEmergencyInfo = false
 );
 
 /// <summary>
@@ -830,6 +836,7 @@ public record EventContactResponse(
     List<ScopeConfiguration> ScopeConfigurations,
     int DisplayOrder,
     bool IsPrimary,
+    bool ShowInEmergencyInfo,
     DateTime CreatedAt,
     DateTime? UpdatedAt
 );
@@ -845,6 +852,7 @@ public record EventContactForMarshalResponse(
     string? Email,
     string? Notes,
     bool IsPrimary,
+    bool ShowInEmergencyInfo,
     string MatchedScope  // Which scope configuration matched for this marshal
 );
 

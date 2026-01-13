@@ -18,6 +18,11 @@
         <span v-if="contact.role" class="contact-role">{{ formatRoleName(contact.role) }}</span>
       </div>
       <span
+        v-if="contact.showInEmergencyInfo && !isMarkedForRemoval"
+        class="emergency-indicator"
+        title="Shown in emergency info"
+      >🚨</span>
+      <span
         v-if="hasNoScope && !isMarkedForRemoval && !isPending"
         class="no-scope-warning"
         title="This contact has no visibility scope configured"
@@ -270,6 +275,12 @@ const truncateContent = (content) => {
 .contact-role {
   font-size: 0.8rem;
   color: var(--text-secondary);
+}
+
+.emergency-indicator {
+  font-size: 0.9rem;
+  flex-shrink: 0;
+  cursor: help;
 }
 
 .no-scope-warning {

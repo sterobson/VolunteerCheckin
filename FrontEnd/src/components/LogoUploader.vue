@@ -416,8 +416,9 @@ defineExpose({
 
 .logo-preview {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   padding: 0.75rem;
   background: var(--bg-secondary);
   border-radius: 8px;
@@ -425,10 +426,12 @@ defineExpose({
 }
 
 .logo-image {
-  max-width: 120px;
-  max-height: 60px;
-  object-fit: contain;
-  border-radius: 4px;
+  width: 160px;
+  height: 160px;
+  object-fit: cover;
+  object-position: center;
+  border-radius: 8px;
+  background: var(--bg-tertiary);
 }
 
 .remove-btn {

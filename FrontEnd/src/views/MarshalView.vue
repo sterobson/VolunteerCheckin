@@ -36,7 +36,7 @@
           <button @click="showReportIncident = true" class="btn-header-action btn-report-incident">
             Report Incident
           </button>
-          <button @click="showEmergency = true" class="btn-header-action btn-emergency">
+          <button v-if="hasEmergencyInfo" @click="showEmergency = true" class="btn-header-action btn-emergency">
             Emergency Info
           </button>
         </div>
@@ -997,19 +997,19 @@ const eventContacts = computed(() => {
   );
 });
 
-// Emergency contacts - filter for specific roles that should be shown in emergency modal
+// Emergency contacts - filter by showInEmergencyInfo flag
 const emergencyContacts = computed(() => {
-  const emergencyRoles = ['EmergencyContact', 'EventDirector', 'MedicalLead', 'SafetyOfficer'];
-  // Use eventContacts which already filters out self and deduplicates
-  return eventContacts.value.filter(contact => emergencyRoles.includes(contact.role));
+  return eventContacts.value.filter(contact => contact.showInEmergencyInfo);
 });
 
-// Emergency notes - filter for Emergency or Urgent priority notes
+// Emergency notes - filter by showInEmergencyInfo flag
 const emergencyNotes = computed(() => {
-  return notes.value.filter(note => {
-    const priority = note.priority || note.Priority;
-    return priority === 'Emergency' || priority === 'Urgent';
-  });
+  return notes.value.filter(note => note.showInEmergencyInfo);
+});
+
+// Check if there's any emergency info to show
+const hasEmergencyInfo = computed(() => {
+  return emergencyContacts.value.length > 0 || emergencyNotes.value.length > 0;
 });
 
 // Get notes that are scoped to a specific checkpoint (area and checkpoint scopes only, not marshal scopes)

@@ -88,11 +88,11 @@
               <span class="info-value">{{ formatDateTime(incident.createdAt) }}</span>
             </div>
             <div v-if="incident.context?.checkpoint" class="info-item">
-              <span class="info-label">Checkpoint</span>
+              <span class="info-label">{{ termsSentence.checkpoint }}</span>
               <span class="info-value">{{ formatCheckpointName(incident.context.checkpoint) }}</span>
             </div>
             <div v-if="incident.area" class="info-item">
-              <span class="info-label">Area</span>
+              <span class="info-label">{{ termsSentence.area }}</span>
               <span class="info-value">{{ incident.area.areaName }}</span>
             </div>
             <div v-if="hasGpsLocation" class="info-item">
@@ -143,7 +143,7 @@
           :class="{ expanded: expandedSections.marshals }"
           @click="toggleSection('marshals')"
         >
-          <span class="accordion-title">Marshals at checkpoint</span>
+          <span class="accordion-title">{{ terms.peoplePlural }} at {{ terms.checkpoint.toLowerCase() }}</span>
           <span class="accordion-preview">{{ sortedMarshalsAtCheckpoint.length }}</span>
           <span class="accordion-arrow">{{ expandedSections.marshals ? '▲' : '▼' }}</span>
         </button>
@@ -222,6 +222,9 @@
 import { ref, computed, watch, defineProps, defineEmits } from 'vue';
 import BaseModal from './BaseModal.vue';
 import CommonMap from './common/CommonMap.vue';
+import { useTerminology } from '../composables/useTerminology';
+
+const { terms, termsSentence } = useTerminology();
 
 const props = defineProps({
   show: {

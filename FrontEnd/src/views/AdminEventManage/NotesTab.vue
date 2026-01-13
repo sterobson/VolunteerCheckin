@@ -38,6 +38,7 @@
             <span v-if="note.isPinned" class="pin-icon" title="Pinned">📌</span>
             <span class="priority-indicator" :class="note.priority?.toLowerCase() || 'normal'"></span>
             <strong>{{ note.title }}</strong>
+            <span v-if="note.showInEmergencyInfo" class="emergency-indicator" title="Shown in emergency info">🚨</span>
           </div>
           <div class="note-meta">
             <span v-if="note.category" class="category-badge">{{ note.category }}</span>
@@ -310,6 +311,12 @@ const formatRelativeTime = (dateString) => {
 
 .pin-icon {
   font-size: 0.9rem;
+}
+
+.emergency-indicator {
+  font-size: 0.9rem;
+  margin-left: auto;
+  cursor: help;
 }
 
 .priority-indicator {

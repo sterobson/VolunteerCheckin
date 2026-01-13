@@ -1,14 +1,14 @@
 <template>
   <BaseModal
     :show="show"
-    title="Marshal check-in link"
+    :title="`${terms.person} check-in link`"
     size="medium"
     :confirm-on-close="true"
     :is-dirty="isDirty"
     @close="handleClose"
   >
     <!-- Instruction text -->
-    <p class="instruction">Share this link with marshals so they can check in:</p>
+    <p class="instruction">Share this link with {{ termsLower.peoplePlural }} so they can check in:</p>
 
     <!-- Share link container -->
     <div class="share-link-container">
@@ -33,6 +33,9 @@
 <script setup>
 import { ref, defineProps, defineEmits } from 'vue';
 import BaseModal from '../../BaseModal.vue';
+import { useTerminology } from '../../../composables/useTerminology';
+
+const { terms, termsLower } = useTerminology();
 
 const props = defineProps({
   show: {

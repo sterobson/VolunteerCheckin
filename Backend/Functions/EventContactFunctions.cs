@@ -134,6 +134,7 @@ public class EventContactFunctions
                 ScopeConfigurationsJson = JsonSerializer.Serialize(scopeConfigs),
                 DisplayOrder = request.DisplayOrder,
                 IsPrimary = request.IsPrimary,
+                ShowInEmergencyInfo = request.ShowInEmergencyInfo,
                 CreatedByPersonId = claims.PersonId,
                 CreatedAt = DateTime.UtcNow,
                 IsDeleted = false
@@ -309,6 +310,7 @@ public class EventContactFunctions
             contact.ScopeConfigurationsJson = JsonSerializer.Serialize(request.ScopeConfigurations ?? []);
             contact.DisplayOrder = request.DisplayOrder;
             contact.IsPrimary = request.IsPrimary;
+            contact.ShowInEmergencyInfo = request.ShowInEmergencyInfo;
             contact.UpdatedAt = DateTime.UtcNow;
 
             await _contactRepository.UpdateAsync(contact);
@@ -425,6 +427,7 @@ public class EventContactFunctions
                         Email: contact.Email,
                         Notes: contact.Notes,
                         IsPrimary: contact.IsPrimary,
+                        ShowInEmergencyInfo: contact.ShowInEmergencyInfo,
                         MatchedScope: result.WinningConfig?.Scope ?? string.Empty
                     ));
                 }
@@ -478,6 +481,7 @@ public class EventContactFunctions
                             Email: c.Email,
                             Notes: c.Notes,
                             IsPrimary: c.IsPrimary,
+                            ShowInEmergencyInfo: c.ShowInEmergencyInfo,
                             MatchedScope: "Admin"
                         )
                     )];
@@ -622,6 +626,7 @@ public class EventContactFunctions
             ScopeConfigurations: configs,
             DisplayOrder: contact.DisplayOrder,
             IsPrimary: contact.IsPrimary,
+            ShowInEmergencyInfo: contact.ShowInEmergencyInfo,
             CreatedAt: contact.CreatedAt,
             UpdatedAt: contact.UpdatedAt
         );

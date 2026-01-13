@@ -122,7 +122,7 @@
       </div>
 
       <div class="form-group">
-        <label>Required marshals</label>
+        <label>Required {{ termsLower.peoplePlural }}</label>
         <input
           v-model.number="form.requiredMarshals"
           type="number"

@@ -69,6 +69,12 @@ public class NoteEntity : ITableEntity
     public bool IsPinned { get; set; }
 
     /// <summary>
+    /// Whether this note should appear in the emergency info section.
+    /// Defaults to true for Urgent or Emergency priority.
+    /// </summary>
+    public bool ShowInEmergencyInfo { get; set; }
+
+    /// <summary>
     /// Who created this note
     /// </summary>
     public string CreatedByPersonId { get; set; } = string.Empty;

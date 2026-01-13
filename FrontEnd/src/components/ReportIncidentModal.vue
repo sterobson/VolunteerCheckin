@@ -67,7 +67,7 @@
 
       <!-- Checkpoint (for leads/admins) -->
       <div v-if="availableCheckpoints.length > 0" class="form-group">
-        <label for="checkpoint" class="form-label">Checkpoint</label>
+        <label for="checkpoint" class="form-label">{{ termsSentence.checkpoint }}</label>
         <select
           id="checkpoint"
           v-model="selectedCheckpointId"
@@ -86,7 +86,7 @@
 
       <!-- Fixed checkpoint display (for marshals with single assignment) -->
       <div v-else-if="checkpoint" class="form-group">
-        <label class="form-label">Checkpoint</label>
+        <label class="form-label">{{ termsSentence.checkpoint }}</label>
         <div class="checkpoint-toggle">
           <label class="checkbox-label">
             <input type="checkbox" v-model="useFixedCheckpoint" />
@@ -190,6 +190,9 @@
 import { ref, computed, watch, defineProps, defineEmits } from 'vue';
 import BaseModal from './BaseModal.vue';
 import CommonMap from './common/CommonMap.vue';
+import { useTerminology } from '../composables/useTerminology';
+
+const { termsSentence } = useTerminology();
 
 const props = defineProps({
   show: {

@@ -102,6 +102,7 @@ public class NoteFunctions
                 Priority = request.Priority ?? Constants.NotePriorityNormal,
                 Category = request.Category ?? string.Empty,
                 IsPinned = request.IsPinned,
+                ShowInEmergencyInfo = request.ShowInEmergencyInfo,
                 CreatedByPersonId = claims.PersonId,
                 CreatedByName = claims.PersonName,
                 CreatedAt = DateTime.UtcNow,
@@ -256,6 +257,7 @@ public class NoteFunctions
             note.Priority = request.Priority ?? Constants.NotePriorityNormal;
             note.Category = request.Category ?? string.Empty;
             note.IsPinned = request.IsPinned;
+            note.ShowInEmergencyInfo = request.ShowInEmergencyInfo;
             note.UpdatedByPersonId = claims.PersonId;
             note.UpdatedByName = claims.PersonName;
             note.UpdatedAt = DateTime.UtcNow;
@@ -367,6 +369,7 @@ public class NoteFunctions
                         Priority: note.Priority,
                         Category: string.IsNullOrEmpty(note.Category) ? null : note.Category,
                         IsPinned: note.IsPinned,
+                        ShowInEmergencyInfo: note.ShowInEmergencyInfo,
                         CreatedAt: note.CreatedAt,
                         CreatedByName: createdByName,
                         MatchedScope: result.WinningConfig?.Scope ?? string.Empty
@@ -442,6 +445,7 @@ public class NoteFunctions
                             Priority: n.Priority,
                             Category: string.IsNullOrEmpty(n.Category) ? null : n.Category,
                             IsPinned: n.IsPinned,
+                            ShowInEmergencyInfo: n.ShowInEmergencyInfo,
                             CreatedAt: n.CreatedAt,
                             CreatedByName: createdByName,
                             MatchedScope: "Admin"
@@ -593,6 +597,7 @@ public class NoteFunctions
             Priority: note.Priority,
             Category: string.IsNullOrEmpty(note.Category) ? null : note.Category,
             IsPinned: note.IsPinned,
+            ShowInEmergencyInfo: note.ShowInEmergencyInfo,
             CreatedByPersonId: note.CreatedByPersonId,
             CreatedByName: createdByName,
             CreatedAt: note.CreatedAt,

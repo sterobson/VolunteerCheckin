@@ -47,6 +47,33 @@ public class LogoFunctions
     }
 
     /// <summary>
+    /// Get the logo image for an event.
+    /// GET /events/{eventId}/logo
+    /// </summary>
+    [Function("GetEventLogo")]
+    public async Task<IActionResult> GetEventLogo(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/{eventId}/logo")] HttpRequest req,
+        string eventId)
+    {
+        try
+        {
+            (byte[]? data, string? contentType) = await _blobStorageService.GetLogoAsync(eventId);
+
+            if (data == null)
+            {
+                return new NotFoundResult();
+            }
+
+            return new FileContentResult(data, contentType ?? "image/png");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving logo for event {EventId}", eventId);
+            return new NotFoundResult();
+        }
+    }
+
+    /// <summary>
     /// Upload a logo image for an event.
     /// POST /events/{eventId}/logo
     /// </summary>
@@ -91,8 +118,11 @@ public class LogoFunctions
                 });
             }
 
-            // Upload the logo
-            string logoUrl = await _blobStorageService.UploadLogoAsync(eventId, req.Body, contentType);
+            // Upload the logo and get a cache-busting version string
+            string version = await _blobStorageService.UploadLogoAsync(eventId, req.Body, contentType);
+
+            // Construct the API URL for serving the logo
+            string logoUrl = $"/api/events/{eventId}/logo?v={version}";
 
             // Update the event with the logo URL
             eventEntity.BrandingLogoUrl = logoUrl;

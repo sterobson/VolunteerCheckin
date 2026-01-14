@@ -51,6 +51,9 @@
       :show-notes="true"
       :show-scopes="true"
       :empty-message="emptyMessage"
+      :areas="areas"
+      :locations="locations"
+      :marshals="marshals"
       @select="$emit('select-contact', $event)"
     />
   </div>

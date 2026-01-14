@@ -34,7 +34,15 @@
               </div>
             </div>
             <div class="task-scope">
-              <span class="scope-pill" :title="getScopeTooltip(group.items[0])">
+              <ScopedAssignmentPills
+                v-if="group.items[0]?.scopeConfigurations?.length"
+                :scope-configurations="group.items[0].scopeConfigurations"
+                :areas="areas"
+                :locations="locations"
+                :marshals="marshals"
+                :max-expanded-items="3"
+              />
+              <span v-else class="scope-pill" :title="getScopeTooltip(group.items[0])">
                 {{ getScopeLabel(group.items[0]) }}
               </span>
             </div>
@@ -92,8 +100,9 @@
 </template>
 
 <script setup>
-import { ref, computed, defineProps, defineEmits } from 'vue';
+import { ref, computed } from 'vue';
 import { useTerminology } from '../../composables/useTerminology';
+import ScopedAssignmentPills from '../common/ScopedAssignmentPills.vue';
 
 const { terms, termsLower } = useTerminology();
 
@@ -394,7 +403,10 @@ const formatDateTime = (dateString) => {
 }
 
 .task-scope {
-  flex-shrink: 0;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .scope-pill {

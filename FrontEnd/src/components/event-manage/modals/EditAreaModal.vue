@@ -162,7 +162,15 @@
       :locations="allLocations"
       :areas="areas"
       :assignments="areaAssignments"
+      :marshals="marshals"
       @change="handleChecklistChange"
+    />
+
+    <!-- Add new checklists for this area -->
+    <ChecklistPreviewForArea
+      v-if="activeTab === 'checklists' && isExistingArea"
+      v-model="pendingNewChecklistItems"
+      @change="handleInput"
     />
 
     <!-- Checklists placeholder when creating -->
@@ -179,6 +187,14 @@
       :locations="allLocations"
       :areas="areas"
       :assignments="assignments"
+      :marshals="marshals"
+    />
+
+    <!-- Add new notes for this area -->
+    <NotesPreviewForArea
+      v-if="activeTab === 'notes' && isExistingArea"
+      v-model="pendingNewNotes"
+      @change="handleInput"
     />
 
     <!-- Notes placeholder when creating -->
@@ -401,6 +417,8 @@ import BaseModal from '../../BaseModal.vue';
 import TabHeader from '../../TabHeader.vue';
 import CheckpointChecklistView from '../../CheckpointChecklistView.vue';
 import NotesView from '../../NotesView.vue';
+import ChecklistPreviewForArea from '../../ChecklistPreviewForArea.vue';
+import NotesPreviewForArea from '../../NotesPreviewForArea.vue';
 import CheckpointStylePicker from '../../CheckpointStylePicker.vue';
 import IncidentCard from '../../IncidentCard.vue';
 import ConfirmModal from '../../ConfirmModal.vue';
@@ -562,6 +580,8 @@ const showClearBoundaryConfirm = ref(false);
 const showAddContactModal = ref(false);
 const pendingContacts = ref([]);
 const contactsToRemove = ref([]);
+const pendingNewChecklistItems = ref([]);
+const pendingNewNotes = ref([]);
 
 const form = ref({
   name: '',
@@ -931,6 +951,8 @@ watch(() => props.show, (newVal) => {
     loadingChecklistStatus.value = {};
     pendingContacts.value = [];
     contactsToRemove.value = [];
+    pendingNewChecklistItems.value = [];
+    pendingNewNotes.value = [];
     showAddContactModal.value = false;
     // Reset form when opening for a new area
     if (!isExistingArea.value) {
@@ -1073,6 +1095,9 @@ const handleSave = () => {
     pendingContacts: pendingContacts.value || [],
     // Include contacts to remove from this area
     contactsToRemove: contactsToRemove.value || [],
+    // Include pending new checklist items and notes (for this area)
+    pendingNewChecklistItems: pendingNewChecklistItems.value || [],
+    pendingNewNotes: pendingNewNotes.value || [],
   } : {
     // Create request
     name: form.value.name,

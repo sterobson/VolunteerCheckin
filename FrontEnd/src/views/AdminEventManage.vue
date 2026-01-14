@@ -172,6 +172,7 @@
       :all-locations="locationStatuses"
       :notes="notes"
       :available-marshals="availableMarshalsForAssignment"
+      :all-marshals="marshals"
       :all-checklist-items="checklistItems"
       :incidents="selectedLocationIncidents"
       :is-dirty="formDirty"
@@ -254,6 +255,7 @@
       :event-notes="notes"
       :all-checklist-items="checklistItems"
       :incidents="selectedMarshalIncidents"
+      :all-marshals="marshals"
       :is-dirty="formDirty"
       :validation-errors="marshalValidationErrors"
       :locked-checkpoint-id="lockedCheckpointId"
@@ -481,6 +483,7 @@
       @confirm="handleConfirmModalConfirm"
       @cancel="handleConfirmModalCancel"
     />
+
   </div>
 </template>
 
@@ -1381,6 +1384,48 @@ const handleSaveArea = async (formData) => {
     if ((formData.pendingContacts && formData.pendingContacts.length > 0) ||
         (formData.contactsToRemove && formData.contactsToRemove.length > 0)) {
       await loadContacts();
+    }
+
+    // Create pending new checklist items scoped to this area
+    if (formData.pendingNewChecklistItems && formData.pendingNewChecklistItems.length > 0 && areaId) {
+      for (const item of formData.pendingNewChecklistItems) {
+        if (!item.text?.trim()) continue;
+        try {
+          await checklistApi.create(route.params.eventId, {
+            text: item.text,
+            scopeConfigurations: [
+              { scope: 'EveryoneInAreas', itemType: 'Area', ids: [areaId] }
+            ],
+            displayOrder: 0,
+            isRequired: false,
+          });
+        } catch (error) {
+          console.error('Failed to create checklist item:', item, error);
+        }
+      }
+      await loadChecklistItems();
+    }
+
+    // Create pending new notes scoped to this area
+    if (formData.pendingNewNotes && formData.pendingNewNotes.length > 0 && areaId) {
+      for (const note of formData.pendingNewNotes) {
+        if (!note.title?.trim() && !note.content?.trim()) continue;
+        try {
+          await notesApi.create(route.params.eventId, {
+            title: note.title || 'Untitled',
+            content: note.content || '',
+            scopeConfigurations: [
+              { scope: 'EveryoneInAreas', itemType: 'Area', ids: [areaId] }
+            ],
+            displayOrder: 0,
+            priority: 'Normal',
+            isPinned: false,
+          });
+        } catch (error) {
+          console.error('Failed to create note:', note, error);
+        }
+      }
+      await loadNotes();
     }
 
     await loadAreas();

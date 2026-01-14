@@ -48,15 +48,12 @@
         <div v-if="note.content" class="note-preview">
           {{ truncateContent(note.content) }}
         </div>
-        <div class="note-scopes">
-          <span
-            v-for="(config, index) in note.scopeConfigurations"
-            :key="index"
-            class="scope-badge"
-          >
-            {{ formatScopeConfig(config) }}
-          </span>
-        </div>
+        <ScopedAssignmentPills
+          :scope-configurations="note.scopeConfigurations"
+          :areas="areas"
+          :locations="locations"
+          :marshals="marshals"
+        />
       </div>
     </div>
   </div>
@@ -65,9 +62,7 @@
 <script setup>
 import { ref, computed, defineProps, defineEmits } from 'vue';
 import { alphanumericCompare } from '../../utils/sortUtils';
-import { useTerminology } from '../../composables/useTerminology';
-
-const { termsLower } = useTerminology();
+import ScopedAssignmentPills from '../../components/common/ScopedAssignmentPills.vue';
 
 const props = defineProps({
   notes: {
@@ -133,49 +128,6 @@ const sortedNotes = computed(() => {
     return alphanumericCompare(a.title, b.title);
   });
 });
-
-const formatScope = (scope) => {
-  const scopeMap = {
-    'Everyone': 'Everyone',
-    'EveryoneInAreas': `Everyone in ${termsLower.value.areas}`,
-    'EveryoneAtCheckpoints': `Everyone at ${termsLower.value.checkpoints}`,
-    'SpecificPeople': `Specific ${termsLower.value.people}`,
-    'EveryAreaLead': `Every ${termsLower.value.area} lead`,
-    'OnePerCheckpoint': `One per ${termsLower.value.checkpoint}`,
-    'OnePerArea': `One per ${termsLower.value.area}`,
-    'OneLeadPerArea': `One lead per ${termsLower.value.area}`,
-  };
-  return scopeMap[scope] || scope;
-};
-
-const formatScopeConfig = (config) => {
-  if (!config) return '';
-
-  const scopeName = formatScope(config.scope);
-
-  if (config.itemType === null) {
-    return scopeName;
-  }
-
-  const ids = config.ids || [];
-
-  if (ids.includes('ALL_MARSHALS')) {
-    return `${scopeName} (Everyone)`;
-  }
-  if (ids.includes('ALL_AREAS')) {
-    return `${scopeName} (All ${termsLower.value.areas})`;
-  }
-  if (ids.includes('ALL_CHECKPOINTS')) {
-    return `${scopeName} (All ${termsLower.value.checkpoints})`;
-  }
-
-  const count = ids.length;
-  if (count === 0) {
-    return scopeName;
-  }
-
-  return `${scopeName} (${count})`;
-};
 
 const truncateContent = (content) => {
   if (!content) return '';
@@ -362,21 +314,6 @@ const formatRelativeTime = (dateString) => {
   color: var(--text-secondary);
   line-height: 1.4;
   margin-bottom: 0.75rem;
-}
-
-.note-scopes {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.scope-badge {
-  padding: 0.2rem 0.6rem;
-  background: var(--accent-primary);
-  color: white;
-  border-radius: 12px;
-  font-size: 0.7rem;
-  font-weight: 500;
 }
 
 .btn {

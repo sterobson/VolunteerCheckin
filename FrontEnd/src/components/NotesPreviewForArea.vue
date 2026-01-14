@@ -1,0 +1,307 @@
+<template>
+  <div class="notes-preview">
+    <!-- Header with add button -->
+    <div class="preview-actions">
+      <p class="preview-header">
+        Add new note for this {{ termsLower.area }}:
+      </p>
+      <button
+        type="button"
+        class="add-item-btn"
+        @click="showAddForm = !showAddForm"
+      >
+        {{ showAddForm ? 'Cancel' : 'Add note' }}
+      </button>
+    </div>
+
+    <!-- Add new note form -->
+    <div v-if="showAddForm" class="add-item-form">
+      <div class="add-form-fields">
+        <input
+          v-model="newNoteTitle"
+          type="text"
+          placeholder="Note title..."
+          class="add-item-input title-input"
+        />
+        <textarea
+          v-model="newNoteContent"
+          placeholder="Note content..."
+          class="add-item-input content-input"
+          rows="3"
+        ></textarea>
+      </div>
+      <button
+        type="button"
+        class="save-item-btn"
+        :disabled="!newNoteTitle.trim() && !newNoteContent.trim()"
+        @click="addNewNote"
+      >
+        Add
+      </button>
+    </div>
+
+    <!-- Pending new notes -->
+    <div v-if="pendingNewNotes.length > 0" class="pending-items">
+      <div
+        v-for="(note, index) in pendingNewNotes"
+        :key="`pending-${index}`"
+        class="note-item pending"
+      >
+        <div class="note-header">
+          <span class="note-title">{{ note.title || 'Untitled' }}</span>
+          <div class="note-actions">
+            <span class="scope-pill new-pill" title="Will be created when saved">
+              New
+            </span>
+            <button
+              type="button"
+              class="remove-item-btn"
+              @click="removeNewNote(index)"
+              title="Remove"
+            >
+              &times;
+            </button>
+          </div>
+        </div>
+        <div v-if="note.content" class="note-content">{{ note.content }}</div>
+      </div>
+    </div>
+
+    <!-- Empty state when no pending notes -->
+    <div v-if="pendingNewNotes.length === 0 && !showAddForm" class="empty-state">
+      <p>No new notes to add. Click the button above to create one.</p>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, defineProps, defineEmits, watch } from 'vue';
+import { useTerminology } from '../composables/useTerminology';
+
+const { termsLower } = useTerminology();
+
+const props = defineProps({
+  modelValue: {
+    type: Array,
+    default: () => [],
+  },
+});
+
+const emit = defineEmits(['update:modelValue', 'change']);
+
+// Local state
+const showAddForm = ref(false);
+const newNoteTitle = ref('');
+const newNoteContent = ref('');
+const pendingNewNotes = ref([...props.modelValue]);
+
+// Sync with v-model
+watch(() => props.modelValue, (newVal) => {
+  pendingNewNotes.value = [...newVal];
+}, { deep: true });
+
+const addNewNote = () => {
+  if (!newNoteTitle.value.trim() && !newNoteContent.value.trim()) return;
+
+  pendingNewNotes.value.push({
+    title: newNoteTitle.value.trim(),
+    content: newNoteContent.value.trim(),
+    isNew: true,
+  });
+
+  newNoteTitle.value = '';
+  newNoteContent.value = '';
+  showAddForm.value = false;
+  emitChanges();
+};
+
+const removeNewNote = (index) => {
+  pendingNewNotes.value.splice(index, 1);
+  emitChanges();
+};
+
+const emitChanges = () => {
+  emit('update:modelValue', [...pendingNewNotes.value]);
+  emit('change');
+};
+</script>
+
+<style scoped>
+.notes-preview {
+  padding: 1rem 0;
+}
+
+.preview-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.preview-header {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.add-item-btn {
+  padding: 0.4rem 0.75rem;
+  background: var(--brand-primary);
+  color: var(--card-bg);
+  border: none;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.add-item-btn:hover {
+  background: var(--brand-primary-hover);
+}
+
+.add-item-form {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: var(--brand-primary-light);
+  border-radius: 6px;
+  align-items: flex-start;
+}
+
+.add-form-fields {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.add-item-input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--border-medium);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  background: var(--input-bg);
+  color: var(--text-primary);
+}
+
+.add-item-input:focus {
+  outline: none;
+  border-color: var(--brand-primary);
+}
+
+.content-input {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.save-item-btn {
+  padding: 0.5rem 1rem;
+  background: var(--success);
+  color: var(--card-bg);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  align-self: flex-start;
+}
+
+.save-item-btn:disabled {
+  background: var(--border-dark);
+  cursor: not-allowed;
+}
+
+.save-item-btn:not(:disabled):hover {
+  background: var(--success-hover);
+}
+
+.pending-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-secondary);
+}
+
+.empty-state p {
+  margin: 0;
+}
+
+.note-item {
+  padding: 0.75rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+}
+
+.note-item.pending {
+  background: var(--brand-primary-light);
+  border-color: var(--brand-primary);
+}
+
+.note-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.note-title {
+  font-weight: 600;
+  color: var(--text-dark);
+  flex: 1;
+}
+
+.note-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.scope-pill {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  background: var(--info-bg);
+  color: var(--info-blue);
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.scope-pill.new-pill {
+  background: var(--success-bg-light);
+  color: var(--success-dark);
+}
+
+.remove-item-btn {
+  background: none;
+  border: none;
+  color: var(--danger);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}
+
+.remove-item-btn:hover {
+  color: var(--danger-hover);
+}
+
+.note-content {
+  font-size: 0.9rem;
+  color: var(--text-darker);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+</style>

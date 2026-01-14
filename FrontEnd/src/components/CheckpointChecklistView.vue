@@ -25,6 +25,7 @@
       :items="itemsWithLocalState"
       :locations="locations"
       :areas="areas"
+      :marshals="marshals"
       @toggle-complete="handleToggleComplete"
     />
   </div>
@@ -60,6 +61,10 @@ const props = defineProps({
     default: () => [],
   },
   assignments: {
+    type: Array,
+    default: () => [],
+  },
+  marshals: {
     type: Array,
     default: () => [],
   },

@@ -121,6 +121,7 @@
             :get-toolbar-actions="getCheckpointMapActions"
             :is-area-lead-for-areas="isAreaLeadForAreas"
             :get-notes-for-checkpoint="getNotesForCheckpoint"
+            :area-lead-area-ids="areaLeadAreaIds"
             @toggle="toggleSection('assignments')"
             @toggle-checkpoint="toggleCheckpoint"
             @map-click="handleMapClick"
@@ -228,7 +229,7 @@
             :route="eventRoute"
             :center="mapCenter"
             :highlight-location-ids="assignmentLocationIds"
-            :clickable="selectingLocationOnMap || hasDynamicAssignment"
+            :clickable="selectingLocationOnMap || canUpdateFirstDynamicAssignment"
             :toolbar-actions="courseMapActions"
             @toggle="toggleSection('map')"
             @cancel-select="cancelMapLocationSelect"
@@ -391,6 +392,7 @@ import { useMapActions } from '../composables/useMapActions';
 import { useAreaLeadMarshals } from '../composables/useAreaLeadMarshals';
 import { useMarshalAuth } from '../composables/useMarshalAuth';
 import { getIcon } from '../utils/icons';
+import { canMarshalUpdateDynamicLocation } from '../utils/scopeUtils';
 import { useOffline } from '../composables/useOffline';
 import { cacheEventData, getCachedEventData, updateCachedField } from '../services/offlineDb';
 
@@ -519,7 +521,7 @@ const assignments = ref([]);
 const areas = ref([]);
 const loading = ref(true);
 
-// Branding styles from composable
+// Branding styles from composable (pass eventId for caching)
 const {
   pageBackgroundStyle,
   headerStyle,
@@ -529,7 +531,7 @@ const {
   accentButtonStyle,
   brandingLogoUrl,
   brandingLogoPosition,
-} = useMarshalBranding(event);
+} = useMarshalBranding(event, route.params.eventId);
 
 // Provide branding styles to child components via dependency injection
 provide('marshalBranding', {
@@ -890,6 +892,25 @@ const hasDynamicAssignment = computed(() => {
 // Get the user's first dynamic assignment (for quick updates)
 const firstDynamicAssignment = computed(() => {
   return assignmentsWithDetails.value.find(a => a.location?.isDynamic || a.location?.IsDynamic);
+});
+
+// Check if user can update their first dynamic assignment based on scope
+const canUpdateFirstDynamicAssignment = computed(() => {
+  const dynAssign = firstDynamicAssignment.value;
+  if (!dynAssign) return false;
+
+  const location = dynAssign.location;
+  const scopeConfigurations = location?.locationUpdateScopeConfigurations ||
+    location?.LocationUpdateScopeConfigurations || [];
+
+  return canMarshalUpdateDynamicLocation({
+    scopeConfigurations,
+    marshalId: currentMarshalId.value,
+    marshalAssignmentLocationIds: assignmentLocationIds.value,
+    areaLeadAreaIds: areaLeadAreaIds.value,
+    locationId: dynAssign.locationId,
+    locationAreaIds: dynAssign.areaIds || [],
+  });
 });
 
 // Find checkpoints that are overdue for check-in and haven't been dismissed
@@ -1406,8 +1427,8 @@ const handleMapClick = (coords) => {
     return;
   }
 
-  // If user has a dynamic assignment and clicks on the map, offer to update
-  if (hasDynamicAssignment.value && firstDynamicAssignment.value) {
+  // If user has a dynamic assignment they can update and clicks on the map, offer to update
+  if (canUpdateFirstDynamicAssignment.value && firstDynamicAssignment.value) {
     const dynAssign = firstDynamicAssignment.value;
     confirmModalTitle.value = 'Update location';
     confirmModalMessage.value = `Update ${dynAssign.location?.name || 'dynamic checkpoint'} to this location?`;
@@ -1427,8 +1448,8 @@ const handleLocationClick = (location) => {
   // If in selection mode, don't do anything special - map click will handle it
   if (selectingLocationOnMap.value) return;
 
-  // If user has a dynamic assignment, offer to copy this location
-  if (hasDynamicAssignment.value && firstDynamicAssignment.value) {
+  // If user has a dynamic assignment they can update, offer to copy this location
+  if (canUpdateFirstDynamicAssignment.value && firstDynamicAssignment.value) {
     const dynAssign = firstDynamicAssignment.value;
     // Don't offer to copy from itself
     if (location.id === dynAssign.locationId) return;

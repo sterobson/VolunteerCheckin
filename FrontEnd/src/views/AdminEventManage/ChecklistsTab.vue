@@ -35,16 +35,14 @@
           <div class="checklist-item-title" @click="$emit('select-checklist-item', item, 'details')">
             <strong>{{ item.text }}</strong>
           </div>
-          <div class="checklist-item-scopes">
-            <span
-              v-for="(config, index) in item.scopeConfigurations"
-              :key="index"
-              class="scope-badge"
-              @click="$emit('select-checklist-item', item, 'visibility')"
-            >
-              {{ formatScopeConfig(config) }}
-            </span>
-          </div>
+          <ScopedAssignmentPills
+            class="checklist-item-scopes"
+            :scope-configurations="item.scopeConfigurations"
+            :areas="areas"
+            :locations="locations"
+            :marshals="marshals"
+            @click="$emit('select-checklist-item', item, 'visibility')"
+          />
         </div>
       </div>
     </div>
@@ -54,9 +52,10 @@
 <script setup>
 import { ref, computed, defineProps, defineEmits } from 'vue';
 import { alphanumericCompare } from '../../utils/sortUtils';
+import ScopedAssignmentPills from '../../components/common/ScopedAssignmentPills.vue';
 import { useTerminology } from '../../composables/useTerminology';
 
-const { terms, termsLower } = useTerminology();
+const { termsLower } = useTerminology();
 
 const props = defineProps({
   checklistItems: {
@@ -109,97 +108,6 @@ const sortedItems = computed(() => {
     return alphanumericCompare(a.text, b.text);
   });
 });
-
-const formatScope = (scope) => {
-  const scopeMap = {
-    'Everyone': 'Everyone',
-    'EveryoneInAreas': `Everyone in ${termsLower.value.areas}`,
-    'EveryoneAtCheckpoints': `Everyone at ${termsLower.value.checkpoints}`,
-    'SpecificPeople': `Specific ${termsLower.value.people}`,
-    'OnePerArea': `One per ${termsLower.value.area}`,
-    'OnePerCheckpoint': `One per ${termsLower.value.checkpoint}`,
-    'EveryAreaLead': `Every ${termsLower.value.area} lead`,
-    'OneLeadPerArea': `One lead per ${termsLower.value.area}`,
-    'AreaLead': `${terms.value.area} lead`, // Legacy support
-  };
-  return scopeMap[scope] || scope;
-};
-
-const formatScopeConfig = (config) => {
-  if (!config) return '';
-
-  const scopeName = formatScope(config.scope);
-
-  if (config.itemType === null) {
-    return scopeName;
-  }
-
-  const ids = config.ids || [];
-
-  // Handle sentinel values
-  if (ids.includes('ALL_MARSHALS')) {
-    return `${scopeName} (Everyone)`;
-  }
-  if (ids.includes('ALL_AREAS')) {
-    return `${scopeName} (All ${termsLower.value.areas})`;
-  }
-  if (ids.includes('ALL_CHECKPOINTS')) {
-    return `${scopeName} (All ${termsLower.value.checkpoints})`;
-  }
-
-  const count = ids.length;
-  if (count === 0) {
-    return scopeName;
-  }
-
-  return `${scopeName} (${count})`;
-};
-
-const getAreaNames = (areaIds) => {
-  return areaIds.map(id => {
-    const area = props.areas.find(a => a.id === id);
-    return area ? area.name : id;
-  });
-};
-
-const getLocationNames = (locationIds) => {
-  return locationIds.map(id => {
-    const location = props.locations.find(l => l.id === id);
-    return location ? location.name : id;
-  });
-};
-
-const getMarshalNames = (marshalIds) => {
-  return marshalIds.map(id => {
-    const marshal = props.marshals.find(m => m.id === id);
-    return marshal ? marshal.name : id;
-  });
-};
-
-const formatDateTime = (dateString) => {
-  if (!dateString) return '';
-  const date = new Date(dateString);
-  return date.toLocaleString();
-};
-
-const getCompletionSummary = (item) => {
-  if (!props.completionReport) return null;
-
-  const itemCompletion = props.completionReport.completionsByItem?.find(
-    c => c.itemId === item.itemId
-  );
-
-  if (!itemCompletion) return null;
-
-  const count = itemCompletion.completionCount || 0;
-  return count > 0 ? `Completed ${count} time(s)` : null;
-};
-
-const getIncompleteDetails = (item) => {
-  // TODO: Implement logic to show which areas/checkpoints/people haven't completed
-  // This will require additional API endpoint or data structure
-  return null;
-};
 </script>
 
 <style scoped>
@@ -306,28 +214,9 @@ const getIncompleteDetails = (item) => {
 }
 
 .checklist-item-scopes {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  max-width: 67%;
-  flex-shrink: 0;
+  flex: 1;
+  min-width: 0;
   justify-content: flex-end;
-}
-
-.scope-badge {
-  padding: 0.25rem 0.7rem;
-  background: var(--accent-primary);
-  color: white;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.scope-badge:hover {
-  background: var(--accent-primary-hover);
 }
 
 .btn {

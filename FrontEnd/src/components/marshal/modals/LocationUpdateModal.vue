@@ -82,7 +82,8 @@
                   class="btn btn-secondary btn-checkpoint-source"
                   :disabled="updating"
                 >
-                  {{ loc.name }}
+                  <span class="checkpoint-name">{{ loc.name }}</span>
+                  <span v-if="loc.description" class="checkpoint-description">{{ truncateDescription(loc.description) }}</span>
                 </button>
               </div>
               <p v-else class="no-checkpoints">
@@ -96,7 +97,7 @@
 
         <div class="modal-footer">
           <button @click="$emit('close')" class="btn btn-secondary">
-            Cancel
+            {{ success ? 'Ok' : 'Cancel' }}
           </button>
         </div>
       </div>
@@ -154,6 +155,12 @@ defineEmits(['close', 'update-gps', 'toggle-auto-update', 'select-on-map', 'copy
 const formatDateTime = (dateString) => {
   if (!dateString) return '';
   return new Date(dateString).toLocaleString();
+};
+
+const truncateDescription = (description, maxLength = 50) => {
+  if (!description) return '';
+  if (description.length <= maxLength) return description;
+  return description.substring(0, maxLength).trim() + '...';
 };
 </script>
 
@@ -311,6 +318,19 @@ const formatDateTime = (dateString) => {
 .btn-checkpoint-source {
   text-align: left;
   padding: 0.75rem 1rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.btn-checkpoint-source .checkpoint-name {
+  font-weight: 500;
+}
+
+.btn-checkpoint-source .checkpoint-description {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: normal;
 }
 
 .no-checkpoints {

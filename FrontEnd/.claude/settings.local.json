@@ -27,7 +27,8 @@
       "Bash(az storage entity query:*)",
       "Bash(powershell -Command:*)",
       "Bash(dotnet run:*)",
-      "Bash(dir /b /s \"C:\\\\Users\\\\stero\\\\*screenshot*\")"
+      "Bash(dir /b /s \"C:\\\\Users\\\\stero\\\\*screenshot*\")",
+      "Bash(dir /s /b \"C:\\\\Users\\\\stero\\\\*screenshot*\")"
     ]
   }
 }

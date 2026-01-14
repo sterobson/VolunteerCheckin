@@ -37,6 +37,8 @@
           :notes="getNotesForCheckpoint(assign.locationId, assign.areaIds)"
           :updating-location="updatingLocation"
           :auto-update-enabled="autoUpdateEnabled"
+          :area-lead-area-ids="areaLeadAreaIds"
+          :all-assignment-location-ids="allAssignmentLocationIds"
           @toggle="$emit('toggle-checkpoint', assign.id)"
           @map-click="(e) => $emit('map-click', e)"
           @location-click="(e) => $emit('location-click', e)"
@@ -54,7 +56,7 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits, defineExpose } from 'vue';
+import { defineProps, defineEmits, defineExpose, computed } from 'vue';
 import { getIcon } from '../../utils/icons';
 import { useTerminology } from '../../composables/useTerminology';
 import CheckpointCard from './CheckpointCard.vue';
@@ -126,6 +128,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  areaLeadAreaIds: {
+    type: Array,
+    default: () => [],
+  },
   getToolbarActions: {
     type: Function,
     default: () => [],
@@ -153,6 +159,11 @@ defineEmits([
   'marshal-check-in',
   'toggle-auto-update',
 ]);
+
+// Computed list of all assignment location IDs for scope checking
+const allAssignmentLocationIds = computed(() => {
+  return props.assignments.map(a => a.locationId);
+});
 
 // Store refs to checkpoint cards
 const checkpointRefs = {};

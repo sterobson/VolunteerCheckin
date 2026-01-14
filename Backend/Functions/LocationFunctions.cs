@@ -296,7 +296,19 @@ public class LocationFunctions
             locationEntity.IsDynamic = request.IsDynamic;
             if (request.LocationUpdateScopeConfigurations != null)
             {
-                locationEntity.LocationUpdateScopeJson = JsonSerializer.Serialize(request.LocationUpdateScopeConfigurations);
+                // Replace THIS_CHECKPOINT placeholder with actual location ID in scope configurations
+                List<ScopeConfiguration> locationUpdateScopes = request.LocationUpdateScopeConfigurations;
+                foreach (ScopeConfiguration scope in locationUpdateScopes)
+                {
+                    for (int i = 0; i < scope.Ids.Count; i++)
+                    {
+                        if (scope.Ids[i] == Constants.ThisCheckpoint)
+                        {
+                            scope.Ids[i] = locationId;
+                        }
+                    }
+                }
+                locationEntity.LocationUpdateScopeJson = JsonSerializer.Serialize(locationUpdateScopes);
             }
 
             // Recalculate area assignments based on new location

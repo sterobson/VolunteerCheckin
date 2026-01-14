@@ -50,8 +50,8 @@
           @action-click="(e) => $emit('action-click', e)"
           @visibility-change="(e) => $emit('visibility-change', e)"
         >
-          <!-- Update location button for dynamic checkpoints -->
-          <template v-if="assignment.location?.isDynamic" #fullscreen-footer>
+          <!-- Update location button for dynamic checkpoints (only shown if marshal has permission) -->
+          <template v-if="canUpdateDynamicLocation" #fullscreen-footer>
             <button
               class="btn btn-primary"
               @click="$emit('update-location')"
@@ -201,7 +201,8 @@
             Last updated: {{ formatDateTime(assignment.location.lastLocationUpdate) }}
           </span>
         </div>
-        <div class="dynamic-location-actions">
+        <!-- Only show update buttons if marshal has permission -->
+        <div v-if="canUpdateDynamicLocation" class="dynamic-location-actions">
           <button
             @click="$emit('update-location')"
             class="btn btn-update-location"
@@ -237,6 +238,7 @@ import ContactCard from './ContactCard.vue';
 import NoteCard from './NoteCard.vue';
 import { useTerminology } from '../../composables/useTerminology';
 import { calculateDistance } from '../../utils/coordinateUtils';
+import { canMarshalUpdateDynamicLocation } from '../../utils/scopeUtils';
 
 const { terms, termsLower } = useTerminology();
 const injectedBranding = inject('marshalBranding', {
@@ -320,6 +322,14 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  areaLeadAreaIds: {
+    type: Array,
+    default: () => [],
+  },
+  allAssignmentLocationIds: {
+    type: Array,
+    default: () => [],
+  },
 });
 
 defineEmits([
@@ -339,6 +349,24 @@ const mapRef = ref(null);
 
 const isDynamic = computed(() => {
   return props.assignment.location?.isDynamic;
+});
+
+// Check if the current marshal can update this dynamic location based on scope configuration
+const canUpdateDynamicLocation = computed(() => {
+  if (!isDynamic.value) return false;
+
+  const location = props.assignment.location;
+  const scopeConfigurations = location?.locationUpdateScopeConfigurations ||
+    location?.LocationUpdateScopeConfigurations || [];
+
+  return canMarshalUpdateDynamicLocation({
+    scopeConfigurations,
+    marshalId: props.currentMarshalId,
+    marshalAssignmentLocationIds: props.allAssignmentLocationIds,
+    areaLeadAreaIds: props.areaLeadAreaIds,
+    locationId: props.assignment.locationId,
+    locationAreaIds: props.assignment.areaIds || [],
+  });
 });
 
 // Calculate distance from user location to checkpoint

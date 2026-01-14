@@ -78,6 +78,7 @@
       :locations="allLocations"
       :areas="areas"
       :assignments="assignments"
+      :marshals="allMarshals"
     />
 
     <!-- Notes preview - shown in both create and edit modes to add new scoped items -->
@@ -208,6 +209,10 @@ const props = defineProps({
     default: () => [],
   },
   incidents: {
+    type: Array,
+    default: () => [],
+  },
+  allMarshals: {
     type: Array,
     default: () => [],
   },

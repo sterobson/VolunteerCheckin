@@ -47,7 +47,7 @@
       :people-term-plural="effectivePeopleTerm"
       :areas="areas"
       :locations="allLocations"
-      :marshals="availableMarshals"
+      :marshals="allMarshals"
       :is-editing="isExistingLocation"
       @update:form="updateForm"
       @input="handleInput"
@@ -83,6 +83,7 @@
       :locations="allLocations"
       :areas="areas"
       :assignments="assignments"
+      :marshals="allMarshals"
       @change="handleChecklistChange"
     />
 
@@ -107,6 +108,7 @@
       :locations="allLocations"
       :areas="areas"
       :assignments="assignments"
+      :marshals="allMarshals"
     />
 
     <!-- Notes preview - shown in both create and edit modes to add new scoped items -->
@@ -355,6 +357,10 @@ const props = defineProps({
     default: () => [],
   },
   availableMarshals: {
+    type: Array,
+    default: () => [],
+  },
+  allMarshals: {
     type: Array,
     default: () => [],
   },

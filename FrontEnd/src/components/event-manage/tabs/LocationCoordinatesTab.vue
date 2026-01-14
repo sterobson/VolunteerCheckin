@@ -205,23 +205,25 @@ const handleCheckboxInput = (field, value) => {
 // Handle dynamic toggle - set coordinates to 0 when enabling and set default scope
 const handleDynamicToggle = (isDynamic) => {
   if (isDynamic) {
-    // Default scope: Specific people - everyone (ALL_MARSHALS)
+    // Default scope: Everyone at THIS checkpoint
+    // For new checkpoints (no ID), use THIS_CHECKPOINT placeholder - backend will resolve to actual ID on save
+    // For existing checkpoints, use the actual checkpoint ID so it shows correctly in the UI
+    const checkpointIdForScope = props.form.id || 'THIS_CHECKPOINT';
     const defaultScopeConfig = [{
-      scope: 'SpecificPeople',
-      itemType: 'Marshal',
-      ids: ['ALL_MARSHALS'],
+      scope: 'EveryoneAtCheckpoints',
+      itemType: 'Checkpoint',
+      ids: [checkpointIdForScope],
     }];
 
-    // Only set default if no existing configurations
-    const existingConfigs = props.form.locationUpdateScopeConfigurations || [];
-    const scopeConfigs = existingConfigs.length > 0 ? existingConfigs : defaultScopeConfig;
-
+    // Always reset to default scope when turning ON isDynamic
+    // This ensures turning off then back on resets to the default
+    // Users can then customize the scope if needed
     emit('update:form', {
       ...props.form,
       isDynamic: true,
       latitude: 0,
       longitude: 0,
-      locationUpdateScopeConfigurations: scopeConfigs,
+      locationUpdateScopeConfigurations: defaultScopeConfig,
     });
   } else {
     emit('update:form', { ...props.form, isDynamic: false });

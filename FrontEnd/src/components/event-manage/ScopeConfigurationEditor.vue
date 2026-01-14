@@ -55,7 +55,7 @@
               />
               <div class="checkbox-group scrollable">
                 <label
-                  v-for="marshal in filteredMarshals"
+                  v-for="marshal in getSortedMarshals()"
                   :key="marshal.id"
                   class="checkbox-label"
                 >
@@ -83,7 +83,7 @@
 
             <div v-if="!isAllAreasSelected()" class="specific-selection">
               <div class="checkbox-group scrollable">
-                <label v-for="area in areas" :key="area.id" class="checkbox-label">
+                <label v-for="area in getSortedAreas()" :key="area.id" class="checkbox-label">
                   <input
                     type="checkbox"
                     :checked="isAreaSelected(area.id)"
@@ -130,7 +130,7 @@
                   </div>
                 </label>
                 <label
-                  v-for="location in filteredCheckpoints"
+                  v-for="location in getSortedCheckpoints()"
                   :key="location.id"
                   class="checkbox-label"
                 >
@@ -517,15 +517,32 @@ const toggleMarshal = (marshalId) => {
   }
 };
 
-const filteredMarshals = computed(() => {
-  if (!marshalSearch.value) return props.marshals;
+// Method to get sorted marshals - checked items first
+const getSortedMarshals = () => {
+  let filtered = props.marshals;
 
-  const searchLower = marshalSearch.value.toLowerCase();
-  return props.marshals.filter(marshal =>
-    marshal.name.toLowerCase().includes(searchLower) ||
-    (marshal.email && marshal.email.toLowerCase().includes(searchLower))
-  );
-});
+  if (marshalSearch.value) {
+    const searchLower = marshalSearch.value.toLowerCase();
+    filtered = filtered.filter(marshal =>
+      marshal.name.toLowerCase().includes(searchLower) ||
+      (marshal.email && marshal.email.toLowerCase().includes(searchLower))
+    );
+  }
+
+  // Get selected IDs for the current editing scope
+  const selectedIds = editingScope.value
+    ? (scopeStates.value[editingScope.value]?.ids || [])
+    : [];
+
+  // Sort checked items to the top, then alphabetically by name
+  return [...filtered].sort((a, b) => {
+    const aSelected = selectedIds.includes(a.id);
+    const bSelected = selectedIds.includes(b.id);
+    if (aSelected && !bSelected) return -1;
+    if (!aSelected && bSelected) return 1;
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  });
+};
 
 // Area functions
 const isAllAreasSelected = () => {
@@ -547,6 +564,22 @@ const toggleAllAreas = () => {
 
 const isAreaSelected = (areaId) => {
   return editingScope.value && scopeStates.value[editingScope.value]?.ids.includes(areaId);
+};
+
+// Method to get sorted areas - checked items first
+const getSortedAreas = () => {
+  // Get selected IDs for the current editing scope
+  const selectedIds = editingScope.value
+    ? (scopeStates.value[editingScope.value]?.ids || [])
+    : [];
+
+  return [...props.areas].sort((a, b) => {
+    const aSelected = selectedIds.includes(a.id);
+    const bSelected = selectedIds.includes(b.id);
+    if (aSelected && !bSelected) return -1;
+    if (!aSelected && bSelected) return 1;
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  });
 };
 
 const toggleArea = (areaId) => {
@@ -605,7 +638,8 @@ const toggleCheckpoint = (checkpointId) => {
   }
 };
 
-const filteredCheckpoints = computed(() => {
+// Method to get sorted checkpoints - checked items first
+const getSortedCheckpoints = () => {
   let filtered = props.locations;
 
   if (checkpointSearch.value) {
@@ -616,8 +650,20 @@ const filteredCheckpoints = computed(() => {
     );
   }
 
-  return [...filtered].sort((a, b) => alphanumericCompare(a.name, b.name));
-});
+  // Get selected IDs for the current editing scope
+  const selectedIds = editingScope.value
+    ? (scopeStates.value[editingScope.value]?.ids || [])
+    : [];
+
+  // Sort checked items to the top, then alphanumerically by name
+  return [...filtered].sort((a, b) => {
+    const aSelected = selectedIds.includes(a.id);
+    const bSelected = selectedIds.includes(b.id);
+    if (aSelected && !bSelected) return -1;
+    if (!aSelected && bSelected) return 1;
+    return alphanumericCompare(a.name, b.name);
+  });
+};
 </script>
 
 <style scoped>

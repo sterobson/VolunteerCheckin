@@ -44,7 +44,16 @@
           <span class="created-info">
             Created by {{ note.createdByName || 'Unknown' }} · {{ formatRelativeTime(note.createdAt) }}
           </span>
-          <span v-if="note.matchedScope && showScope" class="scope-info">
+          <ScopedAssignmentPills
+            v-if="note.scopeConfigurations?.length && showScope"
+            class="scope-pills"
+            :scope-configurations="note.scopeConfigurations"
+            :areas="areas"
+            :locations="locations"
+            :marshals="marshals"
+            :max-expanded-items="3"
+          />
+          <span v-else-if="note.matchedScope && showScope" class="scope-info">
             {{ note.matchedScope }}
           </span>
         </div>
@@ -54,8 +63,9 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, defineProps, defineExpose } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { notesApi } from '../services/api';
+import ScopedAssignmentPills from './common/ScopedAssignmentPills.vue';
 
 const props = defineProps({
   eventId: {
@@ -90,6 +100,11 @@ const props = defineProps({
   },
   // Assignments for determining which marshals are at which checkpoints
   assignments: {
+    type: Array,
+    default: () => [],
+  },
+  // All marshals for scope pills display
+  marshals: {
     type: Array,
     default: () => [],
   },
@@ -572,7 +587,9 @@ defineExpose({
 .note-footer {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   font-size: 0.75rem;
   color: var(--text-muted);
   padding-top: 0.5rem;
@@ -581,6 +598,12 @@ defineExpose({
 
 .scope-info {
   font-style: italic;
+}
+
+.scope-pills {
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-end;
 }
 
 .btn {

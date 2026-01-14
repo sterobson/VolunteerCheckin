@@ -15,6 +15,9 @@
       :show-notes="showNotes"
       :show-scopes="showScopes"
       :clickable="isClickable(contact)"
+      :areas="areas"
+      :locations="locations"
+      :marshals="marshals"
       @click="$emit('select', contact)"
       @remove="$emit('remove', $event)"
       @undo-remove="$emit('undo-remove', $event)"
@@ -55,6 +58,18 @@ const props = defineProps({
   emptyHint: {
     type: String,
     default: '',
+  },
+  areas: {
+    type: Array,
+    default: () => [],
+  },
+  locations: {
+    type: Array,
+    default: () => [],
+  },
+  marshals: {
+    type: Array,
+    default: () => [],
   },
 });
 

@@ -4,11 +4,13 @@
       <component :is="Component" :key="route.path" />
     </Transition>
   </router-view>
+  <LoadingOverlay />
 </template>
 
 <script setup>
 import { ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import LoadingOverlay from './components/LoadingOverlay.vue';
 
 const router = useRouter();
 const transitionName = ref('');

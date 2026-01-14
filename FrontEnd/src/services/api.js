@@ -7,6 +7,7 @@ import {
   getPendingActionsCount
 } from './offlineDb';
 import { getSession } from './marshalSessionService';
+import { startRequest, endRequest, getRequestId } from './loadingOverlay';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -180,6 +181,9 @@ api.interceptors.request.use((config) => {
     config.headers['Authorization'] = `Bearer ${token}`;
   }
 
+  // Start tracking this request for loading overlay
+  startRequest(config);
+
   return config;
 });
 
@@ -276,6 +280,12 @@ function isMarshalRequest(config) {
 // Response interceptor to cache successful responses
 api.interceptors.response.use(
   (response) => {
+    // End tracking this request for loading overlay
+    const requestId = getRequestId(response.config);
+    if (requestId) {
+      endRequest(requestId);
+    }
+
     // Mark as online when we get successful responses
     isOfflineMode = false;
 
@@ -295,6 +305,12 @@ api.interceptors.response.use(
   },
   async (error) => {
     const config = error.config;
+
+    // End tracking this request for loading overlay
+    const requestId = getRequestId(config);
+    if (requestId) {
+      endRequest(requestId);
+    }
 
     // Handle authentication errors (401 Unauthorized, 403 Forbidden)
     if (error.response && (error.response.status === 401 || error.response.status === 403)) {

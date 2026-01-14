@@ -58,15 +58,14 @@
       {{ truncateContent(contact.notes) }}
     </div>
 
-    <div v-if="showScopes && contact.scopeConfigurations?.length > 0 && !isMarkedForRemoval" class="contact-card-scopes">
-      <span
-        v-for="(config, index) in contact.scopeConfigurations"
-        :key="index"
-        class="scope-badge"
-      >
-        {{ formatScopeConfig(config) }}
-      </span>
-    </div>
+    <ScopedAssignmentPills
+      v-if="showScopes && contact.scopeConfigurations?.length > 0 && !isMarkedForRemoval"
+      class="contact-card-scopes"
+      :scope-configurations="contact.scopeConfigurations"
+      :areas="areas"
+      :locations="locations"
+      :marshals="marshals"
+    />
 
     <div v-if="isPending" class="contact-card-badge">
       <span class="pending-indicator">Will be added on save</span>
@@ -81,6 +80,7 @@
 <script setup>
 import { computed, defineProps, defineEmits } from 'vue';
 import { useTerminology } from '../../composables/useTerminology';
+import ScopedAssignmentPills from '../common/ScopedAssignmentPills.vue';
 
 const { terms, termsLower } = useTerminology();
 
@@ -117,6 +117,18 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  areas: {
+    type: Array,
+    default: () => [],
+  },
+  locations: {
+    type: Array,
+    default: () => [],
+  },
+  marshals: {
+    type: Array,
+    default: () => [],
+  },
 });
 
 const emit = defineEmits(['click', 'remove', 'undo-remove']);
@@ -142,46 +154,6 @@ const formatRoleName = (role) => {
     .replace(/([A-Z])/g, ' $1')
     .replace(/^./, str => str.toUpperCase())
     .trim();
-};
-
-const formatScope = (scope) => {
-  const scopeMap = {
-    'Everyone': 'Everyone',
-    'EveryoneInAreas': `Everyone in ${termsLower.value.areas}`,
-    'EveryoneAtCheckpoints': `Everyone at ${termsLower.value.checkpoints}`,
-    'SpecificPeople': `Specific ${termsLower.value.people}`,
-    'EveryAreaLead': `Every ${termsLower.value.area} lead`,
-  };
-  return scopeMap[scope] || scope;
-};
-
-const formatScopeConfig = (config) => {
-  if (!config) return '';
-
-  const scopeName = formatScope(config.scope);
-
-  if (config.itemType === null) {
-    return scopeName;
-  }
-
-  const ids = config.ids || [];
-
-  if (ids.includes('ALL_MARSHALS')) {
-    return `${scopeName} (Everyone)`;
-  }
-  if (ids.includes('ALL_AREAS')) {
-    return `${scopeName} (All ${termsLower.value.areas})`;
-  }
-  if (ids.includes('ALL_CHECKPOINTS')) {
-    return `${scopeName} (All ${termsLower.value.checkpoints})`;
-  }
-
-  const count = ids.length;
-  if (count === 0) {
-    return scopeName;
-  }
-
-  return `${scopeName} (${count})`;
 };
 
 const truncateContent = (content) => {
@@ -372,19 +344,7 @@ const truncateContent = (content) => {
 }
 
 .contact-card-scopes {
-  display: flex;
-  gap: 0.375rem;
-  flex-wrap: wrap;
   margin-top: 0.25rem;
-}
-
-.scope-badge {
-  padding: 0.15rem 0.5rem;
-  background: var(--accent-primary);
-  color: white;
-  border-radius: 10px;
-  font-size: 0.65rem;
-  font-weight: 500;
 }
 
 .contact-card-badge {

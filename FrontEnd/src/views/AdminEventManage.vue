@@ -1403,7 +1403,7 @@ const handleSaveArea = async (formData) => {
           console.error('Failed to create checklist item:', item, error);
         }
       }
-      await loadChecklistItems();
+      await loadChecklists();
     }
 
     // Create pending new notes scoped to this area

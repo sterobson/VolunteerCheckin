@@ -45,6 +45,10 @@
             <input type="checkbox" :checked="filters.showRoute" @change="updateFilter('showRoute', $event.target.checked)" />
             <span>{{ terms.course }} line</span>
           </label>
+          <label v-if="areas.length > 0" class="filter-checkbox">
+            <input type="checkbox" :checked="filters.showAreaOverlays !== false" @change="updateFilter('showAreaOverlays', $event.target.checked)" />
+            <span>{{ terms.area }} overlays</span>
+          </label>
         </div>
 
         <div class="filter-section">
@@ -136,6 +140,7 @@ const props = defineProps({
     type: Object,
     default: () => ({
       showRoute: true,
+      showAreaOverlays: true,
       showUncheckedIn: true,
       showPartiallyCheckedIn: true,
       showFullyCheckedIn: true,

@@ -33,7 +33,7 @@
 
     <div class="checkpoint-card-stats">
       <span class="stat-badge staffing-badge" :class="staffingClass">
-        {{ checkpoint.checkedInCount }}/{{ checkpoint.requiredMarshals }} staffed
+        {{ assignedCount }}/{{ checkpoint.requiredMarshals }} staffed
       </span>
       <span v-if="assignedCount > 0" class="stat-badge" :class="checkInStatusClass">
         {{ checkedInAssignedCount }}/{{ assignedCount }} checked in
@@ -103,12 +103,13 @@ const borderColor = computed(() => {
   return '#667eea';
 });
 
-// Staffing status
+// Staffing status (based on assignments, not check-ins)
 const staffingStatus = computed(() => {
   const loc = props.checkpoint;
+  const assigned = (loc.assignments || []).length;
   if (loc.requiredMarshals === 0) return null;
-  if (loc.checkedInCount >= loc.requiredMarshals) return 'full';
-  if (loc.checkedInCount > 0) return 'partial';
+  if (assigned >= loc.requiredMarshals) return 'full';
+  if (assigned > 0) return 'partial';
   return 'none';
 });
 

@@ -294,6 +294,8 @@ export function useMarshalCheckIn({
       return;
     }
 
+    const newIsCheckedIn = !marshal.isCheckedIn;
+
     const assignmentLike = {
       id: assignmentId,
       marshalId: marshal.marshalId,
@@ -302,7 +304,31 @@ export function useMarshalCheckIn({
     };
 
     // Use unified toggle (no GPS for checking in others)
-    await handleCheckInToggle(assignmentLike, false, checkpoint.locationId);
+    // Note: dashboard API uses checkpointId, not locationId
+    await handleCheckInToggle(assignmentLike, false, checkpoint.checkpointId || checkpoint.locationId);
+
+    // Optimistic update: update the marshal's check-in status in all checkpoint data sources
+    // This ensures the UI updates immediately without waiting for a full dashboard reload
+    const allCheckpointSources = [
+      areaLeadRef?.value?.checkpoints,
+      areaLeadCheckpoints?.value
+    ].filter(Boolean);
+
+    for (const checkpointList of allCheckpointSources) {
+      for (const cp of checkpointList) {
+        const m = cp.marshals?.find(m => m.marshalId === marshal.marshalId);
+        if (m) {
+          m.isCheckedIn = newIsCheckedIn;
+          m.checkInTime = newIsCheckedIn ? new Date().toISOString() : null;
+          m.checkInMethod = newIsCheckedIn ? 'AreaLead' : null;
+        }
+      }
+    }
+
+    // Force recomputation of allAreaLeadMarshals
+    if (areaLeadMarshalDataVersion) {
+      areaLeadMarshalDataVersion.value++;
+    }
   };
 
   return {

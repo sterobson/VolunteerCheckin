@@ -403,8 +403,7 @@ const formatDateTime = (dateString) => {
 }
 
 .task-scope {
-  flex: 1;
-  min-width: 0;
+  flex-shrink: 0;
   display: flex;
   justify-content: flex-end;
 }

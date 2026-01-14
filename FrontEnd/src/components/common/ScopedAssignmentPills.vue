@@ -75,20 +75,21 @@ const getScopePrefix = (scope) => {
 };
 
 // Look up item name by ID and type
+// Returns null if the item doesn't exist (orphaned reference)
 const getItemName = (id, itemType) => {
   if (itemType === 'Area') {
     const area = props.areas.find(a => a.id === id);
-    return area?.name || id;
+    return area?.name || null;
   }
   if (itemType === 'Checkpoint') {
     const location = props.locations.find(l => l.id === id);
-    return location?.name || id;
+    return location?.name || null;
   }
   if (itemType === 'Marshal') {
     const marshal = props.marshals.find(m => m.id === id);
-    return marshal?.name || id;
+    return marshal?.name || null;
   }
-  return id;
+  return null;
 };
 
 // Expand a scope config into individual badges if there are few enough items
@@ -114,14 +115,22 @@ const expandScopeConfig = (config) => {
     return [`${scopeName} (All ${termsLower.value.checkpoints})`];
   }
 
-  // If more than maxExpandedItems, return summary badge
-  if (ids.length > props.maxExpandedItems) {
-    return [`${scopeName} (${ids.length})`];
+  // Filter out orphaned references (items that no longer exist)
+  const validIds = ids.filter(id => getItemName(id, config.itemType) !== null);
+
+  // If all items are orphaned, don't show any badge
+  if (validIds.length === 0) {
+    return [];
+  }
+
+  // If more than maxExpandedItems, return summary badge with valid count
+  if (validIds.length > props.maxExpandedItems) {
+    return [`${scopeName} (${validIds.length})`];
   }
 
   // Expand into individual badges with item names
   const prefix = getScopePrefix(config.scope);
-  return ids.map(id => {
+  return validIds.map(id => {
     const itemName = getItemName(id, config.itemType);
     return prefix ? `${prefix} ${itemName}` : itemName;
   });

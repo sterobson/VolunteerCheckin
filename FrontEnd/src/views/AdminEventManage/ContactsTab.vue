@@ -15,7 +15,7 @@
           {{ contacts.length }} total
         </StatusPill>
         <StatusPill
-          v-if="withScopeCount > 0"
+          v-if="withScopeCount > 0 && withScopeCount < contacts.length"
           variant="success"
           :active="activeFilter === 'with-scope'"
           @click="setFilter('with-scope')"
@@ -23,7 +23,7 @@
           {{ withScopeCount }} assigned
         </StatusPill>
         <StatusPill
-          v-if="noScopeCount > 0"
+          v-if="noScopeCount > 0 && noScopeCount < contacts.length"
           variant="danger"
           :active="activeFilter === 'no-scope'"
           @click="setFilter('no-scope')"

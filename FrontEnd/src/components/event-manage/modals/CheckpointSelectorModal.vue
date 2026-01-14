@@ -39,7 +39,7 @@
                   {{ getAreaName(checkpoint.areaId) }}
                 </span>
                 <span class="marshals-badge">
-                  {{ checkpoint.checkedInCount || 0 }}/{{ checkpoint.requiredMarshals }} {{ termsLower.people }}
+                  {{ (checkpoint.assignments || []).length }}/{{ checkpoint.requiredMarshals }} {{ termsLower.people }}
                 </span>
               </div>
             </div>

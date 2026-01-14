@@ -515,6 +515,7 @@ import { formatDate as formatEventDate, formatDateForInput } from '../utils/date
 import { isValidWhat3Words } from '../utils/validators';
 import { calculateDistance } from '../utils/coordinateUtils';
 import { getCheckpointsInPolygon } from '../utils/geometryUtils';
+import { cleanOrphanedScopeConfigurations } from '../utils/scopeUtils';
 import { CHECK_IN_RADIUS_METERS } from '../constants/app';
 
 // Tab Components
@@ -1511,10 +1512,19 @@ const handleSelectChecklistItem = (item, tab = 'details') => {
 
 const handleSaveChecklistItem = async (formData) => {
   try {
+    // Clean up any orphaned scope configurations before saving
+    const cleanedFormData = {
+      ...formData,
+      scopeConfigurations: cleanOrphanedScopeConfigurations(
+        formData.scopeConfigurations,
+        { areas: areas.value, locations: locationStatuses.value, marshals: marshals.value }
+      ),
+    };
+
     if (selectedChecklistItem.value && selectedChecklistItem.value.itemId) {
-      await checklistApi.update(route.params.eventId, selectedChecklistItem.value.itemId, formData);
+      await checklistApi.update(route.params.eventId, selectedChecklistItem.value.itemId, cleanedFormData);
     } else {
-      const response = await checklistApi.create(route.params.eventId, formData);
+      const response = await checklistApi.create(route.params.eventId, cleanedFormData);
 
       // Show success message if multiple items were created
       if (response.data.count && response.data.count > 1) {
@@ -1569,10 +1579,19 @@ const handleSelectNote = (note) => {
 
 const handleSaveNote = async (formData) => {
   try {
+    // Clean up any orphaned scope configurations before saving
+    const cleanedFormData = {
+      ...formData,
+      scopeConfigurations: cleanOrphanedScopeConfigurations(
+        formData.scopeConfigurations,
+        { areas: areas.value, locations: locationStatuses.value, marshals: marshals.value }
+      ),
+    };
+
     if (selectedNote.value && selectedNote.value.noteId) {
-      await notesApi.update(route.params.eventId, selectedNote.value.noteId, formData);
+      await notesApi.update(route.params.eventId, selectedNote.value.noteId, cleanedFormData);
     } else {
-      await notesApi.create(route.params.eventId, formData);
+      await notesApi.create(route.params.eventId, cleanedFormData);
     }
 
     await loadNotes();
@@ -1696,14 +1715,23 @@ const handleSelectContact = (contact) => {
 
 const handleSaveContact = async (formData) => {
   try {
+    // Clean up any orphaned scope configurations before saving
+    const cleanedFormData = {
+      ...formData,
+      scopeConfigurations: cleanOrphanedScopeConfigurations(
+        formData.scopeConfigurations,
+        { areas: areas.value, locations: locationStatuses.value, marshals: marshals.value }
+      ),
+    };
+
     let newContactId = null;
     const isCreatingNew = !selectedContact.value || !selectedContact.value.contactId;
     const hasAreaContext = !!pendingAreaForContact.value;
 
     if (selectedContact.value && selectedContact.value.contactId) {
-      await contactsApi.update(route.params.eventId, selectedContact.value.contactId, formData);
+      await contactsApi.update(route.params.eventId, selectedContact.value.contactId, cleanedFormData);
     } else {
-      const response = await contactsApi.create(route.params.eventId, formData);
+      const response = await contactsApi.create(route.params.eventId, cleanedFormData);
       newContactId = response.data?.contactId || response.data?.id;
     }
 

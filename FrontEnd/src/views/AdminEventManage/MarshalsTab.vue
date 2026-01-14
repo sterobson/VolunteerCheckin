@@ -19,7 +19,7 @@
           {{ marshals.length }} total
         </StatusPill>
         <StatusPill
-          v-if="unassignedCount > 0"
+          v-if="unassignedCount > 0 && unassignedCount < marshals.length"
           variant="warning"
           :active="activeFilter === 'unassigned'"
           @click="setFilter('unassigned')"
@@ -27,7 +27,7 @@
           {{ unassignedCount }} unassigned
         </StatusPill>
         <StatusPill
-          v-if="checkedInCount > 0"
+          v-if="checkedInCount > 0 && checkedInCount < marshals.length"
           variant="success"
           :active="activeFilter === 'checked-in'"
           @click="setFilter('checked-in')"
@@ -35,7 +35,7 @@
           {{ checkedInCount }} checked in
         </StatusPill>
         <StatusPill
-          v-if="notCheckedInCount > 0"
+          v-if="notCheckedInCount > 0 && notCheckedInCount < marshals.length"
           variant="danger"
           :active="activeFilter === 'not-checked-in'"
           @click="setFilter('not-checked-in')"

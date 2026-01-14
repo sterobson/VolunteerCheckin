@@ -67,14 +67,14 @@
       @cancel="handleFullscreenCancel"
       @close="handleFullscreenClose"
     >
-      <!-- Pass through slots -->
-      <template #actions>
+      <!-- Pass through slots (only if content is provided) -->
+      <template v-if="$slots['fullscreen-actions']" #actions>
         <slot name="fullscreen-actions"></slot>
       </template>
-      <template #banner>
+      <template v-if="$slots['fullscreen-banner']" #banner>
         <slot name="fullscreen-banner"></slot>
       </template>
-      <template #footer>
+      <template v-if="$slots['fullscreen-footer']" #footer>
         <slot name="fullscreen-footer"></slot>
       </template>
 
@@ -104,6 +104,19 @@
           @polygon-drawing="handlePolygonDrawing"
           @polygon-update="handlePolygonUpdate"
           @visibility-change="$emit('visibility-change', $event)"
+        />
+
+        <!-- Toolbar in fullscreen (no fullscreen button since already fullscreen) -->
+        <MapToolbar
+          ref="fullscreenToolbarRef"
+          :show-fullscreen="false"
+          :show-filters="showFilters"
+          :filters="internalFilters"
+          :areas="areas"
+          :actions="toolbarActions"
+          :position="toolbarPosition"
+          @filter-change="handleFilterChange"
+          @action-click="$emit('action-click', $event)"
         />
 
         <!-- Drawing controls in fullscreen -->
@@ -220,6 +233,7 @@ const props = defineProps({
     type: Object,
     default: () => ({
       showRoute: true,
+      showAreaOverlays: true,
       showUncheckedIn: true,
       showPartiallyCheckedIn: true,
       showFullyCheckedIn: true,
@@ -278,6 +292,7 @@ const emit = defineEmits([
 const mapViewRef = ref(null);
 const fullscreenMapViewRef = ref(null);
 const toolbarRef = ref(null);
+const fullscreenToolbarRef = ref(null);
 
 // State
 const isFullscreen = ref(false);
@@ -347,6 +362,11 @@ const filteredRoute = computed(() => {
 
 const filteredAreas = computed(() => {
   if (!props.showFilters) return props.areas;
+
+  // If area overlays are hidden, return empty array
+  if (internalFilters.value.showAreaOverlays === false) {
+    return [];
+  }
 
   // Filter areas by selected IDs - if none selected, show none
   if (internalFilters.value.selectedAreaIds && internalFilters.value.selectedAreaIds.length > 0) {
@@ -483,6 +503,9 @@ const closeDropdowns = () => {
   if (toolbarRef.value) {
     toolbarRef.value.closeDropdowns();
   }
+  if (fullscreenToolbarRef.value) {
+    fullscreenToolbarRef.value.closeDropdowns();
+  }
 };
 
 // Expose methods to parent
@@ -543,5 +566,10 @@ defineExpose({
   position: relative;
   width: 100%;
   height: 100%;
+}
+
+/* Ensure toolbar is visible above map in fullscreen */
+.fullscreen-map-wrapper :deep(.map-toolbar) {
+  z-index: 1001;
 }
 </style>

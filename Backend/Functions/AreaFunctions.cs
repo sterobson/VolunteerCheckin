@@ -709,12 +709,17 @@ public class AreaFunctions
                 List<AssignmentEntity> checkpointAssignments = [.. relevantAssignments
                     .Where(a => a.LocationId == checkpoint.RowKey)];
 
+                // Get checkpoint tasks once for this checkpoint
+                List<AreaLeadTaskInfo> checkpointTasks = tasksByCheckpoint.GetValueOrDefault(checkpoint.RowKey, []);
+
                 List<AreaLeadMarshalInfo> marshalInfos = [];
                 foreach (AssignmentEntity assignment in checkpointAssignments)
                 {
                     if (marshalLookup.TryGetValue(assignment.MarshalId, out MarshalEntity? marshal))
                     {
-                        List<AreaLeadTaskInfo> marshalTasks = tasksByMarshal.GetValueOrDefault(assignment.MarshalId, []);
+                        // Combine marshal's personal tasks with checkpoint tasks they're responsible for
+                        List<AreaLeadTaskInfo> marshalPersonalTasks = tasksByMarshal.GetValueOrDefault(assignment.MarshalId, []);
+                        List<AreaLeadTaskInfo> allMarshalTasks = [.. marshalPersonalTasks, .. checkpointTasks];
 
                         marshalInfos.Add(new AreaLeadMarshalInfo(
                             marshal.MarshalId,
@@ -726,13 +731,11 @@ public class AreaFunctions
                             assignment.CheckInTime,
                             assignment.CheckInMethod,
                             marshal.LastAccessedDate,
-                            marshalTasks.Count,
-                            marshalTasks
+                            allMarshalTasks.Count,
+                            allMarshalTasks
                         ));
                     }
                 }
-
-                List<AreaLeadTaskInfo> checkpointTasks = tasksByCheckpoint.GetValueOrDefault(checkpoint.RowKey, []);
 
                 checkpointInfos.Add(new AreaLeadCheckpointInfo(
                     checkpoint.RowKey,

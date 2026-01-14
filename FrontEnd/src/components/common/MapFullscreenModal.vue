@@ -1,8 +1,8 @@
 <template>
   <teleport to="body">
     <div v-if="show" class="fullscreen-map-overlay" @touchmove.prevent.self>
-      <!-- Fixed header at top -->
-      <div class="fullscreen-map-header" :style="headerStyle">
+      <!-- Compact header at top -->
+      <div class="fullscreen-map-header" :class="{ compact: mode === 'view' }" :style="headerStyle">
         <div class="context-info">
           <h3 :style="{ color: headerTextColor }">{{ title }}</h3>
           <p v-if="description" :style="{ color: headerTextColor, opacity: 0.85 }">{{ description }}</p>
@@ -13,7 +13,7 @@
 
           <template v-if="mode === 'view'">
             <button type="button" @click.stop="handleClose" class="btn btn-close-x" :style="closeButtonStyle" title="Close">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
                 <path d="M18 6L6 18M6 6l12 12"/>
               </svg>
             </button>
@@ -154,6 +154,8 @@ onUnmounted(() => {
   overflow: hidden;
   touch-action: none;
   overscroll-behavior: contain;
+  /* Handle safe area insets on mobile devices */
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
 .fullscreen-map-header {
@@ -168,6 +170,22 @@ onUnmounted(() => {
   position: relative;
   z-index: 10;
   touch-action: none;
+}
+
+/* Compact header for view mode */
+.fullscreen-map-header.compact {
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--border-light);
+  box-shadow: none;
+}
+
+.fullscreen-map-header.compact .context-info h3 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.fullscreen-map-header.compact .context-info p {
+  display: none;
 }
 
 .context-info h3 {
@@ -190,7 +208,8 @@ onUnmounted(() => {
 }
 
 .fullscreen-map-container {
-  flex: 1;
+  flex: 1 1 0;
+  min-height: 0;
   position: relative;
   overflow: hidden;
   touch-action: auto;
@@ -232,14 +251,14 @@ onUnmounted(() => {
 
 .btn-close-x {
   background: rgba(0, 0, 0, 0.1);
-  padding: 0.75rem;
+  padding: 0.5rem;
   color: var(--text-dark);
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  min-width: 44px;
-  min-height: 44px;
+  min-width: 36px;
+  min-height: 36px;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -248,6 +267,12 @@ onUnmounted(() => {
 .btn-close-x:hover,
 .btn-close-x:active {
   background: rgba(0, 0, 0, 0.2);
+}
+
+.fullscreen-map-header.compact .btn-close-x {
+  padding: 0.35rem;
+  min-width: 32px;
+  min-height: 32px;
 }
 
 /* Banner styles */
@@ -280,6 +305,22 @@ onUnmounted(() => {
     flex-direction: column;
     gap: 1rem;
     padding: 1rem;
+  }
+
+  /* Keep compact header horizontal on mobile */
+  .fullscreen-map-header.compact {
+    flex-direction: row;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+  }
+
+  .fullscreen-map-header.compact .context-info {
+    text-align: left;
+    width: auto;
+  }
+
+  .fullscreen-map-header.compact .action-buttons {
+    width: auto;
   }
 
   .context-info {

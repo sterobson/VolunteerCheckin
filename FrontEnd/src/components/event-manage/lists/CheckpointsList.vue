@@ -18,8 +18,9 @@
         >
           {{ locations.length }} total
         </StatusPill>
+        <!-- Staffing status pills -->
         <StatusPill
-          v-if="fullCount > 0"
+          v-if="fullCount > 0 && fullCount < locations.length"
           variant="success"
           :active="activeFilter === 'full'"
           @click="setFilter('full')"
@@ -27,20 +28,45 @@
           {{ fullCount }} fully staffed
         </StatusPill>
         <StatusPill
-          v-if="partialCount > 0"
+          v-if="partialCount > 0 && partialCount < locations.length"
           variant="warning"
           :active="activeFilter === 'partial'"
           @click="setFilter('partial')"
         >
-          {{ partialCount }} partial
+          {{ partialCount }} partially staffed
         </StatusPill>
         <StatusPill
-          v-if="missingCount > 0"
+          v-if="missingCount > 0 && missingCount < locations.length"
           variant="danger"
           :active="activeFilter === 'missing'"
           @click="setFilter('missing')"
         >
           {{ missingCount }} unstaffed
+        </StatusPill>
+        <!-- Check-in status pills -->
+        <StatusPill
+          v-if="fullyCheckedInCount > 0 && fullyCheckedInCount < locations.length"
+          variant="success"
+          :active="activeFilter === 'checkin-full'"
+          @click="setFilter('checkin-full')"
+        >
+          {{ fullyCheckedInCount }} fully checked in
+        </StatusPill>
+        <StatusPill
+          v-if="partiallyCheckedInCount > 0 && partiallyCheckedInCount < locations.length"
+          variant="warning"
+          :active="activeFilter === 'checkin-partial'"
+          @click="setFilter('checkin-partial')"
+        >
+          {{ partiallyCheckedInCount }} partially checked in
+        </StatusPill>
+        <StatusPill
+          v-if="notCheckedInCount > 0 && notCheckedInCount < locations.length"
+          variant="danger"
+          :active="activeFilter === 'checkin-none'"
+          @click="setFilter('checkin-none')"
+        >
+          {{ notCheckedInCount }} not checked in
         </StatusPill>
       </div>
     </div>
@@ -96,17 +122,45 @@ const setFilter = (filter) => {
   activeFilter.value = filter;
 };
 
-// Status pill counts
+// Staffing status pill counts (based on assignments)
+const getAssignedCount = (loc) => (loc.assignments || []).length;
+const getCheckedInCount = (loc) => (loc.assignments || []).filter(a => a.isCheckedIn).length;
+
 const fullCount = computed(() => {
-  return props.locations.filter(loc => loc.checkedInCount >= loc.requiredMarshals && loc.requiredMarshals > 0).length;
+  return props.locations.filter(loc => getAssignedCount(loc) >= loc.requiredMarshals && loc.requiredMarshals > 0).length;
 });
 
 const partialCount = computed(() => {
-  return props.locations.filter(loc => loc.checkedInCount > 0 && loc.checkedInCount < loc.requiredMarshals).length;
+  return props.locations.filter(loc => getAssignedCount(loc) > 0 && getAssignedCount(loc) < loc.requiredMarshals).length;
 });
 
 const missingCount = computed(() => {
-  return props.locations.filter(loc => loc.checkedInCount === 0 && loc.requiredMarshals > 0).length;
+  return props.locations.filter(loc => getAssignedCount(loc) === 0 && loc.requiredMarshals > 0).length;
+});
+
+// Check-in status pill counts (based on whether assigned marshals have checked in)
+const fullyCheckedInCount = computed(() => {
+  return props.locations.filter(loc => {
+    const assigned = getAssignedCount(loc);
+    const checkedIn = getCheckedInCount(loc);
+    return assigned > 0 && checkedIn >= assigned;
+  }).length;
+});
+
+const partiallyCheckedInCount = computed(() => {
+  return props.locations.filter(loc => {
+    const assigned = getAssignedCount(loc);
+    const checkedIn = getCheckedInCount(loc);
+    return assigned > 0 && checkedIn > 0 && checkedIn < assigned;
+  }).length;
+});
+
+const notCheckedInCount = computed(() => {
+  return props.locations.filter(loc => {
+    const assigned = getAssignedCount(loc);
+    const checkedIn = getCheckedInCount(loc);
+    return assigned > 0 && checkedIn === 0;
+  }).length;
 });
 
 // Helper to get area name for search
@@ -119,13 +173,33 @@ const getAreaName = (areaId) => {
 const filteredLocations = computed(() => {
   let result = props.locations;
 
-  // Filter by status pill
+  // Filter by staffing status pill (based on assignments)
   if (activeFilter.value === 'full') {
-    result = result.filter(loc => loc.checkedInCount >= loc.requiredMarshals && loc.requiredMarshals > 0);
+    result = result.filter(loc => getAssignedCount(loc) >= loc.requiredMarshals && loc.requiredMarshals > 0);
   } else if (activeFilter.value === 'partial') {
-    result = result.filter(loc => loc.checkedInCount > 0 && loc.checkedInCount < loc.requiredMarshals);
+    result = result.filter(loc => getAssignedCount(loc) > 0 && getAssignedCount(loc) < loc.requiredMarshals);
   } else if (activeFilter.value === 'missing') {
-    result = result.filter(loc => loc.checkedInCount === 0 && loc.requiredMarshals > 0);
+    result = result.filter(loc => getAssignedCount(loc) === 0 && loc.requiredMarshals > 0);
+  }
+  // Filter by check-in status pill
+  else if (activeFilter.value === 'checkin-full') {
+    result = result.filter(loc => {
+      const assigned = getAssignedCount(loc);
+      const checkedIn = getCheckedInCount(loc);
+      return assigned > 0 && checkedIn >= assigned;
+    });
+  } else if (activeFilter.value === 'checkin-partial') {
+    result = result.filter(loc => {
+      const assigned = getAssignedCount(loc);
+      const checkedIn = getCheckedInCount(loc);
+      return assigned > 0 && checkedIn > 0 && checkedIn < assigned;
+    });
+  } else if (activeFilter.value === 'checkin-none') {
+    result = result.filter(loc => {
+      const assigned = getAssignedCount(loc);
+      const checkedIn = getCheckedInCount(loc);
+      return assigned > 0 && checkedIn === 0;
+    });
   }
 
   // Filter by search query
@@ -173,6 +247,24 @@ const emptyMessage = computed(() => {
       return `No unstaffed ${termsLower.value.checkpoints} match your search.`;
     }
     return `No ${termsLower.value.checkpoints} are unstaffed.`;
+  }
+  if (activeFilter.value === 'checkin-full') {
+    if (hasSearch) {
+      return `No fully checked in ${termsLower.value.checkpoints} match your search.`;
+    }
+    return `No ${termsLower.value.checkpoints} are fully checked in.`;
+  }
+  if (activeFilter.value === 'checkin-partial') {
+    if (hasSearch) {
+      return `No partially checked in ${termsLower.value.checkpoints} match your search.`;
+    }
+    return `No ${termsLower.value.checkpoints} are partially checked in.`;
+  }
+  if (activeFilter.value === 'checkin-none') {
+    if (hasSearch) {
+      return `No ${termsLower.value.checkpoints} without check-ins match your search.`;
+    }
+    return `No ${termsLower.value.checkpoints} are without check-ins.`;
   }
   if (hasSearch) {
     return `No ${termsLower.value.checkpoints} match your search.`;

@@ -136,8 +136,14 @@ defineEmits(['toggle', 'toggle-marshal', 'check-in', 'toggle-task']);
 
 const formatMarshalCheckpoints = (checkpoints) => {
   if (!checkpoints || checkpoints.length === 0) return '';
-  if (checkpoints.length === 1) return checkpoints[0].name;
-  return checkpoints.map(c => c.name).join(', ');
+  const formatCheckpoint = (c) => {
+    if (c.description) {
+      return `${c.name} - ${c.description}`;
+    }
+    return c.name;
+  };
+  if (checkpoints.length === 1) return formatCheckpoint(checkpoints[0]);
+  return checkpoints.map(formatCheckpoint).join(', ');
 };
 </script>
 
@@ -296,6 +302,9 @@ const formatMarshalCheckpoints = (checkpoints) => {
 
 .marshal-checkpoint {
   color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .marshal-task-count {

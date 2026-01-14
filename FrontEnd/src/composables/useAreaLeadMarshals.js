@@ -9,6 +9,8 @@ export function useAreaLeadMarshals({
   currentMarshalId,
   areaLeadRef,
   areaLeadCheckpoints,
+  areaChecklistItems,
+  areaLeadAreaIds,
   loadChecklist,
 }) {
   // State
@@ -21,50 +23,117 @@ export function useAreaLeadMarshals({
     expandedAreaLeadMarshal.value = expandedAreaLeadMarshal.value === marshalId ? null : marshalId;
   };
 
-  // Aggregate all marshals from area lead checkpoints (deduplicated, sorted by name)
+  // Aggregate all marshals from area lead checkpoints, with tasks derived from checklist items
   const allAreaLeadMarshals = computed(() => {
     // Access the version trigger to force recomputation when data changes
     // eslint-disable-next-line no-unused-vars
     const _version = areaLeadMarshalDataVersion.value;
-    const checkpoints = areaLeadRef?.value?.checkpoints || areaLeadCheckpoints?.value || [];
+
+    // Get checkpoints from either source - prefer the one with data
+    // (empty array is truthy, so we check length explicitly)
+    const checkpointsFromRef = areaLeadRef?.value?.checkpoints;
+    const checkpointsFromProp = areaLeadCheckpoints?.value;
+    const checkpoints = (checkpointsFromRef?.length > 0)
+      ? checkpointsFromRef
+      : (checkpointsFromProp || []);
+
+    // Get checklist items from the area checklist (same source as "Your area's jobs")
+    const checklistItems = areaChecklistItems?.value || [];
+
+    // Build marshal map with checkpoint assignments
     const marshalMap = new Map();
 
     for (const checkpoint of checkpoints) {
-      for (const marshal of (checkpoint.marshals || [])) {
-        if (!marshalMap.has(marshal.marshalId)) {
-          marshalMap.set(marshal.marshalId, {
+      const marshals = checkpoint.marshals || checkpoint.Marshals || [];
+      const checkpointId = checkpoint.checkpointId || checkpoint.CheckpointId;
+      const checkpointName = checkpoint.name || checkpoint.Name;
+      const checkpointDescription = checkpoint.description || checkpoint.Description;
+      const checkpointAreaIds = checkpoint.areaIds || checkpoint.AreaIds || [];
+
+      for (const marshal of marshals) {
+        const marshalId = marshal.marshalId || marshal.MarshalId;
+        if (!marshalId) continue;
+
+        if (!marshalMap.has(marshalId)) {
+          marshalMap.set(marshalId, {
             ...marshal,
+            marshalId,
             checkpoints: [],
+            checkpointIds: new Set(),
+            areaIds: new Set(),
             allTasks: [],
             totalTaskCount: 0,
             completedTaskCount: 0,
           });
         }
-        const m = marshalMap.get(marshal.marshalId);
+        const m = marshalMap.get(marshalId);
         m.checkpoints.push({
-          checkpointId: checkpoint.checkpointId,
-          name: checkpoint.name,
-          description: checkpoint.description,
+          checkpointId,
+          name: checkpointName,
+          description: checkpointDescription,
         });
-        // Add marshal's outstanding tasks
-        if (marshal.outstandingTasks) {
-          for (const task of marshal.outstandingTasks) {
-            m.allTasks.push({ ...task, isCompleted: false, checkpointName: checkpoint.name });
-            m.totalTaskCount++;
-          }
-        }
-        // Add marshal's completed tasks if available
-        if (marshal.completedTasks) {
-          for (const task of marshal.completedTasks) {
-            m.allTasks.push({ ...task, isCompleted: true, checkpointName: checkpoint.name });
-            m.totalTaskCount++;
-            m.completedTaskCount++;
-          }
+        m.checkpointIds.add(checkpointId);
+        // Track which areas this marshal is in (via checkpoint assignments)
+        for (const areaId of checkpointAreaIds) {
+          m.areaIds.add(areaId);
         }
       }
     }
 
-    return Array.from(marshalMap.values()).sort((a, b) =>
+    // Now assign tasks from checklist items to each marshal
+    for (const item of checklistItems) {
+      const contextType = item.completionContextType;
+      const contextId = item.completionContextId;
+
+      // Determine which marshals this task applies to
+      let applicableMarshals = [];
+
+      if (contextType === 'Personal') {
+        // Personal task - only applies to the specific marshal
+        const targetMarshalId = item.contextOwnerMarshalId;
+        if (targetMarshalId && marshalMap.has(targetMarshalId)) {
+          applicableMarshals = [marshalMap.get(targetMarshalId)];
+        }
+      } else if (contextType === 'Checkpoint') {
+        // Checkpoint task - applies to all marshals assigned to this checkpoint
+        for (const m of marshalMap.values()) {
+          if (m.checkpointIds.has(contextId)) {
+            applicableMarshals.push(m);
+          }
+        }
+      } else if (contextType === 'Area') {
+        // Area task - applies to all marshals in this area
+        for (const m of marshalMap.values()) {
+          if (m.areaIds.has(contextId)) {
+            applicableMarshals.push(m);
+          }
+        }
+      } else {
+        // Event-wide or unknown context - applies to all marshals
+        applicableMarshals = Array.from(marshalMap.values());
+      }
+
+      // Add task to each applicable marshal
+      for (const m of applicableMarshals) {
+        m.allTasks.push({
+          ...item,
+          isCompleted: item.isCompleted || item.localIsCompleted,
+        });
+        m.totalTaskCount++;
+        if (item.isCompleted || item.localIsCompleted) {
+          m.completedTaskCount++;
+        }
+      }
+    }
+
+    // Convert Sets to arrays for serialization and clean up
+    const result = Array.from(marshalMap.values()).map(m => ({
+      ...m,
+      checkpointIds: Array.from(m.checkpointIds),
+      areaIds: Array.from(m.areaIds),
+    }));
+
+    return result.sort((a, b) =>
       (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
     );
   });

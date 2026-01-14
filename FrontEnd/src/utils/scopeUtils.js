@@ -3,6 +3,78 @@
  */
 
 /**
+ * Clean up orphaned scope configurations by removing references to deleted entities.
+ * This should be called before saving entities with scope configurations.
+ *
+ * @param {Array} scopeConfigurations - The scope configurations to clean
+ * @param {Object} validEntities - Object containing arrays of valid entities
+ * @param {Array} validEntities.areas - Array of valid area objects with 'id' property
+ * @param {Array} validEntities.locations - Array of valid location objects with 'id' property
+ * @param {Array} validEntities.marshals - Array of valid marshal objects with 'id' property
+ * @returns {Array} - Cleaned scope configurations with orphaned references removed
+ */
+export function cleanOrphanedScopeConfigurations(scopeConfigurations, { areas = [], locations = [], marshals = [] }) {
+  if (!scopeConfigurations || scopeConfigurations.length === 0) {
+    return scopeConfigurations;
+  }
+
+  const areaIds = new Set(areas.map(a => a.id));
+  const locationIds = new Set(locations.map(l => l.id));
+  const marshalIds = new Set(marshals.map(m => m.id));
+
+  // Special IDs that should always be kept
+  const specialIds = new Set(['ALL_MARSHALS', 'ALL_AREAS', 'ALL_CHECKPOINTS', 'THIS_CHECKPOINT']);
+
+  const cleanedConfigs = scopeConfigurations
+    .map(config => {
+      const itemType = config.itemType;
+      const ids = config.ids || [];
+
+      // If no itemType or no IDs, keep the config as-is
+      if (!itemType || ids.length === 0) {
+        return config;
+      }
+
+      // Filter out orphaned IDs based on item type
+      const validIds = ids.filter(id => {
+        // Always keep special IDs
+        if (specialIds.has(id)) {
+          return true;
+        }
+
+        // Check if ID exists in the appropriate entity list
+        if (itemType === 'Area') {
+          return areaIds.has(id);
+        }
+        if (itemType === 'Checkpoint') {
+          return locationIds.has(id);
+        }
+        if (itemType === 'Marshal') {
+          return marshalIds.has(id);
+        }
+
+        // Unknown item type - keep the ID
+        return true;
+      });
+
+      // Return updated config with cleaned IDs
+      return {
+        ...config,
+        ids: validIds,
+      };
+    })
+    // Remove configs that have no valid IDs left (unless they have no itemType)
+    .filter(config => {
+      if (!config.itemType) {
+        return true;
+      }
+      return config.ids && config.ids.length > 0;
+    });
+
+  return cleanedConfigs;
+}
+
+/**
  * Check if a marshal can update a dynamic location based on its scope configurations.
  *
  * @param {Object} options - The options object

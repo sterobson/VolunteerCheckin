@@ -29,6 +29,7 @@
           :user-location="userLocation"
           :highlight-location-ids="highlightLocationIds"
           :marshal-mode="true"
+          :simplify-non-highlighted="true"
           :clickable="clickable"
           :show-fullscreen="true"
           :fullscreen-title="terms.course"

@@ -225,7 +225,7 @@
             :user-location="userLocation"
             :selecting-location="selectingLocationOnMap"
             :selecting-location-name="updatingLocationFor?.location?.name || ''"
-            :locations="allLocations"
+            :locations="courseMapLocations"
             :route="eventRoute"
             :center="mapCenter"
             :highlight-location-ids="assignmentLocationIds"
@@ -655,6 +655,8 @@ const {
   currentMarshalId,
   areaLeadRef,
   areaLeadCheckpoints,
+  areaChecklistItems,
+  areaLeadAreaIds,
   loadChecklist,
 });
 
@@ -863,6 +865,7 @@ const assignmentsWithDetails = computed(() => {
 // Map actions composable (course map and checkpoint map toolbar)
 const {
   courseMapActions,
+  hideOtherCheckpoints,
   handleCourseMapVisibilityChange,
   handleCourseMapAction,
   getCheckpointMapActions,
@@ -882,6 +885,19 @@ const primaryAssignment = computed(() => {
 // All assignment location IDs for multi-checkpoint highlighting
 const assignmentLocationIds = computed(() => {
   return assignments.value.map(a => a.locationId);
+});
+
+// Filtered locations for course map (when hiding other checkpoints)
+const courseMapLocations = computed(() => {
+  if (!hideOtherCheckpoints.value) {
+    return allLocations.value;
+  }
+  // Show only assigned checkpoints and dynamic checkpoints
+  return allLocations.value.filter(loc => {
+    const isAssigned = assignmentLocationIds.value.includes(loc.id);
+    const isDynamic = loc.isDynamic || loc.IsDynamic;
+    return isAssigned || isDynamic;
+  });
 });
 
 // Check if user has any dynamic checkpoint assignments
@@ -1284,18 +1300,26 @@ const loadEventData = async () => {
     console.error('Failed to load event status:', statusResult.reason);
   }
 
-  // Phase 2: Supplementary data (4 calls in parallel)
-  await Promise.allSettled([
+  // Phase 2: Supplementary data in parallel
+  // For area leads, also load the area lead dashboard to populate "Your marshals" section
+  const phase2Promises = [
     loadChecklist(),
     loadContacts(),
     loadNotes(),
     loadMyIncidents()
-  ]);
+  ];
+
+  // Add area lead dashboard load if user is an area lead
+  if (isAreaLead.value) {
+    phase2Promises.push(loadAreaLeadDashboard());
+  }
+
+  await Promise.allSettled(phase2Promises);
 
   // Cache all data for offline access
   // Use JSON.parse(JSON.stringify()) to convert Vue reactive proxies to plain objects
   try {
-    const plainData = JSON.parse(JSON.stringify({
+    const cacheData = {
       event: event.value,
       areas: areas.value,
       locations: allLocations.value,
@@ -1303,7 +1327,16 @@ const loadEventData = async () => {
       contacts: myContacts.value,
       notes: notes.value,
       marshalId: currentMarshalId.value
-    }));
+    };
+
+    // Include area lead dashboard if available
+    if (areaLeadCheckpoints.value.length > 0) {
+      cacheData.areaLeadDashboard = {
+        checkpoints: areaLeadCheckpoints.value
+      };
+    }
+
+    const plainData = JSON.parse(JSON.stringify(cacheData));
     await cacheEventData(eventId, plainData);
     console.log('Event data cached for offline access');
   } catch (error) {
@@ -1363,6 +1396,25 @@ const preloadOfflineData = async () => {
   }
 
   console.log('Background preload complete');
+};
+
+/**
+ * Load area lead dashboard data - populates areaLeadCheckpoints for "Your marshals" section
+ */
+const loadAreaLeadDashboard = async () => {
+  const eventIdVal = route.params.eventId;
+  try {
+    const response = await areasApi.getAreaLeadDashboard(eventIdVal);
+    if (response.data?.checkpoints) {
+      areaLeadCheckpoints.value = response.data.checkpoints;
+      console.log('Area lead dashboard loaded:', areaLeadCheckpoints.value.length, 'checkpoints');
+    }
+  } catch (error) {
+    // This might fail if user isn't an area lead - that's fine
+    if (error.response?.status !== 403) {
+      console.warn('Failed to load area lead dashboard:', error);
+    }
+  }
 };
 
 const loadNotes = async () => {

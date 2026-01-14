@@ -987,8 +987,11 @@ const updateMarkers = () => {
     const requiredMarshals = location.requiredMarshals || 1;
     const isHighlighted = props.highlightLocationId === location.id ||
                           props.highlightLocationIds.includes(location.id);
+    // Check if this is a dynamic checkpoint (should not be simplified)
+    const isDynamic = location.isDynamic || location.IsDynamic;
     // Show simplified gray dots for non-highlighted checkpoints when simplifyNonHighlighted is true
-    const showSimplified = props.simplifyNonHighlighted && !isHighlighted;
+    // Dynamic checkpoints are always shown normally (not simplified)
+    const showSimplified = props.simplifyNonHighlighted && !isHighlighted && !isDynamic;
 
     // Check if location has a custom style (any non-default resolved property)
     // This includes custom type, background color, border color, icon color, or non-circle shape
@@ -1134,7 +1137,7 @@ const updateMarkers = () => {
               <div style="${rotationStyle}">
                 ${markerHtml}
               </div>
-              ${showSimplified ? '' : `<div style="position: absolute; top: -4px; right: -4px;">
+              ${(showSimplified || props.marshalMode) ? '' : `<div style="position: absolute; top: -4px; right: -4px;">
                 ${statusBadge}
               </div>`}
               ${showSimplified ? '' : countBadge}

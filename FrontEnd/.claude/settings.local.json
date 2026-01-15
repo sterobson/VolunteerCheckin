@@ -29,7 +29,9 @@
       "Bash(dotnet run:*)",
       "Bash(dir /b /s \"C:\\\\Users\\\\stero\\\\*screenshot*\")",
       "Bash(dir /s /b \"C:\\\\Users\\\\stero\\\\*screenshot*\")",
-      "Bash(dir /s /b C:Usersstero*screenshots*)"
+      "Bash(dir /s /b C:Usersstero*screenshots*)",
+      "Bash(npx eslint:*)",
+      "WebFetch(domain:open-meteo.com)"
     ]
   }
 }

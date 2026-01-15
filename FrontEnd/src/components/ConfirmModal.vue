@@ -67,7 +67,7 @@ const handleCancel = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2000; /* Higher than other modals */
+  z-index: 3000; /* Higher than fullscreen map (2000) */
 }
 
 .confirm-modal {

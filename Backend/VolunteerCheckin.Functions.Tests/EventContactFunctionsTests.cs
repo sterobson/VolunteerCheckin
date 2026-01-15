@@ -69,7 +69,7 @@ public class EventContactFunctionsTests
         SetupEventAdminClaims();
 
         CreateEventContactRequest request = new(
-            Role: Constants.ContactRoleEmergency,
+            Roles: [Constants.ContactRoleEmergency],
             Name: "John Smith",
             Phone: "123-456-7890",
             Email: "john@example.com",
@@ -89,13 +89,13 @@ public class EventContactFunctionsTests
         result.ShouldBeOfType<OkObjectResult>();
         EventContactResponse response = (EventContactResponse)((OkObjectResult)result).Value!;
         response.Name.ShouldBe("John Smith");
-        response.Role.ShouldBe(Constants.ContactRoleEmergency);
+        response.Roles.ShouldContain(Constants.ContactRoleEmergency);
         response.Phone.ShouldBe("123-456-7890");
 
         _mockContactRepository.Verify(r => r.AddAsync(It.Is<EventContactEntity>(c =>
             c.EventId == EventId &&
             c.Name == "John Smith" &&
-            c.Role == Constants.ContactRoleEmergency
+            c.RolesJson.Contains(Constants.ContactRoleEmergency)
         )), Times.Once);
     }
 
@@ -118,7 +118,7 @@ public class EventContactFunctionsTests
             .ReturnsAsync(marshal);
 
         CreateEventContactRequest request = new(
-            Role: Constants.ContactRoleEventDirector,
+            Roles: [Constants.ContactRoleEventDirector],
             Name: "Jane Doe",
             Phone: "987-654-3210",
             MarshalId: marshalId
@@ -150,7 +150,7 @@ public class EventContactFunctionsTests
             .ReturnsAsync((MarshalEntity?)null);
 
         CreateEventContactRequest request = new(
-            Role: Constants.ContactRoleEmergency,
+            Roles: [Constants.ContactRoleEmergency],
             Name: "Invalid",
             Phone: "123",
             MarshalId: "nonexistent-marshal"
@@ -171,7 +171,7 @@ public class EventContactFunctionsTests
         // Arrange - no auth setup
 
         CreateEventContactRequest request = new(
-            Role: Constants.ContactRoleEmergency,
+            Roles: [Constants.ContactRoleEmergency],
             Name: "Test",
             Phone: "123"
         );
@@ -202,7 +202,7 @@ public class EventContactFunctionsTests
         ];
 
         CreateEventContactRequest request = new(
-            Role: Constants.ContactRoleMedicalLead,
+            Roles: [Constants.ContactRoleMedicalLead],
             Name: "Medical Lead",
             Phone: "555-1234",
             ScopeConfigurations: scopes
@@ -305,7 +305,7 @@ public class EventContactFunctionsTests
             .Returns(Task.CompletedTask);
 
         UpdateEventContactRequest request = new(
-            Role: Constants.ContactRoleEventDirector,
+            Roles: [Constants.ContactRoleEventDirector],
             Name: "New Name",
             Phone: "999"
         );
@@ -319,11 +319,11 @@ public class EventContactFunctionsTests
         result.ShouldBeOfType<OkObjectResult>();
         EventContactResponse response = (EventContactResponse)((OkObjectResult)result).Value!;
         response.Name.ShouldBe("New Name");
-        response.Role.ShouldBe(Constants.ContactRoleEventDirector);
+        response.Roles.ShouldContain(Constants.ContactRoleEventDirector);
 
         _mockContactRepository.Verify(r => r.UpdateAsync(It.Is<EventContactEntity>(c =>
             c.Name == "New Name" &&
-            c.Role == Constants.ContactRoleEventDirector
+            c.RolesJson.Contains(Constants.ContactRoleEventDirector)
         )), Times.Once);
     }
 
@@ -338,7 +338,7 @@ public class EventContactFunctionsTests
             .ReturnsAsync((EventContactEntity?)null);
 
         UpdateEventContactRequest request = new(
-            Role: Constants.ContactRoleEmergency,
+            Roles: [Constants.ContactRoleEmergency],
             Name: "Test",
             Phone: "123"
         );

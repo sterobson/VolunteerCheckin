@@ -126,6 +126,7 @@ defineExpose({
   mapRef,
   recenterOnLocation: (lat, lng, zoom) => mapRef.value?.recenterOnLocation?.(lat, lng, zoom),
   recenterOnUserLocation: () => mapRef.value?.recenterOnUserLocation?.(),
+  openFullscreen: () => mapRef.value?.openFullscreen?.(),
 });
 </script>
 

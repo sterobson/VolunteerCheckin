@@ -438,7 +438,7 @@ export const eventsApi = {
 export const locationsApi = {
   create: (data) => api.post('/locations', data),
   getById: (eventId, locationId) => api.get(`/locations/${eventId}/${locationId}`),
-  getByEvent: (eventId) => api.get(`/events/${eventId}/locations`),
+  getByEvent: (eventId, config = {}) => api.get(`/events/${eventId}/locations`, config),
   update: (eventId, locationId, data) => api.put(`/locations/${eventId}/${locationId}`, data),
   delete: (eventId, locationId) => api.delete(`/locations/${eventId}/${locationId}`),
   importCsv: (eventId, file, deleteExisting) => {
@@ -450,8 +450,8 @@ export const locationsApi = {
   },
   bulkUpdateTimes: (eventId, timeDelta) => api.post(`/locations/bulk-update-times/${eventId}`, { timeDelta }),
   // Dynamic checkpoint location updates
-  updatePosition: (eventId, locationId, data) => api.post(`/locations/${eventId}/${locationId}/update-position`, data),
-  getDynamicCheckpoints: (eventId) => api.get(`/events/${eventId}/dynamic-checkpoints`),
+  updatePosition: (eventId, locationId, data, config = {}) => api.post(`/locations/${eventId}/${locationId}/update-position`, data, config),
+  getDynamicCheckpoints: (eventId, config = {}) => api.get(`/events/${eventId}/dynamic-checkpoints`, config),
 };
 
 // Assignments API

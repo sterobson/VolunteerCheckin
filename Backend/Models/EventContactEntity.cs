@@ -26,9 +26,16 @@ public class EventContactEntity : ITableEntity
     public string ContactId { get; set; } = string.Empty;
 
     /// <summary>
-    /// The role of this contact (e.g., EmergencyContact, EventDirector, MedicalLead)
+    /// [DEPRECATED] Single role field - use RolesJson instead.
+    /// Kept for backwards compatibility during migration.
     /// </summary>
     public string Role { get; set; } = string.Empty;
+
+    /// <summary>
+    /// JSON array of roles for this contact (e.g., ["EmergencyContact", "MedicalLead"]).
+    /// Supports multiple roles including custom ones.
+    /// </summary>
+    public string RolesJson { get; set; } = "[]";
 
     /// <summary>
     /// Display name of the contact

@@ -179,9 +179,17 @@ onUnmounted(() => {
   box-shadow: none;
 }
 
+.fullscreen-map-header.compact .context-info {
+  overflow: hidden;
+  min-width: 0;
+}
+
 .fullscreen-map-header.compact .context-info h3 {
   font-size: 1rem;
   margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .fullscreen-map-header.compact .context-info p {

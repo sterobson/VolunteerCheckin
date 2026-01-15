@@ -481,7 +481,13 @@ const initMap = () => {
     zoomLevel = 10;
   }
 
-  map = L.map(mapContainer.value).setView(
+  map = L.map(mapContainer.value, {
+    // Disable marker zoom animation to prevent markers from desyncing
+    // from the map on mobile devices during zoom/pan gestures
+    markerZoomAnimation: false,
+    // Disable fade animation to reduce compositing layer issues on mobile
+    fadeAnimation: false,
+  }).setView(
     [centerLat, centerLng],
     zoomLevel
   );
@@ -1485,6 +1491,13 @@ watch(
   /* Ensure the marker doesn't have conflicting positioning */
   background: transparent;
   border: none;
+  /* Prevent any transitions that could cause markers to lag during pan/zoom */
+  transition: none !important;
+}
+
+/* Ensure marker pane transforms stay in sync with map on mobile */
+.leaflet-marker-pane {
+  will-change: transform;
 }
 
 .leaflet-marker-icon.user-location-marker {

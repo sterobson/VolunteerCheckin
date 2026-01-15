@@ -792,7 +792,7 @@ public record NoteForMarshalResponse(
 /// Request to create a new event contact
 /// </summary>
 public record CreateEventContactRequest(
-    string Role,
+    List<string> Roles,
     string Name,
     string? Phone = null,
     string? Email = null,
@@ -809,7 +809,7 @@ public record CreateEventContactRequest(
 /// Request to update an existing event contact
 /// </summary>
 public record UpdateEventContactRequest(
-    string Role,
+    List<string> Roles,
     string Name,
     string? Phone = null,
     string? Email = null,
@@ -828,7 +828,7 @@ public record UpdateEventContactRequest(
 public record EventContactResponse(
     string ContactId,
     string EventId,
-    string Role,
+    List<string> Roles,
     string Name,
     string Phone,
     string? Email,
@@ -849,7 +849,7 @@ public record EventContactResponse(
 /// </summary>
 public record EventContactForMarshalResponse(
     string ContactId,
-    string Role,
+    List<string> Roles,
     string Name,
     string Phone,
     string? Email,

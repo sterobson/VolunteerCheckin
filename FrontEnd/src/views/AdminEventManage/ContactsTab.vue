@@ -121,6 +121,14 @@ const formatRoleName = (role) => {
     .trim();
 };
 
+// Get all role names for a contact (handles both array and legacy single role)
+const getContactRolesText = (contact) => {
+  if (contact.roles && Array.isArray(contact.roles) && contact.roles.length > 0) {
+    return contact.roles.map(formatRoleName).join(' ');
+  }
+  return formatRoleName(contact.role);
+};
+
 // Search filtering - searches name + role with multi-term support
 const filteredContacts = computed(() => {
   let result = props.contacts;
@@ -138,9 +146,9 @@ const filteredContacts = computed(() => {
     const searchTerms = normalizedQuery.split(' ').filter(t => t.length > 0);
 
     result = result.filter(contact => {
-      const roleText = formatRoleName(contact.role);
+      const rolesText = getContactRolesText(contact);
       const searchableText = normalizeText(
-        `${contact.name || ''} ${roleText} ${contact.email || ''} ${contact.phone || ''}`
+        `${contact.name || ''} ${rolesText} ${contact.email || ''} ${contact.phone || ''}`
       );
 
       // All search terms must match

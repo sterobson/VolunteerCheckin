@@ -47,9 +47,14 @@ function cancelHideTimeout() {
 /**
  * Start tracking a request
  * @param {object} config - Axios request config
- * @returns {number} Request ID
+ * @returns {number|null} Request ID, or null if skipped
  */
 export function startRequest(config) {
+  // Skip loading overlay for background requests (e.g., polling, auto-updates)
+  if (config.skipLoadingOverlay) {
+    return null;
+  }
+
   // Cancel any pending hide when a new request starts
   cancelHideTimeout();
 
@@ -74,9 +79,14 @@ export function startRequest(config) {
 
 /**
  * End tracking a request
- * @param {number} requestId - The request ID from startRequest
+ * @param {number|null} requestId - The request ID from startRequest
  */
 export function endRequest(requestId) {
+  // Skip if request was not tracked (background request)
+  if (requestId === null) {
+    return;
+  }
+
   const request = activeRequests.value.get(requestId);
   if (request) {
     clearTimeout(request.timeoutId);

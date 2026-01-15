@@ -39,7 +39,7 @@
           :simplify-non-highlighted="true"
           :clickable="hasDynamicAssignment"
           :show-fullscreen="true"
-          :fullscreen-title="assignment.location?.name || assignment.locationName"
+          :fullscreen-title="fullscreenTitle"
           :fullscreen-header-style="branding.headerStyle"
           :fullscreen-header-text-color="branding.headerTextColor"
           :toolbar-actions="toolbarActions"
@@ -77,6 +77,40 @@
           @toggle="$emit('check-in')"
         />
         <div v-if="checkInError" class="check-in-error">{{ checkInError }}</div>
+      </div>
+
+      <!-- Dynamic checkpoint location update -->
+      <div v-if="isDynamic" class="dynamic-location-section">
+        <div class="dynamic-location-header">
+          <span class="dynamic-badge">Dynamic {{ assignment.location.resolvedCheckpointTerm || termsLower.checkpoint }}</span>
+          <span v-if="assignment.location.lastLocationUpdate" class="last-update">
+            Last updated: {{ formatDateTime(assignment.location.lastLocationUpdate) }}
+          </span>
+        </div>
+        <!-- Only show update buttons if marshal has permission -->
+        <div v-if="canUpdateDynamicLocation" class="dynamic-location-actions">
+          <button
+            @click="$emit('update-location')"
+            class="btn btn-update-location"
+            :disabled="updatingLocation"
+          >
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+            </svg>
+            Update location
+          </button>
+          <button
+            @click="$emit('toggle-auto-update')"
+            class="btn btn-auto-update"
+            :class="{ active: autoUpdateEnabled }"
+            :title="autoUpdateEnabled ? 'Stop auto-updating' : 'Auto-update every 60 seconds'"
+          >
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
+            </svg>
+            {{ autoUpdateEnabled ? 'Stop' : 'Auto' }}
+          </button>
+        </div>
       </div>
 
       <!-- Marshals on this checkpoint -->
@@ -190,40 +224,6 @@
             :priority="note.priority"
             :is-pinned="note.isPinned"
           />
-        </div>
-      </div>
-
-      <!-- Dynamic checkpoint location update -->
-      <div v-if="isDynamic" class="dynamic-location-section">
-        <div class="dynamic-location-header">
-          <span class="dynamic-badge">Dynamic {{ assignment.location.resolvedCheckpointTerm || termsLower.checkpoint }}</span>
-          <span v-if="assignment.location.lastLocationUpdate" class="last-update">
-            Last updated: {{ formatDateTime(assignment.location.lastLocationUpdate) }}
-          </span>
-        </div>
-        <!-- Only show update buttons if marshal has permission -->
-        <div v-if="canUpdateDynamicLocation" class="dynamic-location-actions">
-          <button
-            @click="$emit('update-location')"
-            class="btn btn-update-location"
-            :disabled="updatingLocation"
-          >
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-            </svg>
-            Update location
-          </button>
-          <button
-            @click="$emit('toggle-auto-update')"
-            class="btn btn-auto-update"
-            :class="{ active: autoUpdateEnabled }"
-            :title="autoUpdateEnabled ? 'Stop auto-updating' : 'Auto-update every 60 seconds'"
-          >
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
-            </svg>
-            {{ autoUpdateEnabled ? 'Stop' : 'Auto' }}
-          </button>
         </div>
       </div>
     </div>
@@ -349,6 +349,16 @@ const mapRef = ref(null);
 
 const isDynamic = computed(() => {
   return props.assignment.location?.isDynamic;
+});
+
+// Fullscreen title combines name and description
+const fullscreenTitle = computed(() => {
+  const name = props.assignment.location?.name || props.assignment.locationName;
+  const description = props.assignment.location?.description;
+  if (description) {
+    return `${name} — ${description}`;
+  }
+  return name;
 });
 
 // Check if the current marshal can update this dynamic location based on scope configuration

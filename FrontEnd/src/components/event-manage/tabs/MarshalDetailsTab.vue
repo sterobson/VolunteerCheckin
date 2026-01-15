@@ -84,6 +84,22 @@
           >
             {{ copySuccess ? 'Copied!' : 'Copy link' }}
           </button>
+          <button
+            type="button"
+            class="btn btn-secondary"
+            @click="showQrCode = true"
+            title="Show QR code"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+              <rect x="14" y="14" width="3" height="3"></rect>
+              <rect x="19" y="14" width="2" height="2"></rect>
+              <rect x="14" y="19" width="2" height="2"></rect>
+              <rect x="19" y="19" width="2" height="2"></rect>
+            </svg>
+          </button>
         </div>
         <p v-if="copyError" class="error-text">{{ copyError }}</p>
         <div v-if="hasEmail" class="magic-link-actions">
@@ -102,12 +118,21 @@
 
       <div v-else-if="magicLinkError" class="error-text">{{ magicLinkError }}</div>
     </div>
+
+    <!-- QR Code Modal -->
+    <QrCodeModal
+      :show="showQrCode"
+      :url="magicLink"
+      title="Scan to log in"
+      @close="showQrCode = false"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, watch, onMounted, defineProps, defineEmits, defineExpose, nextTick } from 'vue';
 import { marshalsApi } from '../../../services/api';
+import QrCodeModal from '../../common/QrCodeModal.vue';
 
 const props = defineProps({
   form: {
@@ -144,6 +169,7 @@ const copySuccess = ref(false);
 const sendingEmail = ref(false);
 const emailSentSuccess = ref(false);
 const emailError = ref('');
+const showQrCode = ref(false);
 
 const handleInput = (field, value) => {
   emit('update:form', { ...props.form, [field]: value });

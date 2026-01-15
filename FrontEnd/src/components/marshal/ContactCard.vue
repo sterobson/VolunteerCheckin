@@ -4,7 +4,7 @@
       <div class="contact-name-row">
         <span v-if="isPrimary" class="primary-badge">&#9733;</span>
         <span class="contact-name">{{ name }}</span>
-        <span v-if="role" class="contact-role-badge" :class="{ 'emergency-role': isEmergencyRole }">{{ formattedRole }}</span>
+        <span v-if="allRoles.length > 0" class="contact-role-badge" :class="{ 'emergency-role': isEmergencyRole }">{{ formattedRole }}</span>
       </div>
       <div v-if="notes" class="contact-notes-text">{{ notes }}</div>
       <div v-if="phone" class="contact-detail">{{ phone }}</div>
@@ -45,6 +45,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  roles: {
+    type: Array,
+    default: () => [],
+  },
   phone: {
     type: String,
     default: '',
@@ -63,21 +67,39 @@ const props = defineProps({
   },
 });
 
+// Get all roles (handles both array and legacy single role)
+const allRoles = computed(() => {
+  if (props.roles && props.roles.length > 0) {
+    return props.roles;
+  }
+  if (props.role) {
+    return [props.role];
+  }
+  return [];
+});
+
 // Emergency roles that need special highlighting
 const EMERGENCY_ROLES = ['Emergency', 'Safety', 'Medical', 'First Aid'];
 
 const isEmergencyRole = computed(() => {
-  if (!props.role) return false;
-  return EMERGENCY_ROLES.some(r => props.role.toLowerCase().includes(r.toLowerCase()));
+  if (allRoles.value.length === 0) return false;
+  return allRoles.value.some(role =>
+    EMERGENCY_ROLES.some(r => role.toLowerCase().includes(r.toLowerCase()))
+  );
 });
 
-const formattedRole = computed(() => {
-  if (!props.role) return '';
+const formatSingleRole = (role) => {
+  if (!role) return '';
   // Convert camelCase/PascalCase to Title Case with spaces
-  return props.role
+  return role
     .replace(/([A-Z])/g, ' $1')
     .replace(/^./, str => str.toUpperCase())
     .trim();
+};
+
+const formattedRole = computed(() => {
+  if (allRoles.value.length === 0) return '';
+  return allRoles.value.map(formatSingleRole).join(', ');
 });
 </script>
 

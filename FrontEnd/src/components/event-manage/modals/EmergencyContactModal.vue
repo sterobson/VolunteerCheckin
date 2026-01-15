@@ -37,7 +37,7 @@
         >
           <div class="contact-header">
             <h3>{{ contact.name }}</h3>
-            <span v-if="contact.role" class="role-badge">{{ formatRoleName(contact.role) }}</span>
+            <span v-if="getContactRoles(contact).length > 0" class="role-badge">{{ getContactRoles(contact).map(formatRoleName).join(', ') }}</span>
           </div>
 
           <div class="contact-details">
@@ -173,6 +173,17 @@ const formatRoleName = (role) => {
     'Logistics': 'Logistics',
   };
   return roleMap[role] || role.replace(/([A-Z])/g, ' $1').trim();
+};
+
+// Get roles from contact - handles both array and legacy single role
+const getContactRoles = (contact) => {
+  if (contact.roles && Array.isArray(contact.roles) && contact.roles.length > 0) {
+    return contact.roles;
+  }
+  if (contact.role) {
+    return [contact.role];
+  }
+  return [];
 };
 </script>
 

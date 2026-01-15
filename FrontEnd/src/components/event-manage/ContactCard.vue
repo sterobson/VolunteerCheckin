@@ -17,7 +17,7 @@
           <span v-if="contact.isPrimary && !isMarkedForRemoval" class="primary-badge" title="Primary contact">★</span>
           <span class="contact-name">{{ contact.name }}</span>
         </div>
-        <span v-if="contact.role" class="contact-role">{{ formatRoleName(contact.role) }}</span>
+        <span v-if="displayRoles.length > 0" class="contact-role">{{ displayRoles.map(formatRoleName).join(', ') }}</span>
       </div>
       <span
         v-if="contact.showInEmergencyInfo && !isMarkedForRemoval"
@@ -132,6 +132,17 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['click', 'remove', 'undo-remove']);
+
+// Get roles - supports both array format (new) and single role (legacy)
+const displayRoles = computed(() => {
+  if (props.contact.roles && Array.isArray(props.contact.roles) && props.contact.roles.length > 0) {
+    return props.contact.roles;
+  }
+  if (props.contact.role) {
+    return [props.contact.role];
+  }
+  return [];
+});
 
 // Check if contact has no scope configured
 const hasNoScope = computed(() => {

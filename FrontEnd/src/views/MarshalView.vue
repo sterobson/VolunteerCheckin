@@ -30,6 +30,10 @@
           <h1 v-if="event">{{ event.name }}</h1>
           <div v-if="event?.eventDate" class="header-event-date">
             {{ formatEventDate(event.eventDate) }}
+            <span v-if="shouldShowWeather && weather" class="header-weather" :title="weather.description">
+              <WeatherIcon :icon="weather.icon" :size="18" :alt="weather.description" :color="headerTextColor" />
+              <span class="weather-temp">{{ weather.tempMax }}°{{ weather.unit }}</span>
+            </span>
           </div>
         </div>
         <div v-if="isAuthenticated" class="header-actions">
@@ -361,7 +365,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, provide } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, provide, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { eventsApi, assignmentsApi, areasApi, notesApi, contactsApi, getOfflineMode } from '../services/api';
 import ConfirmModal from '../components/ConfirmModal.vue';
@@ -391,6 +395,8 @@ import { useMarshalIncidents } from '../composables/useMarshalIncidents';
 import { useMapActions } from '../composables/useMapActions';
 import { useAreaLeadMarshals } from '../composables/useAreaLeadMarshals';
 import { useMarshalAuth } from '../composables/useMarshalAuth';
+import { useWeatherForecast } from '../composables/useWeatherForecast';
+import WeatherIcon from '../components/common/WeatherIcon.vue';
 import { getIcon } from '../utils/icons';
 import { canMarshalUpdateDynamicLocation } from '../utils/scopeUtils';
 import { useOffline } from '../composables/useOffline';
@@ -542,6 +548,32 @@ provide('marshalBranding', {
   accentTextColor,
 });
 
+// Weather forecast - compute event location from checkpoint centroid
+const eventLocationLat = computed(() => {
+  if (!allLocations.value.length) return null;
+  const validLocs = allLocations.value.filter(l => l.latitude && l.longitude);
+  if (!validLocs.length) return null;
+  return validLocs.reduce((sum, l) => sum + l.latitude, 0) / validLocs.length;
+});
+
+const eventLocationLng = computed(() => {
+  if (!allLocations.value.length) return null;
+  const validLocs = allLocations.value.filter(l => l.latitude && l.longitude);
+  if (!validLocs.length) return null;
+  return validLocs.reduce((sum, l) => sum + l.longitude, 0) / validLocs.length;
+});
+
+const eventDateRef = computed(() => event.value?.eventDate || null);
+
+const {
+  weather,
+  shouldShowWeather,
+} = useWeatherForecast({
+  eventDate: eventDateRef,
+  latitude: eventLocationLat,
+  longitude: eventLocationLng,
+});
+
 // Accordion state
 const expandedSection = ref('assignments');
 
@@ -621,7 +653,7 @@ const {
   openLocationUpdateModal,
   closeLocationUpdateModal,
   startMapLocationSelect: baseStartMapLocationSelect,
-  cancelMapLocationSelect,
+  cancelMapLocationSelect: baseCancelMapLocationSelect,
   updateDynamicCheckpointLocation,
   updateLocationWithGps,
   updateLocationFromCheckpoint,
@@ -629,6 +661,8 @@ const {
   stopAutoUpdate,
   startDynamicCheckpointPolling,
   stopDynamicCheckpointPolling,
+  startAllCheckpointsPolling,
+  stopAllCheckpointsPolling,
 } = useDynamicLocation({
   eventId,
   allLocations,
@@ -636,10 +670,33 @@ const {
   locationLastUpdated,
 });
 
-// Wrapper for startMapLocationSelect that also expands the map section
-const startMapLocationSelect = () => {
+// Track which section to return to after map location selection
+let sectionBeforeMapSelect = null;
+
+// Wrapper for startMapLocationSelect that also expands the map section and opens fullscreen
+const startMapLocationSelect = async () => {
   baseStartMapLocationSelect();
+  // Remember current section to return to after selection
+  sectionBeforeMapSelect = expandedSection.value;
   expandedSection.value = 'map';
+  // Wait for the section to expand, then open fullscreen
+  await nextTick();
+  routeSectionRef.value?.openFullscreen?.();
+};
+
+// Restore the section that was open before map location selection
+const restoreSectionAfterMapSelect = () => {
+  if (sectionBeforeMapSelect) {
+    expandedSection.value = sectionBeforeMapSelect;
+    sectionBeforeMapSelect = null;
+  }
+};
+
+// Wrapper for cancelMapLocationSelect that also restores the previous section
+const cancelMapLocationSelect = () => {
+  baseCancelMapLocationSelect();
+  routeSectionRef.value?.mapRef?.closeFullscreen?.();
+  restoreSectionAfterMapSelect();
 };
 
 // Area lead marshals composable
@@ -797,6 +854,24 @@ watch(() => assignments.value, (newAssignments) => {
     expandedCheckpoint.value = newAssignments[0].id;
   }
 }, { immediate: true });
+
+// Track if any map is currently visible (course map or checkpoint card map)
+const isAnyMapVisible = computed(() => {
+  // Course map section is expanded
+  if (expandedSection.value === 'map') return true;
+  // Assignments section is expanded AND a checkpoint card is expanded (which shows its map)
+  if (expandedSection.value === 'assignments' && expandedCheckpoint.value !== null) return true;
+  return false;
+});
+
+// Poll checkpoint locations when a map is visible
+watch(isAnyMapVisible, (visible) => {
+  if (visible) {
+    startAllCheckpointsPolling();
+  } else {
+    stopAllCheckpointsPolling();
+  }
+});
 
 // Assignments with details (location info, area name, all marshals on checkpoint, area contacts)
 const assignmentsWithDetails = computed(() => {
@@ -1465,10 +1540,10 @@ const handleMessageModalClose = () => {
   showMessageModal.value = false;
 };
 
-const handleMapClick = (coords) => {
+const handleMapClick = async (coords) => {
   // If in explicit selection mode, update immediately
   if (selectingLocationOnMap.value && updatingLocationFor.value) {
-    updateDynamicCheckpointLocation(
+    await updateDynamicCheckpointLocation(
       updatingLocationFor.value.locationId,
       coords.lat,
       coords.lng,
@@ -1476,6 +1551,9 @@ const handleMapClick = (coords) => {
     );
     selectingLocationOnMap.value = false;
     updatingLocationFor.value = null;
+    // Close fullscreen and restore previous section
+    routeSectionRef.value?.mapRef?.closeFullscreen?.();
+    restoreSectionAfterMapSelect();
     return;
   }
 
@@ -1491,14 +1569,32 @@ const handleMapClick = (coords) => {
         coords.lng,
         'manual'
       );
+      // Close fullscreen after updating
+      routeSectionRef.value?.mapRef?.closeFullscreen?.();
     };
     showConfirmModal.value = true;
   }
 };
 
-const handleLocationClick = (location) => {
-  // If in selection mode, don't do anything special - map click will handle it
-  if (selectingLocationOnMap.value) return;
+const handleLocationClick = async (location) => {
+  // If in selection mode, copy this checkpoint's location
+  if (selectingLocationOnMap.value && updatingLocationFor.value) {
+    // Don't copy from itself
+    if (location.id === updatingLocationFor.value.locationId) return;
+
+    await updateDynamicCheckpointLocation(
+      updatingLocationFor.value.locationId,
+      location.latitude,
+      location.longitude,
+      'checkpoint',
+      location.id
+    );
+    selectingLocationOnMap.value = false;
+    // Close fullscreen and restore previous section
+    routeSectionRef.value?.mapRef?.closeFullscreen?.();
+    restoreSectionAfterMapSelect();
+    return;
+  }
 
   // If user has a dynamic assignment they can update, offer to copy this location
   if (canUpdateFirstDynamicAssignment.value && firstDynamicAssignment.value) {
@@ -1516,6 +1612,8 @@ const handleLocationClick = (location) => {
         'checkpoint',
         location.id
       );
+      // Close fullscreen after updating
+      routeSectionRef.value?.mapRef?.closeFullscreen?.();
     };
     showConfirmModal.value = true;
   }
@@ -1617,6 +1715,7 @@ onUnmounted(() => {
   stopHeartbeat();
   stopAutoUpdate();
   stopDynamicCheckpointPolling();
+  stopAllCheckpointsPolling();
 });
 </script>
 
@@ -1685,6 +1784,23 @@ onUnmounted(() => {
   font-size: 0.9rem;
   opacity: 0.9;
   font-weight: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.header-weather {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  opacity: 0.85;
+  cursor: help;
+}
+
+.header-weather .weather-temp {
+  font-weight: 500;
 }
 
 .header-logo {

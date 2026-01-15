@@ -80,9 +80,9 @@ public class EventContactFunctions
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
             CreateEventContactRequest? request = JsonSerializer.Deserialize<CreateEventContactRequest>(requestBody, FunctionHelpers.JsonOptions);
 
-            if (request == null || string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.Role))
+            if (request == null || string.IsNullOrWhiteSpace(request.Name) || request.Roles == null || request.Roles.Count == 0)
             {
-                return new BadRequestObjectResult(new { message = "Name and Role are required" });
+                return new BadRequestObjectResult(new { message = "Name and at least one role are required" });
             }
 
             // If linked to a marshal, verify the marshal exists
@@ -125,7 +125,6 @@ public class EventContactFunctions
                 RowKey = contactId,
                 EventId = eventId,
                 ContactId = contactId,
-                Role = request.Role,
                 Name = request.Name,
                 Phone = request.Phone,
                 Email = request.Email,
@@ -140,11 +139,12 @@ public class EventContactFunctions
                 CreatedAt = DateTime.UtcNow,
                 IsDeleted = false
             };
+            SetRolesOnEntity(contact, request.Roles);
 
             await _contactRepository.AddAsync(contact);
 
-            // Sync area lead role if this contact is linked to a marshal
-            await SyncAreaLeadRoleAsync(eventId, request.MarshalId, request.Role, scopeConfigs, claims.PersonId);
+            // Sync area lead role if this contact is linked to a marshal and has AreaLead role
+            await SyncAreaLeadRoleAsync(eventId, request.MarshalId, request.Roles, scopeConfigs, claims.PersonId);
 
             _logger.LogInformation("Contact {ContactId} created for event {EventId} by {PersonId}", contactId, eventId, claims.PersonId);
 
@@ -265,15 +265,15 @@ public class EventContactFunctions
 
             // Store old marshal ID for potential role cleanup
             string? oldMarshalId = contact.MarshalId;
-            string oldRole = contact.Role;
+            List<string> oldRoles = GetRolesFromEntity(contact);
 
             // Parse request
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
             UpdateEventContactRequest? request = JsonSerializer.Deserialize<UpdateEventContactRequest>(requestBody, FunctionHelpers.JsonOptions);
 
-            if (request == null || string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.Role))
+            if (request == null || string.IsNullOrWhiteSpace(request.Name) || request.Roles == null || request.Roles.Count == 0)
             {
-                return new BadRequestObjectResult(new { message = "Name and Role are required" });
+                return new BadRequestObjectResult(new { message = "Name and at least one role are required" });
             }
 
             // If linked to a marshal, verify the marshal exists
@@ -302,7 +302,7 @@ public class EventContactFunctions
             }
 
             // Update contact
-            contact.Role = request.Role;
+            SetRolesOnEntity(contact, request.Roles);
             contact.Name = request.Name;
             contact.Phone = request.Phone;
             contact.Email = request.Email;
@@ -321,13 +321,13 @@ public class EventContactFunctions
             List<ScopeConfiguration> scopeConfigs = request.ScopeConfigurations ?? [];
 
             // If marshal changed, remove role from old marshal first
-            if (oldMarshalId != request.MarshalId && !string.IsNullOrEmpty(oldMarshalId) && oldRole == Constants.ContactRoleAreaLead)
+            if (oldMarshalId != request.MarshalId && !string.IsNullOrEmpty(oldMarshalId) && oldRoles.Contains(Constants.ContactRoleAreaLead))
             {
                 await RemoveAreaLeadRoleAsync(eventId, oldMarshalId);
             }
 
             // Sync area lead role for the current marshal
-            await SyncAreaLeadRoleAsync(eventId, request.MarshalId, request.Role, scopeConfigs, claims.PersonId);
+            await SyncAreaLeadRoleAsync(eventId, request.MarshalId, request.Roles, scopeConfigs, claims.PersonId);
 
             _logger.LogInformation("Contact {ContactId} updated for event {EventId} by {PersonId}", contactId, eventId, claims.PersonId);
 
@@ -367,7 +367,8 @@ public class EventContactFunctions
             }
 
             // Remove area lead role if this was an AreaLead contact linked to a marshal
-            if (contact.Role == Constants.ContactRoleAreaLead && !string.IsNullOrEmpty(contact.MarshalId))
+            List<string> roles = GetRolesFromEntity(contact);
+            if (roles.Contains(Constants.ContactRoleAreaLead) && !string.IsNullOrEmpty(contact.MarshalId))
             {
                 await RemoveAreaLeadRoleAsync(eventId, contact.MarshalId);
             }
@@ -423,7 +424,7 @@ public class EventContactFunctions
                 {
                     relevantContacts.Add(new EventContactForMarshalResponse(
                         ContactId: contact.ContactId,
-                        Role: contact.Role,
+                        Roles: GetRolesFromEntity(contact),
                         Name: contact.Name,
                         Phone: contact.Phone,
                         Email: contact.Email,
@@ -483,7 +484,7 @@ public class EventContactFunctions
                         .Select(c =>
                         new EventContactForMarshalResponse(
                             ContactId: c.ContactId,
-                            Role: c.Role,
+                            Roles: GetRolesFromEntity(c),
                             Name: c.Name,
                             Phone: c.Phone,
                             Email: c.Email,
@@ -531,8 +532,8 @@ public class EventContactFunctions
             // Get all contacts for the event to find custom roles
             IEnumerable<EventContactEntity> contacts = await _contactRepository.GetByEventAsync(eventId);
             List<string> customRoles = [.. contacts
-                .Select(c => c.Role)
-                .Where(r => !_builtInRoles.Contains(r))
+                .SelectMany(c => GetRolesFromEntity(c))
+                .Where(r => !string.IsNullOrEmpty(r) && !_builtInRoles.Contains(r))
                 .Distinct()
                 .OrderBy(r => r)];
 
@@ -626,7 +627,7 @@ public class EventContactFunctions
         return new EventContactResponse(
             ContactId: contact.ContactId,
             EventId: contact.EventId,
-            Role: contact.Role,
+            Roles: GetRolesFromEntity(contact),
             Name: contact.Name,
             Phone: contact.Phone,
             Email: contact.Email,
@@ -644,15 +645,50 @@ public class EventContactFunctions
     }
 
     /// <summary>
-    /// Synchronizes the EventAreaLead role for a marshal based on their contact role.
+    /// Gets roles from entity, handling migration from single Role to Roles array.
+    /// Reads from RolesJson if available, falls back to single Role field.
+    /// </summary>
+    private static List<string> GetRolesFromEntity(EventContactEntity contact)
+    {
+        // Try to read from RolesJson first (new format)
+        if (!string.IsNullOrEmpty(contact.RolesJson) && contact.RolesJson != "[]")
+        {
+            List<string>? roles = JsonSerializer.Deserialize<List<string>>(contact.RolesJson, FunctionHelpers.JsonOptions);
+            if (roles != null && roles.Count > 0)
+            {
+                return roles;
+            }
+        }
+
+        // Fall back to single Role field (migration support)
+        if (!string.IsNullOrEmpty(contact.Role))
+        {
+            return [contact.Role];
+        }
+
+        return [];
+    }
+
+    /// <summary>
+    /// Sets roles on entity, updating both RolesJson and legacy Role field.
+    /// </summary>
+    private static void SetRolesOnEntity(EventContactEntity contact, List<string> roles)
+    {
+        contact.RolesJson = JsonSerializer.Serialize(roles);
+        // Keep legacy Role field populated with first role for backwards compatibility
+        contact.Role = roles.Count > 0 ? roles[0] : string.Empty;
+    }
+
+    /// <summary>
+    /// Synchronizes the EventAreaLead role for a marshal based on their contact roles.
     /// If the contact has the AreaLead role and is linked to a marshal, the marshal gets promoted.
-    /// If the contact role changes or is deleted, the marshal is demoted.
+    /// If the contact roles change or is deleted, the marshal is demoted.
     /// </summary>
 #pragma warning disable MA0051
     private async Task SyncAreaLeadRoleAsync(
         string eventId,
         string? marshalId,
-        string contactRole,
+        List<string> contactRoles,
         List<ScopeConfiguration> scopeConfigs,
         string grantedByPersonId)
     {
@@ -674,7 +710,7 @@ public class EventContactFunctions
         IEnumerable<EventRoleEntity> existingRoles = await _eventRoleRepository.GetByPersonAndEventAsync(personId, eventId);
         EventRoleEntity? existingAreaLeadRole = existingRoles.FirstOrDefault(r => r.Role == Constants.RoleEventAreaLead);
 
-        if (contactRole == Constants.ContactRoleAreaLead)
+        if (contactRoles.Contains(Constants.ContactRoleAreaLead))
         {
             // Extract area IDs from scope configurations
             List<string> areaIds = [];

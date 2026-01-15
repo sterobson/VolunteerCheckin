@@ -21,6 +21,7 @@ export function useDynamicLocation({
 
   let autoUpdateInterval = null;
   let dynamicCheckpointPollInterval = null;
+  let allCheckpointsPollInterval = null;
 
   // Check if a location is a dynamic checkpoint
   const isDynamicCheckpoint = (location) => {
@@ -267,7 +268,7 @@ export function useDynamicLocation({
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
         sourceType: 'gps',
-      });
+      }, { skipLoadingOverlay: true });
 
       updateLocalCheckpointPosition(locationId, position.coords.latitude, position.coords.longitude, new Date().toISOString());
     } catch (error) {
@@ -309,7 +310,7 @@ export function useDynamicLocation({
     dynamicCheckpointPollInterval = setInterval(async () => {
       try {
         const evtId = eventId.value;
-        const response = await locationsApi.getDynamicCheckpoints(evtId);
+        const response = await locationsApi.getDynamicCheckpoints(evtId, { skipLoadingOverlay: true });
         if (response.data && Array.isArray(response.data)) {
           for (const dynamicCp of response.data) {
             const location = allLocations.value.find(l => l.id === dynamicCp.checkpointId);
@@ -330,6 +331,46 @@ export function useDynamicLocation({
     if (dynamicCheckpointPollInterval) {
       clearInterval(dynamicCheckpointPollInterval);
       dynamicCheckpointPollInterval = null;
+    }
+  };
+
+  // Poll all checkpoint locations (used when a map is visible)
+  // This uses a single API call to fetch all locations efficiently
+  const pollAllCheckpointLocations = async () => {
+    try {
+      const evtId = eventId.value;
+      const response = await locationsApi.getByEvent(evtId, { skipLoadingOverlay: true });
+      if (response.data && Array.isArray(response.data)) {
+        // Update only coordinate data to avoid disrupting UI state
+        for (const fetchedLoc of response.data) {
+          const existingLoc = allLocations.value.find(l => l.id === fetchedLoc.id);
+          if (existingLoc) {
+            // Silently update position data
+            existingLoc.latitude = fetchedLoc.latitude;
+            existingLoc.longitude = fetchedLoc.longitude;
+            if (fetchedLoc.lastLocationUpdate) {
+              existingLoc.lastLocationUpdate = fetchedLoc.lastLocationUpdate;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to poll all checkpoint locations:', error);
+    }
+  };
+
+  const startAllCheckpointsPolling = () => {
+    if (allCheckpointsPollInterval) return;
+
+    // Poll immediately, then every 60 seconds
+    pollAllCheckpointLocations();
+    allCheckpointsPollInterval = setInterval(pollAllCheckpointLocations, 60000);
+  };
+
+  const stopAllCheckpointsPolling = () => {
+    if (allCheckpointsPollInterval) {
+      clearInterval(allCheckpointsPollInterval);
+      allCheckpointsPollInterval = null;
     }
   };
 
@@ -371,6 +412,8 @@ export function useDynamicLocation({
     stopAutoUpdate,
     startDynamicCheckpointPolling,
     stopDynamicCheckpointPolling,
+    startAllCheckpointsPolling,
+    stopAllCheckpointsPolling,
     handleMapClickForLocation,
   };
 }

@@ -18,6 +18,7 @@
           v-for="contact in contacts"
           :key="contact.contactId"
           :name="contact.name"
+          :roles="contact.roles"
           :role="contact.role"
           :phone="contact.phone"
           :email="contact.email"

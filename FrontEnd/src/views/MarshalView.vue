@@ -1278,53 +1278,67 @@ const mapCenter = computed(() => {
   return { lat: 51.505, lng: -0.09 };
 });
 
+// Helper to populate state from cached data
+const populateFromCache = (cachedData) => {
+  event.value = cachedData.event;
+  areas.value = cachedData.areas || [];
+  allLocations.value = cachedData.locations || [];
+  checklistItems.value = cachedData.checklist || [];
+  myContacts.value = cachedData.contacts || [];
+  notes.value = cachedData.notes || [];
+
+  // Load area lead checkpoints for marshal name lookup
+  if (cachedData.areaLeadDashboard?.checkpoints) {
+    areaLeadCheckpoints.value = cachedData.areaLeadDashboard.checkpoints;
+  }
+
+  // Apply terminology settings
+  if (event.value) {
+    setTerminology(event.value);
+  }
+
+  // Extract assignments for current marshal
+  if (currentMarshalId.value) {
+    const myAssignments = [];
+    for (const location of allLocations.value) {
+      const myAssignment = location.assignments?.find(a => a.marshalId === currentMarshalId.value);
+      if (myAssignment) {
+        myAssignments.push(myAssignment);
+      }
+    }
+    assignments.value = myAssignments;
+  }
+};
+
 const loadEventData = async () => {
   const eventId = route.params.eventId;
   console.log('Loading event data for:', { eventId, marshalId: currentMarshalId.value });
 
-  // Check if we're offline and have cached data
+  // Check for cached data first (stale-while-revalidate pattern)
+  const cachedData = await getCachedEventData(eventId);
+  let hasCachedData = false;
+
+  if (cachedData) {
+    console.log('Loaded cached data from:', cachedData.cachedAt);
+    populateFromCache(cachedData);
+    hasCachedData = true;
+    // Signal that we have data to show (hides loading spinner)
+    loading.value = false;
+  }
+
+  // If offline with cached data, we're done
   if (getOfflineMode()) {
-    console.log('Offline mode detected, attempting to load from cache...');
-    const cachedData = await getCachedEventData(eventId);
-    if (cachedData) {
-      console.log('Loaded cached data from:', cachedData.cachedAt);
-      event.value = cachedData.event;
-      areas.value = cachedData.areas || [];
-      allLocations.value = cachedData.locations || [];
-      checklistItems.value = cachedData.checklist || [];
-      myContacts.value = cachedData.contacts || [];
-      notes.value = cachedData.notes || [];
-
-      // Load area lead checkpoints for marshal name lookup
-      if (cachedData.areaLeadDashboard?.checkpoints) {
-        areaLeadCheckpoints.value = cachedData.areaLeadDashboard.checkpoints;
-      }
-
-      // Apply terminology settings
-      if (event.value) {
-        setTerminology(event.value);
-      }
-
-      // Extract assignments for current marshal
-      if (currentMarshalId.value) {
-        const myAssignments = [];
-        for (const location of allLocations.value) {
-          const myAssignment = location.assignments?.find(a => a.marshalId === currentMarshalId.value);
-          if (myAssignment) {
-            myAssignments.push(myAssignment);
-          }
-        }
-        assignments.value = myAssignments;
-      }
-
+    if (hasCachedData) {
+      console.log('Offline mode - using cached data');
       return;
     } else {
       console.warn('No cached data available while offline');
+      return;
     }
   }
 
-  // Load all data in parallel for better performance
-  console.log('Fetching event data in parallel...');
+  // Fetch fresh data in background (silently if we have cached data)
+  console.log('Fetching fresh event data in parallel...');
 
   // Phase 1: Core event data (3 calls in parallel)
   const [eventResult, areasResult, statusResult] = await Promise.allSettled([

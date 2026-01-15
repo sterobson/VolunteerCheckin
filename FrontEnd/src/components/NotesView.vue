@@ -15,50 +15,109 @@
       <p>{{ emptyMessage }}</p>
     </div>
 
-    <div v-else class="notes-list">
-      <div
-        v-for="note in sortedNotes"
-        :key="note.noteId"
-        class="note-item"
-        :class="{ pinned: note.isPinned }"
+    <template v-else>
+      <!-- Reorderable list -->
+      <DraggableList
+        v-if="allowReorder"
+        :items="sortedNotes"
+        item-key="noteId"
+        pinned-key="isPinned"
+        @reorder="handleReorder"
+        class="notes-list"
       >
-        <div class="note-header">
-          <div class="note-title-row">
-            <span v-if="note.isPinned" class="pin-icon" title="Pinned">📌</span>
-            <span class="priority-indicator" :class="(note.priority || 'Normal').toLowerCase()"></span>
-            <strong class="note-title">{{ note.title }}</strong>
+        <template #item="{ element: note }">
+          <div
+            class="note-item"
+            :class="{ pinned: note.isPinned }"
+          >
+            <DragHandle />
+            <div class="note-item-content">
+              <div class="note-header">
+                <div class="note-title-row">
+                  <span v-if="note.isPinned" class="pin-icon" title="Pinned">📌</span>
+                  <span class="priority-indicator" :class="(note.priority || 'Normal').toLowerCase()"></span>
+                  <strong class="note-title">{{ note.title }}</strong>
+                </div>
+                <div class="note-meta">
+                  <span v-if="note.category" class="category-badge">{{ note.category }}</span>
+                  <span class="priority-badge" :class="(note.priority || 'Normal').toLowerCase()">
+                    {{ note.priority || 'Normal' }}
+                  </span>
+                </div>
+              </div>
+
+              <div v-if="note.content" class="note-content">
+                {{ note.content }}
+              </div>
+
+              <div class="note-footer">
+                <span class="created-info">
+                  Created by {{ note.createdByName || 'Unknown' }} · {{ formatRelativeTime(note.createdAt) }}
+                </span>
+                <ScopedAssignmentPills
+                  v-if="note.scopeConfigurations?.length && showScope"
+                  class="scope-pills"
+                  :scope-configurations="note.scopeConfigurations"
+                  :areas="areas"
+                  :locations="locations"
+                  :marshals="marshals"
+                  :max-expanded-items="3"
+                />
+                <span v-else-if="note.matchedScope && showScope" class="scope-info">
+                  {{ note.matchedScope }}
+                </span>
+              </div>
+            </div>
           </div>
-          <div class="note-meta">
-            <span v-if="note.category" class="category-badge">{{ note.category }}</span>
-            <span class="priority-badge" :class="(note.priority || 'Normal').toLowerCase()">
-              {{ note.priority || 'Normal' }}
+        </template>
+      </DraggableList>
+
+      <!-- Static list (default) -->
+      <div v-else class="notes-list">
+        <div
+          v-for="note in sortedNotes"
+          :key="note.noteId"
+          class="note-item"
+          :class="{ pinned: note.isPinned }"
+        >
+          <div class="note-header">
+            <div class="note-title-row">
+              <span v-if="note.isPinned" class="pin-icon" title="Pinned">📌</span>
+              <span class="priority-indicator" :class="(note.priority || 'Normal').toLowerCase()"></span>
+              <strong class="note-title">{{ note.title }}</strong>
+            </div>
+            <div class="note-meta">
+              <span v-if="note.category" class="category-badge">{{ note.category }}</span>
+              <span class="priority-badge" :class="(note.priority || 'Normal').toLowerCase()">
+                {{ note.priority || 'Normal' }}
+              </span>
+            </div>
+          </div>
+
+          <div v-if="note.content" class="note-content">
+            {{ note.content }}
+          </div>
+
+          <div class="note-footer">
+            <span class="created-info">
+              Created by {{ note.createdByName || 'Unknown' }} · {{ formatRelativeTime(note.createdAt) }}
+            </span>
+            <ScopedAssignmentPills
+              v-if="note.scopeConfigurations?.length && showScope"
+              class="scope-pills"
+              :scope-configurations="note.scopeConfigurations"
+              :areas="areas"
+              :locations="locations"
+              :marshals="marshals"
+              :max-expanded-items="3"
+            />
+            <span v-else-if="note.matchedScope && showScope" class="scope-info">
+              {{ note.matchedScope }}
             </span>
           </div>
         </div>
-
-        <div v-if="note.content" class="note-content">
-          {{ note.content }}
-        </div>
-
-        <div class="note-footer">
-          <span class="created-info">
-            Created by {{ note.createdByName || 'Unknown' }} · {{ formatRelativeTime(note.createdAt) }}
-          </span>
-          <ScopedAssignmentPills
-            v-if="note.scopeConfigurations?.length && showScope"
-            class="scope-pills"
-            :scope-configurations="note.scopeConfigurations"
-            :areas="areas"
-            :locations="locations"
-            :marshals="marshals"
-            :max-expanded-items="3"
-          />
-          <span v-else-if="note.matchedScope && showScope" class="scope-info">
-            {{ note.matchedScope }}
-          </span>
-        </div>
       </div>
-    </div>
+    </template>
   </div>
 </template>
 
@@ -66,6 +125,8 @@
 import { ref, computed, watch } from 'vue';
 import { notesApi } from '../services/api';
 import ScopedAssignmentPills from './common/ScopedAssignmentPills.vue';
+import DraggableList from './common/DraggableList.vue';
+import DragHandle from './common/DragHandle.vue';
 
 const props = defineProps({
   eventId: {
@@ -113,7 +174,14 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  // Whether to allow reordering via drag-drop
+  allowReorder: {
+    type: Boolean,
+    default: false,
+  },
 });
+
+const emit = defineEmits(['reorder']);
 
 const notes = ref([]);
 const loading = ref(false);
@@ -388,6 +456,10 @@ const sortedNotes = computed(() => {
   });
 });
 
+const handleReorder = ({ changes }) => {
+  emit('reorder', changes);
+};
+
 const loadNotes = async () => {
   // If allNotes is provided, we use that and filter locally
   if (props.allNotes !== null) {
@@ -481,6 +553,9 @@ defineExpose({
 }
 
 .note-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
   border-radius: 8px;
@@ -491,6 +566,11 @@ defineExpose({
 .note-item.pinned {
   border-left: 4px solid var(--brand-primary);
   background: var(--brand-primary-bg);
+}
+
+.note-item-content {
+  flex: 1;
+  min-width: 0;
 }
 
 .note-header {

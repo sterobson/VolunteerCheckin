@@ -24,6 +24,7 @@ public class EventContactFunctions
     private readonly IAssignmentRepository _assignmentRepository;
     private readonly IAreaRepository _areaRepository;
     private readonly IEventRoleRepository _eventRoleRepository;
+    private readonly IEventRoleDefinitionRepository _roleDefinitionRepository;
     private readonly ClaimsService _claimsService;
 
     // Built-in contact roles
@@ -45,6 +46,7 @@ public class EventContactFunctions
         IAssignmentRepository assignmentRepository,
         IAreaRepository areaRepository,
         IEventRoleRepository eventRoleRepository,
+        IEventRoleDefinitionRepository roleDefinitionRepository,
         ClaimsService claimsService)
     {
         _logger = logger;
@@ -54,6 +56,7 @@ public class EventContactFunctions
         _assignmentRepository = assignmentRepository;
         _areaRepository = areaRepository;
         _eventRoleRepository = eventRoleRepository;
+        _roleDefinitionRepository = roleDefinitionRepository;
         _claimsService = claimsService;
     }
 
@@ -143,6 +146,9 @@ public class EventContactFunctions
 
             await _contactRepository.AddAsync(contact);
 
+            // Sync roles to the linked marshal if applicable
+            await SyncRolesToLinkedMarshalAsync(eventId, request.MarshalId, request.Roles);
+
             // Sync area lead role if this contact is linked to a marshal and has AreaLead role
             await SyncAreaLeadRoleAsync(eventId, request.MarshalId, request.Roles, scopeConfigs, claims.PersonId);
 
@@ -176,7 +182,10 @@ public class EventContactFunctions
                 return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
             }
 
-            IEnumerable<EventContactEntity> contacts = await _contactRepository.GetByEventAsync(eventId);
+            List<EventContactEntity> contacts = (await _contactRepository.GetByEventAsync(eventId)).ToList();
+
+            // Lazy migration: normalize DisplayOrder if any contacts have DisplayOrder = 0
+            await NormalizeContactDisplayOrdersAsync(contacts, eventId);
 
             // Get marshal names for linked contacts
             IEnumerable<MarshalEntity> marshals = await _marshalRepository.GetByEventAsync(eventId);
@@ -316,6 +325,9 @@ public class EventContactFunctions
             contact.UpdatedAt = DateTime.UtcNow;
 
             await _contactRepository.UpdateAsync(contact);
+
+            // Sync roles to the linked marshal if applicable
+            await SyncRolesToLinkedMarshalAsync(eventId, request.MarshalId, request.Roles);
 
             // Handle area lead role changes
             List<ScopeConfiguration> scopeConfigs = request.ScopeConfigurations ?? [];
@@ -681,7 +693,7 @@ public class EventContactFunctions
 
     /// <summary>
     /// Synchronizes the EventAreaLead role for a marshal based on their contact roles.
-    /// If the contact has the AreaLead role and is linked to a marshal, the marshal gets promoted.
+    /// If the contact has a role with CanManageAreaCheckpoints=true and is linked to a marshal, the marshal gets promoted.
     /// If the contact roles change or is deleted, the marshal is demoted.
     /// </summary>
 #pragma warning disable MA0051
@@ -710,7 +722,10 @@ public class EventContactFunctions
         IEnumerable<EventRoleEntity> existingRoles = await _eventRoleRepository.GetByPersonAndEventAsync(personId, eventId);
         EventRoleEntity? existingAreaLeadRole = existingRoles.FirstOrDefault(r => r.Role == Constants.RoleEventAreaLead);
 
-        if (contactRoles.Contains(Constants.ContactRoleAreaLead))
+        // Check if any of the contact's roles have CanManageAreaCheckpoints=true
+        bool hasAreaManageRole = await HasRoleWithAreaManagePermissionAsync(eventId, contactRoles);
+
+        if (hasAreaManageRole)
         {
             // Extract area IDs from scope configurations
             List<string> areaIds = [];
@@ -774,7 +789,7 @@ public class EventContactFunctions
         }
         else
         {
-            // Contact role is not AreaLead, remove any existing area lead role
+            // Contact doesn't have a role with area manage permission, remove any existing area lead role
             if (existingAreaLeadRole != null)
             {
                 await _eventRoleRepository.DeleteAsync(personId, existingAreaLeadRole.RowKey);
@@ -783,6 +798,48 @@ public class EventContactFunctions
         }
     }
 #pragma warning restore MA0051
+
+    /// <summary>
+    /// Checks if any of the given role IDs correspond to a role definition with CanManageAreaCheckpoints=true.
+    /// Also supports legacy role names for backwards compatibility.
+    /// </summary>
+    private async Task<bool> HasRoleWithAreaManagePermissionAsync(string eventId, List<string> roleIds)
+    {
+        if (roleIds.Count == 0)
+        {
+            return false;
+        }
+
+        // Get all role definitions for this event
+        IEnumerable<EventRoleDefinitionEntity> roleDefinitions = await _roleDefinitionRepository.GetByEventAsync(eventId);
+        List<EventRoleDefinitionEntity> roleDefList = [.. roleDefinitions];
+
+        // Check each role ID
+        foreach (string roleId in roleIds)
+        {
+            // Check by role ID (GUID)
+            EventRoleDefinitionEntity? matchByGuid = roleDefList.FirstOrDefault(rd => rd.RoleId == roleId);
+            if (matchByGuid != null && matchByGuid.CanManageAreaCheckpoints)
+            {
+                return true;
+            }
+
+            // For backwards compatibility, also check if this is a legacy role name
+            // (e.g., "AreaLead" string from before migration)
+            if (!Guid.TryParse(roleId, out _))
+            {
+                EventRoleDefinitionEntity? matchByName = roleDefList.FirstOrDefault(rd =>
+                    rd.Name.Equals(roleId, StringComparison.OrdinalIgnoreCase) ||
+                    roleId.Equals(Constants.ContactRoleAreaLead, StringComparison.OrdinalIgnoreCase));
+                if (matchByName != null && matchByName.CanManageAreaCheckpoints)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Removes area lead role when a contact is deleted.
@@ -813,5 +870,123 @@ public class EventContactFunctions
         }
     }
 
+    /// <summary>
+    /// Syncs roles from a contact to its linked marshal.
+    /// When a contact has roles and is linked to a marshal, the marshal's roles are updated to match.
+    /// </summary>
+    private async Task SyncRolesToLinkedMarshalAsync(string eventId, string? marshalId, List<string> roles)
+    {
+        if (string.IsNullOrEmpty(marshalId))
+        {
+            return; // No marshal linked, nothing to do
+        }
+
+        MarshalEntity? marshal = await _marshalRepository.GetAsync(eventId, marshalId);
+        if (marshal == null)
+        {
+            return;
+        }
+
+        // Update the marshal's roles to match the contact's roles
+        marshal.RolesJson = JsonSerializer.Serialize(roles);
+        await _marshalRepository.UpdateAsync(marshal);
+
+        _logger.LogInformation("Synced roles from contact to linked marshal {MarshalId} in event {EventId}: {Roles}",
+            marshalId, eventId, string.Join(", ", roles));
+    }
+
     #endregion
+
+    /// <summary>
+    /// Reorder contacts by updating their display order.
+    /// Only event admins can reorder contacts.
+    /// </summary>
+    [Function("ReorderContacts")]
+    public async Task<IActionResult> ReorderContacts(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "events/{eventId}/contacts/reorder")] HttpRequest req,
+        string eventId)
+    {
+        try
+        {
+            // Authenticate - only admins can reorder
+            UserClaims? claims = await GetClaimsAsync(req, eventId);
+            if (claims == null || (!claims.IsEventAdmin && !claims.IsSystemAdmin))
+            {
+                return new UnauthorizedObjectResult(new { message = "Only event admins can reorder contacts" });
+            }
+
+            // Parse request
+            string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+            ReorderContactsRequest? request = JsonSerializer.Deserialize<ReorderContactsRequest>(requestBody, FunctionHelpers.JsonOptions);
+
+            if (request == null || request.Items == null || request.Items.Count == 0)
+            {
+                return new BadRequestObjectResult(new { message = "Items array is required" });
+            }
+
+            // Build display order map
+            Dictionary<string, int> displayOrders = request.Items.ToDictionary(i => i.Id, i => i.DisplayOrder);
+
+            // Update all contacts
+            await _contactRepository.UpdateDisplayOrdersAsync(eventId, displayOrders);
+
+            _logger.LogInformation("Contacts reordered for event {EventId} by {PersonId}", eventId, claims.PersonId);
+
+            return new NoContentResult();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error reordering contacts for event {EventId}", eventId);
+            return FunctionHelpers.CreateErrorResponse(ex, "Failed to reorder contacts");
+        }
+    }
+
+    /// <summary>
+    /// Lazy migration: if any contacts have DisplayOrder = 0, normalize all display orders.
+    /// Sorts by pinned first, then primary, then by name, and assigns sequential orders.
+    /// </summary>
+    private async Task NormalizeContactDisplayOrdersAsync(List<EventContactEntity> contacts, string eventId)
+    {
+        // Check if any contacts need migration (DisplayOrder = 0)
+        bool needsMigration = contacts.Any(c => c.DisplayOrder == 0);
+        if (!needsMigration || contacts.Count == 0)
+        {
+            return;
+        }
+
+        _logger.LogInformation("Normalizing DisplayOrder for {Count} contacts in event {EventId}",
+            contacts.Count, eventId);
+
+        // Sort: pinned first, then primary, then alphabetically by name
+        List<EventContactEntity> sortedContacts = [.. contacts
+            .OrderByDescending(c => c.IsPinned)
+            .ThenByDescending(c => c.IsPrimary)
+            .ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase)];
+
+        // Assign sequential display orders
+        Dictionary<string, int> changes = [];
+        for (int i = 0; i < sortedContacts.Count; i++)
+        {
+            int newOrder = i + 1;
+            if (sortedContacts[i].DisplayOrder != newOrder)
+            {
+                sortedContacts[i].DisplayOrder = newOrder;
+                changes[sortedContacts[i].ContactId] = newOrder;
+            }
+        }
+
+        // Batch update if there are changes
+        if (changes.Count > 0)
+        {
+            try
+            {
+                await _contactRepository.UpdateDisplayOrdersAsync(eventId, changes);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to persist DisplayOrder migration for contacts");
+                // Continue anyway - the in-memory list is already updated
+            }
+        }
+    }
 }

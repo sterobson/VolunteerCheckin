@@ -524,11 +524,13 @@ export const checklistApi = {
   update: (eventId, itemId, data) => api.put(`/checklist-items/${eventId}/${itemId}`, data),
   delete: (eventId, itemId) => api.delete(`/checklist-items/${eventId}/${itemId}`),
   getReport: (eventId) => api.get(`/events/${eventId}/checklist-report`),
+  getDetailedReport: (eventId) => api.get(`/events/${eventId}/checklist-report/detailed`),
   getMarshalChecklist: (eventId, marshalId) => api.get(`/events/${eventId}/marshals/${marshalId}/checklist`),
   getCheckpointChecklist: (eventId, locationId) => api.get(`/events/${eventId}/locations/${locationId}/checklist`),
   getAreaChecklist: (eventId, areaId) => api.get(`/events/${eventId}/areas/${areaId}/checklist`),
   complete: (eventId, itemId, data) => api.post(`/checklist-items/${eventId}/${itemId}/complete`, data),
   uncomplete: (eventId, itemId, data) => api.post(`/checklist-items/${eventId}/${itemId}/uncomplete`, data),
+  reorder: (eventId, items) => api.post(`/events/${eventId}/checklist-items/reorder`, { items }),
 };
 
 // Notes API
@@ -540,6 +542,7 @@ export const notesApi = {
   delete: (eventId, noteId) => api.delete(`/events/${eventId}/notes/${noteId}`),
   getMarshalNotes: (eventId, marshalId) => api.get(`/events/${eventId}/marshals/${marshalId}/notes`),
   getMyNotes: (eventId) => api.get(`/events/${eventId}/my-notes`),
+  reorder: (eventId, items) => api.post(`/events/${eventId}/notes/reorder`, { items }),
 };
 
 // Contacts API
@@ -554,6 +557,25 @@ export const contactsApi = {
   // Marshal endpoints
   getMarshalContacts: (eventId, marshalId) => api.get(`/events/${eventId}/marshals/${marshalId}/contacts`),
   getMyContacts: (eventId) => api.get(`/events/${eventId}/my-contacts`),
+  reorder: (eventId, items) => api.post(`/events/${eventId}/contacts/reorder`, { items }),
+};
+
+// Role Definitions API
+export const roleDefinitionsApi = {
+  // Get all role definitions for an event
+  getAll: (eventId) => api.get(`/events/${eventId}/role-definitions`),
+  // Create a new role definition
+  create: (eventId, data) => api.post(`/events/${eventId}/role-definitions`, data),
+  // Update an existing role definition
+  update: (eventId, roleId, data) => api.put(`/events/${eventId}/role-definitions/${roleId}`, data),
+  // Delete a role definition (must not be in use)
+  delete: (eventId, roleId) => api.delete(`/events/${eventId}/role-definitions/${roleId}`),
+  // Get unified list of people for a role
+  getPeople: (eventId, roleId) => api.get(`/events/${eventId}/role-definitions/${roleId}/people`),
+  // Update role assignments (add/remove people)
+  updatePeople: (eventId, roleId, data) => api.put(`/events/${eventId}/role-definitions/${roleId}/people`, data),
+  // Reorder role definitions
+  reorder: (eventId, items) => api.post(`/events/${eventId}/role-definitions/reorder`, { items }),
 };
 
 // Incidents API

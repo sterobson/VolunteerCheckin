@@ -37,6 +37,28 @@
             <span>Each line creates a new item</span>
           </label>
         </div>
+
+        <!-- Link to check-in status -->
+        <div v-if="canLinkToCheckIn" class="form-group link-to-checkin">
+          <label class="checkbox-label-inline">
+            <input
+              type="checkbox"
+              v-model="form.linksToCheckIn"
+              @change="handleInput"
+            />
+            <span>Link to check-in status</span>
+          </label>
+          <p class="help-text">
+            Completing this {{ termsLower.checklist }} will check the {{ termsLower.person }} in at the {{ termsLower.checkpoint }}.
+            Checking in will complete this {{ termsLower.checklist }}.
+          </p>
+        </div>
+        <div v-else-if="form.linksToCheckIn" class="form-group link-to-checkin-warning">
+          <p class="help-text warning">
+            <strong>Note:</strong> Link to check-in is currently enabled but the visibility settings are incompatible.
+            Change visibility to "Everyone at specific {{ termsLower.checkpoints }}" or "Specific {{ termsLower.people }}" to use this feature.
+          </p>
+        </div>
       </div>
 
       <!-- Visibility Tab -->
@@ -152,9 +174,26 @@ const form = ref({
   visibleUntil: null,
   mustCompleteBy: null,
   createSeparateItems: true,
+  linksToCheckIn: false,
 });
 
 const isEditing = computed(() => !!props.checklistItem);
+
+// Check if the current scope configuration allows linking to check-in
+// Only EveryoneAtCheckpoints and SpecificPeople scopes can be linked
+const canLinkToCheckIn = computed(() => {
+  const activeScopes = form.value.scopeConfigurations.filter(
+    c => c.scope && (c.ids?.length > 0 || c.scope === 'Everyone' || c.scope === 'EveryoneAtCheckpoints' || c.scope === 'SpecificPeople')
+  );
+
+  // Must have at least one scope configured
+  if (activeScopes.length === 0) return false;
+
+  // All scopes must be EveryoneAtCheckpoints or SpecificPeople
+  return activeScopes.every(c =>
+    c.scope === 'EveryoneAtCheckpoints' || c.scope === 'SpecificPeople'
+  );
+});
 
 const tabs = [
   { value: 'details', label: 'Details' },
@@ -189,6 +228,7 @@ watch(() => props.show, (newVal) => {
         visibleUntil: props.checklistItem.visibleUntil ? formatDateTimeForInput(props.checklistItem.visibleUntil) : null,
         mustCompleteBy: props.checklistItem.mustCompleteBy ? formatDateTimeForInput(props.checklistItem.mustCompleteBy) : null,
         createSeparateItems: false, // Not used when editing
+        linksToCheckIn: props.checklistItem.linksToCheckIn || false,
       };
     } else {
       form.value = {
@@ -204,6 +244,7 @@ watch(() => props.show, (newVal) => {
         visibleUntil: null,
         mustCompleteBy: null,
         createSeparateItems: true, // Default to true for new items
+        linksToCheckIn: false,
       };
     }
 
@@ -279,6 +320,7 @@ const handleSave = () => {
     visibleFrom: parseDateTime(form.value.visibleFrom),
     visibleUntil: parseDateTime(form.value.visibleUntil),
     mustCompleteBy: parseDateTime(form.value.mustCompleteBy),
+    linksToCheckIn: form.value.linksToCheckIn,
   };
 
   // Only include createSeparateItems when creating new items
@@ -400,6 +442,36 @@ select {
   background: var(--info-bg);
   border-radius: 4px;
   border: 1px solid var(--accent-primary-light);
+}
+
+.link-to-checkin {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background: var(--info-bg);
+  border-radius: 4px;
+  border: 1px solid var(--accent-primary-light);
+}
+
+.link-to-checkin .help-text {
+  margin-top: 0.5rem;
+  font-style: italic;
+}
+
+.link-to-checkin-warning {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background: var(--warning-bg);
+  border-radius: 4px;
+  border: 1px solid var(--warning);
+}
+
+.link-to-checkin-warning .help-text {
+  color: var(--text-dark);
+  font-style: normal;
+}
+
+.link-to-checkin-warning .help-text.warning {
+  color: var(--text-dark);
 }
 
 .search-input {

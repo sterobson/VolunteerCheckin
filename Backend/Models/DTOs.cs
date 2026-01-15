@@ -385,6 +385,7 @@ public record CreateMarshalRequest(
     string Email,
     string PhoneNumber,
     string Notes,
+    List<string>? Roles = null,
     List<PendingChecklistItem>? PendingNewChecklistItems = null,
     List<PendingNote>? PendingNewNotes = null
 );
@@ -408,7 +409,8 @@ public record UpdateMarshalRequest(
     string Name,
     string Email,
     string PhoneNumber,
-    string Notes
+    string Notes,
+    List<string>? Roles = null
 );
 
 public record MarshalResponse(
@@ -418,6 +420,7 @@ public record MarshalResponse(
     string Email,
     string PhoneNumber,
     string Notes,
+    List<string> Roles,
     List<string> AssignedLocationIds,
     bool IsCheckedIn,
     DateTime CreatedDate,
@@ -435,6 +438,7 @@ public record MarshalWithPermissionsResponse(
     string? Email,           // null if user cannot view contact details
     string? PhoneNumber,     // null if user cannot view contact details
     string? Notes,           // null if user cannot view contact details
+    List<string> Roles,
     List<string> AssignedLocationIds,
     bool IsCheckedIn,
     DateTime CreatedDate,
@@ -487,7 +491,8 @@ public record CreateChecklistItemRequest(
     DateTime? VisibleFrom,
     DateTime? VisibleUntil,
     DateTime? MustCompleteBy,
-    bool CreateSeparateItems = false
+    bool CreateSeparateItems = false,
+    bool LinksToCheckIn = false
 );
 
 public record UpdateChecklistItemRequest(
@@ -497,7 +502,8 @@ public record UpdateChecklistItemRequest(
     bool IsRequired,
     DateTime? VisibleFrom,
     DateTime? VisibleUntil,
-    DateTime? MustCompleteBy
+    DateTime? MustCompleteBy,
+    bool LinksToCheckIn = false
 );
 
 public record ChecklistItemResponse(
@@ -513,7 +519,8 @@ public record ChecklistItemResponse(
     string CreatedByAdminEmail,
     DateTime CreatedDate,
     DateTime? LastModifiedDate,
-    string LastModifiedByAdminEmail
+    string LastModifiedByAdminEmail,
+    bool LinksToCheckIn
 );
 
 public record ChecklistItemWithStatus(
@@ -536,7 +543,10 @@ public record ChecklistItemWithStatus(
     string CompletionContextId,
     string MatchedScope,  // Which scope configuration matched for this marshal
     string? ContextOwnerName,  // Name of the person this item belongs to (for personal items)
-    string? ContextOwnerMarshalId  // Marshal ID of the owner (for personal items)
+    string? ContextOwnerMarshalId,  // Marshal ID of the owner (for personal items)
+    bool LinksToCheckIn,  // Whether this task is linked to check-in status
+    string? LinkedCheckpointId,  // The specific checkpoint this instance is for (when linked)
+    string? LinkedCheckpointName  // Name of the checkpoint for display
 );
 
 public record CompleteChecklistItemRequest(
@@ -558,7 +568,26 @@ public record ChecklistCompletionResponse(
     string ActorId,
     string ActorName,
     DateTime CompletedAt,
-    bool IsDeleted
+    bool IsDeleted,
+    LinkedCheckInInfo? LinkedCheckIn = null  // Info about the check-in triggered by this completion
+);
+
+/// <summary>
+/// Information about a check-in that was triggered by completing a linked task
+/// </summary>
+public record LinkedCheckInInfo(
+    string AssignmentId,
+    string LocationId,
+    string LocationName,
+    DateTime CheckedInAt
+);
+
+/// <summary>
+/// Information about a task that was completed by checking in
+/// </summary>
+public record LinkedTaskCompletedInfo(
+    string ItemId,
+    string Text
 );
 
 // Authentication and Claims DTOs
@@ -830,7 +859,7 @@ public record EventContactResponse(
     string EventId,
     List<string> Roles,
     string Name,
-    string Phone,
+    string? Phone,
     string? Email,
     string? Notes,
     string? MarshalId,
@@ -851,7 +880,7 @@ public record EventContactForMarshalResponse(
     string ContactId,
     List<string> Roles,
     string Name,
-    string Phone,
+    string? Phone,
     string? Email,
     string? Notes,
     int DisplayOrder,
@@ -1086,4 +1115,100 @@ public record IncidentResponse(
 /// </summary>
 public record IncidentsListResponse(
     List<IncidentResponse> Incidents
+);
+
+// Reorder DTOs
+
+/// <summary>
+/// Single item in a reorder request
+/// </summary>
+public record ReorderItem(
+    string Id,
+    int DisplayOrder
+);
+
+/// <summary>
+/// Request to reorder notes
+/// </summary>
+public record ReorderNotesRequest(
+    List<ReorderItem> Items
+);
+
+/// <summary>
+/// Request to reorder checklist items
+/// </summary>
+public record ReorderChecklistItemsRequest(
+    List<ReorderItem> Items
+);
+
+/// <summary>
+/// Request to reorder contacts
+/// </summary>
+public record ReorderContactsRequest(
+    List<ReorderItem> Items
+);
+
+// Role Definition DTOs
+
+/// <summary>
+/// Request to create a new role definition
+/// </summary>
+public record CreateRoleDefinitionRequest(
+    string Name,
+    string Notes = "",
+    bool CanManageAreaCheckpoints = false
+);
+
+/// <summary>
+/// Request to update an existing role definition
+/// </summary>
+public record UpdateRoleDefinitionRequest(
+    string Name,
+    string Notes = "",
+    bool CanManageAreaCheckpoints = false
+);
+
+/// <summary>
+/// Role definition response for admin views
+/// </summary>
+public record RoleDefinitionResponse(
+    string RoleId,
+    string EventId,
+    string Name,
+    string Notes,
+    bool IsBuiltIn,
+    bool CanManageAreaCheckpoints,
+    int DisplayOrder,
+    int UsageCount,
+    DateTime CreatedAt,
+    DateTime? UpdatedAt
+);
+
+/// <summary>
+/// Request to reorder role definitions
+/// </summary>
+public record ReorderRoleDefinitionsRequest(
+    List<ReorderItem> Items
+);
+
+/// <summary>
+/// Unified person entry for role assignment (combines marshals and contacts, deduplicates linked ones)
+/// </summary>
+public record PersonWithRoleResponse(
+    string Id,
+    string Name,
+    string PersonType,  // "Marshal", "Contact", or "Linked"
+    string? MarshalId,
+    string? ContactId,
+    bool HasRole
+);
+
+/// <summary>
+/// Request to update role assignments for a role definition
+/// </summary>
+public record UpdateRoleAssignmentsRequest(
+    List<string> MarshalIdsToAdd,
+    List<string> MarshalIdsToRemove,
+    List<string> ContactIdsToAdd,
+    List<string> ContactIdsToRemove
 );

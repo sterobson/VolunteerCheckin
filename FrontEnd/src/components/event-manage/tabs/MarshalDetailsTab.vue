@@ -48,7 +48,7 @@
     </div>
 
     <div class="form-group" :class="{ 'has-error': validationErrors.notes }">
-      <label>Notes</label>
+      <label>Additional details</label>
       <textarea
         ref="notesInputRef"
         :value="form.notes"
@@ -130,7 +130,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, defineProps, defineEmits, defineExpose, nextTick } from 'vue';
+import { ref, watch, defineProps, defineEmits, defineExpose, nextTick } from 'vue';
 import { marshalsApi } from '../../../services/api';
 import QrCodeModal from '../../common/QrCodeModal.vue';
 

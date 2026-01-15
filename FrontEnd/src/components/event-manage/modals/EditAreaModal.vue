@@ -115,9 +115,12 @@
         :remove-title="getContactRemoveTitle"
         :empty-message="`No contacts assigned to this ${termsLower.area}.`"
         :empty-hint="`Click 'Add contact' to assign contacts who will be visible to ${termsLower.people} in this ${termsLower.area}.`"
+        :allow-reorder="isExistingArea"
+        :role-definitions="roleDefinitions"
         @select="$emit('edit-contact', $event)"
         @remove="handleContactRemove"
         @undo-remove="handleUndoRemove"
+        @reorder="handleContactsReorder"
       />
     </div>
 
@@ -163,7 +166,9 @@
       :areas="areas"
       :assignments="areaAssignments"
       :marshals="marshals"
+      :allow-reorder="true"
       @change="handleChecklistChange"
+      @reorder="handleChecklistsReorder"
     />
 
     <!-- Add new checklists for this area -->
@@ -188,6 +193,8 @@
       :areas="areas"
       :assignments="assignments"
       :marshals="marshals"
+      :allow-reorder="true"
+      @reorder="handleNotesReorder"
     />
 
     <!-- Add new notes for this area -->
@@ -548,6 +555,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  roleDefinitions: {
+    type: Array,
+    default: () => [],
+  },
   initialTab: {
     type: String,
     default: 'details',
@@ -569,6 +580,9 @@ const emit = defineEmits([
   'create-new-contact',
   'edit-contact',
   'select-incident',
+  'reorder-notes',
+  'reorder-checklists',
+  'reorder-contacts',
 ]);
 
 const activeTab = ref('details');
@@ -1065,6 +1079,18 @@ const goToNextTab = () => {
   if (nextTab.value) {
     activeTab.value = nextTab.value.value;
   }
+};
+
+const handleNotesReorder = (changes) => {
+  emit('reorder-notes', changes);
+};
+
+const handleChecklistsReorder = (changes) => {
+  emit('reorder-checklists', changes);
+};
+
+const handleContactsReorder = (changes) => {
+  emit('reorder-contacts', changes);
 };
 
 const handleSave = () => {

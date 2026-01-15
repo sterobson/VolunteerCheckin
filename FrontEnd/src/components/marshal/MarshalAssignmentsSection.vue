@@ -49,6 +49,7 @@
           @toggle-marshal="(id) => $emit('toggle-marshal', id)"
           @marshal-check-in="(m) => $emit('marshal-check-in', m, assign.locationId)"
           @toggle-auto-update="$emit('toggle-auto-update', assign)"
+          @show-marshal-qr="(m) => $emit('show-marshal-qr', m)"
         />
       </div>
     </div>
@@ -158,6 +159,7 @@ defineEmits([
   'toggle-marshal',
   'marshal-check-in',
   'toggle-auto-update',
+  'show-marshal-qr',
 ]);
 
 // Computed list of all assignment location IDs for scope checking

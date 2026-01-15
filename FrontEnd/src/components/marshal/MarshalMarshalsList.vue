@@ -43,8 +43,8 @@
           </button>
 
           <div v-if="expandedMarshalId === marshal.marshalId" class="area-lead-marshal-content">
-            <!-- Check-in status -->
-            <div class="marshal-checkin-section">
+            <!-- Check-in and QR code actions (not for yourself) -->
+            <div v-if="marshal.marshalId !== currentMarshalId" class="marshal-actions-row">
               <CheckInToggleButton
                 :is-checked-in="marshal.isCheckedIn"
                 :check-in-time="marshal.checkInTime"
@@ -54,6 +54,21 @@
                 :is-loading="checkingInMarshalId === marshal.id"
                 @toggle="$emit('check-in', marshal)"
               />
+              <button
+                class="btn btn-secondary btn-qr-icon"
+                @click.stop="$emit('show-qr', marshal)"
+                title="Show QR code for magic link"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="3" width="7" height="7"></rect>
+                  <rect x="3" y="14" width="7" height="7"></rect>
+                  <rect x="14" y="14" width="3" height="3"></rect>
+                  <rect x="19" y="14" width="2" height="2"></rect>
+                  <rect x="14" y="19" width="2" height="2"></rect>
+                  <rect x="19" y="19" width="2" height="2"></rect>
+                </svg>
+              </button>
             </div>
 
             <!-- Contact details -->
@@ -130,9 +145,13 @@ defineProps({
     type: Boolean,
     default: false,
   },
+  currentMarshalId: {
+    type: String,
+    default: null,
+  },
 });
 
-defineEmits(['toggle', 'toggle-marshal', 'check-in', 'toggle-task']);
+defineEmits(['toggle', 'toggle-marshal', 'check-in', 'toggle-task', 'show-qr']);
 
 const formatMarshalCheckpoints = (checkpoints) => {
   if (!checkpoints || checkpoints.length === 0) return '';
@@ -389,5 +408,34 @@ const formatMarshalCheckpoints = (checkpoints) => {
   font-size: 0.85rem;
   color: var(--text-secondary);
   font-style: italic;
+}
+
+.marshal-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.btn-qr-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-muted);
+  color: var(--text-dark);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.btn-qr-icon:hover {
+  background: var(--bg-hover);
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+}
+
+.btn-qr-icon svg {
+  display: block;
 }
 </style>

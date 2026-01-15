@@ -129,9 +129,24 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  roleDefinitions: {
+    type: Array,
+    default: () => [],
+  },
 });
 
 const emit = defineEmits(['click', 'remove', 'undo-remove']);
+
+// Build a lookup map for role definitions
+const roleDefinitionMap = computed(() => {
+  const map = new Map();
+  for (const rd of props.roleDefinitions) {
+    map.set(rd.roleId, rd.name);
+    // Also map by name for legacy support
+    map.set(rd.name, rd.name);
+  }
+  return map;
+});
 
 // Get roles - supports both array format (new) and single role (legacy)
 const displayRoles = computed(() => {
@@ -158,6 +173,14 @@ const handleClick = () => {
 
 const formatRoleName = (role) => {
   if (!role) return '';
+
+  // Try to look up in role definitions first (for GUIDs)
+  const definitionName = roleDefinitionMap.value.get(role);
+  if (definitionName) {
+    return definitionName;
+  }
+
+  // Fallback for legacy role names
   if (role === 'AreaLead') {
     return `${terms.value.area} Lead`;
   }

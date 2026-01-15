@@ -37,4 +37,10 @@ public class MarshalEntity : ITableEntity
     /// Null if they have never accessed the site.
     /// </summary>
     public DateTime? LastAccessedDate { get; set; }
+
+    /// <summary>
+    /// JSON array of role definition IDs for this marshal.
+    /// References EventRoleDefinitionEntity entries for this event.
+    /// </summary>
+    public string RolesJson { get; set; } = "[]";
 }

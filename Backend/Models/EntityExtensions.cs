@@ -196,11 +196,12 @@ public static class EntityExtensions
             entity.CreatedByAdminEmail,
             entity.CreatedDate,
             entity.LastModifiedDate,
-            entity.LastModifiedByAdminEmail
+            entity.LastModifiedByAdminEmail,
+            entity.LinksToCheckIn
         );
     }
 
-    public static ChecklistCompletionResponse ToResponse(this ChecklistCompletionEntity entity)
+    public static ChecklistCompletionResponse ToResponse(this ChecklistCompletionEntity entity, LinkedCheckInInfo? linkedCheckIn = null)
     {
         return new ChecklistCompletionResponse(
             entity.RowKey,
@@ -214,7 +215,8 @@ public static class EntityExtensions
             entity.ActorId,
             entity.ActorName,
             entity.CompletedAt,
-            entity.IsDeleted
+            entity.IsDeleted,
+            linkedCheckIn
         );
     }
 

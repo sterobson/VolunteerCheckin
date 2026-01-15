@@ -101,4 +101,22 @@ public class TableStorageEventContactRepository : IEventContactRepository
     {
         await _table.DeleteEntityAsync(eventId, contactId);
     }
+
+    public async Task UpdateDisplayOrdersAsync(string eventId, Dictionary<string, int> contactDisplayOrders)
+    {
+        foreach (KeyValuePair<string, int> kvp in contactDisplayOrders)
+        {
+            try
+            {
+                Response<EventContactEntity> response = await _table.GetEntityAsync<EventContactEntity>(eventId, kvp.Key);
+                EventContactEntity contact = response.Value;
+                contact.DisplayOrder = kvp.Value;
+                await _table.UpdateEntityAsync(contact, contact.ETag, TableUpdateMode.Replace);
+            }
+            catch (RequestFailedException)
+            {
+                // Skip contacts that don't exist
+            }
+        }
+    }
 }

@@ -223,7 +223,11 @@ public class ChecklistContextHelper
         string? actorId = null;
         DateTime? completedAt = null;
 
-        if (ChecklistScopeHelper.IsPersonalScope(matchedScope))
+        // For linked tasks or checkpoint/area contexts, look up by context type and ID
+        // For regular personal scopes, look up by marshal ID
+        bool useContextLookup = item.LinksToCheckIn || contextType == Constants.ChecklistContextCheckpoint || contextType == Constants.ChecklistContextArea;
+
+        if (!useContextLookup && ChecklistScopeHelper.IsPersonalScope(matchedScope))
         {
             ChecklistCompletionEntity? completion = allCompletions.FirstOrDefault(c =>
                 c.ChecklistItemId == item.ItemId &&
@@ -238,11 +242,12 @@ public class ChecklistContextHelper
         }
         else
         {
-            // For shared scopes, check completion in this specific context
+            // For shared scopes or linked tasks, check completion in this specific context
             ChecklistCompletionEntity? completion = allCompletions.FirstOrDefault(c =>
                 c.ChecklistItemId == item.ItemId &&
                 c.CompletionContextType == contextType &&
                 c.CompletionContextId == contextId &&
+                c.ContextOwnerMarshalId == context.MarshalId &&  // Also filter by marshal for linked tasks
                 !c.IsDeleted);
 
             isCompleted = completion != null;
@@ -253,6 +258,19 @@ public class ChecklistContextHelper
         }
 
         bool canComplete = ChecklistScopeHelper.CanMarshalCompleteItem(item, context, checkpointLookup);
+
+        // For linked tasks, determine the checkpoint ID and name
+        string? linkedCheckpointId = null;
+        string? linkedCheckpointName = null;
+
+        if (item.LinksToCheckIn && contextType == Constants.ChecklistContextCheckpoint && !string.IsNullOrEmpty(contextId))
+        {
+            linkedCheckpointId = contextId;
+            if (checkpointLookup.TryGetValue(contextId, out LocationEntity? checkpoint))
+            {
+                linkedCheckpointName = checkpoint.Name;
+            }
+        }
 
         return new ChecklistItemWithStatus(
             item.ItemId,
@@ -274,7 +292,10 @@ public class ChecklistContextHelper
             contextId,
             matchedScope,
             null,  // ContextOwnerName - will be set by caller if needed
-            ChecklistScopeHelper.IsPersonalScope(matchedScope) ? context.MarshalId : null  // ContextOwnerMarshalId
+            ChecklistScopeHelper.IsPersonalScope(matchedScope) ? context.MarshalId : null,  // ContextOwnerMarshalId
+            item.LinksToCheckIn,
+            linkedCheckpointId,
+            linkedCheckpointName
         );
     }
 }

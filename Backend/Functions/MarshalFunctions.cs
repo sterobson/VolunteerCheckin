@@ -21,6 +21,7 @@ public class MarshalFunctions
     private readonly IEventRepository _eventRepository;
     private readonly IChecklistItemRepository _checklistItemRepository;
     private readonly INoteRepository _noteRepository;
+    private readonly IEventContactRepository _contactRepository;
     private readonly ClaimsService _claimsService;
     private readonly ContactPermissionService _contactPermissionService;
     private readonly EmailService? _emailService;
@@ -33,6 +34,7 @@ public class MarshalFunctions
         IEventRepository eventRepository,
         IChecklistItemRepository checklistItemRepository,
         INoteRepository noteRepository,
+        IEventContactRepository contactRepository,
         ClaimsService claimsService,
         ContactPermissionService contactPermissionService,
         EmailService? emailService = null)
@@ -44,6 +46,7 @@ public class MarshalFunctions
         _eventRepository = eventRepository;
         _checklistItemRepository = checklistItemRepository;
         _noteRepository = noteRepository;
+        _contactRepository = contactRepository;
         _claimsService = claimsService;
         _contactPermissionService = contactPermissionService;
         _emailService = emailService;
@@ -96,6 +99,7 @@ public class MarshalFunctions
 
             string marshalId = Guid.NewGuid().ToString();
             string personId = Guid.NewGuid().ToString(); // Each marshal gets their own PersonId
+            List<string> roles = request.Roles ?? [];
             MarshalEntity marshalEntity = new()
             {
                 PartitionKey = request.EventId,
@@ -107,7 +111,8 @@ public class MarshalFunctions
                 Name = sanitizedName,
                 Email = sanitizedEmail ?? string.Empty,
                 PhoneNumber = sanitizedPhone,
-                Notes = sanitizedNotes
+                Notes = sanitizedNotes,
+                RolesJson = JsonSerializer.Serialize(roles)
             };
 
             await _marshalRepository.AddAsync(marshalEntity);
@@ -193,6 +198,7 @@ public class MarshalFunctions
                 marshalEntity.Email,
                 marshalEntity.PhoneNumber,
                 marshalEntity.Notes,
+                roles,
                 [],
                 false,
                 marshalEntity.CreatedDate,
@@ -264,6 +270,10 @@ public class MarshalFunctions
                 bool canViewContact = _contactPermissionService.CanViewContactDetails(permissions, marshalEntity.MarshalId);
                 bool canModify = _contactPermissionService.CanModifyMarshal(permissions, marshalEntity.MarshalId);
 
+                List<string> marshalRoles = string.IsNullOrEmpty(marshalEntity.RolesJson)
+                    ? []
+                    : JsonSerializer.Deserialize<List<string>>(marshalEntity.RolesJson) ?? [];
+
                 marshals.Add(new MarshalWithPermissionsResponse(
                     marshalEntity.MarshalId,
                     marshalEntity.EventId,
@@ -271,6 +281,7 @@ public class MarshalFunctions
                     canViewContact ? marshalEntity.Email : null,
                     canViewContact ? marshalEntity.PhoneNumber : null,
                     canViewContact ? marshalEntity.Notes : null,
+                    marshalRoles,
                     assignedLocationIds,
                     isCheckedIn,
                     marshalEntity.CreatedDate,
@@ -339,6 +350,10 @@ public class MarshalFunctions
                 }
             }
 
+            List<string> marshalRoles = string.IsNullOrEmpty(marshalEntity.RolesJson)
+                ? []
+                : JsonSerializer.Deserialize<List<string>>(marshalEntity.RolesJson) ?? [];
+
             MarshalWithPermissionsResponse response = new(
                 marshalEntity.MarshalId,
                 marshalEntity.EventId,
@@ -346,6 +361,7 @@ public class MarshalFunctions
                 canViewContact ? marshalEntity.Email : null,
                 canViewContact ? marshalEntity.PhoneNumber : null,
                 canViewContact ? marshalEntity.Notes : null,
+                marshalRoles,
                 assignedLocationIds,
                 isCheckedIn,
                 marshalEntity.CreatedDate,
@@ -424,13 +440,22 @@ public class MarshalFunctions
             marshalEntity.Email = sanitizedEmail ?? string.Empty;
             marshalEntity.PhoneNumber = sanitizedPhone;
 
-            // Only admins can modify notes (notes may contain sensitive admin-only info)
+            // Only admins can modify notes and roles (notes may contain sensitive admin-only info)
+            List<string>? newRoles = null;
             if (claims.IsEventAdmin || claims.IsSystemAdmin)
             {
                 marshalEntity.Notes = sanitizedNotes;
+                newRoles = request.Roles ?? [];
+                marshalEntity.RolesJson = JsonSerializer.Serialize(newRoles);
             }
 
             await _marshalRepository.UpdateAsync(marshalEntity);
+
+            // Sync roles to linked contact if roles were updated
+            if (newRoles != null)
+            {
+                await SyncRolesToLinkedContactAsync(eventId, marshalId, newRoles);
+            }
 
             // Update denormalized name in all assignments
             IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByMarshalAsync(eventId, marshalId);
@@ -457,6 +482,10 @@ public class MarshalFunctions
             // Return with appropriate visibility
             bool canViewContact = _contactPermissionService.CanViewContactDetails(permissions, marshalId);
 
+            List<string> marshalRoles = string.IsNullOrEmpty(marshalEntity.RolesJson)
+                ? []
+                : JsonSerializer.Deserialize<List<string>>(marshalEntity.RolesJson) ?? [];
+
             MarshalWithPermissionsResponse response = new(
                 marshalEntity.MarshalId,
                 marshalEntity.EventId,
@@ -464,6 +493,7 @@ public class MarshalFunctions
                 canViewContact ? marshalEntity.Email : null,
                 canViewContact ? marshalEntity.PhoneNumber : null,
                 canViewContact ? marshalEntity.Notes : null,
+                marshalRoles,
                 assignedLocationIds,
                 isCheckedIn,
                 marshalEntity.CreatedDate,
@@ -534,6 +564,7 @@ public class MarshalFunctions
     }
 #pragma warning restore MA0051
 
+#pragma warning disable MA0051 // Authentication and magic link generation with validation
     [Function("GetMarshalMagicLink")]
     public async Task<IActionResult> GetMarshalMagicLink(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "marshals/{eventId}/{marshalId}/magic-link")] HttpRequest req,
@@ -555,11 +586,18 @@ public class MarshalFunctions
                 return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
             }
 
-            // Require at least area admin permission
+            // Check permissions: admin, area admin, or area lead for marshal's areas
             bool hasAreaAdminRole = claims.HasRole(Constants.RoleEventAreaAdmin);
-            if (!claims.IsEventAdmin && !claims.IsSystemAdmin && !hasAreaAdminRole)
+            bool isAdminOrAreaAdmin = claims.IsEventAdmin || claims.IsSystemAdmin || hasAreaAdminRole;
+
+            if (!isAdminOrAreaAdmin)
             {
-                return new ObjectResult(new { message = "Admin permission required" }) { StatusCode = 403 };
+                // Check if user is an area lead with access to this marshal
+                bool canAccess = await CanAreaLeadAccessMarshalMagicLinkAsync(claims, eventId, marshalId);
+                if (!canAccess)
+                {
+                    return new ObjectResult(new { message = "You can only access magic links for marshals in your areas" }) { StatusCode = 403 };
+                }
             }
 
             MarshalEntity? marshalEntity = await _marshalRepository.GetAsync(eventId, marshalId);
@@ -594,6 +632,7 @@ public class MarshalFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
 #pragma warning disable MA0051
     [Function("SendMarshalMagicLink")]
@@ -879,5 +918,73 @@ public class MarshalFunctions
 
         await _assignmentRepository.AddAsync(assignmentEntity);
         return true;
+    }
+
+    /// <summary>
+    /// Checks if an area lead has access to a marshal's magic link.
+    /// Area leads can only access magic links for marshals assigned to checkpoints in their areas.
+    /// </summary>
+    private async Task<bool> CanAreaLeadAccessMarshalMagicLinkAsync(UserClaims claims, string eventId, string marshalId)
+    {
+        // Get area lead's area IDs
+        List<string> areaLeadAreaIds = claims.EventRoles
+            .Where(r => r.Role == Constants.RoleEventAreaLead)
+            .SelectMany(r => r.AreaIds)
+            .ToList();
+
+        if (areaLeadAreaIds.Count == 0)
+        {
+            return false;
+        }
+
+        // Get marshal's assignments to find their checkpoint areas
+        IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByMarshalAsync(eventId, marshalId);
+        List<string> locationIds = assignments.Select(a => a.LocationId).Distinct().ToList();
+
+        // Get locations to find area IDs
+        HashSet<string> marshalAreaIds = [];
+        foreach (string locId in locationIds)
+        {
+            LocationEntity? loc = await _locationRepository.GetAsync(eventId, locId);
+            if (loc != null && !string.IsNullOrEmpty(loc.AreaIdsJson))
+            {
+                List<string>? areaIds = JsonSerializer.Deserialize<List<string>>(loc.AreaIdsJson);
+                if (areaIds != null)
+                {
+                    foreach (string areaId in areaIds)
+                    {
+                        marshalAreaIds.Add(areaId);
+                    }
+                }
+            }
+        }
+
+        // Check if marshal is in any of the area lead's areas
+        return marshalAreaIds.Any(areaId => areaLeadAreaIds.Contains(areaId));
+    }
+
+    /// <summary>
+    /// Syncs roles from a marshal to their linked contact.
+    /// When a marshal has roles updated and is linked to a contact, the contact's roles are updated to match.
+    /// </summary>
+    private async Task SyncRolesToLinkedContactAsync(string eventId, string marshalId, List<string> roles)
+    {
+        // Find any contact linked to this marshal
+        IEnumerable<EventContactEntity> contacts = await _contactRepository.GetByEventAsync(eventId);
+        EventContactEntity? linkedContact = contacts.FirstOrDefault(c => c.MarshalId == marshalId && !c.IsDeleted);
+
+        if (linkedContact == null)
+        {
+            return; // No linked contact, nothing to do
+        }
+
+        // Update the contact's roles to match the marshal's roles
+        linkedContact.RolesJson = JsonSerializer.Serialize(roles);
+        linkedContact.Role = roles.Count > 0 ? roles[0] : string.Empty; // Keep legacy field for backwards compatibility
+        linkedContact.UpdatedAt = DateTime.UtcNow;
+        await _contactRepository.UpdateAsync(linkedContact);
+
+        _logger.LogInformation("Synced roles from marshal {MarshalId} to linked contact {ContactId} in event {EventId}: {Roles}",
+            marshalId, linkedContact.ContactId, eventId, string.Join(", ", roles));
     }
 }

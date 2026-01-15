@@ -88,4 +88,22 @@ public class TableStorageNoteRepository : INoteRepository
     {
         await _table.DeleteEntityAsync(eventId, noteId);
     }
+
+    public async Task UpdateDisplayOrdersAsync(string eventId, Dictionary<string, int> noteDisplayOrders)
+    {
+        foreach (KeyValuePair<string, int> kvp in noteDisplayOrders)
+        {
+            try
+            {
+                Response<NoteEntity> response = await _table.GetEntityAsync<NoteEntity>(eventId, kvp.Key);
+                NoteEntity note = response.Value;
+                note.DisplayOrder = kvp.Value;
+                await _table.UpdateEntityAsync(note, note.ETag);
+            }
+            catch (RequestFailedException)
+            {
+                // Skip notes that don't exist
+            }
+        }
+    }
 }

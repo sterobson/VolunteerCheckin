@@ -25,6 +25,11 @@ namespace VolunteerCheckin.Functions.Tests
         private Mock<ILocationRepository> _mockLocationRepository = null!;
         private Mock<GpsService> _mockGpsService = null!;
         private Mock<ClaimsService> _mockClaimsService = null!;
+        private Mock<IChecklistItemRepository> _mockChecklistItemRepository = null!;
+        private Mock<IChecklistCompletionRepository> _mockChecklistCompletionRepository = null!;
+        private Mock<IMarshalRepository> _mockMarshalRepository = null!;
+        private Mock<IAreaRepository> _mockAreaRepository = null!;
+        private Mock<IEventRoleRepository> _mockEventRoleRepository = null!;
         private CheckInFunctions _checkInFunctions = null!;
 
         [TestInitialize]
@@ -34,6 +39,11 @@ namespace VolunteerCheckin.Functions.Tests
             _mockAssignmentRepository = new Mock<IAssignmentRepository>();
             _mockLocationRepository = new Mock<ILocationRepository>();
             _mockGpsService = new Mock<GpsService>();
+            _mockChecklistItemRepository = new Mock<IChecklistItemRepository>();
+            _mockChecklistCompletionRepository = new Mock<IChecklistCompletionRepository>();
+            _mockMarshalRepository = new Mock<IMarshalRepository>();
+            _mockAreaRepository = new Mock<IAreaRepository>();
+            _mockEventRoleRepository = new Mock<IEventRoleRepository>();
             _mockClaimsService = new Mock<ClaimsService>(
                 Mock.Of<IAuthSessionRepository>(),
                 Mock.Of<IPersonRepository>(),
@@ -47,12 +57,22 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(g => g.CalculateDistance(It.IsAny<double>(), It.IsAny<double>(), It.IsAny<double>(), It.IsAny<double>()))
                 .Returns(50.0); // Default: 50 meters away (within range)
 
+            // Setup default checklist item repository to return empty list (no linked tasks)
+            _mockChecklistItemRepository
+                .Setup(r => r.GetByEventAsync(It.IsAny<string>()))
+                .ReturnsAsync(new List<ChecklistItemEntity>());
+
             _checkInFunctions = new CheckInFunctions(
                 _mockLogger.Object,
                 _mockAssignmentRepository.Object,
                 _mockLocationRepository.Object,
                 _mockGpsService.Object,
-                _mockClaimsService.Object
+                _mockClaimsService.Object,
+                _mockChecklistItemRepository.Object,
+                _mockChecklistCompletionRepository.Object,
+                _mockMarshalRepository.Object,
+                _mockAreaRepository.Object,
+                _mockEventRoleRepository.Object
             );
         }
 

@@ -203,6 +203,7 @@ public class ImportOptimizationTests
         Mock<IEventRepository> mockEventRepo = new();
         Mock<IChecklistItemRepository> mockChecklistItemRepo = new();
         Mock<INoteRepository> mockNoteRepo = new();
+        Mock<IEventContactRepository> mockContactRepo = new();
         Mock<ILogger<MarshalFunctions>> mockLogger = new();
 
         Mock<ClaimsService> mockClaimsService = new(
@@ -270,6 +271,7 @@ public class ImportOptimizationTests
             mockEventRepo.Object,
             mockChecklistItemRepo.Object,
             mockNoteRepo.Object,
+            mockContactRepo.Object,
             mockClaimsService.Object,
             mockContactPermission.Object);
 
@@ -303,6 +305,7 @@ public class ImportOptimizationTests
         Mock<IEventRepository> mockEventRepo = new();
         Mock<IChecklistItemRepository> mockChecklistItemRepo = new();
         Mock<INoteRepository> mockNoteRepo = new();
+        Mock<IEventContactRepository> mockContactRepo = new();
         Mock<ILogger<MarshalFunctions>> mockLogger = new();
 
         Mock<ClaimsService> mockClaimsService = new(
@@ -354,6 +357,7 @@ public class ImportOptimizationTests
             mockEventRepo.Object,
             mockChecklistItemRepo.Object,
             mockNoteRepo.Object,
+            mockContactRepo.Object,
             mockClaimsService.Object,
             mockContactPermission.Object);
 

@@ -10,6 +10,7 @@ export function useAreaLeadMarshals({
   areaLeadRef,
   areaLeadCheckpoints,
   areaChecklistItems,
+  myChecklistItems,
   areaLeadAreaIds,
   loadChecklist,
 }) {
@@ -37,8 +38,11 @@ export function useAreaLeadMarshals({
       ? checkpointsFromRef
       : (checkpointsFromProp || []);
 
-    // Get checklist items from the area checklist (same source as "Your area's jobs")
-    const checklistItems = areaChecklistItems?.value || [];
+    // Get checklist items - combine area checklist items with the area lead's own items
+    // (areaChecklistItems excludes the area lead's own tasks, so we need to add them back)
+    const areaItems = areaChecklistItems?.value || [];
+    const myItems = myChecklistItems?.value || [];
+    const checklistItems = [...areaItems, ...myItems];
 
     // Build marshal map with checkpoint assignments
     const marshalMap = new Map();

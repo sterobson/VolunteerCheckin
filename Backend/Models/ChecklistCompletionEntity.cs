@@ -97,10 +97,12 @@ public class ChecklistCompletionEntity : ITableEntity
 
     /// <summary>
     /// Legacy field - Admin email who undid this completion.
-    /// Kept for backwards compatibility with existing data.
+    /// Kept for backwards compatibility with existing Azure Table Storage data.
     /// </summary>
+#pragma warning disable S1133 // Intentionally kept for data compatibility
     [Obsolete("Use UncompletedByActorId instead")]
     public string UncompletedByAdminEmail { get; set; } = string.Empty;
+#pragma warning restore S1133
 
     /// <summary>
     /// Helper to create partition key from event ID

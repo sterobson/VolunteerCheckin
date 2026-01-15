@@ -24,7 +24,9 @@
       "Bash(ls -lR \"C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\FrontEnd\\\\src\\\\components\\\\event-manage\\\\modals\"\" | grep -E \"^- \")",
       "Bash(ls:*)",
       "Bash(done)",
-      "Bash(npm run lint)"
+      "Bash(npm run lint)",
+      "Bash(dir /B /S \"C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\FrontEnd\\\\src\")",
+      "Bash(xargs:*)"
     ]
   }
 }

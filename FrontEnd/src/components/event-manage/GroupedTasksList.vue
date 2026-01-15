@@ -4,13 +4,20 @@
       <p>No tasks available.</p>
     </div>
 
-    <div v-else class="task-groups">
-      <div
-        v-for="group in groupedItems"
-        :key="group.itemId"
-        class="task-group"
-        :class="{ 'all-completed': group.allCompleted, 'has-modified': group.hasModified }"
-      >
+    <DraggableList
+      v-else
+      :items="groupedItems"
+      item-key="itemId"
+      :disabled="!allowReorder"
+      :show-order-overlay="allowReorder"
+      @reorder="handleReorder"
+    >
+      <template #item="{ element: group }">
+        <div
+          class="task-group"
+          :class="{ 'all-completed': group.allCompleted, 'has-modified': group.hasModified }"
+        >
+        <DragHandle v-if="allowReorder" class="task-drag-handle" />
         <button
           type="button"
           class="task-group-header"
@@ -95,7 +102,8 @@
           </div>
         </div>
       </div>
-    </div>
+      </template>
+    </DraggableList>
   </div>
 </template>
 
@@ -103,6 +111,8 @@
 import { ref, computed } from 'vue';
 import { useTerminology } from '../../composables/useTerminology';
 import ScopedAssignmentPills from '../common/ScopedAssignmentPills.vue';
+import DraggableList from '../common/DraggableList.vue';
+import DragHandle from '../common/DragHandle.vue';
 
 const { terms, termsLower } = useTerminology();
 
@@ -123,9 +133,13 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  allowReorder: {
+    type: Boolean,
+    default: false,
+  },
 });
 
-const emit = defineEmits(['toggle-complete']);
+const emit = defineEmits(['toggle-complete', 'reorder']);
 
 const expandedGroups = ref(new Set());
 
@@ -138,6 +152,7 @@ const groupedItems = computed(() => {
       groups.set(item.itemId, {
         itemId: item.itemId,
         text: item.text,
+        displayOrder: item.displayOrder || 0,
         items: [],
         totalCount: 0,
         completedCount: 0,
@@ -169,8 +184,13 @@ const groupedItems = computed(() => {
     });
   }
 
-  // Convert to array and sort by task name only (keep completed groups in place)
+  // Convert to array and sort by displayOrder, then task name
   return Array.from(groups.values()).sort((a, b) => {
+    // First sort by displayOrder if available
+    const orderA = a.displayOrder || 0;
+    const orderB = b.displayOrder || 0;
+    if (orderA !== orderB) return orderA - orderB;
+    // Then by task name
     return a.text.localeCompare(b.text, undefined, { sensitivity: 'base' });
   });
 });
@@ -183,6 +203,11 @@ const toggleGroup = (itemId) => {
   }
   // Trigger reactivity
   expandedGroups.value = new Set(expandedGroups.value);
+};
+
+const handleReorder = ({ changes }) => {
+  // Emit the reorder event with itemId -> displayOrder mapping
+  emit('reorder', changes);
 };
 
 const getStatusClass = (group) => {
@@ -290,10 +315,19 @@ const formatDateTime = (dateString) => {
 }
 
 .task-group {
+  display: flex;
+  align-items: stretch;
   border: 1px solid var(--border-light);
   border-radius: 8px;
   background: var(--card-bg);
   overflow: hidden;
+}
+
+.task-drag-handle {
+  display: flex;
+  align-items: center;
+  padding: 0 0.25rem 0 0.5rem;
+  flex-shrink: 0;
 }
 
 .task-group.all-completed {
@@ -305,7 +339,7 @@ const formatDateTime = (dateString) => {
 }
 
 .task-group-header {
-  width: 100%;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -317,6 +351,7 @@ const formatDateTime = (dateString) => {
   text-align: left;
   font-family: inherit;
   transition: background-color 0.15s;
+  min-width: 0;
 }
 
 .task-group-header:hover {

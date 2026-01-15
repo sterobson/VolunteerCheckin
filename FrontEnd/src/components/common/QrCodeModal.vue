@@ -8,6 +8,7 @@
     @close="$emit('close')"
   >
     <div class="qr-container">
+      <p v-if="warning" class="qr-warning">{{ warning }}</p>
       <canvas ref="canvasRef" class="qr-canvas"></canvas>
       <p v-if="error" class="error-text">{{ error }}</p>
     </div>
@@ -39,6 +40,10 @@ const props = defineProps({
   zIndex: {
     type: Number,
     default: 1000,
+  },
+  warning: {
+    type: String,
+    default: '',
   },
 });
 
@@ -86,6 +91,17 @@ watch(
   flex-direction: column;
   align-items: center;
   padding: 1rem 0;
+}
+
+.qr-warning {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: var(--warning-bg, #fff3cd);
+  border: 1px solid var(--warning-border, #ffc107);
+  border-radius: 6px;
+  color: var(--warning-text, #856404);
+  font-size: 0.9rem;
+  text-align: center;
 }
 
 .qr-canvas {

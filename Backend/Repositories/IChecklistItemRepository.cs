@@ -10,4 +10,5 @@ public interface IChecklistItemRepository
     Task UpdateAsync(ChecklistItemEntity item);
     Task DeleteAsync(string eventId, string itemId);
     Task DeleteAllByEventAsync(string eventId);
+    Task UpdateDisplayOrdersAsync(string eventId, Dictionary<string, int> itemDisplayOrders);
 }

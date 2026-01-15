@@ -21,6 +21,7 @@ public class ChecklistCompletionFunctions
     private readonly IMarshalRepository _marshalRepository;
     private readonly ILocationRepository _locationRepository;
     private readonly IAdminUserRepository _adminUserRepository;
+    private readonly IAssignmentRepository _assignmentRepository;
     private readonly ChecklistContextHelper _contextHelper;
 
     public ChecklistCompletionFunctions(
@@ -40,6 +41,7 @@ public class ChecklistCompletionFunctions
         _marshalRepository = marshalRepository;
         _locationRepository = locationRepository;
         _adminUserRepository = adminUserRepository;
+        _assignmentRepository = assignmentRepository;
         _contextHelper = new ChecklistContextHelper(assignmentRepository, locationRepository, areaRepository, eventRoleRepository, marshalRepository);
     }
 
@@ -100,9 +102,38 @@ public class ChecklistCompletionFunctions
             }
 
             // Determine context for completion
-            (string contextType, string contextId, _) = request.ContextType != null && request.ContextId != null
-                ? (request.ContextType, request.ContextId, string.Empty)
-                : ChecklistScopeHelper.DetermineCompletionContext(item, context, checkpointLookup);
+            string contextType;
+            string contextId;
+            if (!string.IsNullOrEmpty(request.ContextType) && !string.IsNullOrEmpty(request.ContextId))
+            {
+                contextType = request.ContextType;
+                contextId = request.ContextId;
+            }
+            else
+            {
+                (contextType, contextId, _) = ChecklistScopeHelper.DetermineCompletionContext(item, context, checkpointLookup);
+            }
+
+            // For linked tasks, ensure we use Checkpoint context with the checkpoint ID
+            // This handles cases where the context is Personal (from DetermineCompletionContext or old frontend data)
+            if (item.LinksToCheckIn && contextType != Constants.ChecklistContextCheckpoint)
+            {
+                // Try to find the checkpoint from request or assigned locations
+                string? checkpointId = null;
+                if (request.ContextType == Constants.ChecklistContextCheckpoint && !string.IsNullOrEmpty(request.ContextId))
+                {
+                    checkpointId = request.ContextId;
+                }
+                if (string.IsNullOrEmpty(checkpointId))
+                {
+                    checkpointId = context.AssignedLocationIds.FirstOrDefault();
+                }
+                if (!string.IsNullOrEmpty(checkpointId))
+                {
+                    contextType = Constants.ChecklistContextCheckpoint;
+                    contextId = checkpointId;
+                }
+            }
 
             // Determine actor (who is actually performing this action)
             string actorType;
@@ -165,12 +196,81 @@ public class ChecklistCompletionFunctions
 
             _logger.LogInformation("Checklist item {ItemId} completed by {ActorType} {ActorName} (context owner: {ContextOwnerName}) at {CompletedAt}", itemId, actorType, actorName, marshal.Name, completion.CompletedAt);
 
-            return new OkObjectResult(completion.ToResponse());
+            // Handle linked check-in: if LinksToCheckIn is true and this is a checkpoint context, check in the marshal
+            LinkedCheckInInfo? linkedCheckIn = null;
+            if (item.LinksToCheckIn && contextType == Constants.ChecklistContextCheckpoint && !string.IsNullOrEmpty(contextId))
+            {
+                linkedCheckIn = await TryCheckInMarshalAsync(eventId, request.MarshalId, contextId, actorName);
+            }
+
+            return new OkObjectResult(completion.ToResponse(linkedCheckIn));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error completing checklist item");
             return new StatusCodeResult(500);
+        }
+    }
+
+    /// <summary>
+    /// Attempts to check in a marshal at a checkpoint when completing a linked task.
+    /// Returns LinkedCheckInInfo if check-in occurred, null otherwise.
+    /// </summary>
+    private async Task<LinkedCheckInInfo?> TryCheckInMarshalAsync(string eventId, string marshalId, string checkpointId, string checkedInBy)
+    {
+        try
+        {
+            // Find the marshal's assignment at this checkpoint
+            IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByMarshalAsync(eventId, marshalId);
+            AssignmentEntity? assignment = assignments.FirstOrDefault(a => a.LocationId == checkpointId);
+
+            if (assignment == null || assignment.IsCheckedIn)
+            {
+                return null; // No assignment or already checked in
+            }
+
+            // Get the location for the response and to update count
+            LocationEntity? location = await _locationRepository.GetAsync(eventId, checkpointId);
+            if (location == null)
+            {
+                return null;
+            }
+
+            // Check in the marshal
+            assignment.IsCheckedIn = true;
+            assignment.CheckInTime = DateTime.UtcNow;
+            assignment.CheckInMethod = "Task"; // Special method indicating check-in via task completion
+            assignment.CheckedInBy = checkedInBy;
+
+            await _assignmentRepository.UpdateAsync(assignment);
+
+            // Update location checked-in count with retry logic
+            location.CheckedInCount++;
+            bool locationUpdated = await FunctionHelpers.ExecuteWithRetryAsync(
+                () => _locationRepository.UpdateAsync(location),
+                maxRetries: 3,
+                baseDelayMs: 100
+            );
+
+            if (!locationUpdated)
+            {
+                _logger.LogWarning("Failed to update location count after linked check-in for assignment {AssignmentId}", assignment.RowKey);
+                // Don't rollback - the check-in is the primary operation
+            }
+
+            _logger.LogInformation("Marshal {MarshalId} checked in at {LocationName} via linked task completion", marshalId, location.Name);
+
+            return new LinkedCheckInInfo(
+                assignment.RowKey,
+                checkpointId,
+                location.Name,
+                assignment.CheckInTime.Value
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during linked check-in for marshal {MarshalId} at checkpoint {CheckpointId}", marshalId, checkpointId);
+            return null; // Don't fail the completion if check-in fails
         }
     }
 #pragma warning restore MA0051
@@ -217,7 +317,21 @@ public class ChecklistCompletionFunctions
             // Find the completion to uncomplete
             ChecklistCompletionEntity? completion;
 
-            if (ChecklistScopeHelper.IsPersonalScope(matchedScope))
+            // For linked tasks or checkpoint contexts, we need to match by context type/id
+            // because there can be multiple completions per marshal (one per checkpoint)
+            if (item.LinksToCheckIn || contextType == Constants.ChecklistContextCheckpoint)
+            {
+                // Use request context if provided, otherwise use determined context
+                string lookupContextType = !string.IsNullOrEmpty(request.ContextType) ? request.ContextType : contextType;
+                string lookupContextId = !string.IsNullOrEmpty(request.ContextId) ? request.ContextId : contextId;
+
+                completion = itemCompletions.FirstOrDefault(c =>
+                    c.ContextOwnerMarshalId == request.MarshalId &&
+                    c.CompletionContextType == lookupContextType &&
+                    c.CompletionContextId == lookupContextId &&
+                    !c.IsDeleted);
+            }
+            else if (ChecklistScopeHelper.IsPersonalScope(matchedScope))
             {
                 completion = itemCompletions.FirstOrDefault(c =>
                     c.ContextOwnerMarshalId == request.MarshalId &&
@@ -293,12 +407,98 @@ public class ChecklistCompletionFunctions
 
             _logger.LogInformation("Checklist item {ItemId} uncompleted for marshal {MarshalId} by {ActorType} {ActorName}", itemId, request.MarshalId, actorType, actorName);
 
+            // Handle linked check-out: if LinksToCheckIn is true, check out the marshal
+            // Use the lookup context (from request or determined) since the stored completion may have legacy context type
+            if (item.LinksToCheckIn)
+            {
+                // For linked tasks, determine the checkpoint ID
+                // Priority: request context > completion context > determined context
+                string? checkpointId = null;
+                if (!string.IsNullOrEmpty(request.ContextId) && request.ContextType == Constants.ChecklistContextCheckpoint)
+                {
+                    checkpointId = request.ContextId;
+                }
+                else if (completion.CompletionContextType == Constants.ChecklistContextCheckpoint && !string.IsNullOrEmpty(completion.CompletionContextId))
+                {
+                    checkpointId = completion.CompletionContextId;
+                }
+                else if (contextType == Constants.ChecklistContextCheckpoint && !string.IsNullOrEmpty(contextId))
+                {
+                    checkpointId = contextId;
+                }
+                else
+                {
+                    // Fall back to finding the first assigned checkpoint for this marshal
+                    checkpointId = context.AssignedLocationIds.FirstOrDefault();
+                }
+
+                if (!string.IsNullOrEmpty(checkpointId))
+                {
+                    await TryCheckOutMarshalAsync(eventId, request.MarshalId, checkpointId);
+                }
+            }
+
             return new NoContentResult();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error uncompleting checklist item");
             return new StatusCodeResult(500);
+        }
+    }
+
+    /// <summary>
+    /// Attempts to check out a marshal at a checkpoint when uncompleting a linked task.
+    /// </summary>
+    private async Task TryCheckOutMarshalAsync(string eventId, string marshalId, string checkpointId)
+    {
+        try
+        {
+            // Find the marshal's assignment at this checkpoint
+            IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByMarshalAsync(eventId, marshalId);
+            AssignmentEntity? assignment = assignments.FirstOrDefault(a => a.LocationId == checkpointId);
+
+            if (assignment == null || !assignment.IsCheckedIn)
+            {
+                return; // No assignment or already checked out
+            }
+
+            // Get the location to update count
+            LocationEntity? location = await _locationRepository.GetAsync(eventId, checkpointId);
+            if (location == null)
+            {
+                return;
+            }
+
+            // Check out the marshal
+            assignment.IsCheckedIn = false;
+            assignment.CheckInTime = null;
+            assignment.CheckInLatitude = null;
+            assignment.CheckInLongitude = null;
+            assignment.CheckInMethod = string.Empty;
+            assignment.CheckedInBy = string.Empty;
+
+            await _assignmentRepository.UpdateAsync(assignment);
+
+            // Update location checked-in count with retry logic
+            location.CheckedInCount--;
+            bool locationUpdated = await FunctionHelpers.ExecuteWithRetryAsync(
+                () => _locationRepository.UpdateAsync(location),
+                maxRetries: 3,
+                baseDelayMs: 100
+            );
+
+            if (!locationUpdated)
+            {
+                _logger.LogWarning("Failed to update location count after linked check-out for assignment {AssignmentId}", assignment.RowKey);
+            }
+
+            _logger.LogInformation("Marshal {MarshalId} checked out from {LocationName} via linked task uncomplete", marshalId, location.Name);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during linked check-out for marshal {MarshalId} at checkpoint {CheckpointId}", marshalId, checkpointId);
+            // Don't fail the uncomplete if check-out fails
         }
     }
 #pragma warning restore MA0051
@@ -348,4 +548,342 @@ public class ChecklistCompletionFunctions
             return new StatusCodeResult(500);
         }
     }
+
+    /// <summary>
+    /// Gets detailed checklist status report showing task completion by person and by task.
+    /// This is a more expensive query than the basic report, intended for admin reporting views.
+    /// </summary>
+    [Function("GetChecklistDetailedReport")]
+#pragma warning disable MA0051 // Complex report generation with multiple aggregation views
+    public async Task<IActionResult> GetChecklistDetailedReport(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/{eventId}/checklist-report/detailed")] HttpRequest req,
+        string eventId)
+    {
+        try
+        {
+            // Get all items, sorted by display order
+            List<ChecklistItemEntity> items = [.. (await _checklistItemRepository.GetByEventAsync(eventId))
+                .OrderBy(i => i.DisplayOrder)
+                .ThenBy(i => i.Text)];
+
+            // Get all completions (non-deleted only)
+            List<ChecklistCompletionEntity> completions = [.. (await _checklistCompletionRepository.GetByEventAsync(eventId))
+                .Where(c => !c.IsDeleted)];
+
+            // Get all marshals for this event, sorted by name
+            List<MarshalEntity> marshals = [.. (await _marshalRepository.GetByEventAsync(eventId))
+                .OrderBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase)];
+
+            // Preload event data for efficient context building
+            ChecklistContextHelper.PreloadedEventData preloadedData = await _contextHelper.PreloadEventDataAsync(eventId);
+
+            // Build marshal contexts for all marshals
+            Dictionary<string, ChecklistScopeHelper.MarshalContext> marshalContexts =
+                ChecklistContextHelper.BuildMarshalContextsFromPreloaded(
+                    marshals.Select(m => m.MarshalId),
+                    preloadedData);
+
+            // Build detailed report by person (marshal)
+            List<object> detailedByPerson = [];
+            foreach (MarshalEntity marshal in marshals)
+            {
+                ChecklistScopeHelper.MarshalContext context = marshalContexts[marshal.MarshalId];
+                List<object> taskStatuses = [];
+
+                foreach (ChecklistItemEntity item in items)
+                {
+                    // Check if this task applies to this marshal
+                    if (!ChecklistScopeHelper.IsItemRelevantToMarshal(item, context, preloadedData.LocationsById))
+                    {
+                        continue;
+                    }
+
+                    // Check completion status
+                    bool isCompleted = ChecklistScopeHelper.IsItemCompletedInContext(item, context, preloadedData.LocationsById, completions);
+                    (string? actorName, _, DateTime? completedAt) = ChecklistScopeHelper.GetCompletionDetails(item, context, preloadedData.LocationsById, completions);
+
+                    taskStatuses.Add(new
+                    {
+                        ItemId = item.ItemId,
+                        Text = item.Text,
+                        DisplayOrder = item.DisplayOrder,
+                        IsRequired = item.IsRequired,
+                        IsCompleted = isCompleted,
+                        CompletedAt = completedAt,
+                        CompletedBy = actorName
+                    });
+                }
+
+                if (taskStatuses.Count > 0)
+                {
+                    int completedCount = taskStatuses.Count(t => ((dynamic)t).IsCompleted);
+                    detailedByPerson.Add(new
+                    {
+                        MarshalId = marshal.MarshalId,
+                        MarshalName = marshal.Name,
+                        TotalTasks = taskStatuses.Count,
+                        CompletedTasks = completedCount,
+                        Tasks = taskStatuses
+                    });
+                }
+            }
+
+            // Build detailed report by task (item)
+            List<object> detailedByTask = [];
+            foreach (ChecklistItemEntity item in items)
+            {
+                List<object> marshalStatuses = [];
+
+                foreach (MarshalEntity marshal in marshals)
+                {
+                    ChecklistScopeHelper.MarshalContext context = marshalContexts[marshal.MarshalId];
+
+                    // Check if this task applies to this marshal
+                    if (!ChecklistScopeHelper.IsItemRelevantToMarshal(item, context, preloadedData.LocationsById))
+                    {
+                        continue;
+                    }
+
+                    // Check completion status
+                    bool isCompleted = ChecklistScopeHelper.IsItemCompletedInContext(item, context, preloadedData.LocationsById, completions);
+                    (string? actorName, _, DateTime? completedAt) = ChecklistScopeHelper.GetCompletionDetails(item, context, preloadedData.LocationsById, completions);
+
+                    marshalStatuses.Add(new
+                    {
+                        MarshalId = marshal.MarshalId,
+                        MarshalName = marshal.Name,
+                        IsCompleted = isCompleted,
+                        CompletedAt = completedAt,
+                        CompletedBy = actorName
+                    });
+                }
+
+                int applicableCount = marshalStatuses.Count;
+                int completedCount = marshalStatuses.Count(m => ((dynamic)m).IsCompleted);
+
+                detailedByTask.Add(new
+                {
+                    ItemId = item.ItemId,
+                    Text = item.Text,
+                    DisplayOrder = item.DisplayOrder,
+                    IsRequired = item.IsRequired,
+                    ScopeConfigurations = JsonSerializer.Deserialize<List<ScopeConfiguration>>(item.ScopeConfigurationsJson, FunctionHelpers.JsonOptions) ?? [],
+                    ApplicableCount = applicableCount,
+                    CompletedCount = completedCount,
+                    Marshals = marshalStatuses
+                });
+            }
+
+            // Build assignments grouped by location for checkpoint report
+            Dictionary<string, List<(string MarshalId, string MarshalName)>> assignmentsByLocation = [];
+            foreach (KeyValuePair<string, List<AssignmentEntity>> kvp in preloadedData.AssignmentsByMarshal)
+            {
+                MarshalEntity? marshal = marshals.FirstOrDefault(m => m.MarshalId == kvp.Key);
+                if (marshal == null) continue;
+
+                foreach (AssignmentEntity assignment in kvp.Value)
+                {
+                    if (!assignmentsByLocation.ContainsKey(assignment.LocationId))
+                    {
+                        assignmentsByLocation[assignment.LocationId] = [];
+                    }
+                    assignmentsByLocation[assignment.LocationId].Add((marshal.MarshalId, marshal.Name));
+                }
+            }
+
+            // Build detailed report by checkpoint (Checkpoint > Person > Job)
+            List<object> detailedByCheckpoint = [];
+            List<LocationEntity> sortedLocations = [.. preloadedData.LocationsById.Values];
+
+            foreach (LocationEntity location in sortedLocations)
+            {
+                List<(string MarshalId, string MarshalName)> assignedMarshals = assignmentsByLocation.GetValueOrDefault(location.RowKey) ?? [];
+                // Sort marshals alphabetically
+                assignedMarshals = [.. assignedMarshals.OrderBy(m => m.MarshalName, StringComparer.CurrentCultureIgnoreCase)];
+
+                List<object> peopleStatuses = [];
+                int totalTasksInCheckpoint = 0;
+                int completedTasksInCheckpoint = 0;
+
+                foreach ((string marshalId, string marshalName) in assignedMarshals)
+                {
+                    ChecklistScopeHelper.MarshalContext context = marshalContexts[marshalId];
+                    List<object> taskStatuses = [];
+
+                    foreach (ChecklistItemEntity item in items)
+                    {
+                        // Check if this task applies to this marshal at this checkpoint
+                        if (!ChecklistScopeHelper.IsItemRelevantToMarshal(item, context, preloadedData.LocationsById))
+                        {
+                            continue;
+                        }
+
+                        // Check completion status
+                        bool isCompleted = ChecklistScopeHelper.IsItemCompletedInContext(item, context, preloadedData.LocationsById, completions);
+                        (string? actorName, _, DateTime? completedAt) = ChecklistScopeHelper.GetCompletionDetails(item, context, preloadedData.LocationsById, completions);
+
+                        taskStatuses.Add(new
+                        {
+                            ItemId = item.ItemId,
+                            Text = item.Text,
+                            DisplayOrder = item.DisplayOrder,
+                            IsRequired = item.IsRequired,
+                            IsCompleted = isCompleted,
+                            CompletedAt = completedAt,
+                            CompletedBy = actorName
+                        });
+                    }
+
+                    if (taskStatuses.Count > 0)
+                    {
+                        int personCompletedCount = taskStatuses.Count(t => ((dynamic)t).IsCompleted);
+                        totalTasksInCheckpoint += taskStatuses.Count;
+                        completedTasksInCheckpoint += personCompletedCount;
+
+                        peopleStatuses.Add(new
+                        {
+                            MarshalId = marshalId,
+                            MarshalName = marshalName,
+                            TotalTasks = taskStatuses.Count,
+                            CompletedTasks = personCompletedCount,
+                            Tasks = taskStatuses
+                        });
+                    }
+                }
+
+                if (peopleStatuses.Count > 0)
+                {
+                    detailedByCheckpoint.Add(new
+                    {
+                        CheckpointId = location.RowKey,
+                        CheckpointName = location.Name,
+                        CheckpointDescription = location.Description,
+                        TotalTasks = totalTasksInCheckpoint,
+                        CompletedTasks = completedTasksInCheckpoint,
+                        TotalPeople = peopleStatuses.Count,
+                        People = peopleStatuses
+                    });
+                }
+            }
+
+            // Build detailed report by area (Area > Person > Job)
+            List<object> detailedByArea = [];
+            List<AreaEntity> sortedAreas = [.. preloadedData.Areas];
+
+            foreach (AreaEntity area in sortedAreas)
+            {
+                // Find all marshals assigned to checkpoints in this area
+                List<string> areaLocationIds = preloadedData.LocationsById.Values
+                    .Where(loc =>
+                    {
+                        List<string> locAreaIds = JsonSerializer.Deserialize<List<string>>(loc.AreaIdsJson, FunctionHelpers.JsonOptions) ?? [];
+                        return locAreaIds.Contains(area.RowKey);
+                    })
+                    .Select(loc => loc.RowKey)
+                    .ToList();
+
+                // Get unique marshals assigned to any checkpoint in this area
+                HashSet<string> marshalIdsInArea = [];
+                foreach (string locationId in areaLocationIds)
+                {
+                    if (assignmentsByLocation.TryGetValue(locationId, out List<(string MarshalId, string MarshalName)>? locationMarshals))
+                    {
+                        foreach ((string marshalId, _) in locationMarshals)
+                        {
+                            marshalIdsInArea.Add(marshalId);
+                        }
+                    }
+                }
+
+                // Sort marshals alphabetically
+                List<MarshalEntity> marshalsInArea = marshals
+                    .Where(m => marshalIdsInArea.Contains(m.MarshalId))
+                    .OrderBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase)
+                    .ToList();
+
+                List<object> peopleStatuses = [];
+                int totalTasksInArea = 0;
+                int completedTasksInArea = 0;
+
+                foreach (MarshalEntity marshal in marshalsInArea)
+                {
+                    ChecklistScopeHelper.MarshalContext context = marshalContexts[marshal.MarshalId];
+                    List<object> taskStatuses = [];
+
+                    foreach (ChecklistItemEntity item in items)
+                    {
+                        // Check if this task applies to this marshal
+                        if (!ChecklistScopeHelper.IsItemRelevantToMarshal(item, context, preloadedData.LocationsById))
+                        {
+                            continue;
+                        }
+
+                        // Check completion status
+                        bool isCompleted = ChecklistScopeHelper.IsItemCompletedInContext(item, context, preloadedData.LocationsById, completions);
+                        (string? actorName, _, DateTime? completedAt) = ChecklistScopeHelper.GetCompletionDetails(item, context, preloadedData.LocationsById, completions);
+
+                        taskStatuses.Add(new
+                        {
+                            ItemId = item.ItemId,
+                            Text = item.Text,
+                            DisplayOrder = item.DisplayOrder,
+                            IsRequired = item.IsRequired,
+                            IsCompleted = isCompleted,
+                            CompletedAt = completedAt,
+                            CompletedBy = actorName
+                        });
+                    }
+
+                    if (taskStatuses.Count > 0)
+                    {
+                        int personCompletedCount = taskStatuses.Count(t => ((dynamic)t).IsCompleted);
+                        totalTasksInArea += taskStatuses.Count;
+                        completedTasksInArea += personCompletedCount;
+
+                        peopleStatuses.Add(new
+                        {
+                            MarshalId = marshal.MarshalId,
+                            MarshalName = marshal.Name,
+                            TotalTasks = taskStatuses.Count,
+                            CompletedTasks = personCompletedCount,
+                            Tasks = taskStatuses
+                        });
+                    }
+                }
+
+                if (peopleStatuses.Count > 0)
+                {
+                    detailedByArea.Add(new
+                    {
+                        AreaId = area.RowKey,
+                        AreaName = area.Name,
+                        TotalTasks = totalTasksInArea,
+                        CompletedTasks = completedTasksInArea,
+                        TotalPeople = peopleStatuses.Count,
+                        People = peopleStatuses
+                    });
+                }
+            }
+
+            object report = new
+            {
+                TotalItems = items.Count,
+                TotalMarshals = marshals.Count,
+                TotalCheckpoints = sortedLocations.Count,
+                TotalAreas = sortedAreas.Count,
+                DetailedByPerson = detailedByPerson,
+                DetailedByTask = detailedByTask,
+                DetailedByCheckpoint = detailedByCheckpoint,
+                DetailedByArea = detailedByArea
+            };
+
+            return new OkObjectResult(report);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting detailed checklist report");
+            return new StatusCodeResult(500);
+        }
+    }
+#pragma warning restore MA0051
 }

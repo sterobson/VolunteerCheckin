@@ -86,19 +86,23 @@ export function useMarshalChecklist({
 
   // Items with local state for GroupedTasksList
   const myChecklistItemsWithLocalState = computed(() => {
-    return myChecklistItems.value.map(item => ({
-      ...item,
-      localIsCompleted: item.isCompleted,
-      isModified: false,
-    }));
+    return myChecklistItems.value
+      .map(item => ({
+        ...item,
+        localIsCompleted: item.isCompleted,
+        isModified: false,
+      }))
+      .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
   });
 
   const areaChecklistItemsWithLocalState = computed(() => {
-    return areaChecklistItems.value.map(item => ({
-      ...item,
-      localIsCompleted: item.isCompleted,
-      isModified: false,
-    }));
+    return areaChecklistItems.value
+      .map(item => ({
+        ...item,
+        localIsCompleted: item.isCompleted,
+        isModified: false,
+      }))
+      .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
   });
 
   // Collect all marshals from area lead's checkpoints for name lookup
@@ -162,6 +166,15 @@ export function useMarshalChecklist({
       if (item.isCompleted) {
         groups[key].completedCount++;
       }
+    }
+
+    // Sort items within each group by displayOrder
+    for (const group of Object.values(groups)) {
+      group.items.sort((a, b) => {
+        const orderA = a.displayOrder || 0;
+        const orderB = b.displayOrder || 0;
+        return orderA - orderB;
+      });
     }
 
     return Object.values(groups).sort((a, b) =>
@@ -291,6 +304,17 @@ export function useMarshalChecklist({
           if (updatePendingCount) await updatePendingCount();
         } else {
           await checklistApi.uncomplete(evtId, item.itemId, actionData);
+
+          // Handle linked check-out - update assignment state if this was a linked task
+          if (item.linksToCheckIn && item.linkedCheckpointId) {
+            const assignment = assignments.value.find(a => a.locationId === item.linkedCheckpointId);
+            if (assignment) {
+              assignment.isCheckedIn = false;
+              assignment.checkedInAt = null;
+              console.log(`Linked check-out: Checked out from ${item.linkedCheckpointName || 'checkpoint'}`);
+            }
+          }
+
           await loadChecklist(true);
         }
       } else {
@@ -305,7 +329,26 @@ export function useMarshalChecklist({
           item.completedByActorName = currentPerson.value?.name || 'You';
           if (updatePendingCount) await updatePendingCount();
         } else {
-          await checklistApi.complete(evtId, item.itemId, actionData);
+          const response = await checklistApi.complete(evtId, item.itemId, actionData);
+
+          // Handle linked check-in - update assignment state if check-in occurred
+          if (response.data?.linkedCheckIn) {
+            const linkedCheckIn = response.data.linkedCheckIn;
+            // Find assignment by locationId (consistent with checkout logic)
+            const assignment = assignments.value.find(a =>
+              a.locationId === linkedCheckIn.locationId ||
+              a.id === linkedCheckIn.assignmentId ||
+              a.assignmentId === linkedCheckIn.assignmentId
+            );
+            if (assignment) {
+              assignment.isCheckedIn = true;
+              assignment.checkedInAt = linkedCheckIn.checkedInAt;
+              console.log(`Linked check-in: Checked in at ${linkedCheckIn.locationName}`);
+            } else {
+              console.warn('Could not find assignment for linked check-in:', linkedCheckIn);
+            }
+          }
+
           await loadChecklist(true);
         }
       }

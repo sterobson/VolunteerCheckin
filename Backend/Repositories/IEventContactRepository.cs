@@ -46,4 +46,9 @@ public interface IEventContactRepository
     /// Permanently delete a contact (hard delete)
     /// </summary>
     Task HardDeleteAsync(string eventId, string contactId);
+
+    /// <summary>
+    /// Update display order for multiple contacts
+    /// </summary>
+    Task UpdateDisplayOrdersAsync(string eventId, Dictionary<string, int> contactDisplayOrders);
 }

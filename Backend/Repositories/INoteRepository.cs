@@ -41,4 +41,9 @@ public interface INoteRepository
     /// Permanently delete a note (hard delete)
     /// </summary>
     Task HardDeleteAsync(string eventId, string noteId);
+
+    /// <summary>
+    /// Update display order for multiple notes
+    /// </summary>
+    Task UpdateDisplayOrdersAsync(string eventId, Dictionary<string, int> noteDisplayOrders);
 }

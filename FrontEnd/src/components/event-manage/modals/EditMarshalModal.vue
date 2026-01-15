@@ -54,7 +54,9 @@
       :marshal-id="marshal.id"
       :locations="allLocations"
       :areas="areas"
+      :allow-reorder="true"
       @change="handleChecklistChange"
+      @reorder="handleChecklistsReorder"
     />
 
     <!-- Checklists preview - shown in both create and edit modes to add new scoped items -->
@@ -79,6 +81,8 @@
       :areas="areas"
       :assignments="assignments"
       :marshals="allMarshals"
+      :allow-reorder="true"
+      @reorder="handleNotesReorder"
     />
 
     <!-- Notes preview - shown in both create and edit modes to add new scoped items -->
@@ -104,6 +108,15 @@
         />
       </div>
     </div>
+
+    <!-- Roles Tab -->
+    <MarshalRolesTab
+      v-if="activeTab === 'roles'"
+      :roles="form.roles"
+      :role-definitions="roleDefinitions"
+      @update:roles="handleUpdateRoles"
+      @input="handleInput"
+    />
 
     <!-- Custom footer with left and right aligned buttons -->
     <template #footer>
@@ -152,6 +165,7 @@ import BaseModal from '../../BaseModal.vue';
 import TabHeader from '../../TabHeader.vue';
 import MarshalDetailsTab from '../tabs/MarshalDetailsTab.vue';
 import MarshalCheckpointsTab from '../tabs/MarshalCheckpointsTab.vue';
+import MarshalRolesTab from '../tabs/MarshalRolesTab.vue';
 import MarshalChecklistView from '../../MarshalChecklistView.vue';
 import ChecklistPreview from '../../ChecklistPreview.vue';
 import NotesView from '../../NotesView.vue';
@@ -228,6 +242,10 @@ const props = defineProps({
     type: Number,
     default: 1000,
   },
+  roleDefinitions: {
+    type: Array,
+    default: () => [],
+  },
 });
 
 const emit = defineEmits([
@@ -240,6 +258,8 @@ const emit = defineEmits([
   'update:isDirty',
   'select-incident',
   'select-checkpoint',
+  'reorder-notes',
+  'reorder-checklists',
 ]);
 
 const activeTab = ref('details');
@@ -255,6 +275,7 @@ const form = ref({
   email: '',
   phoneNumber: '',
   notes: '',
+  roles: [],
 });
 
 // Map modal state for distance click
@@ -328,6 +349,8 @@ const availableTabs = computed(() => {
   if (props.incidents && props.incidents.length > 0) {
     tabs.push({ value: 'incidents', label: 'Incidents', icon: 'incidents' });
   }
+  // Always show roles tab at the end
+  tabs.push({ value: 'roles', label: 'Roles', icon: 'roles' });
   return tabs;
 });
 
@@ -387,6 +410,7 @@ watch(() => props.marshal, (newVal) => {
       email: newVal.email || '',
       phoneNumber: newVal.phoneNumber || '',
       notes: newVal.notes || '',
+      roles: newVal.roles || [],
     };
   } else {
     form.value = {
@@ -394,6 +418,7 @@ watch(() => props.marshal, (newVal) => {
       email: '',
       phoneNumber: '',
       notes: '',
+      roles: [],
     };
   }
 }, { immediate: true, deep: true });
@@ -412,6 +437,7 @@ watch(() => props.show, (newVal) => {
         email: '',
         phoneNumber: '',
         notes: '',
+        roles: [],
       };
     }
     // Clear pending changes in checkpoints tab if it exists
@@ -429,6 +455,10 @@ const updateForm = (newFormData) => {
   form.value = newFormData;
 };
 
+const handleUpdateRoles = (newRoles) => {
+  form.value = { ...form.value, roles: newRoles };
+};
+
 const handleInput = () => {
   emit('update:isDirty', true);
 };
@@ -441,6 +471,14 @@ const goToNextTab = () => {
   if (nextTab.value) {
     activeTab.value = nextTab.value.value;
   }
+};
+
+const handleNotesReorder = (changes) => {
+  emit('reorder-notes', changes);
+};
+
+const handleChecklistsReorder = (changes) => {
+  emit('reorder-checklists', changes);
 };
 
 const handleSave = () => {

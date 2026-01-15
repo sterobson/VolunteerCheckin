@@ -92,5 +92,6 @@ builder.Services.AddSingleton<IAuthSessionRepository, TableStorageAuthSessionRep
 builder.Services.AddSingleton<INoteRepository, TableStorageNoteRepository>();
 builder.Services.AddSingleton<IEventContactRepository, TableStorageEventContactRepository>();
 builder.Services.AddSingleton<IIncidentRepository, TableStorageIncidentRepository>();
+builder.Services.AddSingleton<IEventRoleDefinitionRepository, TableStorageEventRoleDefinitionRepository>();
 
 await builder.Build().RunAsync();

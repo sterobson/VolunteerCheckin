@@ -72,6 +72,14 @@ public class ChecklistFunctions
                 return new BadRequestObjectResult(new { message = "At least one scope configuration is required" });
             }
 
+            // Validate LinksToCheckIn scope compatibility
+            string? linkValidationError = ChecklistCheckInLinkHelper.GetLinkToCheckInValidationError(
+                request.ScopeConfigurations, request.LinksToCheckIn);
+            if (linkValidationError != null)
+            {
+                return new BadRequestObjectResult(new { message = linkValidationError });
+            }
+
             // Sanitize input
             string sanitizedText = InputSanitizer.SanitizeDescription(request.Text);
 
@@ -111,7 +119,8 @@ public class ChecklistFunctions
                         VisibleUntil = request.VisibleUntil,
                         MustCompleteBy = request.MustCompleteBy,
                         CreatedByAdminEmail = adminEmail,
-                        CreatedDate = DateTime.UtcNow
+                        CreatedDate = DateTime.UtcNow,
+                        LinksToCheckIn = request.LinksToCheckIn
                     };
 
                     await _checklistItemRepository.AddAsync(entity);
@@ -140,7 +149,8 @@ public class ChecklistFunctions
                     VisibleUntil = request.VisibleUntil,
                     MustCompleteBy = request.MustCompleteBy,
                     CreatedByAdminEmail = adminEmail,
-                    CreatedDate = DateTime.UtcNow
+                    CreatedDate = DateTime.UtcNow,
+                    LinksToCheckIn = request.LinksToCheckIn
                 };
 
                 await _checklistItemRepository.AddAsync(entity);
@@ -165,7 +175,11 @@ public class ChecklistFunctions
     {
         try
         {
-            IEnumerable<ChecklistItemEntity> items = await _checklistItemRepository.GetByEventAsync(eventId);
+            List<ChecklistItemEntity> items = (await _checklistItemRepository.GetByEventAsync(eventId)).ToList();
+
+            // Lazy migration: normalize DisplayOrder if any items have DisplayOrder = 0
+            await NormalizeChecklistDisplayOrdersAsync(items, eventId);
+
             List<ChecklistItemResponse> responses = [.. items.Select(i => i.ToResponse())];
 
             return new OkObjectResult(responses);
@@ -238,6 +252,14 @@ public class ChecklistFunctions
                 return new BadRequestObjectResult(new { message = "At least one scope configuration is required" });
             }
 
+            // Validate LinksToCheckIn scope compatibility
+            string? linkValidationError = ChecklistCheckInLinkHelper.GetLinkToCheckInValidationError(
+                request.ScopeConfigurations, request.LinksToCheckIn);
+            if (linkValidationError != null)
+            {
+                return new BadRequestObjectResult(new { message = linkValidationError });
+            }
+
             // Sanitize input
             string sanitizedText = InputSanitizer.SanitizeDescription(request.Text);
 
@@ -249,6 +271,7 @@ public class ChecklistFunctions
             item.VisibleFrom = request.VisibleFrom;
             item.VisibleUntil = request.VisibleUntil;
             item.MustCompleteBy = request.MustCompleteBy;
+            item.LinksToCheckIn = request.LinksToCheckIn;
             item.LastModifiedDate = DateTime.UtcNow;
             item.LastModifiedByAdminEmail = adminEmail;
 
@@ -295,6 +318,89 @@ public class ChecklistFunctions
         {
             _logger.LogError(ex, "Error deleting checklist item");
             return new StatusCodeResult(500);
+        }
+    }
+
+    /// <summary>
+    /// Reorder checklist items by updating their display order.
+    /// </summary>
+    [Function("ReorderChecklistItems")]
+    public async Task<IActionResult> ReorderChecklistItems(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "events/{eventId}/checklist-items/reorder")] HttpRequest req,
+        string eventId)
+    {
+        try
+        {
+            // Parse request
+            string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+            ReorderChecklistItemsRequest? request = JsonSerializer.Deserialize<ReorderChecklistItemsRequest>(requestBody, FunctionHelpers.JsonOptions);
+
+            if (request == null || request.Items == null || request.Items.Count == 0)
+            {
+                return new BadRequestObjectResult(new { message = "Items array is required" });
+            }
+
+            // Build display order map
+            Dictionary<string, int> displayOrders = request.Items.ToDictionary(i => i.Id, i => i.DisplayOrder);
+
+            // Update all items
+            await _checklistItemRepository.UpdateDisplayOrdersAsync(eventId, displayOrders);
+
+            _logger.LogInformation("Checklist items reordered for event {EventId}", eventId);
+
+            return new NoContentResult();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error reordering checklist items for event {EventId}", eventId);
+            return FunctionHelpers.CreateErrorResponse(ex, "Failed to reorder checklist items");
+        }
+    }
+
+    /// <summary>
+    /// Lazy migration: if any checklist items have DisplayOrder = 0, normalize all display orders.
+    /// Sorts by text (alphabetically) and assigns sequential orders.
+    /// </summary>
+    private async Task NormalizeChecklistDisplayOrdersAsync(List<ChecklistItemEntity> items, string eventId)
+    {
+        // Check if any items need migration (DisplayOrder = 0)
+        bool needsMigration = items.Any(i => i.DisplayOrder == 0);
+        if (!needsMigration || items.Count == 0)
+        {
+            return;
+        }
+
+        _logger.LogInformation("Normalizing DisplayOrder for {Count} checklist items in event {EventId}",
+            items.Count, eventId);
+
+        // Sort alphabetically by text
+        List<ChecklistItemEntity> sortedItems = [.. items
+            .OrderBy(i => i.Text, StringComparer.OrdinalIgnoreCase)];
+
+        // Assign sequential display orders
+        Dictionary<string, int> changes = [];
+        for (int i = 0; i < sortedItems.Count; i++)
+        {
+            int newOrder = i + 1;
+            if (sortedItems[i].DisplayOrder != newOrder)
+            {
+                sortedItems[i].DisplayOrder = newOrder;
+                changes[sortedItems[i].ItemId] = newOrder;
+            }
+        }
+
+        // Batch update if there are changes
+        if (changes.Count > 0)
+        {
+            try
+            {
+                await _checklistItemRepository.UpdateDisplayOrdersAsync(eventId, changes);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to persist DisplayOrder migration for checklist items");
+                // Continue anyway - the in-memory list is already updated
+            }
         }
     }
 }

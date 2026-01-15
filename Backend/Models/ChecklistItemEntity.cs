@@ -76,4 +76,11 @@ public class ChecklistItemEntity : ITableEntity
     /// Future extensibility: Complex filter rules in JSON format
     /// </summary>
     public string AdvancedFilterJson { get; set; } = "null";
+
+    /// <summary>
+    /// When true, completing this task checks in the person at the checkpoint,
+    /// and checking in completes this task. Only valid for EveryoneAtCheckpoints
+    /// or SpecificPeople scopes with checkpoint context.
+    /// </summary>
+    public bool LinksToCheckIn { get; set; } = false;
 }

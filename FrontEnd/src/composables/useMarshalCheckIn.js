@@ -15,6 +15,7 @@ export function useMarshalCheckIn({
   areaLeadMarshalDataVersion,
   updatePendingCount,
   updateCachedField,
+  reloadChecklist,
 }) {
   const { termsLower } = useTerminology();
 
@@ -204,10 +205,15 @@ export function useMarshalCheckIn({
       } else {
         const response = await checkInApi.toggleCheckIn(evtId, assign.id, gpsData);
 
+        // Handle response - may be assignment directly or { assignment, linkedTasksCompleted/linkedTasksUncompleted }
+        const assignmentData = response.data?.assignment || response.data;
+        const linkedTasksCompleted = response.data?.linkedTasksCompleted || [];
+        const linkedTasksUncompleted = response.data?.linkedTasksUncompleted || 0;
+
         // Update the assignment in the list
         const index = assignments.value.findIndex(a => a.id === assign.id);
         if (index !== -1) {
-          assignments.value[index] = response.data;
+          assignments.value[index] = assignmentData;
         }
 
         // Also update in location assignments if checking in another marshal
@@ -216,9 +222,19 @@ export function useMarshalCheckIn({
           if (location?.assignments) {
             const locAssign = location.assignments.find(a => a.id === assign.id || a.marshalId === assign.marshalId);
             if (locAssign) {
-              Object.assign(locAssign, response.data);
+              Object.assign(locAssign, assignmentData);
             }
           }
+        }
+
+        // Reload checklist if linked tasks were affected
+        if (reloadChecklist && linkedTasksCompleted.length > 0) {
+          console.log('Linked tasks completed via check-in:', linkedTasksCompleted.length);
+          await reloadChecklist(true);
+        }
+        if (reloadChecklist && linkedTasksUncompleted > 0) {
+          console.log('Linked tasks uncompleted via check-out:', linkedTasksUncompleted);
+          await reloadChecklist(true);
         }
       }
 

@@ -27,6 +27,7 @@ public class EventContactFunctionsTests
     private Mock<IAssignmentRepository> _mockAssignmentRepository = null!;
     private Mock<IAreaRepository> _mockAreaRepository = null!;
     private Mock<IEventRoleRepository> _mockEventRoleRepository = null!;
+    private Mock<IEventRoleDefinitionRepository> _mockRoleDefinitionRepository = null!;
     private Mock<ClaimsService> _mockClaimsService = null!;
     private EventContactFunctions _functions = null!;
 
@@ -40,6 +41,7 @@ public class EventContactFunctionsTests
         _mockAssignmentRepository = new Mock<IAssignmentRepository>();
         _mockAreaRepository = new Mock<IAreaRepository>();
         _mockEventRoleRepository = new Mock<IEventRoleRepository>();
+        _mockRoleDefinitionRepository = new Mock<IEventRoleDefinitionRepository>();
 
         _mockClaimsService = new Mock<ClaimsService>(
             MockBehavior.Loose,
@@ -57,6 +59,7 @@ public class EventContactFunctionsTests
             _mockAssignmentRepository.Object,
             _mockAreaRepository.Object,
             _mockEventRoleRepository.Object,
+            _mockRoleDefinitionRepository.Object,
             _mockClaimsService.Object);
     }
 

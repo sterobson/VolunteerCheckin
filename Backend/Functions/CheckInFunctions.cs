@@ -19,19 +19,34 @@ public class CheckInFunctions
     private readonly ILocationRepository _locationRepository;
     private readonly GpsService _gpsService;
     private readonly ClaimsService _claimsService;
+    private readonly IChecklistItemRepository _checklistItemRepository;
+    private readonly IChecklistCompletionRepository _checklistCompletionRepository;
+    private readonly IMarshalRepository _marshalRepository;
+    private readonly IAreaRepository _areaRepository;
+    private readonly IEventRoleRepository _eventRoleRepository;
 
     public CheckInFunctions(
         ILogger<CheckInFunctions> logger,
         IAssignmentRepository assignmentRepository,
         ILocationRepository locationRepository,
         GpsService gpsService,
-        ClaimsService claimsService)
+        ClaimsService claimsService,
+        IChecklistItemRepository checklistItemRepository,
+        IChecklistCompletionRepository checklistCompletionRepository,
+        IMarshalRepository marshalRepository,
+        IAreaRepository areaRepository,
+        IEventRoleRepository eventRoleRepository)
     {
         _logger = logger;
         _assignmentRepository = assignmentRepository;
         _locationRepository = locationRepository;
         _gpsService = gpsService;
         _claimsService = claimsService;
+        _checklistItemRepository = checklistItemRepository;
+        _checklistCompletionRepository = checklistCompletionRepository;
+        _marshalRepository = marshalRepository;
+        _areaRepository = areaRepository;
+        _eventRoleRepository = eventRoleRepository;
     }
 
 #pragma warning disable MA0051
@@ -369,10 +384,34 @@ public class CheckInFunctions
                 return new StatusCodeResult(500);
             }
 
+            // Handle linked task completion/uncomplete
+            List<LinkedTaskCompletedInfo> linkedTasks = [];
+            int linkedTasksUncompleted = 0;
+            if (wantToCheckIn && !wasCheckedIn)
+            {
+                // Check-in: complete linked tasks
+                linkedTasks = await CompleteLinkedTasksAsync(eventId, assignment.MarshalId, assignment.LocationId, checkedInBy);
+            }
+            else if (!wantToCheckIn && wasCheckedIn)
+            {
+                // Check-out: uncomplete linked tasks
+                linkedTasksUncompleted = await UncompleteLinkedTasksAsync(eventId, assignment.MarshalId, assignment.LocationId, checkedInBy);
+            }
+
             AssignmentResponse response = assignment.ToResponse();
 
             _logger.LogInformation("Toggle check-in: {AssignmentId} by {Method} - Now {CheckInStatus}",
                 assignment.RowKey, checkInMethod, assignment.IsCheckedIn ? "checked in" : "checked out");
+
+            // Return response with linked tasks info if any were affected
+            if (linkedTasks.Count > 0)
+            {
+                return new OkObjectResult(new { assignment = response, linkedTasksCompleted = linkedTasks });
+            }
+            if (linkedTasksUncompleted > 0)
+            {
+                return new OkObjectResult(new { assignment = response, linkedTasksUncompleted });
+            }
 
             return new OkObjectResult(response);
         }
@@ -525,10 +564,34 @@ public class CheckInFunctions
                 return new StatusCodeResult(500);
             }
 
+            // Handle linked task completion/uncomplete
+            List<LinkedTaskCompletedInfo> linkedTasks = [];
+            int linkedTasksUncompleted = 0;
+            if (assignment.IsCheckedIn && !wasCheckedIn)
+            {
+                // Check-in: complete linked tasks
+                linkedTasks = await CompleteLinkedTasksAsync(eventId, assignment.MarshalId, assignment.LocationId, checkedInBy);
+            }
+            else if (!assignment.IsCheckedIn && wasCheckedIn)
+            {
+                // Check-out: uncomplete linked tasks
+                linkedTasksUncompleted = await UncompleteLinkedTasksAsync(eventId, assignment.MarshalId, assignment.LocationId, checkedInBy);
+            }
+
             AssignmentResponse response = assignment.ToResponse();
 
             _logger.LogInformation("Admin check-in toggle: {AssignmentId} by {CheckedInBy} - Now {CheckInStatus}",
                 assignment.RowKey, checkedInBy, assignment.IsCheckedIn ? "checked in" : "checked out");
+
+            // Return response with linked tasks info if any were affected
+            if (linkedTasks.Count > 0)
+            {
+                return new OkObjectResult(new { assignment = response, linkedTasksCompleted = linkedTasks });
+            }
+            if (linkedTasksUncompleted > 0)
+            {
+                return new OkObjectResult(new { assignment = response, linkedTasksUncompleted });
+            }
 
             return new OkObjectResult(response);
         }
@@ -539,4 +602,128 @@ public class CheckInFunctions
         }
     }
 #pragma warning restore MA0051
+
+    /// <summary>
+    /// Completes all linked checklist items for a marshal at a specific checkpoint.
+    /// </summary>
+#pragma warning disable MA0051 // Linked task completion with context building
+    private async Task<List<LinkedTaskCompletedInfo>> CompleteLinkedTasksAsync(string eventId, string marshalId, string checkpointId, string actorName)
+    {
+        List<LinkedTaskCompletedInfo> completedTasks = [];
+
+        try
+        {
+            // Get the marshal details
+            MarshalEntity? marshal = await _marshalRepository.GetAsync(eventId, marshalId);
+            if (marshal == null)
+            {
+                return completedTasks;
+            }
+
+            // Build marshal context
+            ChecklistContextHelper contextHelper = new(_assignmentRepository, _locationRepository, _areaRepository, _eventRoleRepository, _marshalRepository);
+            ChecklistScopeHelper.MarshalContext context = await contextHelper.BuildMarshalContextAsync(eventId, marshalId);
+
+            // Get all locations for checkpoint lookup
+            IEnumerable<LocationEntity> allLocations = await _locationRepository.GetByEventAsync(eventId);
+            Dictionary<string, LocationEntity> checkpointLookup = allLocations.ToDictionary(l => l.RowKey);
+
+            // Create the helper for linked operations
+            ChecklistCheckInLinkHelper linkHelper = new(
+                _checklistItemRepository,
+                _checklistCompletionRepository,
+                _assignmentRepository);
+
+            // Find all linked items for this checkpoint
+            List<ChecklistItemEntity> linkedItems = await linkHelper.FindLinkedItemsForCheckpointAsync(
+                eventId, checkpointId, marshalId, context, checkpointLookup);
+
+            // Complete each item if not already completed
+            foreach (ChecklistItemEntity item in linkedItems)
+            {
+                bool isCompleted = await linkHelper.IsItemCompletedForContextAsync(eventId, item.ItemId, marshalId, checkpointId);
+
+                if (!isCompleted)
+                {
+                    await linkHelper.CreateCompletionAsync(
+                        eventId,
+                        item.ItemId,
+                        marshalId,
+                        marshal.Name,
+                        checkpointId,
+                        Constants.ActorTypeMarshal,
+                        marshalId,
+                        actorName);
+
+                    completedTasks.Add(new LinkedTaskCompletedInfo(item.ItemId, item.Text));
+
+                    _logger.LogInformation("Linked task {ItemId} completed for marshal {MarshalId} at checkpoint {CheckpointId} via check-in",
+                        item.ItemId, marshalId, checkpointId);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error completing linked tasks for marshal {MarshalId} at checkpoint {CheckpointId}", marshalId, checkpointId);
+            // Don't fail the check-in if task completion fails
+        }
+
+        return completedTasks;
+    }
+#pragma warning restore MA0051
+
+    /// <summary>
+    /// Uncompletes all linked checklist items for a marshal at a specific checkpoint.
+    /// </summary>
+    private async Task<int> UncompleteLinkedTasksAsync(string eventId, string marshalId, string checkpointId, string actorName)
+    {
+        int uncompletedCount = 0;
+
+        try
+        {
+            // Build marshal context
+            ChecklistContextHelper contextHelper = new(_assignmentRepository, _locationRepository, _areaRepository, _eventRoleRepository, _marshalRepository);
+            ChecklistScopeHelper.MarshalContext context = await contextHelper.BuildMarshalContextAsync(eventId, marshalId);
+
+            // Get all locations for checkpoint lookup
+            IEnumerable<LocationEntity> allLocations = await _locationRepository.GetByEventAsync(eventId);
+            Dictionary<string, LocationEntity> checkpointLookup = allLocations.ToDictionary(l => l.RowKey);
+
+            // Create the helper for linked operations
+            ChecklistCheckInLinkHelper linkHelper = new(
+                _checklistItemRepository,
+                _checklistCompletionRepository,
+                _assignmentRepository);
+
+            // Find all linked items for this checkpoint
+            List<ChecklistItemEntity> linkedItems = await linkHelper.FindLinkedItemsForCheckpointAsync(
+                eventId, checkpointId, marshalId, context, checkpointLookup);
+
+            // Uncomplete each item if completed
+            foreach (ChecklistItemEntity item in linkedItems)
+            {
+                ChecklistCompletionEntity? completion = await linkHelper.FindCompletionAsync(eventId, item.ItemId, marshalId, checkpointId);
+
+                if (completion != null)
+                {
+                    await linkHelper.UncompleteAsync(
+                        completion,
+                        Constants.ActorTypeMarshal,
+                        marshalId,
+                        actorName);
+
+                    uncompletedCount++;
+                    _logger.LogInformation("Linked task {ItemId} uncompleted for marshal {MarshalId} at checkpoint {CheckpointId} via check-out",
+                        item.ItemId, marshalId, checkpointId);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error uncompleting linked tasks for marshal {MarshalId} at checkpoint {CheckpointId}", marshalId, checkpointId);
+            // Don't fail the check-out if task uncomplete fails
+        }
+
+        return uncompletedCount;
+    }
 }

@@ -55,15 +55,15 @@
           <!-- Selected roles as removable pills -->
           <div v-if="form.roles.length > 0" class="selected-roles">
             <span
-              v-for="role in form.roles"
-              :key="role"
+              v-for="roleId in form.roles"
+              :key="roleId"
               class="role-pill"
             >
-              {{ formatRoleName(role) }}
+              {{ getRoleName(roleId) }}
               <button
                 type="button"
                 class="remove-role-btn"
-                @click="removeRole(role)"
+                @click="removeRole(roleId)"
                 title="Remove role"
               >×</button>
             </span>
@@ -71,47 +71,15 @@
           <!-- Role selector -->
           <div class="role-input-group">
             <select
-              v-if="!useCustomRole"
               id="role"
               v-model="selectedRoleToAdd"
               @change="addSelectedRole"
             >
               <option value="" disabled>Add a role...</option>
-              <optgroup v-if="availableBuiltInRoles.length > 0" label="Built-in Roles">
-                <option v-for="role in availableBuiltInRoles" :key="role" :value="role">
-                  {{ formatRoleName(role) }}
-                </option>
-              </optgroup>
-              <optgroup v-if="availableCustomRoles.length > 0" label="Custom Roles">
-                <option v-for="role in availableCustomRoles" :key="role" :value="role">
-                  {{ formatRoleName(role) }}
-                </option>
-              </optgroup>
+              <option v-for="role in availableRoles" :key="role.roleId" :value="role.roleId">
+                {{ role.name }}
+              </option>
             </select>
-            <input
-              v-else
-              id="customRole"
-              v-model="customRoleInput"
-              type="text"
-              placeholder="Enter custom role name..."
-              @keydown.enter.prevent="addCustomRole"
-            />
-            <button
-              v-if="useCustomRole"
-              type="button"
-              class="add-role-btn"
-              @click="addCustomRole"
-              :disabled="!customRoleInput.trim()"
-            >
-              Add
-            </button>
-            <button
-              type="button"
-              class="toggle-custom-btn"
-              @click="useCustomRole = !useCustomRole"
-            >
-              {{ useCustomRole ? 'Use existing' : 'Custom' }}
-            </button>
           </div>
           <label class="checkbox-label-inline show-emergency-checkbox">
             <input
@@ -281,6 +249,10 @@ const props = defineProps({
     type: Object,
     default: () => ({ builtInRoles: [], customRoles: [] }),
   },
+  roleDefinitions: {
+    type: Array,
+    default: () => [],
+  },
   isDirty: {
     type: Boolean,
     default: false,
@@ -313,9 +285,7 @@ const emit = defineEmits([
 const showErrorModal = ref(false);
 const errorMessage = ref('');
 const activeTab = ref('details');
-const useCustomRole = ref(false);
 const selectedRoleToAdd = ref('');
-const customRoleInput = ref('');
 
 const form = ref({
   roles: [],
@@ -334,19 +304,39 @@ const form = ref({
   }],
 });
 
-// Helper to check if a role should default to showing in emergency info
-const isEmergencyRole = (role) => {
-  return role === 'EmergencyContact';
-};
+// Sort roles: built-in first, then by displayOrder, then alphabetically
+const sortedRoleDefinitions = computed(() => {
+  return [...props.roleDefinitions].sort((a, b) => {
+    // Built-in first
+    if (a.isBuiltIn !== b.isBuiltIn) {
+      return a.isBuiltIn ? -1 : 1;
+    }
+    // Then by display order
+    if (a.displayOrder !== b.displayOrder) {
+      return (a.displayOrder || 0) - (b.displayOrder || 0);
+    }
+    // Then alphabetically
+    return (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' });
+  });
+});
 
 // Filter out already selected roles from available options
-const availableBuiltInRoles = computed(() => {
-  return (props.availableRoles.builtInRoles || []).filter(r => !form.value.roles.includes(r));
+const availableRoles = computed(() => {
+  const selectedIds = form.value.roles || [];
+  return sortedRoleDefinitions.value.filter(r => !selectedIds.includes(r.roleId));
 });
 
-const availableCustomRoles = computed(() => {
-  return (props.availableRoles.customRoles || []).filter(r => !form.value.roles.includes(r));
-});
+// Get role name from roleId
+const getRoleName = (roleId) => {
+  const role = props.roleDefinitions.find(r => r.roleId === roleId);
+  return role?.name || roleId;
+};
+
+// Helper to check if a roleId refers to the EmergencyContact role
+const isEmergencyRole = (roleId) => {
+  const role = props.roleDefinitions.find(r => r.roleId === roleId);
+  return role?.name === 'EmergencyContact';
+};
 
 // Role management functions
 const addSelectedRole = () => {
@@ -361,21 +351,12 @@ const addSelectedRole = () => {
   selectedRoleToAdd.value = '';
 };
 
-const addCustomRole = () => {
-  const role = customRoleInput.value.trim();
-  if (role && !form.value.roles.includes(role)) {
-    form.value.roles.push(role);
-    handleInput();
-  }
-  customRoleInput.value = '';
-};
-
-const removeRole = (role) => {
-  const index = form.value.roles.indexOf(role);
+const removeRole = (roleId) => {
+  const index = form.value.roles.indexOf(roleId);
   if (index > -1) {
     form.value.roles.splice(index, 1);
     // If removing the last EmergencyContact role, disable emergency info
-    if (isEmergencyRole(role) && !form.value.roles.some(r => isEmergencyRole(r))) {
+    if (isEmergencyRole(roleId) && !form.value.roles.some(r => isEmergencyRole(r))) {
       form.value.showInEmergencyInfo = false;
     }
     handleInput();
@@ -418,19 +399,13 @@ watch(() => props.show, (newVal) => {
   if (newVal) {
     activeTab.value = props.initialTab;
     selectedRoleToAdd.value = '';
-    customRoleInput.value = '';
 
     if (props.contact) {
-      // Get roles from contact - handle both array format and legacy single role
+      // Get roles from contact - should be array of roleIds now
       let contactRoles = [];
       if (props.contact.roles && Array.isArray(props.contact.roles)) {
         contactRoles = [...props.contact.roles];
-      } else if (props.contact.role) {
-        // Legacy single role format
-        contactRoles = [props.contact.role];
       }
-
-      useCustomRole.value = false;
 
       form.value = {
         roles: contactRoles,
@@ -451,7 +426,6 @@ watch(() => props.show, (newVal) => {
             }],
       };
     } else {
-      useCustomRole.value = false;
       // Determine default scope configuration:
       // - If creating from area context, use empty scope (area scope added when area is saved)
       // - If preselected area, pre-configure for that area
@@ -474,8 +448,8 @@ watch(() => props.show, (newVal) => {
         }];
       }
 
-      // Check if we have a prefilled marshal - get their details
-      let prefilledDetails = { name: props.prefilledName || '', phone: '', email: '' };
+      // Check if we have a prefilled marshal - get their details including roles
+      let prefilledDetails = { name: props.prefilledName || '', phone: '', email: '', roles: [] };
       if (props.prefilledMarshalId) {
         const marshal = props.marshals.find(m => m.id === props.prefilledMarshalId);
         if (marshal) {
@@ -483,18 +457,19 @@ watch(() => props.show, (newVal) => {
             name: marshal.name || '',
             phone: marshal.phoneNumber || '',
             email: marshal.email || '',
+            roles: marshal.roles || [],
           };
         }
       }
 
       form.value = {
-        roles: [],
+        roles: [...prefilledDetails.roles],
         name: prefilledDetails.name,
         phone: prefilledDetails.phone,
         email: prefilledDetails.email,
         notes: '',
         marshalId: props.prefilledMarshalId || null,
-        showInEmergencyInfo: false,
+        showInEmergencyInfo: prefilledDetails.roles.some(r => isEmergencyRole(r)),
         displayOrder: 0,
         isPinned: false,
         scopeConfigurations: defaultScopeConfig,
@@ -505,26 +480,12 @@ watch(() => props.show, (newVal) => {
   }
 });
 
-// Note: showInEmergencyInfo is now managed in addSelectedRole and removeRole functions
-
-const formatRoleName = (role) => {
-  if (!role) return '';
-  // Special handling for AreaLead - use terminology
-  if (role === 'AreaLead') {
-    return `${terms.value.area} Lead`;
-  }
-  return role
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/^./, str => str.toUpperCase())
-    .trim();
-};
-
 const handleInput = () => {
   emit('update:isDirty', true);
 };
 
 const handleMarshalSelect = () => {
-  // When a marshal is selected, auto-fill contact details
+  // When a marshal is selected, auto-fill contact details and sync roles
   if (form.value.marshalId) {
     const marshal = props.marshals.find(m => m.id === form.value.marshalId);
     if (marshal) {
@@ -533,7 +494,14 @@ const handleMarshalSelect = () => {
       // Only auto-fill phone/email if fields are empty
       if (!form.value.phone && marshal.phoneNumber) form.value.phone = marshal.phoneNumber;
       if (!form.value.email && marshal.email) form.value.email = marshal.email;
+      // Sync roles from linked marshal
+      form.value.roles = marshal.roles ? [...marshal.roles] : [];
+      // Update emergency info flag based on roles
+      form.value.showInEmergencyInfo = form.value.roles.some(r => isEmergencyRole(r));
     }
+  } else {
+    // When unlinked, clear the name (user must provide it)
+    form.value.name = '';
   }
   handleInput();
 };
@@ -723,47 +691,8 @@ select {
   gap: 0.5rem;
 }
 
-.role-input-group select,
-.role-input-group input {
+.role-input-group select {
   flex: 1;
-}
-
-.add-role-btn {
-  padding: 0.5rem 0.75rem;
-  background: var(--accent-primary);
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  color: white;
-  white-space: nowrap;
-  transition: all 0.2s;
-}
-
-.add-role-btn:hover:not(:disabled) {
-  background: var(--accent-primary-hover);
-}
-
-.add-role-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.toggle-custom-btn {
-  padding: 0.5rem 0.75rem;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-medium);
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  transition: all 0.2s;
-}
-
-.toggle-custom-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-dark);
 }
 
 .help-text {

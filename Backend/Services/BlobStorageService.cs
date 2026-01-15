@@ -75,10 +75,19 @@ public class BlobStorageService
     {
         BlobContainerClient container = await GetOrCreateContainerAsync();
 
-        // Find the logo blob for this event (handles different extensions)
+        // Find the first logo blob for this event (handles different extensions)
+        BlobItem? firstBlob = null;
+#pragma warning disable S1751 // Intentionally getting only the first item from async enumerable
         await foreach (BlobItem blobItem in container.GetBlobsAsync(prefix: $"{eventId}/"))
         {
-            BlobClient blob = container.GetBlobClient(blobItem.Name);
+            firstBlob = blobItem;
+            break;
+        }
+#pragma warning restore S1751
+
+        if (firstBlob != null)
+        {
+            BlobClient blob = container.GetBlobClient(firstBlob.Name);
             BlobDownloadResult download = await blob.DownloadContentAsync();
             return (download.Content.ToArray(), download.Details.ContentType);
         }

@@ -141,7 +141,10 @@ public class NoteFunctions
                 return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
             }
 
-            IEnumerable<NoteEntity> notes = await _noteRepository.GetByEventAsync(eventId);
+            List<NoteEntity> notes = (await _noteRepository.GetByEventAsync(eventId)).ToList();
+
+            // Lazy migration: normalize DisplayOrder if any notes have DisplayOrder = 0
+            await NormalizeDisplayOrdersAsync(notes);
 
             // Build a lookup of current marshal names by PersonId
             IEnumerable<MarshalEntity> marshals = await _marshalRepository.GetByEventAsync(eventId);
@@ -620,5 +623,98 @@ public class NoteFunctions
         };
     }
 
+    /// <summary>
+    /// Lazy migration: if any notes have DisplayOrder = 0, normalize all display orders.
+    /// Sorts by pinned first, then priority, then createdAt, and assigns sequential orders.
+    /// </summary>
+    private async Task NormalizeDisplayOrdersAsync(List<NoteEntity> notes)
+    {
+        // Check if any notes need migration (DisplayOrder = 0)
+        bool needsMigration = notes.Any(n => n.DisplayOrder == 0);
+        if (!needsMigration || notes.Count == 0)
+        {
+            return;
+        }
+
+        _logger.LogInformation("Normalizing DisplayOrder for {Count} notes in event {EventId}",
+            notes.Count, notes[0].EventId);
+
+        // Sort: pinned first, then by priority, then by creation date
+        List<NoteEntity> sortedNotes = [.. notes
+            .OrderByDescending(n => n.IsPinned)
+            .ThenBy(n => GetPrioritySortOrder(n.Priority))
+            .ThenBy(n => n.CreatedAt)];
+
+        // Assign sequential display orders
+        Dictionary<string, int> changes = [];
+        for (int i = 0; i < sortedNotes.Count; i++)
+        {
+            int newOrder = i + 1;
+            if (sortedNotes[i].DisplayOrder != newOrder)
+            {
+                sortedNotes[i].DisplayOrder = newOrder;
+                changes[sortedNotes[i].NoteId] = newOrder;
+            }
+        }
+
+        // Batch update in background if there are changes
+        if (changes.Count > 0)
+        {
+            try
+            {
+                await _noteRepository.UpdateDisplayOrdersAsync(notes[0].EventId, changes);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to persist DisplayOrder migration for notes");
+                // Continue anyway - the in-memory list is already updated
+            }
+        }
+    }
+
     #endregion
+
+    /// <summary>
+    /// Reorder notes by updating their display order.
+    /// Only event admins can reorder notes.
+    /// </summary>
+    [Function("ReorderNotes")]
+    public async Task<IActionResult> ReorderNotes(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "events/{eventId}/notes/reorder")] HttpRequest req,
+        string eventId)
+    {
+        try
+        {
+            // Authenticate - only admins can reorder
+            UserClaims? claims = await GetClaimsAsync(req, eventId);
+            if (claims == null || (!claims.IsEventAdmin && !claims.IsSystemAdmin))
+            {
+                return new UnauthorizedObjectResult(new { message = "Only event admins can reorder notes" });
+            }
+
+            // Parse request
+            string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+            ReorderNotesRequest? request = JsonSerializer.Deserialize<ReorderNotesRequest>(requestBody, FunctionHelpers.JsonOptions);
+
+            if (request == null || request.Items == null || request.Items.Count == 0)
+            {
+                return new BadRequestObjectResult(new { message = "Items array is required" });
+            }
+
+            // Build display order map
+            Dictionary<string, int> displayOrders = request.Items.ToDictionary(i => i.Id, i => i.DisplayOrder);
+
+            // Update all notes
+            await _noteRepository.UpdateDisplayOrdersAsync(eventId, displayOrders);
+
+            _logger.LogInformation("Notes reordered for event {EventId} by {PersonId}", eventId, claims.PersonId);
+
+            return new NoContentResult();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error reordering notes for event {EventId}", eventId);
+            return FunctionHelpers.CreateErrorResponse(ex, "Failed to reorder notes");
+        }
+    }
 }

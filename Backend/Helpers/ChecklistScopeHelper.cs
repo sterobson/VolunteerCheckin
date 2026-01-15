@@ -185,6 +185,7 @@ public static class ChecklistScopeHelper
     /// Gets all relevant contexts for a checklist item for a specific marshal.
     /// For personal scopes, returns one context (the marshal).
     /// For shared scopes (OnePerCheckpoint, OnePerArea), returns multiple contexts.
+    /// For linked tasks with EveryoneAtCheckpoints/SpecificPeople, returns one context per checkpoint.
     /// </summary>
     public static List<ScopeMatchResult> GetAllRelevantContexts(
         ChecklistItemEntity item,
@@ -202,7 +203,13 @@ public static class ChecklistScopeHelper
             return [];
         }
 
-        // For personal scopes, return single context
+        // For linked tasks with checkpoint-based personal scopes, return one context per checkpoint
+        if (item.LinksToCheckIn && IsPersonalScope(bestMatch.WinningConfig.Scope))
+        {
+            return GetLinkedTaskContexts(marshalContext, checkpointLookup, bestMatch);
+        }
+
+        // For regular personal scopes, return single context
         if (IsPersonalScope(bestMatch.WinningConfig.Scope))
         {
             return [bestMatch];
@@ -217,6 +224,67 @@ public static class ChecklistScopeHelper
             Constants.ChecklistScopeOneLeadPerArea => ConvertResults(ScopeEvaluator.GetAllAreaContexts(bestMatch.WinningConfig, scopeContext, checkpointLookup, true)),
             _ => [bestMatch] // Fallback to single context
         };
+    }
+
+    /// <summary>
+    /// Gets contexts for linked tasks. For EveryoneAtCheckpoints/SpecificPeople scopes,
+    /// returns one Checkpoint context per checkpoint where the marshal is assigned and in scope.
+    /// </summary>
+    private static List<ScopeMatchResult> GetLinkedTaskContexts(
+        MarshalContext marshalContext,
+        Dictionary<string, LocationEntity> checkpointLookup,
+        ScopeMatchResult bestMatch)
+    {
+        List<ScopeMatchResult> results = [];
+        ScopeConfiguration config = bestMatch.WinningConfig!;
+
+        if (config.Scope == Constants.ChecklistScopeEveryoneAtCheckpoints)
+        {
+            // Get all checkpoints in scope that the marshal is assigned to
+            HashSet<string> checkpointsInScope = config.Ids.Contains(Constants.AllCheckpoints)
+                ? new HashSet<string>(checkpointLookup.Keys)
+                : new HashSet<string>(config.Ids);
+
+            foreach (string checkpointId in marshalContext.AssignedLocationIds)
+            {
+                if (checkpointsInScope.Contains(checkpointId))
+                {
+                    results.Add(new ScopeMatchResult(
+                        true,
+                        config,
+                        bestMatch.Specificity,
+                        Constants.ChecklistContextCheckpoint,  // Use Checkpoint context for linked tasks
+                        checkpointId
+                    ));
+                }
+            }
+        }
+        else if (config.Scope == Constants.ChecklistScopeSpecificPeople)
+        {
+            // For SpecificPeople, check if this marshal is in scope
+            if (config.Ids.Contains(Constants.AllMarshals) || config.Ids.Contains(marshalContext.MarshalId))
+            {
+                // Return one context per checkpoint the marshal is assigned to
+                foreach (string checkpointId in marshalContext.AssignedLocationIds)
+                {
+                    results.Add(new ScopeMatchResult(
+                        true,
+                        config,
+                        bestMatch.Specificity,
+                        Constants.ChecklistContextCheckpoint,  // Use Checkpoint context for linked tasks
+                        checkpointId
+                    ));
+                }
+            }
+        }
+        else
+        {
+            // For other personal scopes (EveryoneInAreas, EveryAreaLead), fall back to single context
+            // (these shouldn't be used with LinksToCheckIn but handle gracefully)
+            results.Add(bestMatch);
+        }
+
+        return results;
     }
 
     /// <summary>

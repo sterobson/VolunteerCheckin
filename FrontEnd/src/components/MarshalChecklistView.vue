@@ -20,7 +20,9 @@
       :items="itemsWithLocalState"
       :locations="locations"
       :areas="areas"
+      :allow-reorder="allowReorder"
       @toggle-complete="handleToggleComplete"
+      @reorder="handleReorder"
     />
   </div>
 </template>
@@ -54,9 +56,13 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  allowReorder: {
+    type: Boolean,
+    default: false,
+  },
 });
 
-const emit = defineEmits(['update:modelValue', 'change']);
+const emit = defineEmits(['update:modelValue', 'change', 'reorder']);
 
 const items = ref([]);
 const loading = ref(false);
@@ -139,6 +145,10 @@ const emitChanges = () => {
 
   emit('update:modelValue', changes);
   emit('change', changes);
+};
+
+const handleReorder = (changes) => {
+  emit('reorder', changes);
 };
 
 // Reset local state when modal opens/closes

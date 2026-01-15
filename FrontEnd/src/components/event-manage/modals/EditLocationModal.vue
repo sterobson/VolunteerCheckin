@@ -84,7 +84,9 @@
       :areas="areas"
       :assignments="assignments"
       :marshals="allMarshals"
+      :allow-reorder="true"
       @change="handleChecklistChange"
+      @reorder="handleChecklistsReorder"
     />
 
     <!-- Checklists preview - shown in both create and edit modes to add new scoped items -->
@@ -109,6 +111,8 @@
       :areas="areas"
       :assignments="assignments"
       :marshals="allMarshals"
+      :allow-reorder="true"
+      @reorder="handleNotesReorder"
     />
 
     <!-- Notes preview - shown in both create and edit modes to add new scoped items -->
@@ -429,6 +433,8 @@ const emit = defineEmits([
   'update:isDirty',
   'select-incident',
   'select-marshal',
+  'reorder-notes',
+  'reorder-checklists',
 ]);
 
 const activeTab = ref('details');
@@ -998,6 +1004,14 @@ const handleClose = () => {
 const handleStyleInput = (field, value) => {
   form.value[field] = value;
   handleInput();
+};
+
+const handleNotesReorder = (changes) => {
+  emit('reorder-notes', changes);
+};
+
+const handleChecklistsReorder = (changes) => {
+  emit('reorder-checklists', changes);
 };
 </script>
 

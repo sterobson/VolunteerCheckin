@@ -180,8 +180,8 @@
                 <a v-if="m.phoneNumber" :href="'sms:' + m.phoneNumber" class="btn btn-sm btn-secondary">Text</a>
                 <a v-if="m.email" :href="'mailto:' + m.email" class="btn btn-sm btn-secondary">Email</a>
               </div>
-              <!-- Check-in/check-out button for area leads (not for yourself) -->
-              <div v-if="m.marshalId !== currentMarshalId" class="checkpoint-marshal-checkin">
+              <!-- Check-in and QR code actions for area leads (not for yourself) -->
+              <div v-if="m.marshalId !== currentMarshalId" class="checkpoint-marshal-actions">
                 <CheckInToggleButton
                   :is-checked-in="m.effectiveIsCheckedIn"
                   :check-in-time="m.checkInTime"
@@ -191,6 +191,21 @@
                   :is-loading="checkingInMarshalId === m.id"
                   @toggle="$emit('marshal-check-in', m)"
                 />
+                <button
+                  class="btn btn-secondary btn-qr-icon"
+                  @click.stop="$emit('show-marshal-qr', m)"
+                  title="Show QR code for magic link"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="3" width="7" height="7"></rect>
+                    <rect x="3" y="14" width="7" height="7"></rect>
+                    <rect x="14" y="14" width="3" height="3"></rect>
+                    <rect x="19" y="14" width="2" height="2"></rect>
+                    <rect x="14" y="19" width="2" height="2"></rect>
+                    <rect x="19" y="19" width="2" height="2"></rect>
+                  </svg>
+                </button>
               </div>
             </div>
           </div>
@@ -343,6 +358,7 @@ defineEmits([
   'toggle-marshal',
   'marshal-check-in',
   'toggle-auto-update',
+  'show-marshal-qr',
 ]);
 
 const mapRef = ref(null);
@@ -742,10 +758,36 @@ const formatDateTime = (dateString) => {
   font-size: 0.8rem;
 }
 
-.checkpoint-marshal-checkin {
+.checkpoint-marshal-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
   margin-top: 0.75rem;
   padding-top: 0.75rem;
   border-top: 1px solid var(--border-light);
+}
+
+.btn-qr-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-muted);
+  color: var(--text-dark);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.btn-qr-icon:hover {
+  background: var(--bg-hover);
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+}
+
+.btn-qr-icon svg {
+  display: block;
 }
 
 .checkpoint-area-contacts {

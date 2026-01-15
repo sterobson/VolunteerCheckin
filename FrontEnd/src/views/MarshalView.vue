@@ -137,6 +137,7 @@
             @toggle-marshal="toggleMarshalDetails"
             @marshal-check-in="(m, locId) => handleCheckInToggle(m, false, locId)"
             @toggle-auto-update="toggleAutoUpdate"
+            @show-marshal-qr="showMarshalQr"
           />
 
           <!-- Checklist Section -->
@@ -216,10 +217,12 @@
             :expanded-marshal-id="expandedAreaLeadMarshal"
             :checking-in-marshal-id="checkingIn"
             :saving-task="savingAreaLeadMarshalTask"
+            :current-marshal-id="currentMarshalId"
             @toggle="toggleSection('areaLeadMarshals')"
             @toggle-marshal="toggleAreaLeadMarshalExpansion"
             @check-in="handleAreaLeadMarshalCheckIn"
             @toggle-task="toggleAreaLeadMarshalTask"
+            @show-qr="showMarshalQr"
           />
 
           <!-- Route/Map Section -->
@@ -361,13 +364,41 @@
       @copy-from-checkpoint="updateLocationFromCheckpoint"
     />
 
+    <!-- Marshal Magic Link QR Code Modal -->
+    <QrCodeModal
+      v-if="!marshalQrLoading && !marshalQrError && marshalQrUrl"
+      :show="showMarshalQrModal"
+      :url="marshalQrUrl"
+      :title="`Magic link for ${marshalQrName}`"
+      :warning="`Only share this QR code with ${marshalQrName}. This link provides full access to their ${termsLower.person} dashboard.`"
+      :z-index="1100"
+      @close="showMarshalQrModal = false"
+    />
+
+    <!-- Marshal Magic Link Loading/Error Modal -->
+    <BaseModal
+      v-if="marshalQrLoading || marshalQrError"
+      :show="showMarshalQrModal"
+      :title="`Magic link for ${marshalQrName}`"
+      size="small"
+      :z-index="1100"
+      @close="showMarshalQrModal = false"
+    >
+      <div v-if="marshalQrLoading" class="qr-loading-state">
+        <p>Loading magic link...</p>
+      </div>
+      <div v-else-if="marshalQrError" class="qr-error-state">
+        <p>{{ marshalQrError }}</p>
+      </div>
+    </BaseModal>
+
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, provide, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { eventsApi, assignmentsApi, areasApi, notesApi, contactsApi, getOfflineMode } from '../services/api';
+import { eventsApi, assignmentsApi, areasApi, notesApi, contactsApi, marshalsApi, getOfflineMode } from '../services/api';
 import ConfirmModal from '../components/ConfirmModal.vue';
 import BaseModal from '../components/BaseModal.vue';
 import EmergencyContactModal from '../components/event-manage/modals/EmergencyContactModal.vue';
@@ -376,6 +407,7 @@ import IncidentDetailModal from '../components/IncidentDetailModal.vue';
 import OfflineIndicator from '../components/OfflineIndicator.vue';
 import CheckInReminderModal from '../components/marshal/modals/CheckInReminderModal.vue';
 import LocationUpdateModal from '../components/marshal/modals/LocationUpdateModal.vue';
+import QrCodeModal from '../components/common/QrCodeModal.vue';
 import MarshalContactsSection from '../components/marshal/MarshalContactsSection.vue';
 import MarshalIncidentsSection from '../components/marshal/MarshalIncidentsSection.vue';
 import MarshalEventDetailsSection from '../components/marshal/MarshalEventDetailsSection.vue';
@@ -713,6 +745,7 @@ const {
   areaLeadRef,
   areaLeadCheckpoints,
   areaChecklistItems,
+  myChecklistItems,
   areaLeadAreaIds,
   loadChecklist,
 });
@@ -741,6 +774,7 @@ const {
   areaLeadMarshalDataVersion,
   updatePendingCount,
   updateCachedField,
+  reloadChecklist: loadChecklist,
 });
 
 // UI state
@@ -760,6 +794,31 @@ const showMessage = (title, message) => {
   messageModalTitle.value = title;
   messageModalMessage.value = message;
   showMessageModal.value = true;
+};
+
+// QR code modal state for area lead marshal magic links
+const showMarshalQrModal = ref(false);
+const marshalQrUrl = ref('');
+const marshalQrName = ref('');
+const marshalQrLoading = ref(false);
+const marshalQrError = ref('');
+
+// Handler for showing marshal QR code
+const showMarshalQr = async (marshal) => {
+  marshalQrName.value = marshal.name || marshal.marshalName || '';
+  marshalQrUrl.value = '';
+  marshalQrError.value = '';
+  marshalQrLoading.value = true;
+  showMarshalQrModal.value = true;
+
+  try {
+    const response = await marshalsApi.getMagicLink(eventId.value, marshal.marshalId);
+    marshalQrUrl.value = response.data.magicLink;
+    marshalQrLoading.value = false;
+  } catch (err) {
+    marshalQrLoading.value = false;
+    marshalQrError.value = err.response?.data?.message || 'Failed to load magic link';
+  }
 };
 
 // Incidents composable
@@ -1231,6 +1290,11 @@ const getNotesForCheckpoint = (locationId, passedAreaIds = []) => {
     const priorityA = priorityOrder[a.priority || a.Priority || 'Normal'] ?? 3;
     const priorityB = priorityOrder[b.priority || b.Priority || 'Normal'] ?? 3;
     if (priorityA !== priorityB) return priorityA - priorityB;
+
+    // Then by display order
+    const orderA = a.displayOrder || a.DisplayOrder || 0;
+    const orderB = b.displayOrder || b.DisplayOrder || 0;
+    if (orderA !== orderB) return orderA - orderB;
 
     // Then by date (newest first)
     const dateA = a.createdAt || a.CreatedAt;
@@ -2141,4 +2205,15 @@ onUnmounted(() => {
   }
 }
 
+/* QR Modal Loading/Error States */
+.qr-loading-state,
+.qr-error-state {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-secondary);
+}
+
+.qr-error-state {
+  color: var(--danger);
+}
 </style>

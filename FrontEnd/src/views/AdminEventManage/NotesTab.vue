@@ -26,43 +26,56 @@
         <p>{{ searchQuery ? 'No notes match your search.' : 'No notes yet. Create one to get started!' }}</p>
       </div>
 
-      <div
-        v-for="note in sortedNotes"
-        :key="note.noteId"
-        class="note-card"
-        :class="{ pinned: note.isPinned }"
-        @click="$emit('select-note', note)"
+      <DraggableList
+        v-else
+        :items="sortedNotes"
+        item-key="noteId"
+        pinned-key="isPinned"
+        :disabled="!!searchQuery"
+        @reorder="handleReorder"
       >
-        <div class="note-header">
-          <div class="note-title-row">
-            <span v-if="note.isPinned" class="pin-icon" title="Pinned">📌</span>
-            <span class="priority-indicator" :class="note.priority?.toLowerCase() || 'normal'"></span>
-            <strong>{{ note.title }}</strong>
-            <span v-if="note.showInEmergencyInfo" class="emergency-indicator" title="Shown in emergency info">🚨</span>
+        <template #item="{ element: note }">
+          <div
+            class="note-card"
+            :class="{ pinned: note.isPinned }"
+          >
+            <DragHandle v-if="!searchQuery" />
+            <div class="note-content" @click="$emit('select-note', note)">
+              <div class="note-header">
+                <div class="note-title-row">
+                  <span v-if="note.isPinned" class="pin-icon" title="Pinned">📌</span>
+                  <span class="priority-indicator" :class="note.priority?.toLowerCase() || 'normal'"></span>
+                  <strong>{{ note.title }}</strong>
+                  <span v-if="note.showInEmergencyInfo" class="emergency-indicator" title="Shown in emergency info">🚨</span>
+                </div>
+                <div class="note-meta">
+                  <span v-if="note.category" class="category-badge">{{ note.category }}</span>
+                  <span class="created-info">{{ formatRelativeTime(note.createdAt) }}</span>
+                </div>
+              </div>
+              <div v-if="note.content" class="note-preview">
+                {{ truncateContent(note.content) }}
+              </div>
+              <ScopedAssignmentPills
+                :scope-configurations="note.scopeConfigurations"
+                :areas="areas"
+                :locations="locations"
+                :marshals="marshals"
+              />
+            </div>
           </div>
-          <div class="note-meta">
-            <span v-if="note.category" class="category-badge">{{ note.category }}</span>
-            <span class="created-info">{{ formatRelativeTime(note.createdAt) }}</span>
-          </div>
-        </div>
-        <div v-if="note.content" class="note-preview">
-          {{ truncateContent(note.content) }}
-        </div>
-        <ScopedAssignmentPills
-          :scope-configurations="note.scopeConfigurations"
-          :areas="areas"
-          :locations="locations"
-          :marshals="marshals"
-        />
-      </div>
+        </template>
+      </DraggableList>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, defineProps, defineEmits } from 'vue';
+import { ref, computed } from 'vue';
 import { alphanumericCompare } from '../../utils/sortUtils';
 import ScopedAssignmentPills from '../../components/common/ScopedAssignmentPills.vue';
+import DraggableList from '../../components/common/DraggableList.vue';
+import DragHandle from '../../components/common/DragHandle.vue';
 
 const props = defineProps({
   notes: {
@@ -83,7 +96,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['add-note', 'select-note']);
+const emit = defineEmits(['add-note', 'select-note', 'reorder']);
 
 const searchQuery = ref('');
 
@@ -128,6 +141,12 @@ const sortedNotes = computed(() => {
     return alphanumericCompare(a.title, b.title);
   });
 });
+
+const handleReorder = ({ changes }) => {
+  // Transform changes to use noteId instead of id
+  const noteChanges = changes.map(c => ({ id: c.id, displayOrder: c.displayOrder }));
+  emit('reorder', noteChanges);
+};
 
 const truncateContent = (content) => {
   if (!content) return '';
@@ -180,7 +199,6 @@ const formatRelativeTime = (dateString) => {
   display: flex;
   gap: 0.75rem;
 }
-.btn {  padding: 0.5rem 1rem;  border: none;  border-radius: 4px;  cursor: pointer;  font-size: 0.9rem;  transition: background-color 0.2s;}.btn-primary {  background: var(--accent-primary);  color: white;}.btn-primary:hover {  background: var(--accent-primary-hover);}
 
 .filters-section {
   margin-bottom: 1rem;
@@ -229,12 +247,16 @@ const formatRelativeTime = (dateString) => {
 }
 
 .note-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
   padding: 1rem 1.25rem;
   background: var(--card-bg);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  cursor: pointer;
   transition: all 0.2s;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .note-card:hover {
@@ -245,6 +267,12 @@ const formatRelativeTime = (dateString) => {
 .note-card.pinned {
   border-left: 4px solid var(--accent-primary);
   background: var(--bg-secondary);
+}
+
+.note-content {
+  flex: 1;
+  cursor: pointer;
+  min-width: 0;
 }
 
 .note-header {

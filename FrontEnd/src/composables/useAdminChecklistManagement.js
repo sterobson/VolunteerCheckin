@@ -10,6 +10,8 @@ export function useAdminChecklistManagement(eventId) {
   // Data
   const checklistItems = ref([]);
   const checklistCompletionReport = ref(null);
+  const checklistDetailedReport = ref(null);
+  const isLoadingDetailedReport = ref(false);
 
   // Modal state
   const showEditChecklistItem = ref(false);
@@ -33,6 +35,23 @@ export function useAdminChecklistManagement(eventId) {
     } catch (error) {
       console.error('Failed to load checklists:', error);
       throw error;
+    }
+  };
+
+  /**
+   * Load detailed report for reporting views
+   */
+  const loadDetailedReport = async () => {
+    try {
+      isLoadingDetailedReport.value = true;
+      const response = await checklistApi.getDetailedReport(eventId.value);
+      checklistDetailedReport.value = response.data;
+      return response.data;
+    } catch (error) {
+      console.error('Failed to load detailed checklist report:', error);
+      throw error;
+    } finally {
+      isLoadingDetailedReport.value = false;
     }
   };
 
@@ -136,6 +155,8 @@ export function useAdminChecklistManagement(eventId) {
     // Data
     checklistItems,
     checklistCompletionReport,
+    checklistDetailedReport,
+    isLoadingDetailedReport,
 
     // Modal state
     showEditChecklistItem,
@@ -146,6 +167,7 @@ export function useAdminChecklistManagement(eventId) {
 
     // Methods
     loadChecklists,
+    loadDetailedReport,
     handleAddChecklistItem,
     handleSelectChecklistItem,
     closeEditChecklistItemModal,

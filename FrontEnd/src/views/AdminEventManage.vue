@@ -94,8 +94,12 @@
           :locations="locationStatuses"
           :marshals="marshals"
           :completion-report="checklistCompletionReport"
+          :detailed-report="checklistDetailedReport"
+          :is-loading-detailed-report="isLoadingDetailedReport"
           @add-checklist-item="handleAddChecklistItem"
           @select-checklist-item="handleSelectChecklistItem"
+          @reorder="handleReorderChecklistItems"
+          @load-detailed-report="loadDetailedReport"
         />
 
         <NotesTab
@@ -106,6 +110,7 @@
           :marshals="marshals"
           @add-note="handleAddNote"
           @select-note="handleSelectNote"
+          @reorder="handleReorderNotes"
         />
 
         <IncidentsTab
@@ -124,8 +129,18 @@
           :locations="locationStatuses"
           :marshals="marshals"
           :available-roles="contactRoles"
+          :role-definitions="roleDefinitions"
           @add-contact="handleAddContact"
           @select-contact="handleSelectContact"
+          @reorder="handleReorderContacts"
+        />
+
+        <RolesTab
+          v-if="activeTab === 'roles'"
+          :role-definitions="roleDefinitions"
+          @add-role="handleAddRole"
+          @select-role="handleSelectRole"
+          @reorder="handleReorderRoles"
         />
 
         <EventDetailsTab
@@ -196,6 +211,8 @@
       @update:isDirty="markFormDirty"
       @select-incident="handleSelectLocationIncident"
       @select-marshal="handleSelectMarshalFromCheckpoint"
+      @reorder-notes="handleReorderNotes"
+      @reorder-checklists="handleReorderChecklists"
     />
 
     <ShareLinkModal
@@ -260,6 +277,7 @@
       :validation-errors="marshalValidationErrors"
       :locked-checkpoint-id="lockedCheckpointId"
       :z-index="lockedCheckpointId ? 1100 : 1000"
+      :role-definitions="roleDefinitions"
       @close="closeEditMarshalModal"
       @save="handleSaveMarshal"
       @delete="handleDeleteMarshal"
@@ -268,6 +286,8 @@
       @update:isDirty="markFormDirty"
       @select-incident="handleSelectMarshalIncident"
       @select-checkpoint="handleSelectCheckpointFromMarshal"
+      @reorder-notes="handleReorderNotes"
+      @reorder-checklists="handleReorderChecklists"
     />
 
     <ImportMarshalsModal
@@ -322,6 +342,7 @@
       :notes="notes"
       :contacts="contacts"
       :incidents="selectedAreaIncidents"
+      :role-definitions="roleDefinitions"
       :event-default-style-type="event?.defaultCheckpointStyleType || event?.DefaultCheckpointStyleType || 'default'"
       :event-default-style-color="event?.defaultCheckpointStyleColor || event?.DefaultCheckpointStyleColor || ''"
       :event-default-style-background-shape="event?.defaultCheckpointStyleBackgroundShape || event?.DefaultCheckpointStyleBackgroundShape || ''"
@@ -342,6 +363,9 @@
       @create-new-contact="handleCreateNewContact"
       @edit-contact="handleEditContactFromArea"
       @select-incident="handleSelectAreaIncident"
+      @reorder-notes="handleReorderNotes"
+      @reorder-checklists="handleReorderChecklists"
+      @reorder-contacts="handleReorderContacts"
     />
 
     <EditChecklistItemModal
@@ -434,6 +458,7 @@
       :locations="locationStatuses"
       :marshals="marshals"
       :available-roles="contactRoles"
+      :role-definitions="roleDefinitions"
       :is-dirty="formDirty"
       :prefilled-name="prefilledContactName"
       :prefilled-marshal-id="prefilledContactMarshalId"
@@ -442,6 +467,21 @@
       @save="handleSaveContact"
       @delete="handleDeleteContact"
       @update:isDirty="markFormDirty"
+    />
+
+    <EditRoleDefinitionModal
+      :show="showEditRole"
+      :role="selectedRole"
+      :initial-tab="roleInitialTab"
+      :people="rolePeople"
+      :loading-people="loadingRolePeople"
+      :is-dirty="formDirty"
+      @close="closeEditRoleModal"
+      @save="handleSaveRole"
+      @delete="handleDeleteRole"
+      @update:isDirty="markFormDirty"
+      @load-people="handleLoadPeopleForRole"
+      @toggle-person-role="handleTogglePersonRole"
     />
 
     <!-- Fullscreen Map Overlay -->
@@ -495,7 +535,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useEventsStore } from '../stores/events';
-import { authApi, checkInApi, eventAdminsApi, eventsApi, locationsApi, marshalsApi, areasApi, checklistApi, notesApi, contactsApi, incidentsApi } from '../services/api';
+import { authApi, checkInApi, eventAdminsApi, eventsApi, locationsApi, marshalsApi, areasApi, checklistApi, notesApi, contactsApi, incidentsApi, roleDefinitionsApi } from '../services/api';
 
 // Composables
 import { useTabs } from '../composables/useTabs';
@@ -524,6 +564,7 @@ import MarshalsTab from './AdminEventManage/MarshalsTab.vue';
 import ChecklistsTab from './AdminEventManage/ChecklistsTab.vue';
 import NotesTab from './AdminEventManage/NotesTab.vue';
 import ContactsTab from './AdminEventManage/ContactsTab.vue';
+import RolesTab from './AdminEventManage/RolesTab.vue';
 import EventDetailsTab from './AdminEventManage/EventDetailsTab.vue';
 import SettingsTab from './AdminEventManage/SettingsTab.vue';
 import IncidentsTab from './AdminEventManage/IncidentsTab.vue';
@@ -549,6 +590,7 @@ import EditNoteModal from '../components/event-manage/modals/EditNoteModal.vue';
 import IncidentDetailModal from '../components/IncidentDetailModal.vue';
 import ReportIncidentModal from '../components/ReportIncidentModal.vue';
 import EditContactModal from '../components/event-manage/modals/EditContactModal.vue';
+import EditRoleDefinitionModal from '../components/event-manage/modals/EditRoleDefinitionModal.vue';
 import InfoModal from '../components/InfoModal.vue';
 import ConfirmModal from '../components/ConfirmModal.vue';
 import BaseModal from '../components/BaseModal.vue';
@@ -565,7 +607,7 @@ const eventsStore = useEventsStore();
 const eventId = computed(() => route.params.eventId);
 
 // Use composables
-const { activeTab, switchTab } = useTabs('details', ['details', 'course', 'areas', 'checkpoints', 'marshals', 'notes', 'checklists', 'contacts', 'settings']);
+const { activeTab, switchTab } = useTabs('details', ['details', 'course', 'areas', 'checkpoints', 'marshals', 'notes', 'checklists', 'contacts', 'roles', 'settings']);
 const {
   showConfirmModal,
   confirmModalTitle,
@@ -604,6 +646,7 @@ const mainTabs = computed(() => [
   { value: 'incidents', label: 'Incidents', icon: 'incidents' },
   { value: 'checklists', label: tabLabels.value.checklists, icon: 'checklist' },
   { value: 'contacts', label: 'Contacts', icon: 'contacts' },
+  { value: 'roles', label: 'Roles', icon: 'roles' },
   { value: 'settings', label: 'Settings', icon: 'settings' },
 ]);
 
@@ -622,6 +665,7 @@ const dataLastLoadedAt = ref({
   notes: 0,
   incidents: 0,
   contacts: 0,
+  roles: 0,
 });
 const selectedLocation = ref(null);
 const lockedFromMarshal = ref(false);
@@ -745,6 +789,8 @@ const selectedChecklistItem = ref(null);
 const showEditChecklistItem = ref(false);
 const checklistItemInitialTab = ref('details');
 const checklistCompletionReport = ref(null);
+const checklistDetailedReport = ref(null);
+const isLoadingDetailedReport = ref(false);
 const notes = ref([]);
 const selectedNote = ref(null);
 const showEditNote = ref(false);
@@ -761,6 +807,13 @@ const contacts = ref([]);
 const contactRoles = ref({ builtInRoles: [], customRoles: [] });
 const selectedContact = ref(null);
 const showEditContact = ref(false);
+// Role definitions state
+const roleDefinitions = ref([]);
+const selectedRole = ref(null);
+const showEditRole = ref(false);
+const roleInitialTab = ref('details');
+const rolePeople = ref([]);
+const loadingRolePeople = ref(false);
 const contactInitialTab = ref('details');
 const pendingAreaForContact = ref(null);
 const prefilledContactName = ref('');
@@ -1167,6 +1220,18 @@ const loadChecklists = async () => {
   }
 };
 
+const loadDetailedReport = async () => {
+  try {
+    isLoadingDetailedReport.value = true;
+    const response = await checklistApi.getDetailedReport(route.params.eventId);
+    checklistDetailedReport.value = response.data;
+  } catch (error) {
+    console.error('Failed to load detailed report:', error);
+  } finally {
+    isLoadingDetailedReport.value = false;
+  }
+};
+
 const loadNotes = async () => {
   try {
     const response = await notesApi.getByEvent(route.params.eventId);
@@ -1562,6 +1627,28 @@ const closeEditChecklistItemModal = () => {
   formDirty.value = false;
 };
 
+const handleReorderChecklistItems = async (changes) => {
+  // Store original order for rollback
+  const originalItems = [...checklistItems.value];
+
+  // Apply optimistic update
+  changes.forEach(change => {
+    const item = checklistItems.value.find(i => i.itemId === change.id);
+    if (item) {
+      item.displayOrder = change.displayOrder;
+    }
+  });
+
+  try {
+    await checklistApi.reorder(route.params.eventId, changes);
+  } catch (error) {
+    // Rollback on failure
+    checklistItems.value = originalItems;
+    console.error('Failed to reorder checklist items:', error);
+    alert('Failed to save order. Changes have been reverted.');
+  }
+};
+
 // Notes handlers
 const handleAddNote = () => {
   selectedNote.value = null;
@@ -1620,6 +1707,50 @@ const closeEditNoteModal = () => {
   showEditNote.value = false;
   selectedNote.value = null;
   formDirty.value = false;
+};
+
+const handleReorderNotes = async (changes) => {
+  // Store original order for rollback
+  const originalNotes = [...notes.value];
+
+  // Apply optimistic update
+  changes.forEach(change => {
+    const note = notes.value.find(n => n.noteId === change.id);
+    if (note) {
+      note.displayOrder = change.displayOrder;
+    }
+  });
+
+  try {
+    await notesApi.reorder(route.params.eventId, changes);
+  } catch (error) {
+    // Rollback on failure
+    notes.value = originalNotes;
+    console.error('Failed to reorder notes:', error);
+    alert('Failed to save order. Changes have been reverted.');
+  }
+};
+
+const handleReorderChecklists = async (changes) => {
+  // Store original order for rollback
+  const originalItems = [...checklistItems.value];
+
+  // Apply optimistic update
+  changes.forEach(change => {
+    const item = checklistItems.value.find(i => i.itemId === change.id);
+    if (item) {
+      item.displayOrder = change.displayOrder;
+    }
+  });
+
+  try {
+    await checklistApi.reorder(route.params.eventId, changes);
+  } catch (error) {
+    // Rollback on failure
+    checklistItems.value = originalItems;
+    console.error('Failed to reorder checklists:', error);
+    alert('Failed to save order. Changes have been reverted.');
+  }
 };
 
 // Incident handlers
@@ -1779,6 +1910,163 @@ const closeEditContactModal = () => {
   prefilledContactName.value = '';
   prefilledContactMarshalId.value = null;
   formDirty.value = false;
+};
+
+const handleReorderContacts = async (changes) => {
+  // Store original order for rollback
+  const originalContacts = [...contacts.value];
+
+  // Apply optimistic update
+  changes.forEach(change => {
+    const contact = contacts.value.find(c => c.contactId === change.id);
+    if (contact) {
+      contact.displayOrder = change.displayOrder;
+    }
+  });
+
+  try {
+    await contactsApi.reorder(route.params.eventId, changes);
+  } catch (error) {
+    // Rollback on failure
+    contacts.value = originalContacts;
+    console.error('Failed to reorder contacts:', error);
+    alert('Failed to save order. Changes have been reverted.');
+  }
+};
+
+// Role Definition Handlers
+const loadRoleDefinitions = async () => {
+  try {
+    const response = await roleDefinitionsApi.getAll(route.params.eventId);
+    roleDefinitions.value = response.data;
+    dataLastLoadedAt.value.roles = Date.now();
+  } catch (error) {
+    console.error('Failed to load role definitions:', error);
+  }
+};
+
+const handleAddRole = () => {
+  selectedRole.value = null;
+  roleInitialTab.value = 'details';
+  rolePeople.value = [];
+  formDirty.value = false;
+  showEditRole.value = true;
+};
+
+const handleSelectRole = (role) => {
+  selectedRole.value = role;
+  roleInitialTab.value = 'details';
+  rolePeople.value = [];
+  formDirty.value = false;
+  showEditRole.value = true;
+};
+
+const handleSaveRole = async (formData) => {
+  try {
+    if (selectedRole.value?.roleId) {
+      // Update existing role
+      await roleDefinitionsApi.update(route.params.eventId, selectedRole.value.roleId, formData);
+    } else {
+      // Create new role
+      await roleDefinitionsApi.create(route.params.eventId, formData);
+    }
+    await loadRoleDefinitions();
+    closeEditRoleModal();
+  } catch (error) {
+    console.error('Failed to save role:', error);
+    const errorMessage = error.response?.data?.message || 'Failed to save role. Please try again.';
+    alert(errorMessage);
+  }
+};
+
+const handleDeleteRole = async (roleId) => {
+  showConfirm('Delete role', 'Are you sure you want to delete this role?', async () => {
+    try {
+      await roleDefinitionsApi.delete(route.params.eventId, roleId);
+      await loadRoleDefinitions();
+      closeEditRoleModal();
+    } catch (error) {
+      console.error('Failed to delete role:', error);
+      alert(error.response?.data?.message || 'Failed to delete role. Please try again.');
+    }
+  }, { isDanger: true, confirmText: 'Delete' });
+};
+
+const closeEditRoleModal = () => {
+  showEditRole.value = false;
+  selectedRole.value = null;
+  rolePeople.value = [];
+  formDirty.value = false;
+};
+
+const handleLoadPeopleForRole = async (roleId) => {
+  loadingRolePeople.value = true;
+  try {
+    const response = await roleDefinitionsApi.getPeople(route.params.eventId, roleId);
+    rolePeople.value = response.data;
+  } catch (error) {
+    console.error('Failed to load people for role:', error);
+  } finally {
+    loadingRolePeople.value = false;
+  }
+};
+
+const handleTogglePersonRole = async ({ person, addRole }) => {
+  if (!selectedRole.value?.roleId) return;
+
+  const roleId = selectedRole.value.roleId;
+  const changes = {
+    marshalIdsToAdd: [],
+    marshalIdsToRemove: [],
+    contactIdsToAdd: [],
+    contactIdsToRemove: [],
+  };
+
+  if (person.personType === 'Marshal' || person.personType === 'Linked') {
+    if (addRole) {
+      changes.marshalIdsToAdd.push(person.marshalId);
+    } else {
+      changes.marshalIdsToRemove.push(person.marshalId);
+    }
+  } else if (person.personType === 'Contact') {
+    if (addRole) {
+      changes.contactIdsToAdd.push(person.contactId);
+    } else {
+      changes.contactIdsToRemove.push(person.contactId);
+    }
+  }
+
+  try {
+    const response = await roleDefinitionsApi.updatePeople(route.params.eventId, roleId, changes);
+    rolePeople.value = response.data;
+    // Reload role definitions to update usage counts
+    await loadRoleDefinitions();
+  } catch (error) {
+    console.error('Failed to update role assignment:', error);
+    alert('Failed to update role assignment. Please try again.');
+  }
+};
+
+const handleReorderRoles = async (changes) => {
+  // Store original order for rollback
+  const originalRoles = [...roleDefinitions.value];
+
+  // Apply optimistic update
+  changes.forEach(change => {
+    const role = roleDefinitions.value.find(r => r.roleId === change.id);
+    if (role) {
+      role.displayOrder = change.displayOrder;
+    }
+  });
+
+  try {
+    await roleDefinitionsApi.reorder(route.params.eventId, changes);
+  } catch (error) {
+    // Rollback on failure
+    roleDefinitions.value = originalRoles;
+    console.error('Failed to reorder roles:', error);
+    alert('Failed to save order. Changes have been reverted.');
+  }
 };
 
 const handleDrawBoundary = (formData) => {
@@ -2838,6 +3126,7 @@ const handleSaveMarshal = async (formData) => {
           email: formData.email,
           phoneNumber: formData.phoneNumber,
           notes: formData.notes,
+          roles: formData.roles || [],
         }
       );
 
@@ -2879,6 +3168,7 @@ const handleSaveMarshal = async (formData) => {
         email: formData.email,
         phoneNumber: formData.phoneNumber,
         notes: formData.notes,
+        roles: formData.roles || [],
         pendingNewChecklistItems: formData.pendingNewChecklistItems || [],
         pendingNewNotes: formData.pendingNewNotes || [],
       });
@@ -3229,6 +3519,10 @@ watch(activeTab, (newTab) => {
       if (isStale('areas')) {
         loadAreas();
       }
+      // Also load role definitions for displaying role names in area contacts
+      if (isStale('roles')) {
+        loadRoleDefinitions();
+      }
       break;
     case 'checkpoints':
       if (isStale('checkpoints')) {
@@ -3253,6 +3547,15 @@ watch(activeTab, (newTab) => {
     case 'contacts':
       if (isStale('contacts')) {
         loadContacts();
+      }
+      // Also load role definitions for displaying role names
+      if (isStale('roles')) {
+        loadRoleDefinitions();
+      }
+      break;
+    case 'roles':
+      if (isStale('roles')) {
+        loadRoleDefinitions();
       }
       break;
   }

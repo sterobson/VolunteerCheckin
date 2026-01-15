@@ -60,4 +60,22 @@ public class TableStorageChecklistItemRepository : IChecklistItemRepository
             await _table.DeleteEntityAsync(eventId, item.RowKey);
         }
     }
+
+    public async Task UpdateDisplayOrdersAsync(string eventId, Dictionary<string, int> itemDisplayOrders)
+    {
+        foreach (KeyValuePair<string, int> kvp in itemDisplayOrders)
+        {
+            try
+            {
+                Response<ChecklistItemEntity> response = await _table.GetEntityAsync<ChecklistItemEntity>(eventId, kvp.Key);
+                ChecklistItemEntity item = response.Value;
+                item.DisplayOrder = kvp.Value;
+                await _table.UpdateEntityAsync(item, item.ETag);
+            }
+            catch (RequestFailedException)
+            {
+                // Skip items that don't exist
+            }
+        }
+    }
 }

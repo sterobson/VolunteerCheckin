@@ -78,6 +78,7 @@ public class LogoFunctions
     /// POST /events/{eventId}/logo
     /// </summary>
     [Function("UploadEventLogo")]
+#pragma warning disable MA0051 // File upload handling with validation and processing
     public async Task<IActionResult> UploadEventLogo(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "events/{eventId}/logo")] HttpRequest req,
         string eventId)
@@ -145,6 +146,7 @@ public class LogoFunctions
             };
         }
     }
+#pragma warning restore MA0051
 
     /// <summary>
     /// Delete the logo for an event.

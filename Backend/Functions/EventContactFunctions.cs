@@ -422,6 +422,10 @@ public class EventContactFunctions
             // Get all contacts for the event
             IEnumerable<EventContactEntity> allContacts = await _contactRepository.GetByEventAsync(eventId);
 
+            // Load role definitions to resolve role IDs to names
+            IEnumerable<EventRoleDefinitionEntity> roleDefinitions = await _roleDefinitionRepository.GetByEventAsync(eventId);
+            Dictionary<string, string> roleIdToName = roleDefinitions.ToDictionary(r => r.RoleId, r => r.Name);
+
             // Filter contacts based on scope
             List<EventContactForMarshalResponse> relevantContacts = [];
             foreach (EventContactEntity contact in allContacts)
@@ -434,9 +438,12 @@ public class EventContactFunctions
 
                 if (result.IsRelevant)
                 {
+                    List<string> rawRoles = GetRolesFromEntity(contact);
+                    List<string> resolvedRoles = ResolveRoleNames(rawRoles, roleIdToName);
+
                     relevantContacts.Add(new EventContactForMarshalResponse(
                         ContactId: contact.ContactId,
-                        Roles: GetRolesFromEntity(contact),
+                        Roles: resolvedRoles,
                         Name: contact.Name,
                         Phone: contact.Phone,
                         Email: contact.Email,
@@ -489,6 +496,11 @@ public class EventContactFunctions
                 if (claims.IsEventAdmin)
                 {
                     IEnumerable<EventContactEntity> allContacts = await _contactRepository.GetByEventAsync(eventId);
+
+                    // Load role definitions to resolve role IDs to names
+                    IEnumerable<EventRoleDefinitionEntity> roleDefinitions = await _roleDefinitionRepository.GetByEventAsync(eventId);
+                    Dictionary<string, string> roleIdToName = roleDefinitions.ToDictionary(r => r.RoleId, r => r.Name);
+
                     List<EventContactForMarshalResponse> allContactsResponse = [.. allContacts
                         .OrderByDescending(c => c.IsPinned)
                         .ThenBy(c => c.DisplayOrder)
@@ -496,7 +508,7 @@ public class EventContactFunctions
                         .Select(c =>
                         new EventContactForMarshalResponse(
                             ContactId: c.ContactId,
-                            Roles: GetRolesFromEntity(c),
+                            Roles: ResolveRoleNames(GetRolesFromEntity(c), roleIdToName),
                             Name: c.Name,
                             Phone: c.Phone,
                             Email: c.Email,
@@ -679,6 +691,29 @@ public class EventContactFunctions
         }
 
         return [];
+    }
+
+    /// <summary>
+    /// Resolves role IDs to role names using role definitions lookup.
+    /// Built-in roles (non-GUIDs) are returned as-is.
+    /// </summary>
+    private static List<string> ResolveRoleNames(List<string> roleIds, Dictionary<string, string> roleIdToName)
+    {
+        List<string> resolved = [];
+        foreach (string roleId in roleIds)
+        {
+            // If it's a GUID and we have a mapping, resolve it
+            if (Guid.TryParse(roleId, out _) && roleIdToName.TryGetValue(roleId, out string? roleName))
+            {
+                resolved.Add(roleName);
+            }
+            else
+            {
+                // Built-in role or unknown - return as-is
+                resolved.Add(roleId);
+            }
+        }
+        return resolved;
     }
 
     /// <summary>

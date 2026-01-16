@@ -60,48 +60,109 @@
         </div>
 
         <div v-if="expandedGroups.has(group.itemId)" class="task-group-details">
-          <div
-            v-for="item in group.items"
-            :key="`${item.itemId}-${item.completionContextId}`"
-            class="task-detail-item"
-            :class="{
-              'item-completed': item.localIsCompleted,
-              'item-modified': item.isModified
-            }"
-          >
-            <div class="detail-checkbox">
-              <input
-                type="checkbox"
-                :checked="item.localIsCompleted"
-                :disabled="!item.canBeCompletedByMe && !item.localIsCompleted"
-                @change="$emit('toggle-complete', item)"
-              />
+          <!-- For shared scopes with sub-groups (by checkpoint/area), show nested structure -->
+          <template v-if="group.subGroups && group.subGroups.length > 0">
+            <div
+              v-for="subGroup in group.subGroups"
+              :key="subGroup.contextId"
+              class="task-sub-group"
+            >
+              <div class="sub-group-header">
+                {{ subGroup.contextName }}
+              </div>
+              <div
+                v-for="item in subGroup.items"
+                :key="`${item.itemId}-${item.completionContextId}-${item.contextOwnerMarshalId}`"
+                class="task-detail-item"
+                :class="{
+                  'item-completed': item.localIsCompleted,
+                  'item-modified': item.isModified
+                }"
+              >
+                <div class="detail-checkbox">
+                  <!-- Use radio buttons when context not yet completed (only one person can complete) -->
+                  <!-- Use checkboxes when completed (so completer can uncomplete) -->
+                  <input
+                    v-if="!subGroup.isContextCompleted"
+                    type="radio"
+                    :name="`shared-${item.itemId}-${subGroup.contextId}`"
+                    :checked="item.localIsCompleted"
+                    :disabled="!item.canBeCompletedByMe"
+                    @change="$emit('toggle-complete', item)"
+                  />
+                  <input
+                    v-else
+                    type="checkbox"
+                    :checked="item.localIsCompleted"
+                    :disabled="!item.canBeCompletedByMe && !item.localIsCompleted"
+                    @change="$emit('toggle-complete', item)"
+                  />
+                </div>
+                <div class="detail-content">
+                  <div class="detail-context">
+                    {{ item.contextOwnerName || 'Unknown marshal' }}
+                  </div>
+                  <div v-if="item.localIsCompleted" class="detail-completion">
+                    <span v-if="item.isModified && !item.isCompleted" class="pending-text">
+                      Will be marked as completed
+                    </span>
+                    <template v-else>
+                      <span class="completion-text">{{ getCompletionText(item) }}</span>
+                      <span class="completion-time">{{ formatDateTime(item.completedAt) }}</span>
+                    </template>
+                  </div>
+                  <div v-else-if="item.isModified && item.isCompleted" class="detail-uncomplete">
+                    <span class="pending-text">Will be marked as incomplete</span>
+                  </div>
+                  <div v-else-if="!item.canBeCompletedByMe" class="detail-disabled">
+                    Already completed by someone else
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="detail-content">
-              <div class="detail-context">
-                {{ getContextLabel(item) }}
+          </template>
+
+          <!-- For non-shared scopes, show flat list -->
+          <template v-else>
+            <div
+              v-for="item in group.items"
+              :key="`${item.itemId}-${item.completionContextId}`"
+              class="task-detail-item"
+              :class="{
+                'item-completed': item.localIsCompleted,
+                'item-modified': item.isModified
+              }"
+            >
+              <div class="detail-checkbox">
+                <input
+                  type="checkbox"
+                  :checked="item.localIsCompleted"
+                  :disabled="!item.canBeCompletedByMe && !item.localIsCompleted"
+                  @change="$emit('toggle-complete', item)"
+                />
               </div>
-              <div v-if="item.localIsCompleted" class="detail-completion">
-                <span v-if="item.isModified && !item.isCompleted" class="pending-text">
-                  Will be marked as completed
-                </span>
-                <template v-else>
-                  <span class="completion-text">
-                    {{ item.completedByActorName || 'Unknown' }}
+              <div class="detail-content">
+                <div class="detail-context">
+                  {{ getContextLabel(item) }}
+                </div>
+                <div v-if="item.localIsCompleted" class="detail-completion">
+                  <span v-if="item.isModified && !item.isCompleted" class="pending-text">
+                    Will be marked as completed
                   </span>
-                  <span class="completion-time">
-                    {{ formatDateTime(item.completedAt) }}
-                  </span>
-                </template>
-              </div>
-              <div v-else-if="item.isModified && item.isCompleted" class="detail-uncomplete">
-                <span class="pending-text">Will be marked as incomplete</span>
-              </div>
-              <div v-else-if="!item.canBeCompletedByMe" class="detail-disabled">
-                Already completed by someone else
+                  <template v-else>
+                    <span class="completion-text">{{ getCompletionText(item) }}</span>
+                    <span class="completion-time">{{ formatDateTime(item.completedAt) }}</span>
+                  </template>
+                </div>
+                <div v-else-if="item.isModified && item.isCompleted" class="detail-uncomplete">
+                  <span class="pending-text">Will be marked as incomplete</span>
+                </div>
+                <div v-else-if="!item.canBeCompletedByMe" class="detail-disabled">
+                  Already completed by someone else
+                </div>
               </div>
             </div>
-          </div>
+          </template>
         </div>
       </div>
       </template>
@@ -145,6 +206,41 @@ const emit = defineEmits(['toggle-complete', 'reorder']);
 
 const expandedGroups = ref(new Set());
 
+// Helper to get checkpoint/area name for sub-grouping (with description, truncated)
+const getContextName = (contextType, contextId) => {
+  if (contextType === 'Checkpoint') {
+    const location = props.locations.find(l => l.id === contextId);
+    if (!location) return `${terms.value.checkpoint} (unknown)`;
+    if (location.description) {
+      // Truncate description if too long
+      const maxDescLength = 40;
+      const desc = location.description.length > maxDescLength
+        ? location.description.substring(0, maxDescLength) + '...'
+        : location.description;
+      return `${location.name} - ${desc}`;
+    }
+    return location.name;
+  }
+  if (contextType === 'Area') {
+    const area = props.areas.find(a => a.id === contextId);
+    return area?.name || `${terms.value.area} (unknown)`;
+  }
+  return contextId;
+};
+
+// Helper to get sort key for checkpoint/area (just the name for proper sorting)
+const getContextSortKey = (contextType, contextId) => {
+  if (contextType === 'Checkpoint') {
+    const location = props.locations.find(l => l.id === contextId);
+    return location?.name || '';
+  }
+  if (contextType === 'Area') {
+    const area = props.areas.find(a => a.id === contextId);
+    return area?.name || '';
+  }
+  return contextId;
+};
+
 // Group items by task text (itemId groups same task across contexts)
 const groupedItems = computed(() => {
   const groups = new Map();
@@ -155,35 +251,95 @@ const groupedItems = computed(() => {
         itemId: item.itemId,
         text: item.text,
         displayOrder: item.displayOrder || 0,
+        matchedScope: item.matchedScope,
         items: [],
+        subGroups: null, // Will be populated for shared scopes
         totalCount: 0,
         completedCount: 0,
         allCompleted: false,
         hasModified: false,
+        // Track unique contexts for shared scopes
+        contextIds: new Set(),
+        completedContextIds: new Set(),
       });
     }
 
     const group = groups.get(item.itemId);
     group.items.push(item);
-    group.totalCount++;
-    if (item.localIsCompleted) {
-      group.completedCount++;
+
+    // For shared scopes, count by unique context (checkpoint/area), not by marshal
+    const isSharedScope = sharedScopes.includes(item.matchedScope);
+    if (isSharedScope && item.completionContextId) {
+      group.contextIds.add(item.completionContextId);
+      if (item.localIsCompleted) {
+        group.completedContextIds.add(item.completionContextId);
+      }
+    } else {
+      group.totalCount++;
+      if (item.localIsCompleted) {
+        group.completedCount++;
+      }
     }
+
     if (item.isModified) {
       group.hasModified = true;
     }
   }
 
-  // Calculate allCompleted and sort items within each group by context name only
+  // Finalize counts, create sub-groups, and sort items within each group
   for (const group of groups.values()) {
-    group.allCompleted = group.completedCount === group.totalCount;
+    const isSharedScope = sharedScopes.includes(group.matchedScope);
 
-    // Sort items by context name (keep completed items in place)
-    group.items.sort((a, b) => {
-      const nameA = getContextLabel(a);
-      const nameB = getContextLabel(b);
-      return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
-    });
+    if (isSharedScope) {
+      // For shared scopes, use context-based counts
+      group.totalCount = group.contextIds.size;
+      group.completedCount = group.completedContextIds.size;
+
+      // Create sub-groups by checkpoint/area
+      const subGroupMap = new Map();
+      for (const item of group.items) {
+        const contextId = item.completionContextId;
+        if (!subGroupMap.has(contextId)) {
+          subGroupMap.set(contextId, {
+            contextId,
+            contextType: item.completionContextType,
+            contextName: getContextName(item.completionContextType, contextId),
+            sortKey: getContextSortKey(item.completionContextType, contextId),
+            items: [],
+            isContextCompleted: false, // Will be set to true if any item is completed
+          });
+        }
+        const subGroup = subGroupMap.get(contextId);
+        subGroup.items.push(item);
+        // Track if this context has been completed by anyone
+        if (item.localIsCompleted) {
+          subGroup.isContextCompleted = true;
+        }
+      }
+
+      // Sort sub-groups by checkpoint/area name (numeric sorting for "2 A" before "10 B")
+      group.subGroups = Array.from(subGroupMap.values()).sort((a, b) =>
+        a.sortKey.localeCompare(b.sortKey, undefined, { numeric: true, sensitivity: 'base' })
+      );
+
+      // Sort marshals within each sub-group alphabetically
+      for (const subGroup of group.subGroups) {
+        subGroup.items.sort((a, b) => {
+          const nameA = a.contextOwnerName || '';
+          const nameB = b.contextOwnerName || '';
+          return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
+        });
+      }
+    } else {
+      // For non-shared scopes, sort items by context name
+      group.items.sort((a, b) => {
+        const nameA = getContextLabel(a);
+        const nameB = getContextLabel(b);
+        return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+      });
+    }
+
+    group.allCompleted = group.totalCount > 0 && group.completedCount === group.totalCount;
   }
 
   // Convert to array and sort by displayOrder, then task name
@@ -222,7 +378,7 @@ const getStatusClass = (group) => {
 const getStatusIcon = (group) => {
   if (group.allCompleted) return '✓';
   if (group.completedCount > 0) return '◐';
-  return '○';
+  return '✗';
 };
 
 const getScopeLabel = (item) => {
@@ -253,12 +409,29 @@ const getScopeTooltip = (item) => {
   return tooltips[item.matchedScope] || '';
 };
 
+// Shared scope types where one person completes for the whole group
+const sharedScopes = ['OnePerCheckpoint', 'OnePerArea', 'OneLeadPerArea'];
+
 const getContextLabel = (item) => {
   if (!item.completionContextType || !item.completionContextId) {
     return 'Everyone';
   }
 
+  // For shared scope per-marshal items, show the marshal name
+  if (sharedScopes.includes(item.matchedScope) && item.contextOwnerName) {
+    return item.contextOwnerName;
+  }
+
   if (item.completionContextType === 'Checkpoint') {
+    // For linked tasks, show marshal name with checkpoint as secondary detail
+    if (item.linksToCheckIn && item.contextOwnerName) {
+      const location = props.locations.find(l => l.id === item.completionContextId);
+      const checkpointName = location?.name || item.linkedCheckpointName;
+      return checkpointName
+        ? `${item.contextOwnerName} (${checkpointName})`
+        : item.contextOwnerName;
+    }
+    // Regular checkpoint context - show checkpoint name
     const location = props.locations.find(l => l.id === item.completionContextId);
     if (!location) return `${terms.value.checkpoint} (unknown)`;
     return location.description
@@ -293,7 +466,23 @@ const getContextLabel = (item) => {
 const formatDateTime = (dateString) => {
   if (!dateString) return '';
   const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffHours = diffMs / (1000 * 60 * 60);
+
+  // If within 24 hours, just show time
+  if (diffHours < 24 && diffHours >= 0) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
   return date.toLocaleString();
+};
+
+const getCompletionText = (item) => {
+  if (item.completedByActorName && item.contextOwnerName &&
+      item.completedByActorName !== item.contextOwnerName) {
+    return `${item.completedByActorName} on behalf of ${item.contextOwnerName}`;
+  }
+  return item.completedByActorName || item.contextOwnerName || 'Unknown';
 };
 </script>
 
@@ -399,8 +588,8 @@ const formatDateTime = (dateString) => {
 }
 
 .task-status-icon.status-pending {
-  background: var(--bg-tertiary);
-  color: var(--text-muted);
+  background: var(--danger-bg-lighter, #fee2e2);
+  color: var(--danger, #dc2626);
 }
 
 .task-status-icon.status-modified {
@@ -484,7 +673,17 @@ const formatDateTime = (dateString) => {
 }
 
 .task-detail-item.item-completed {
+  /* Don't use opacity on the whole row - it makes enabled checkboxes look disabled */
+  /* Instead, style the text content to show completion */
+}
+
+.task-detail-item.item-completed .detail-content {
   opacity: 0.7;
+}
+
+/* Ensure checkbox remains fully visible and clickable even in completed items */
+.task-detail-item.item-completed .detail-checkbox {
+  opacity: 1;
 }
 
 .task-detail-item.item-modified {
@@ -496,13 +695,15 @@ const formatDateTime = (dateString) => {
   padding-top: 0.125rem;
 }
 
-.detail-checkbox input[type="checkbox"] {
+.detail-checkbox input[type="checkbox"],
+.detail-checkbox input[type="radio"] {
   cursor: pointer;
   width: 1rem;
   height: 1rem;
 }
 
-.detail-checkbox input[type="checkbox"]:disabled {
+.detail-checkbox input[type="checkbox"]:disabled,
+.detail-checkbox input[type="radio"]:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
@@ -553,6 +754,32 @@ const formatDateTime = (dateString) => {
 .pending-text {
   color: var(--warning-dark);
   font-style: italic;
+}
+
+/* Sub-group styles for shared scope tasks */
+.task-sub-group {
+  border-bottom: 1px solid var(--border-light);
+}
+
+.task-sub-group:last-child {
+  border-bottom: none;
+}
+
+.sub-group-header {
+  padding: 0.5rem 1rem 0.5rem 1.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-muted);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.task-sub-group .task-detail-item {
+  padding-left: 2rem;
+}
+
+.task-sub-group .task-detail-item:last-child {
+  border-bottom: none;
 }
 
 @media (max-width: 640px) {

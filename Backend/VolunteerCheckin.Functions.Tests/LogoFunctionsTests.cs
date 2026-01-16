@@ -31,7 +31,7 @@ public class LogoFunctionsTests
 
     private const string EventId = "event123";
     private const string AdminEmail = "admin@test.com";
-    private const string LogoUrl = "https://storage.blob.core.windows.net/logos/event123/logo.png";
+    private const string LogoVersion = "1234567890";
 
     [TestInitialize]
     public void Setup()
@@ -113,7 +113,7 @@ public class LogoFunctionsTests
 
         _mockBlobStorageService
             .Setup(s => s.UploadLogoAsync(EventId, It.IsAny<Stream>(), "image/png"))
-            .ReturnsAsync(LogoUrl);
+            .ReturnsAsync(LogoVersion);
 
         EventEntity? capturedEntity = null;
         _mockEventRepository
@@ -130,7 +130,8 @@ public class LogoFunctionsTests
         result.ShouldBeOfType<OkObjectResult>();
 
         capturedEntity.ShouldNotBeNull();
-        capturedEntity.BrandingLogoUrl.ShouldBe(LogoUrl);
+        // Logo URL is now API path with version query string for cache-busting
+        capturedEntity.BrandingLogoUrl.ShouldBe($"/api/events/{EventId}/logo?v={LogoVersion}");
     }
 
     [TestMethod]
@@ -146,7 +147,7 @@ public class LogoFunctionsTests
 
         _mockBlobStorageService
             .Setup(s => s.UploadLogoAsync(EventId, It.IsAny<Stream>(), "image/jpeg"))
-            .ReturnsAsync(LogoUrl);
+            .ReturnsAsync(LogoVersion);
 
         _mockEventRepository
             .Setup(r => r.UpdateAsync(It.IsAny<EventEntity>()))
@@ -174,7 +175,7 @@ public class LogoFunctionsTests
 
         _mockBlobStorageService
             .Setup(s => s.UploadLogoAsync(EventId, It.IsAny<Stream>(), "image/svg+xml"))
-            .ReturnsAsync(LogoUrl);
+            .ReturnsAsync(LogoVersion);
 
         _mockEventRepository
             .Setup(r => r.UpdateAsync(It.IsAny<EventEntity>()))
@@ -270,8 +271,8 @@ public class LogoFunctionsTests
             .Setup(r => r.GetAsync(EventId))
             .ReturnsAsync(eventEntity);
 
-        // 600KB - exceeds 500KB limit
-        HttpRequest httpRequest = CreateUploadRequest("image/png", 600 * 1024);
+        // 6MB - exceeds 5MB limit
+        HttpRequest httpRequest = CreateUploadRequest("image/png", 6 * 1024 * 1024);
 
         // Act
         IActionResult result = await _functions.UploadEventLogo(httpRequest, EventId);
@@ -317,7 +318,7 @@ public class LogoFunctionsTests
 
         _mockBlobStorageService
             .Setup(s => s.UploadLogoAsync(EventId, It.IsAny<Stream>(), "image/gif"))
-            .ReturnsAsync(LogoUrl);
+            .ReturnsAsync(LogoVersion);
 
         _mockEventRepository
             .Setup(r => r.UpdateAsync(It.IsAny<EventEntity>()))
@@ -345,7 +346,7 @@ public class LogoFunctionsTests
 
         _mockBlobStorageService
             .Setup(s => s.UploadLogoAsync(EventId, It.IsAny<Stream>(), "image/webp"))
-            .ReturnsAsync(LogoUrl);
+            .ReturnsAsync(LogoVersion);
 
         _mockEventRepository
             .Setup(r => r.UpdateAsync(It.IsAny<EventEntity>()))
@@ -370,7 +371,7 @@ public class LogoFunctionsTests
         // Arrange
         SetupAuthorizedUser();
         EventEntity eventEntity = CreateEventEntity();
-        eventEntity.BrandingLogoUrl = LogoUrl;
+        eventEntity.BrandingLogoUrl = $"/api/events/{EventId}/logo?v={LogoVersion}";
 
         _mockEventRepository
             .Setup(r => r.GetAsync(EventId))

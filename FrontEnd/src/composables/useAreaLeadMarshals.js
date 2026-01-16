@@ -88,25 +88,30 @@ export function useAreaLeadMarshals({
     for (const item of checklistItems) {
       const contextType = item.completionContextType;
       const contextId = item.completionContextId;
+      const ownerMarshalId = item.contextOwnerMarshalId;
 
       // Determine which marshals this task applies to
       let applicableMarshals = [];
 
-      if (contextType === 'Personal') {
-        // Personal task - only applies to the specific marshal
-        const targetMarshalId = item.contextOwnerMarshalId;
-        if (targetMarshalId && marshalMap.has(targetMarshalId)) {
-          applicableMarshals = [marshalMap.get(targetMarshalId)];
+      // If the item has a specific owner marshal ID set (per-marshal items from shared scopes),
+      // only add it to that specific marshal. This avoids duplicates where the same task
+      // appears once per marshal in the area.
+      if (ownerMarshalId) {
+        if (marshalMap.has(ownerMarshalId)) {
+          applicableMarshals = [marshalMap.get(ownerMarshalId)];
         }
+      } else if (contextType === 'Personal') {
+        // Personal task without owner ID - skip (shouldn't happen, but be safe)
+        continue;
       } else if (contextType === 'Checkpoint') {
-        // Checkpoint task - applies to all marshals assigned to this checkpoint
+        // Checkpoint task (summary item) - applies to all marshals assigned to this checkpoint
         for (const m of marshalMap.values()) {
           if (m.checkpointIds.has(contextId)) {
             applicableMarshals.push(m);
           }
         }
       } else if (contextType === 'Area') {
-        // Area task - applies to all marshals in this area
+        // Area task (summary item) - applies to all marshals in this area
         for (const m of marshalMap.values()) {
           if (m.areaIds.has(contextId)) {
             applicableMarshals.push(m);
@@ -149,10 +154,12 @@ export function useAreaLeadMarshals({
 
     const actionData = {
       marshalId: marshal.marshalId,
-      contextType: task.contextType,
-      contextId: task.contextId,
+      contextType: task.completionContextType || task.contextType,
+      contextId: task.completionContextId || task.contextId,
       actorMarshalId: currentMarshalId.value,
     };
+
+    const isCompleting = !task.isCompleted;
 
     try {
       if (task.isCompleted) {
@@ -162,9 +169,30 @@ export function useAreaLeadMarshals({
         // Complete
         await checklistApi.complete(eventId.value, task.itemId, actionData);
       }
+
+      // For linked tasks, optimistically update the marshal's check-in status
+      // The backend handles the actual check-in/out when linksToCheckIn is true
+      if (task.linksToCheckIn) {
+        const checkpoints = areaLeadRef?.value?.checkpoints || areaLeadCheckpoints?.value || [];
+        for (const checkpoint of checkpoints) {
+          const m = checkpoint.marshals?.find(m => m.marshalId === marshal.marshalId);
+          if (m) {
+            m.isCheckedIn = isCompleting;
+            m.checkInTime = isCompleting ? new Date().toISOString() : null;
+            m.checkInMethod = isCompleting ? 'Task' : null;
+          }
+        }
+      }
+
       // Reload the area lead dashboard data
       if (areaLeadRef?.value?.loadDashboard) {
         await areaLeadRef.value.loadDashboard();
+        // Sync areaLeadCheckpoints with the reloaded data
+        // This ensures the computed picks up the updated check-in status
+        // (Vue's reactivity doesn't track areaLeadRef?.value?.checkpoints properly)
+        if (areaLeadCheckpoints && areaLeadRef?.value?.checkpoints) {
+          areaLeadCheckpoints.value = areaLeadRef.value.checkpoints;
+        }
       }
       // Force recomputation of allAreaLeadMarshals
       areaLeadMarshalDataVersion.value++;
@@ -174,6 +202,7 @@ export function useAreaLeadMarshals({
       }
     } catch (err) {
       console.error('Failed to toggle area lead marshal task:', err);
+      console.error('Error response data:', err.response?.data);
     } finally {
       savingAreaLeadMarshalTask.value = false;
     }

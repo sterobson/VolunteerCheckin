@@ -402,6 +402,7 @@ public class EventContactFunctions
     /// Get contacts relevant to a specific marshal.
     /// Uses scope evaluation to filter contacts based on marshal's assignments.
     /// </summary>
+#pragma warning disable MA0051 // Method is too long - complex endpoint with scope evaluation
     [Function("GetContactsForMarshal")]
     public async Task<IActionResult> GetContactsForMarshal(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/{eventId}/marshals/{marshalId}/contacts")] HttpRequest req,
@@ -471,6 +472,7 @@ public class EventContactFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     /// <summary>
     /// Get contacts for the current authenticated marshal.

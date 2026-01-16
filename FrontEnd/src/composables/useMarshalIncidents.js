@@ -77,7 +77,6 @@ export function useMarshalIncidents({
       if (sectionLastLoadedAt?.value) {
         sectionLastLoadedAt.value.incidents = Date.now();
       }
-      console.log('My incidents loaded:', myIncidents.value.length);
     } catch (error) {
       console.error('Failed to load incidents:', error);
     } finally {

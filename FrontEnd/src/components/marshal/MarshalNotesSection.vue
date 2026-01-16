@@ -7,7 +7,7 @@
     >
       <span class="accordion-title">
         <span class="section-icon" v-html="getIcon('notes')"></span>
-        Your {{ notes.length === 1 ? 'note' : 'notes' }}{{ notes.length > 1 ? ` (${notes.length})` : '' }}
+        Your {{ notes.length === 1 ? 'note' : 'notes' }}<span v-if="notes.length > 1" class="header-count"> ({{ notes.length }})</span>
       </span>
       <span class="accordion-icon">{{ isExpanded ? '−' : '+' }}</span>
     </button>
@@ -104,6 +104,11 @@ defineEmits(['toggle', 'notes-changed']);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.header-count {
+  font-style: italic;
+  opacity: 0.6;
 }
 
 .section-icon {

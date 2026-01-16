@@ -7,7 +7,7 @@
     >
       <span class="accordion-title">
         <span class="section-icon" v-html="getIcon('marshal')"></span>
-        Your {{ marshals.length === 1 ? termsLower.person : termsLower.people }}{{ marshals.length > 1 ? ` (${marshals.length})` : '' }}
+        Your {{ marshals.length === 1 ? termsLower.person : termsLower.people }}<span v-if="marshals.length > 1" class="header-count"> ({{ marshals.length }})</span>
       </span>
       <span class="accordion-icon">{{ isExpanded ? '−' : '+' }}</span>
     </button>
@@ -34,8 +34,8 @@
                 <span class="marshal-checkpoint">
                   {{ formatMarshalCheckpoints(marshal.checkpoints) }}
                 </span>
-                <span v-if="marshal.totalTaskCount > 0" class="marshal-task-count">
-                  {{ marshal.completedTaskCount }} / {{ marshal.totalTaskCount }} {{ termsLower.checklists }} complete
+                <span v-if="getTaskCounts(marshal).total > 0" class="marshal-task-count">
+                  {{ getTaskCounts(marshal).completed }} / {{ getTaskCounts(marshal).total }} {{ termsLower.checklists }} complete
                 </span>
               </div>
             </div>
@@ -82,12 +82,12 @@
             </div>
 
             <!-- Tasks -->
-            <div v-if="marshal.allTasks.length > 0" class="marshal-tasks-section">
+            <div v-if="getProcessedTasks(marshal).length > 0" class="marshal-tasks-section">
               <div class="tasks-label">{{ terms.checklists }}</div>
               <div class="tasks-list">
                 <div
-                  v-for="task in marshal.allTasks"
-                  :key="`${task.itemId}-${task.contextId}`"
+                  v-for="task in getProcessedTasks(marshal)"
+                  :key="`${task.itemId}-${task.completionContextType || task.contextType}-${task.completionContextId || task.contextId}`"
                   class="task-item"
                   :class="{ 'task-completed': task.isCompleted }"
                 >
@@ -97,7 +97,16 @@
                     :disabled="savingTask"
                     @change="$emit('toggle-task', task, marshal)"
                   />
-                  <span class="task-text">{{ task.text }}</span>
+                  <div class="task-content">
+                    <span class="task-text">{{ task.text }}</span>
+                    <div v-if="task.needsDisambiguation && task.contextDisplayName" class="task-context">
+                      {{ task.contextDisplayName }}
+                    </div>
+                    <div v-if="task.isCompleted && (task.completedByActorName || task.completedAt)" class="task-completion-info">
+                      <span v-if="getCompletionText(task)" class="completion-by">{{ getCompletionText(task) }}</span>
+                      <span v-if="task.completedAt" class="completion-time">{{ formatDateTime(task.completedAt) }}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -120,7 +129,7 @@ import CheckInToggleButton from '../common/CheckInToggleButton.vue';
 
 const { terms, termsLower } = useTerminology();
 
-defineProps({
+const props = defineProps({
   isAreaLead: {
     type: Boolean,
     default: false,
@@ -149,6 +158,14 @@ defineProps({
     type: String,
     default: null,
   },
+  locations: {
+    type: Array,
+    default: () => [],
+  },
+  areas: {
+    type: Array,
+    default: () => [],
+  },
 });
 
 defineEmits(['toggle', 'toggle-marshal', 'check-in', 'toggle-task', 'show-qr']);
@@ -163,6 +180,147 @@ const formatMarshalCheckpoints = (checkpoints) => {
   };
   if (checkpoints.length === 1) return formatCheckpoint(checkpoints[0]);
   return checkpoints.map(formatCheckpoint).join(', ');
+};
+
+// Get display name for a context (checkpoint with description, or area name)
+const getContextDisplayName = (task, marshal) => {
+  const contextType = task.completionContextType || task.contextType;
+  const contextId = task.completionContextId || task.contextId;
+
+  if (contextType === 'Checkpoint' && contextId) {
+    // First try to get from marshal's checkpoints (has description)
+    const marshalCheckpoint = marshal.checkpoints?.find(c => c.checkpointId === contextId);
+    if (marshalCheckpoint) {
+      if (marshalCheckpoint.description) {
+        const maxDescLength = 50;
+        const desc = marshalCheckpoint.description.length > maxDescLength
+          ? marshalCheckpoint.description.substring(0, maxDescLength) + '...'
+          : marshalCheckpoint.description;
+        return `${marshalCheckpoint.name} - ${desc}`;
+      }
+      return marshalCheckpoint.name;
+    }
+    // Fallback to locations prop
+    const location = props.locations.find(l => l.id === contextId);
+    if (location) {
+      if (location.description) {
+        const maxDescLength = 50;
+        const desc = location.description.length > maxDescLength
+          ? location.description.substring(0, maxDescLength) + '...'
+          : location.description;
+        return `${location.name} - ${desc}`;
+      }
+      return location.name;
+    }
+  }
+  if (contextType === 'Area' && contextId) {
+    const area = props.areas.find(a => a.id === contextId);
+    if (area) {
+      return area.name;
+    }
+  }
+  return '';
+};
+
+// Get sort key for context (just the name for proper sorting)
+const getContextSortKey = (task, marshal) => {
+  const contextType = task.completionContextType || task.contextType;
+  const contextId = task.completionContextId || task.contextId;
+
+  if (contextType === 'Checkpoint' && contextId) {
+    const marshalCheckpoint = marshal.checkpoints?.find(c => c.checkpointId === contextId);
+    if (marshalCheckpoint) return marshalCheckpoint.name || '';
+    const location = props.locations.find(l => l.id === contextId);
+    return location?.name || '';
+  }
+  if (contextType === 'Area' && contextId) {
+    const area = props.areas.find(a => a.id === contextId);
+    return area?.name || '';
+  }
+  return '';
+};
+
+// Process tasks for a marshal: dedupe, sort, and add disambiguation
+const getProcessedTasks = (marshal) => {
+  if (!marshal.allTasks || marshal.allTasks.length === 0) return [];
+
+  // Deduplicate by itemId + contextType + contextId
+  // If duplicates exist, prefer the completed version (merge completion state)
+  const taskMap = new Map();
+  for (const task of marshal.allTasks) {
+    const contextType = task.completionContextType || task.contextType;
+    const contextId = task.completionContextId || task.contextId;
+    const key = `${task.itemId}_${contextType}_${contextId}`;
+
+    if (!taskMap.has(key)) {
+      taskMap.set(key, { ...task });
+    } else {
+      // Merge: if any instance is completed, mark as completed
+      const existing = taskMap.get(key);
+      if (task.isCompleted && !existing.isCompleted) {
+        taskMap.set(key, {
+          ...existing,
+          isCompleted: true,
+          completedAt: task.completedAt || existing.completedAt,
+          completedByActorName: task.completedByActorName || existing.completedByActorName,
+          contextOwnerName: task.contextOwnerName || existing.contextOwnerName,
+        });
+      }
+    }
+  }
+  const uniqueTasks = Array.from(taskMap.values());
+
+  // Count occurrences of each task text
+  const textCounts = new Map();
+  for (const task of uniqueTasks) {
+    textCounts.set(task.text, (textCounts.get(task.text) || 0) + 1);
+  }
+
+  // Sort: by text first, then by context name for items with same text
+  const sorted = [...uniqueTasks].sort((a, b) => {
+    const textCompare = a.text.localeCompare(b.text, undefined, { sensitivity: 'base' });
+    if (textCompare !== 0) return textCompare;
+    const contextA = getContextSortKey(a, marshal);
+    const contextB = getContextSortKey(b, marshal);
+    return contextA.localeCompare(contextB, undefined, { numeric: true, sensitivity: 'base' });
+  });
+
+  // Add disambiguation info
+  return sorted.map(task => ({
+    ...task,
+    needsDisambiguation: textCounts.get(task.text) > 1,
+    contextDisplayName: getContextDisplayName(task, marshal),
+  }));
+};
+
+// Format completion text (who completed it, on behalf of whom)
+const getCompletionText = (task) => {
+  if (task.completedByActorName && task.contextOwnerName &&
+      task.completedByActorName !== task.contextOwnerName) {
+    return `${task.completedByActorName} on behalf of ${task.contextOwnerName}`;
+  }
+  return task.completedByActorName || '';
+};
+
+// Format date/time - show just time if within 24 hours
+const formatDateTime = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffHours = diffMs / (1000 * 60 * 60);
+  if (diffHours < 24 && diffHours >= 0) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  return date.toLocaleString();
+};
+
+// Get task counts based on deduped tasks
+const getTaskCounts = (marshal) => {
+  const tasks = getProcessedTasks(marshal);
+  const total = tasks.length;
+  const completed = tasks.filter(t => t.isCompleted).length;
+  return { total, completed };
 };
 </script>
 
@@ -210,6 +368,11 @@ const formatMarshalCheckpoints = (checkpoints) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.header-count {
+  font-style: italic;
+  opacity: 0.6;
 }
 
 .section-icon {
@@ -376,9 +539,9 @@ const formatMarshalCheckpoints = (checkpoints) => {
 
 .task-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
-  padding: 0.4rem 0.5rem;
+  padding: 0.5rem;
   background: var(--bg-muted);
   border-radius: 6px;
   font-size: 0.85rem;
@@ -391,17 +554,46 @@ const formatMarshalCheckpoints = (checkpoints) => {
 .task-item input[type="checkbox"] {
   width: 16px;
   height: 16px;
+  margin-top: 0.1rem;
   cursor: pointer;
+  flex-shrink: 0;
+}
+
+.task-content {
+  flex: 1;
+  min-width: 0;
 }
 
 .task-text {
-  flex: 1;
   color: var(--text-dark);
 }
 
 .task-completed .task-text {
   text-decoration: line-through;
   color: var(--text-secondary);
+}
+
+.task-context {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-top: 0.15rem;
+}
+
+.task-completion-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--success-dark);
+  margin-top: 0.25rem;
+}
+
+.completion-by {
+  color: var(--success-dark);
+}
+
+.completion-time {
+  color: var(--text-muted);
 }
 
 .no-tasks-message {

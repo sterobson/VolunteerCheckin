@@ -278,7 +278,8 @@ public class AuthServiceTests
         // Assert
         success.ShouldBeFalse();
         sessionToken.ShouldBeNull();
-        message.ShouldContain("Invalid");
+        message.ShouldNotBeNull();
+        message!.ShouldContain("Invalid");
     }
 
     [TestMethod]
@@ -388,7 +389,8 @@ public class AuthServiceTests
 
         // Assert
         success.ShouldBeFalse();
-        message.ShouldContain("Person not found");
+        message.ShouldNotBeNull();
+        message!.ShouldContain("Person not found");
     }
 
     #endregion
@@ -445,7 +447,8 @@ public class AuthServiceTests
 
         // Assert
         success.ShouldBeFalse();
-        message.ShouldContain("Invalid magic code");
+        message.ShouldNotBeNull();
+        message!.ShouldContain("Invalid magic code");
     }
 
     [TestMethod]
@@ -457,7 +460,8 @@ public class AuthServiceTests
 
         // Assert
         success.ShouldBeFalse();
-        message.ShouldContain("required");
+        message.ShouldNotBeNull();
+        message!.ShouldContain("required");
     }
 
     [TestMethod]

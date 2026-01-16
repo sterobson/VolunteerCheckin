@@ -231,6 +231,8 @@
             :checking-in-marshal-id="checkingIn"
             :saving-task="savingAreaLeadMarshalTask"
             :current-marshal-id="currentMarshalId"
+            :locations="allLocations"
+            :areas="areas"
             @toggle="toggleSection('areaLeadMarshals')"
             @toggle-marshal="toggleAreaLeadMarshalExpansion"
             @check-in="handleAreaLeadMarshalCheckIn"
@@ -427,6 +429,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, provide, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { eventsApi, assignmentsApi, areasApi, notesApi, contactsApi, marshalsApi, roleDefinitionsApi, getOfflineMode } from '../services/api';
+import { setSkipLoadingOverlayForGets } from '../services/loadingOverlay';
 import ConfirmModal from '../components/ConfirmModal.vue';
 import BaseModal from '../components/BaseModal.vue';
 import EmergencyContactModal from '../components/event-manage/modals/EmergencyContactModal.vue';
@@ -808,6 +811,8 @@ const {
   updatePendingCount,
   updateCachedField,
   reloadChecklist: loadChecklist,
+  checklistItems,
+  currentMarshalId,
 });
 
 // UI state
@@ -1754,6 +1759,10 @@ const formatEventDate = (dateString) => {
 };
 
 onMounted(async () => {
+  // In marshal mode, skip the center loading overlay for GET requests
+  // We use the subtle bottom refresh indicator instead
+  setSkipLoadingOverlayForGets(true);
+
   const eventId = route.params.eventId;
   const magicCode = route.query.code;
 
@@ -1830,6 +1839,9 @@ onUnmounted(() => {
   stopAutoUpdate();
   stopDynamicCheckpointPolling();
   stopAllCheckpointsPolling();
+
+  // Reset the loading overlay setting so other views (admin mode) show the loading overlay
+  setSkipLoadingOverlayForGets(false);
 });
 </script>
 

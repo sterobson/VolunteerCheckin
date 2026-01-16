@@ -109,10 +109,18 @@ const detailsDisplay = computed(() => {
   return checkInMethod || '';
 });
 
+// Format time, showing date alongside time if more than 24 hours ago
 const formatTime = (timeString) => {
   if (!timeString) return '';
   const date = new Date(timeString);
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const now = new Date();
+  const hoursDiff = (now - date) / (1000 * 60 * 60);
+  const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (hoursDiff > 24) {
+    const dateStr = date.toLocaleDateString([], { day: 'numeric', month: 'short' });
+    return `${dateStr}, ${timeStr}`;
+  }
+  return timeStr;
 };
 </script>
 

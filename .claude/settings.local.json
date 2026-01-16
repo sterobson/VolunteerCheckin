@@ -26,7 +26,10 @@
       "Bash(done)",
       "Bash(npm run lint)",
       "Bash(dir /B /S \"C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\FrontEnd\\\\src\")",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(npm run lint:*)",
+      "Bash(dir \"C:\\\\Users\\\\stero\\\\OneDrive\\\\Pictures\\\\screenshots\" /O-D /B)",
+      "Bash(dotnet test:*)"
     ]
   }
 }

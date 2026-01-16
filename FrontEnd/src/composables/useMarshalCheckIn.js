@@ -1,5 +1,5 @@
 import { ref } from 'vue';
-import { checkInApi, queueOfflineAction, getOfflineMode } from '../services/api';
+import { checkInApi, checklistApi, queueOfflineAction, getOfflineMode } from '../services/api';
 import { calculateDistance } from '../utils/coordinateUtils';
 import { useTerminology } from './useTerminology';
 
@@ -16,6 +16,8 @@ export function useMarshalCheckIn({
   updatePendingCount,
   updateCachedField,
   reloadChecklist,
+  checklistItems,
+  currentMarshalId,
 }) {
   const { termsLower } = useTerminology();
 
@@ -33,20 +35,24 @@ export function useMarshalCheckIn({
   const showDistanceWarning = ref(false);
   const distanceWarningMessage = ref('');
 
-  // Helper to check if a check-in is stale (more than 24 hours old)
-  const isCheckInStale = (checkInTime) => {
-    if (!checkInTime) return true;
-    const checkInDate = new Date(checkInTime);
-    const now = new Date();
-    const hoursDiff = (now - checkInDate) / (1000 * 60 * 60);
-    return hoursDiff > 24;
+  // Helper to check if a check-in is stale - check-ins no longer expire
+  const isCheckInStale = () => {
+    return false;
   };
 
   // Format check-in time for display
+  // Shows date alongside time if check-in was more than 24 hours ago
   const formatCheckInTime = (checkInTime) => {
     if (!checkInTime) return '';
     const date = new Date(checkInTime);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const now = new Date();
+    const hoursDiff = (now - date) / (1000 * 60 * 60);
+    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (hoursDiff > 24) {
+      const dateStr = date.toLocaleDateString([], { day: 'numeric', month: 'short' });
+      return `${dateStr}, ${timeStr}`;
+    }
+    return timeStr;
   };
 
   // Format check-in method for display
@@ -160,7 +166,6 @@ export function useMarshalCheckIn({
         method = 'GPS';
       } catch (gpsError) {
         // GPS failed, fall back to manual silently
-        console.log('GPS unavailable, using manual check-in:', gpsError.message);
       }
     }
 
@@ -228,12 +233,7 @@ export function useMarshalCheckIn({
         }
 
         // Reload checklist if linked tasks were affected
-        if (reloadChecklist && linkedTasksCompleted.length > 0) {
-          console.log('Linked tasks completed via check-in:', linkedTasksCompleted.length);
-          await reloadChecklist(true);
-        }
-        if (reloadChecklist && linkedTasksUncompleted > 0) {
-          console.log('Linked tasks uncompleted via check-out:', linkedTasksUncompleted);
+        if (reloadChecklist && (linkedTasksCompleted.length > 0 || linkedTasksUncompleted > 0)) {
           await reloadChecklist(true);
         }
       }
@@ -241,6 +241,11 @@ export function useMarshalCheckIn({
       // Refresh area lead dashboard if applicable
       if (locationId && areaLeadRef?.value?.loadDashboard) {
         await areaLeadRef.value.loadDashboard();
+        // Sync areaLeadCheckpoints with the reloaded data
+        // This ensures the computed picks up the updated check-in status
+        if (areaLeadCheckpoints && areaLeadRef?.value?.checkpoints) {
+          areaLeadCheckpoints.value = areaLeadRef.value.checkpoints;
+        }
       }
       if (areaLeadMarshalDataVersion) {
         areaLeadMarshalDataVersion.value++;
@@ -311,6 +316,7 @@ export function useMarshalCheckIn({
     }
 
     const newIsCheckedIn = !marshal.isCheckedIn;
+    const checkpointId = checkpoint.checkpointId || checkpoint.locationId;
 
     const assignmentLike = {
       id: assignmentId,
@@ -321,7 +327,7 @@ export function useMarshalCheckIn({
 
     // Use unified toggle (no GPS for checking in others)
     // Note: dashboard API uses checkpointId, not locationId
-    await handleCheckInToggle(assignmentLike, false, checkpoint.checkpointId || checkpoint.locationId);
+    await handleCheckInToggle(assignmentLike, false, checkpointId);
 
     // Optimistic update: update the marshal's check-in status in all checkpoint data sources
     // This ensures the UI updates immediately without waiting for a full dashboard reload
@@ -344,6 +350,44 @@ export function useMarshalCheckIn({
     // Force recomputation of allAreaLeadMarshals
     if (areaLeadMarshalDataVersion) {
       areaLeadMarshalDataVersion.value++;
+    }
+
+    // Handle linked tasks: complete/uncomplete any tasks linked to check-in for this marshal at this checkpoint
+    if (checklistItems?.value && eventId?.value && currentMarshalId?.value) {
+      const linkedTasks = checklistItems.value.filter(item =>
+        item.linksToCheckIn &&
+        item.linkedCheckpointId === checkpointId &&
+        (item.contextOwnerMarshalId === marshal.marshalId ||
+         (item.completionContextType === 'Checkpoint' && item.completionContextId === checkpointId))
+      );
+
+      if (linkedTasks.length > 0) {
+        for (const task of linkedTasks) {
+          try {
+            const actionData = {
+              marshalId: task.contextOwnerMarshalId || marshal.marshalId,
+              contextType: task.completionContextType,
+              contextId: task.completionContextId,
+              actorMarshalId: currentMarshalId.value,
+            };
+
+            if (newIsCheckedIn && !task.isCompleted) {
+              // Checking in - complete the linked task
+              await checklistApi.complete(eventId.value, task.itemId, actionData);
+            } else if (!newIsCheckedIn && task.isCompleted) {
+              // Checking out - uncomplete the linked task
+              await checklistApi.uncomplete(eventId.value, task.itemId, actionData);
+            }
+          } catch (err) {
+            console.error('Failed to toggle linked task:', err);
+          }
+        }
+
+        // Reload checklist to reflect changes
+        if (reloadChecklist) {
+          await reloadChecklist(true);
+        }
+      }
     }
   };
 

@@ -7,7 +7,7 @@
     >
       <span class="accordion-title">
         <span class="section-icon" v-html="getIcon('checkpoint')"></span>
-        Your {{ assignments.length === 1 ? termsLower.checkpoint : termsLower.checkpoints }}{{ assignments.length > 1 ? ` (${assignments.length})` : '' }}
+        Your {{ assignments.length === 1 ? termsLower.checkpoint : termsLower.checkpoints }}<span v-if="assignments.length > 1" class="header-count"> ({{ assignments.length }})</span>
       </span>
       <span class="accordion-icon">{{ isExpanded ? '−' : '+' }}</span>
     </button>
@@ -242,6 +242,11 @@ defineExpose({
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.header-count {
+  font-style: italic;
+  opacity: 0.6;
 }
 
 .section-icon {

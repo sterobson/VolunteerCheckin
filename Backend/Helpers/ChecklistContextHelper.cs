@@ -189,13 +189,20 @@ public class ChecklistContextHelper
     /// <summary>
     /// Builds a ChecklistItemWithStatus from an item and its context.
     /// </summary>
+    /// <param name="item">The checklist item entity</param>
+    /// <param name="context">The marshal context</param>
+    /// <param name="checkpointLookup">Dictionary of checkpoints by ID</param>
+    /// <param name="allCompletions">All completions for the event</param>
+    /// <param name="scopeMatchResult">Optional pre-computed scope match result</param>
+    /// <param name="perMarshalView">If true, for shared scopes show per-marshal completion status (for area lead view)</param>
 #pragma warning disable MA0051 // Method is too long - builds complex DTO with multiple fields
     public static ChecklistItemWithStatus BuildItemWithStatus(
         ChecklistItemEntity item,
         ChecklistScopeHelper.MarshalContext context,
         Dictionary<string, LocationEntity> checkpointLookup,
         List<ChecklistCompletionEntity> allCompletions,
-        ChecklistScopeHelper.ScopeMatchResult? scopeMatchResult = null)
+        ChecklistScopeHelper.ScopeMatchResult? scopeMatchResult = null,
+        bool perMarshalView = false)
     {
         List<ScopeConfiguration> scopeConfigurations =
             JsonSerializer.Deserialize<List<ScopeConfiguration>>(item.ScopeConfigurationsJson, FunctionHelpers.JsonOptions) ?? [];
@@ -223,41 +230,94 @@ public class ChecklistContextHelper
         string? actorId = null;
         DateTime? completedAt = null;
 
-        // For linked tasks or checkpoint/area contexts, look up by context type and ID
-        // For regular personal scopes, look up by marshal ID
-        bool useContextLookup = item.LinksToCheckIn || contextType == Constants.ChecklistContextCheckpoint || contextType == Constants.ChecklistContextArea;
+        // Determine how to look up completion based on scope type:
+        // - Personal scopes: look up by marshal ID (each marshal has their own completion)
+        // - Linked tasks: look up by context + marshal ID (each marshal has their own linked task per checkpoint)
+        // - Shared scopes (OnePerCheckpoint, OnePerArea): look up by context only (any completion counts)
+        //   UNLESS perMarshalView is true, then show per-marshal status for area lead view
+        bool isPersonalScope = ChecklistScopeHelper.IsPersonalScope(matchedScope);
+        bool isSharedScope = contextType == Constants.ChecklistContextCheckpoint || contextType == Constants.ChecklistContextArea;
+        bool isLinkedTask = item.LinksToCheckIn;
 
-        if (!useContextLookup && ChecklistScopeHelper.IsPersonalScope(matchedScope))
-        {
-            ChecklistCompletionEntity? completion = allCompletions.FirstOrDefault(c =>
-                c.ChecklistItemId == item.ItemId &&
-                c.ContextOwnerMarshalId == context.MarshalId &&
-                !c.IsDeleted);
+        ChecklistCompletionEntity? completion;
+        ChecklistCompletionEntity? anyCompletionInContext = null;
 
-            isCompleted = completion != null;
-            actorName = completion?.ActorName;
-            actorType = completion?.ActorType;
-            actorId = completion?.ActorId;
-            completedAt = completion?.CompletedAt;
-        }
-        else
+        if (isLinkedTask)
         {
-            // For shared scopes or linked tasks, check completion in this specific context
-            ChecklistCompletionEntity? completion = allCompletions.FirstOrDefault(c =>
+            // Linked tasks: each marshal has their own task per checkpoint, filter by marshal
+            completion = allCompletions.FirstOrDefault(c =>
                 c.ChecklistItemId == item.ItemId &&
                 c.CompletionContextType == contextType &&
                 c.CompletionContextId == contextId &&
-                c.ContextOwnerMarshalId == context.MarshalId &&  // Also filter by marshal for linked tasks
+                c.ContextOwnerMarshalId == context.MarshalId &&
+                !c.IsDeleted);
+        }
+        else if (isSharedScope)
+        {
+            // For shared scopes, first find if anyone completed it
+            anyCompletionInContext = allCompletions.FirstOrDefault(c =>
+                c.ChecklistItemId == item.ItemId &&
+                c.CompletionContextType == contextType &&
+                c.CompletionContextId == contextId &&
                 !c.IsDeleted);
 
-            isCompleted = completion != null;
-            actorName = completion?.ActorName;
-            actorType = completion?.ActorType;
-            actorId = completion?.ActorId;
-            completedAt = completion?.CompletedAt;
+            if (perMarshalView)
+            {
+                // Per-marshal view: check if THIS marshal completed it
+                completion = (anyCompletionInContext?.ContextOwnerMarshalId == context.MarshalId)
+                    ? anyCompletionInContext
+                    : null;
+            }
+            else
+            {
+                // Normal view: any completion counts
+                completion = anyCompletionInContext;
+            }
+        }
+        else if (isPersonalScope)
+        {
+            // Personal scopes: look up by marshal ID
+            completion = allCompletions.FirstOrDefault(c =>
+                c.ChecklistItemId == item.ItemId &&
+                c.ContextOwnerMarshalId == context.MarshalId &&
+                !c.IsDeleted);
+        }
+        else
+        {
+            completion = null;
         }
 
+        isCompleted = completion != null;
+        actorName = completion?.ActorName;
+        actorType = completion?.ActorType;
+        actorId = completion?.ActorId;
+        completedAt = completion?.CompletedAt;
+
+        // Determine if this marshal can complete/toggle the item
         bool canComplete = ChecklistScopeHelper.CanMarshalCompleteItem(item, context, checkpointLookup);
+
+        if (isSharedScope)
+        {
+            bool taskIsCompletedByAnyone = anyCompletionInContext != null || completion != null;
+            // Check if this marshal completed it (they can uncomplete their own completion)
+            bool completedByThisMarshal = anyCompletionInContext?.ContextOwnerMarshalId == context.MarshalId;
+
+            if (perMarshalView)
+            {
+                // In per-marshal view: only the person who completed it can toggle (uncomplete)
+                // Others are disabled
+                if (taskIsCompletedByAnyone && !isCompleted)
+                {
+                    canComplete = false;
+                }
+            }
+            else if (taskIsCompletedByAnyone && !completedByThisMarshal)
+            {
+                // Normal view: if someone else completed, this marshal cannot complete/uncomplete
+                // But if this marshal completed it, they can uncomplete it
+                canComplete = false;
+            }
+        }
 
         // For linked tasks, determine the checkpoint ID and name
         string? linkedCheckpointId = null;
@@ -270,6 +330,24 @@ public class ChecklistContextHelper
             {
                 linkedCheckpointName = checkpoint.Name;
             }
+        }
+
+        // Set ContextOwnerMarshalId:
+        // - For personal scopes: always set to marshal ID
+        // - For shared scopes in per-marshal view: set to marshal ID (so frontend can distinguish marshals)
+        // - For shared scopes in normal view: null (task belongs to context, not individual)
+        string? contextOwnerMarshalId = null;
+        if (ChecklistScopeHelper.IsPersonalScope(matchedScope) || (perMarshalView && isSharedScope))
+        {
+            contextOwnerMarshalId = context.MarshalId;
+        }
+
+        // Set ContextOwnerName from the completion record for shared scopes
+        // This enables "on behalf of" display when someone completes a shared task for another person
+        string? contextOwnerName = null;
+        if (isSharedScope && anyCompletionInContext != null && !string.IsNullOrEmpty(anyCompletionInContext.ContextOwnerMarshalName))
+        {
+            contextOwnerName = anyCompletionInContext.ContextOwnerMarshalName;
         }
 
         return new ChecklistItemWithStatus(
@@ -291,8 +369,8 @@ public class ChecklistContextHelper
             contextType,
             contextId,
             matchedScope,
-            null,  // ContextOwnerName - will be set by caller if needed
-            ChecklistScopeHelper.IsPersonalScope(matchedScope) ? context.MarshalId : null,  // ContextOwnerMarshalId
+            contextOwnerName,
+            contextOwnerMarshalId,
             item.LinksToCheckIn,
             linkedCheckpointId,
             linkedCheckpointName

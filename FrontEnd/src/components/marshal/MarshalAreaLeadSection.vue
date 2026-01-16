@@ -7,7 +7,7 @@
     >
       <span class="accordion-title">
         <span class="section-icon" v-html="getIcon('area')"></span>
-        Your {{ areas.length === 1 ? termsLower.area : termsLower.areas }}{{ areas.length > 1 ? ` (${areas.length})` : '' }}
+        Your {{ areas.length === 1 ? termsLower.area : termsLower.areas }}<span v-if="areas.length > 1" class="header-count"> ({{ areas.length }})</span>
       </span>
       <span class="accordion-icon">{{ isExpanded ? '−' : '+' }}</span>
     </button>
@@ -148,6 +148,11 @@ defineExpose({
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.header-count {
+  font-style: italic;
+  opacity: 0.6;
 }
 
 .section-icon {

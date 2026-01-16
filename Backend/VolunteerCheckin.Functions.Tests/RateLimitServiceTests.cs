@@ -100,13 +100,13 @@ namespace VolunteerCheckin.Functions.Tests
             // Arrange
             string email = "ratelimit-test@example.com";
 
-            // Use up all allowed requests (5 per hour)
-            for (int i = 0; i < 5; i++)
+            // Use up all allowed requests (10 per hour)
+            for (int i = 0; i < 10; i++)
             {
                 _rateLimitService.IsAllowedMagicLinkRequest(email);
             }
 
-            // Act - 6th request should be rejected
+            // Act - 11th request should be rejected
             bool result = _rateLimitService.IsAllowedMagicLinkRequest(email);
 
             // Assert
@@ -120,8 +120,8 @@ namespace VolunteerCheckin.Functions.Tests
             string email1 = "Test@Example.Com";
             string email2 = "test@example.com";
 
-            // Use up all requests with uppercase
-            for (int i = 0; i < 5; i++)
+            // Use up all requests with uppercase (10 per hour)
+            for (int i = 0; i < 10; i++)
             {
                 _rateLimitService.IsAllowedMagicLinkRequest(email1);
             }

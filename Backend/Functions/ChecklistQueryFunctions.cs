@@ -295,17 +295,50 @@ public class ChecklistQueryFunctions
                             if (shouldInclude)
                             {
                                 // Check if we already have this exact item instance
+                                // For personal scopes and shared scopes, include marshal ID in dedup check
+                                // This gives us one row per marshal for shared tasks (so area lead sees each person)
+                                string scope = scopeContext.WinningConfig?.Scope ?? "";
+                                bool isPersonalScope = ChecklistScopeHelper.IsPersonalScope(scope);
+                                bool isSharedScope = scope == Constants.ChecklistScopeOnePerCheckpoint ||
+                                                     scope == Constants.ChecklistScopeOnePerArea ||
+                                                     scope == Constants.ChecklistScopeOneLeadPerArea;
+
+                                // For OnePerCheckpoint, only include marshals actually assigned to that checkpoint
+                                if (scope == Constants.ChecklistScopeOnePerCheckpoint &&
+                                    scopeContext.ContextType == Constants.ChecklistContextCheckpoint &&
+                                    !marshalContext.AssignedLocationIds.Contains(scopeContext.ContextId))
+                                {
+                                    continue; // Skip - marshal not assigned to this checkpoint
+                                }
+
+                                // For OnePerArea, only include marshals actually in that area
+                                if (scope == Constants.ChecklistScopeOnePerArea &&
+                                    scopeContext.ContextType == Constants.ChecklistContextArea &&
+                                    !marshalContext.AssignedAreaIds.Contains(scopeContext.ContextId))
+                                {
+                                    continue; // Skip - marshal not in this area
+                                }
+
+                                bool includesMarshalInKey = isPersonalScope || isSharedScope;
+
                                 bool alreadyAdded = relevantItems.Any(existing =>
                                     existing.ItemId == item.ItemId &&
                                     existing.CompletionContextType == scopeContext.ContextType &&
-                                    existing.CompletionContextId == scopeContext.ContextId);
+                                    existing.CompletionContextId == scopeContext.ContextId &&
+                                    (!includesMarshalInKey || existing.ContextOwnerMarshalId == marshalId));
 
                                 if (!alreadyAdded)
                                 {
-                                    ChecklistItemWithStatus itemStatus = ChecklistContextHelper.BuildItemWithStatus(item, marshalContext, checkpointLookup, allCompletions, scopeContext);
+                                    // For shared scopes, use per-marshal view to show individual completion status
+                                    ChecklistItemWithStatus itemStatus = ChecklistContextHelper.BuildItemWithStatus(
+                                        item, marshalContext, checkpointLookup, allCompletions, scopeContext,
+                                        perMarshalView: isSharedScope);
 
-                                    // Set context owner name for personal items
-                                    if (scopeContext.ContextType == "Personal" && marshalNames.TryGetValue(marshalId, out string? marshalName))
+                                    // Set context owner name for personal items, linked tasks, and shared scopes
+                                    bool needsOwnerName = scopeContext.ContextType == "Personal" ||
+                                        (item.LinksToCheckIn && scopeContext.ContextType == Constants.ChecklistContextCheckpoint) ||
+                                        isSharedScope;
+                                    if (needsOwnerName && marshalNames.TryGetValue(marshalId, out string? marshalName))
                                     {
                                         itemStatus = itemStatus with { ContextOwnerName = marshalName };
                                     }

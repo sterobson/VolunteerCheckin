@@ -232,6 +232,18 @@ public class ChecklistCompletionFunctionsTests
 
         SetupMarshalContext();
 
+        // Setup marshal lookup (needed because it now happens before completion check)
+        MarshalEntity marshal = new()
+        {
+            PartitionKey = EventId,
+            RowKey = MarshalId,
+            MarshalId = MarshalId,
+            Name = "Test Marshal"
+        };
+        _mockMarshalRepository
+            .Setup(r => r.GetAsync(EventId, MarshalId))
+            .ReturnsAsync(marshal);
+
         // Already has a completion
         _mockChecklistCompletionRepository
             .Setup(r => r.GetByItemAsync(EventId, ItemId))
@@ -528,6 +540,406 @@ public class ChecklistCompletionFunctionsTests
             )),
             Times.Once
         );
+    }
+
+    #endregion
+
+    #region Multi-Checkpoint Completion Tests
+
+    [TestMethod]
+    public async Task CompleteChecklistItem_PersonalScopeAtMultipleCheckpoints_CanCompleteAtSecondCheckpoint()
+    {
+        // Arrange - Marshal is assigned to two checkpoints and has a personal scope task for both
+        // They have already completed at checkpoint 1, now trying to complete at checkpoint 2
+        string checkpoint1 = "checkpoint-1";
+        string checkpoint2 = "checkpoint-2";
+
+        CompleteChecklistItemRequest request = new(MarshalId, Constants.ChecklistContextCheckpoint, checkpoint2);
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
+
+        ChecklistItemEntity item = new()
+        {
+            PartitionKey = EventId,
+            RowKey = ItemId,
+            ItemId = ItemId,
+            EventId = EventId,
+            Text = "Check in at your checkpoint",
+            LinksToCheckIn = true,
+            ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
+            {
+                new() { Scope = Constants.ChecklistScopeEveryoneAtCheckpoints, ItemType = "Checkpoint", Ids = [checkpoint1, checkpoint2] }
+            })
+        };
+        _mockChecklistItemRepository
+            .Setup(r => r.GetAsync(EventId, ItemId))
+            .ReturnsAsync(item);
+
+        // Marshal is assigned to both checkpoints
+        _mockAssignmentRepository
+            .Setup(r => r.GetByMarshalAsync(EventId, MarshalId))
+            .ReturnsAsync([
+                new AssignmentEntity { LocationId = checkpoint1 },
+                new AssignmentEntity { LocationId = checkpoint2 }
+            ]);
+
+        LocationEntity location1 = new()
+        {
+            PartitionKey = EventId,
+            RowKey = checkpoint1,
+            Name = "Checkpoint 1",
+            AreaIdsJson = $"[\"{AreaId}\"]"
+        };
+        LocationEntity location2 = new()
+        {
+            PartitionKey = EventId,
+            RowKey = checkpoint2,
+            Name = "Checkpoint 2",
+            AreaIdsJson = $"[\"{AreaId}\"]"
+        };
+        _mockLocationRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([location1, location2]);
+
+        _mockAreaRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([new AreaEntity { RowKey = AreaId }]);
+
+        _mockMarshalRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync(new List<MarshalEntity>());
+
+        _mockEventRoleRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync(new List<EventRoleEntity>());
+
+        // Already has a completion at checkpoint 1 - but NOT at checkpoint 2
+        _mockChecklistCompletionRepository
+            .Setup(r => r.GetByItemAsync(EventId, ItemId))
+            .ReturnsAsync([new ChecklistCompletionEntity
+            {
+                ChecklistItemId = ItemId,
+                ContextOwnerMarshalId = MarshalId,
+                CompletionContextType = Constants.ChecklistContextCheckpoint,
+                CompletionContextId = checkpoint1, // Completed at checkpoint 1 only
+                IsDeleted = false
+            }]);
+
+        MarshalEntity marshal = new()
+        {
+            PartitionKey = EventId,
+            RowKey = MarshalId,
+            MarshalId = MarshalId,
+            Name = "Test Marshal"
+        };
+        _mockMarshalRepository
+            .Setup(r => r.GetAsync(EventId, MarshalId))
+            .ReturnsAsync(marshal);
+
+        ChecklistCompletionEntity? capturedCompletion = null;
+        _mockChecklistCompletionRepository
+            .Setup(r => r.AddAsync(It.IsAny<ChecklistCompletionEntity>()))
+            .Callback<ChecklistCompletionEntity>(c => capturedCompletion = c)
+            .ReturnsAsync((ChecklistCompletionEntity c) => c);
+
+        // Act
+        IActionResult result = await _functions.CompleteChecklistItem(httpRequest, EventId, ItemId);
+
+        // Assert - Should succeed because checkpoint 2 hasn't been completed yet
+        result.ShouldBeOfType<OkObjectResult>();
+        capturedCompletion.ShouldNotBeNull();
+        capturedCompletion.ChecklistItemId.ShouldBe(ItemId);
+        capturedCompletion.ContextOwnerMarshalId.ShouldBe(MarshalId);
+        capturedCompletion.CompletionContextType.ShouldBe(Constants.ChecklistContextCheckpoint);
+        capturedCompletion.CompletionContextId.ShouldBe(checkpoint2);
+    }
+
+    [TestMethod]
+    public async Task CompleteChecklistItem_LinkedTaskAtSameCheckpoint_ReturnsBadRequest()
+    {
+        // Arrange - Marshal tries to complete at checkpoint 1 when already completed there
+        string checkpoint1 = "checkpoint-1";
+
+        CompleteChecklistItemRequest request = new(MarshalId, Constants.ChecklistContextCheckpoint, checkpoint1);
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
+
+        ChecklistItemEntity item = new()
+        {
+            PartitionKey = EventId,
+            RowKey = ItemId,
+            ItemId = ItemId,
+            EventId = EventId,
+            Text = "Check in at your checkpoint",
+            LinksToCheckIn = true,
+            ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
+            {
+                new() { Scope = Constants.ChecklistScopeEveryoneAtCheckpoints, ItemType = "Checkpoint", Ids = [checkpoint1] }
+            })
+        };
+        _mockChecklistItemRepository
+            .Setup(r => r.GetAsync(EventId, ItemId))
+            .ReturnsAsync(item);
+
+        _mockAssignmentRepository
+            .Setup(r => r.GetByMarshalAsync(EventId, MarshalId))
+            .ReturnsAsync([new AssignmentEntity { LocationId = checkpoint1 }]);
+
+        LocationEntity location1 = new()
+        {
+            PartitionKey = EventId,
+            RowKey = checkpoint1,
+            Name = "Checkpoint 1",
+            AreaIdsJson = $"[\"{AreaId}\"]"
+        };
+        _mockLocationRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([location1]);
+
+        _mockAreaRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([new AreaEntity { RowKey = AreaId }]);
+
+        _mockMarshalRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync(new List<MarshalEntity>());
+
+        _mockEventRoleRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync(new List<EventRoleEntity>());
+
+        MarshalEntity marshal = new()
+        {
+            PartitionKey = EventId,
+            RowKey = MarshalId,
+            MarshalId = MarshalId,
+            Name = "Test Marshal"
+        };
+        _mockMarshalRepository
+            .Setup(r => r.GetAsync(EventId, MarshalId))
+            .ReturnsAsync(marshal);
+
+        // Already completed at checkpoint 1
+        _mockChecklistCompletionRepository
+            .Setup(r => r.GetByItemAsync(EventId, ItemId))
+            .ReturnsAsync([new ChecklistCompletionEntity
+            {
+                ChecklistItemId = ItemId,
+                ContextOwnerMarshalId = MarshalId,
+                CompletionContextType = Constants.ChecklistContextCheckpoint,
+                CompletionContextId = checkpoint1,
+                IsDeleted = false
+            }]);
+
+        // Act
+        IActionResult result = await _functions.CompleteChecklistItem(httpRequest, EventId, ItemId);
+
+        // Assert - Should fail because already completed at this checkpoint
+        result.ShouldBeOfType<BadRequestObjectResult>();
+    }
+
+    [TestMethod]
+    public async Task CompleteChecklistItem_CheckpointContextTask_CompletionOrderDoesNotMatter()
+    {
+        // Arrange - Marshal completes checkpoint 2 first, then checkpoint 1
+        // This tests that the fix allows completion in any order
+        string checkpoint1 = "checkpoint-1";
+        string checkpoint2 = "checkpoint-2";
+
+        // Completing checkpoint 1 after checkpoint 2 was already completed
+        CompleteChecklistItemRequest request = new(MarshalId, Constants.ChecklistContextCheckpoint, checkpoint1);
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
+
+        ChecklistItemEntity item = new()
+        {
+            PartitionKey = EventId,
+            RowKey = ItemId,
+            ItemId = ItemId,
+            EventId = EventId,
+            Text = "Check in at your checkpoint",
+            LinksToCheckIn = true,
+            ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
+            {
+                new() { Scope = Constants.ChecklistScopeEveryoneAtCheckpoints, ItemType = "Checkpoint", Ids = [checkpoint1, checkpoint2] }
+            })
+        };
+        _mockChecklistItemRepository
+            .Setup(r => r.GetAsync(EventId, ItemId))
+            .ReturnsAsync(item);
+
+        _mockAssignmentRepository
+            .Setup(r => r.GetByMarshalAsync(EventId, MarshalId))
+            .ReturnsAsync([
+                new AssignmentEntity { LocationId = checkpoint1 },
+                new AssignmentEntity { LocationId = checkpoint2 }
+            ]);
+
+        LocationEntity location1 = new()
+        {
+            PartitionKey = EventId,
+            RowKey = checkpoint1,
+            Name = "Checkpoint 1",
+            AreaIdsJson = $"[\"{AreaId}\"]"
+        };
+        LocationEntity location2 = new()
+        {
+            PartitionKey = EventId,
+            RowKey = checkpoint2,
+            Name = "Checkpoint 2",
+            AreaIdsJson = $"[\"{AreaId}\"]"
+        };
+        _mockLocationRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([location1, location2]);
+
+        _mockAreaRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([new AreaEntity { RowKey = AreaId }]);
+
+        _mockMarshalRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync(new List<MarshalEntity>());
+
+        _mockEventRoleRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync(new List<EventRoleEntity>());
+
+        // Checkpoint 2 was completed first
+        _mockChecklistCompletionRepository
+            .Setup(r => r.GetByItemAsync(EventId, ItemId))
+            .ReturnsAsync([new ChecklistCompletionEntity
+            {
+                ChecklistItemId = ItemId,
+                ContextOwnerMarshalId = MarshalId,
+                CompletionContextType = Constants.ChecklistContextCheckpoint,
+                CompletionContextId = checkpoint2, // Checkpoint 2 done first
+                IsDeleted = false
+            }]);
+
+        MarshalEntity marshal = new()
+        {
+            PartitionKey = EventId,
+            RowKey = MarshalId,
+            MarshalId = MarshalId,
+            Name = "Test Marshal"
+        };
+        _mockMarshalRepository
+            .Setup(r => r.GetAsync(EventId, MarshalId))
+            .ReturnsAsync(marshal);
+
+        ChecklistCompletionEntity? capturedCompletion = null;
+        _mockChecklistCompletionRepository
+            .Setup(r => r.AddAsync(It.IsAny<ChecklistCompletionEntity>()))
+            .Callback<ChecklistCompletionEntity>(c => capturedCompletion = c)
+            .ReturnsAsync((ChecklistCompletionEntity c) => c);
+
+        // Act
+        IActionResult result = await _functions.CompleteChecklistItem(httpRequest, EventId, ItemId);
+
+        // Assert - Should succeed regardless of completion order
+        result.ShouldBeOfType<OkObjectResult>();
+        capturedCompletion.ShouldNotBeNull();
+        capturedCompletion.CompletionContextId.ShouldBe(checkpoint1);
+    }
+
+    [TestMethod]
+    public async Task CompleteChecklistItem_NonLinkedCheckpointTask_UsesContextFromRequest()
+    {
+        // Arrange - Non-linked task with checkpoint context
+        string checkpoint1 = "checkpoint-1";
+        string checkpoint2 = "checkpoint-2";
+
+        CompleteChecklistItemRequest request = new(MarshalId, Constants.ChecklistContextCheckpoint, checkpoint2);
+        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
+
+        ChecklistItemEntity item = new()
+        {
+            PartitionKey = EventId,
+            RowKey = ItemId,
+            ItemId = ItemId,
+            EventId = EventId,
+            Text = "Equipment check",
+            LinksToCheckIn = false, // Not a linked task
+            ScopeConfigurationsJson = JsonSerializer.Serialize(new List<ScopeConfiguration>
+            {
+                new() { Scope = Constants.ChecklistScopeEveryoneAtCheckpoints, ItemType = "Checkpoint", Ids = [checkpoint1, checkpoint2] }
+            })
+        };
+        _mockChecklistItemRepository
+            .Setup(r => r.GetAsync(EventId, ItemId))
+            .ReturnsAsync(item);
+
+        _mockAssignmentRepository
+            .Setup(r => r.GetByMarshalAsync(EventId, MarshalId))
+            .ReturnsAsync([
+                new AssignmentEntity { LocationId = checkpoint1 },
+                new AssignmentEntity { LocationId = checkpoint2 }
+            ]);
+
+        LocationEntity location1 = new()
+        {
+            PartitionKey = EventId,
+            RowKey = checkpoint1,
+            Name = "Checkpoint 1",
+            AreaIdsJson = $"[\"{AreaId}\"]"
+        };
+        LocationEntity location2 = new()
+        {
+            PartitionKey = EventId,
+            RowKey = checkpoint2,
+            Name = "Checkpoint 2",
+            AreaIdsJson = $"[\"{AreaId}\"]"
+        };
+        _mockLocationRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([location1, location2]);
+
+        _mockAreaRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync([new AreaEntity { RowKey = AreaId }]);
+
+        _mockMarshalRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync(new List<MarshalEntity>());
+
+        _mockEventRoleRepository
+            .Setup(r => r.GetByEventAsync(EventId))
+            .ReturnsAsync(new List<EventRoleEntity>());
+
+        // Already completed at checkpoint 1
+        _mockChecklistCompletionRepository
+            .Setup(r => r.GetByItemAsync(EventId, ItemId))
+            .ReturnsAsync([new ChecklistCompletionEntity
+            {
+                ChecklistItemId = ItemId,
+                ContextOwnerMarshalId = MarshalId,
+                CompletionContextType = Constants.ChecklistContextCheckpoint,
+                CompletionContextId = checkpoint1,
+                IsDeleted = false
+            }]);
+
+        MarshalEntity marshal = new()
+        {
+            PartitionKey = EventId,
+            RowKey = MarshalId,
+            MarshalId = MarshalId,
+            Name = "Test Marshal"
+        };
+        _mockMarshalRepository
+            .Setup(r => r.GetAsync(EventId, MarshalId))
+            .ReturnsAsync(marshal);
+
+        ChecklistCompletionEntity? capturedCompletion = null;
+        _mockChecklistCompletionRepository
+            .Setup(r => r.AddAsync(It.IsAny<ChecklistCompletionEntity>()))
+            .Callback<ChecklistCompletionEntity>(c => capturedCompletion = c)
+            .ReturnsAsync((ChecklistCompletionEntity c) => c);
+
+        // Act
+        IActionResult result = await _functions.CompleteChecklistItem(httpRequest, EventId, ItemId);
+
+        // Assert - Should succeed for checkpoint 2 even though checkpoint 1 is done
+        result.ShouldBeOfType<OkObjectResult>();
+        capturedCompletion.ShouldNotBeNull();
+        capturedCompletion.CompletionContextId.ShouldBe(checkpoint2);
     }
 
     #endregion

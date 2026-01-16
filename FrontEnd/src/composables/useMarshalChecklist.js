@@ -29,18 +29,13 @@ export function useMarshalChecklist({
   const checklistGroupBy = ref('person');
   const expandedChecklistGroup = ref(null);
 
-  // Filter out completed shared tasks that the marshal doesn't need to see
+  // Sort by displayOrder so all derived computations are in order
+  // For shared scopes (OnePerCheckpoint, OnePerArea), completed tasks stay visible
+  // so all marshals can see the task is done and who completed it
   const visibleChecklistItems = computed(() => {
-    return checklistItems.value.filter(item => {
-      if (!item.isCompleted) return true;
-
-      const sharedScopes = ['OnePerCheckpoint', 'OnePerArea', 'OneLeadPerArea'];
-      if (sharedScopes.includes(item.matchedScope)) {
-        return item.completedByActorId === currentMarshalId.value;
-      }
-
-      return true;
-    });
+    return checklistItems.value
+      .slice()
+      .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
   });
 
   // Checklist completion count
@@ -48,15 +43,41 @@ export function useMarshalChecklist({
     return visibleChecklistItems.value.filter(item => item.isCompleted).length;
   });
 
+  // Shared scope types where one person completes for the whole group
+  const sharedScopes = ['OnePerCheckpoint', 'OnePerArea', 'OneLeadPerArea'];
+
   // Separate checklist items into "your jobs" vs "your area's jobs"
+  // "Your jobs" = tasks assigned directly to you (including shared tasks at your checkpoint)
+  // "Your area's jobs" = tasks for other people in your area (area leads only)
   const myChecklistItems = computed(() => {
     const myAssignmentIds = assignments.value.map(a => a.locationId);
 
     return visibleChecklistItems.value.filter(item => {
+      // For shared scopes, only include "summary" items (contextOwnerMarshalId is null)
+      // Per-marshal items go to areaChecklistItems for area leads to manage
+      if (sharedScopes.includes(item.matchedScope)) {
+        if (item.contextOwnerMarshalId != null) {
+          return false; // Per-marshal items go to area's jobs only
+        }
+        // Summary item - include if at my checkpoint/area
+        if (item.completionContextType === 'Checkpoint') {
+          return myAssignmentIds.includes(item.completionContextId);
+        }
+        if (item.completionContextType === 'Area') {
+          return areaLeadAreaIds.value.includes(item.completionContextId);
+        }
+        return true;
+      }
+
       if (item.completionContextType === 'Personal') {
         return item.contextOwnerMarshalId === currentMarshalId.value;
       }
       if (item.completionContextType === 'Checkpoint') {
+        // For linked tasks, filter by marshal ID (each marshal has their own task)
+        if (item.linksToCheckIn) {
+          return item.contextOwnerMarshalId === currentMarshalId.value;
+        }
+        // For non-linked checkpoint tasks, include if at my checkpoint
         return myAssignmentIds.includes(item.completionContextId);
       }
       if (item.completionContextType === 'Area') {
@@ -68,17 +89,28 @@ export function useMarshalChecklist({
 
   const areaChecklistItems = computed(() => {
     if (!isAreaLead.value) return [];
-    const myAssignmentIds = assignments.value.map(a => a.locationId);
 
     return visibleChecklistItems.value.filter(item => {
+      // For shared scopes, include per-marshal items (those with contextOwnerMarshalId set)
+      // These show one row per marshal so area lead can see/manage who completed
+      if (sharedScopes.includes(item.matchedScope)) {
+        return item.contextOwnerMarshalId != null;
+      }
+
       if (item.completionContextType === 'Personal') {
         return item.contextOwnerMarshalId !== currentMarshalId.value;
       }
       if (item.completionContextType === 'Checkpoint') {
-        return !myAssignmentIds.includes(item.completionContextId);
+        // For linked tasks, include other marshals' tasks (not mine)
+        if (item.linksToCheckIn) {
+          return item.contextOwnerMarshalId !== currentMarshalId.value;
+        }
+        // For non-linked checkpoint tasks, exclude (they go to myChecklistItems)
+        return false;
       }
       if (item.completionContextType === 'Area') {
-        return !areaLeadAreaIds.value.includes(item.completionContextId);
+        // Non-shared area tasks - exclude (they go to myChecklistItems for area leads)
+        return false;
       }
       return false;
     });
@@ -227,14 +259,11 @@ export function useMarshalChecklist({
 
     try {
       const evtId = eventId.value;
-      console.log('Fetching checklist for marshal:', currentMarshalId.value);
-
       const marshalResponse = await checklistApi.getMarshalChecklist(evtId, currentMarshalId.value);
       let allItems = marshalResponse.data || [];
 
       // For area leads, also fetch checklist items for their areas
       if (isAreaLead.value && areaLeadAreaIds.value.length > 0) {
-        console.log('Fetching area checklists for areas:', areaLeadAreaIds.value);
         const areaPromises = areaLeadAreaIds.value.map(areaId =>
           checklistApi.getAreaChecklist(evtId, areaId).catch(err => {
             console.warn(`Failed to fetch checklist for area ${areaId}:`, err);
@@ -244,28 +273,36 @@ export function useMarshalChecklist({
         const areaResponses = await Promise.all(areaPromises);
 
         // Merge and deduplicate items
+        // Include contextOwnerMarshalId in key when present (for linked tasks and shared scope per-marshal items)
         const itemMap = new Map();
+        const buildKey = (item) => {
+          const baseKey = `${item.itemId}_${item.completionContextType}_${item.completionContextId}`;
+          // Include marshal ID if set - this covers:
+          // - Linked tasks (per-marshal items with Checkpoint context)
+          // - Shared scope per-marshal items from area checklist
+          if (item.contextOwnerMarshalId) {
+            return `${baseKey}_${item.contextOwnerMarshalId}`;
+          }
+          return baseKey;
+        };
         for (const item of allItems) {
-          const key = `${item.itemId}_${item.completionContextType}_${item.completionContextId}`;
-          itemMap.set(key, item);
+          itemMap.set(buildKey(item), item);
         }
         for (const response of areaResponses) {
           for (const item of (response.data || [])) {
-            const key = `${item.itemId}_${item.completionContextType}_${item.completionContextId}`;
+            const key = buildKey(item);
             if (!itemMap.has(key)) {
               itemMap.set(key, item);
             }
           }
         }
         allItems = Array.from(itemMap.values());
-        console.log('Merged checklist items:', allItems.length);
       }
 
       checklistItems.value = allItems;
       if (sectionLastLoadedAt?.value) {
         sectionLastLoadedAt.value.checklist = Date.now();
       }
-      console.log('Checklist loaded:', checklistItems.value.length, 'items');
     } catch (error) {
       console.error('Failed to load checklist:', error.response?.status, error.response?.data);
       checklistError.value = error.response?.data?.message || 'Failed to load checklist';
@@ -311,7 +348,6 @@ export function useMarshalChecklist({
             if (assignment) {
               assignment.isCheckedIn = false;
               assignment.checkedInAt = null;
-              console.log(`Linked check-out: Checked out from ${item.linkedCheckpointName || 'checkpoint'}`);
             }
           }
 
@@ -341,9 +377,6 @@ export function useMarshalChecklist({
               const checkedInAt = response.data?.linkedCheckIn?.checkedInAt || new Date().toISOString();
               assignment.isCheckedIn = true;
               assignment.checkedInAt = checkedInAt;
-              console.log(`Linked check-in: Checked in at ${item.linkedCheckpointName || checkpointId}`);
-            } else {
-              console.warn('Could not find assignment for linked check-in:', { checkpointId, linkedCheckpointId: item.linkedCheckpointId });
             }
           }
 

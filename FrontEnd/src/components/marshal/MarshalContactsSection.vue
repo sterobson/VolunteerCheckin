@@ -7,7 +7,7 @@
     >
       <span class="accordion-title">
         <span class="section-icon" v-html="getIcon('contacts')"></span>
-        Your {{ contacts.length === 1 ? 'contact' : 'contacts' }}{{ contacts.length > 1 ? ` (${contacts.length})` : '' }}
+        Your {{ contacts.length === 1 ? 'contact' : 'contacts' }}<span v-if="contacts.length > 1" class="header-count"> ({{ contacts.length }})</span>
       </span>
       <span class="accordion-icon">{{ isExpanded ? '−' : '+' }}</span>
     </button>
@@ -97,6 +97,11 @@ defineEmits(['toggle']);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.header-count {
+  font-style: italic;
+  opacity: 0.6;
 }
 
 .section-icon {

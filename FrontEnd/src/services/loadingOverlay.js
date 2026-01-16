@@ -20,6 +20,9 @@ const activeRequests = ref(new Map());
 const showOverlay = ref(false);
 const overlayMessage = ref('');
 
+// When true, skip showing overlay for loading (GET) requests - only show for saving
+let skipLoadingOverlayForGets = false;
+
 let requestCounter = 0;
 let hideTimeoutId = null;
 
@@ -52,6 +55,12 @@ function cancelHideTimeout() {
 export function startRequest(config) {
   // Skip loading overlay for background requests (e.g., polling, auto-updates)
   if (config.skipLoadingOverlay) {
+    return null;
+  }
+
+  // Skip loading overlay for GET requests when in marshal mode
+  const upperMethod = (config.method || 'get').toUpperCase();
+  if (skipLoadingOverlayForGets && upperMethod === 'GET') {
     return null;
   }
 
@@ -130,4 +139,14 @@ export function useGlobalLoadingOverlay() {
     showOverlay,
     overlayMessage,
   };
+}
+
+/**
+ * Set whether to skip the loading overlay for GET requests.
+ * When true, only saving operations (POST/PUT/PATCH/DELETE) will show the overlay.
+ * Use this for marshal mode where we have a separate bottom loading indicator.
+ * @param {boolean} skip - Whether to skip loading overlay for GET requests
+ */
+export function setSkipLoadingOverlayForGets(skip) {
+  skipLoadingOverlayForGets = skip;
 }

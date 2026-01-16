@@ -478,7 +478,16 @@ const formatCheckInMethod = (method) => {
 
 const formatDateTime = (dateString) => {
   if (!dateString) return '';
-  return new Date(dateString).toLocaleString();
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffHours = diffMs / (1000 * 60 * 60);
+
+  // If within 24 hours, just show time
+  if (diffHours < 24 && diffHours >= 0) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  return date.toLocaleString();
 };
 </script>
 

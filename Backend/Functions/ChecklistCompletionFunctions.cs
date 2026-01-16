@@ -84,16 +84,6 @@ public class ChecklistCompletionFunctions
                 return new ForbidResult();
             }
 
-            // Get all completions for this item
-            List<ChecklistCompletionEntity> itemCompletions =
-                [.. await _checklistCompletionRepository.GetByItemAsync(eventId, itemId)];
-
-            // Check if already completed in this context
-            if (ChecklistScopeHelper.IsItemCompletedInContext(item, context, checkpointLookup, itemCompletions))
-            {
-                return new BadRequestObjectResult(new { message = Constants.ErrorChecklistAlreadyCompleted });
-            }
-
             // Get marshal details for denormalization (context owner)
             MarshalEntity? marshal = await _marshalRepository.GetAsync(eventId, request.MarshalId);
             if (marshal == null)
@@ -101,7 +91,8 @@ public class ChecklistCompletionFunctions
                 return new NotFoundObjectResult(new { message = Constants.ErrorMarshalNotFound });
             }
 
-            // Determine context for completion
+            // Determine context for completion FIRST (before checking for existing completions)
+            // This allows us to check the specific context from the request
             string contextType;
             string contextId;
             if (!string.IsNullOrEmpty(request.ContextType) && !string.IsNullOrEmpty(request.ContextId))
@@ -112,6 +103,34 @@ public class ChecklistCompletionFunctions
             else
             {
                 (contextType, contextId, _) = ChecklistScopeHelper.DetermineCompletionContext(item, context, checkpointLookup);
+            }
+
+            // Get all completions for this item
+            List<ChecklistCompletionEntity> itemCompletions =
+                [.. await _checklistCompletionRepository.GetByItemAsync(eventId, itemId)];
+
+            // Check if already completed in this specific context
+            // For linked tasks and personal scopes at checkpoints, we need to check by context (not just marshal ID)
+            // because the same marshal can complete the same task at different checkpoints
+            bool isAlreadyCompleted;
+            if (item.LinksToCheckIn || contextType == Constants.ChecklistContextCheckpoint)
+            {
+                // Check for completion in this specific checkpoint context for this marshal
+                isAlreadyCompleted = itemCompletions.Any(c =>
+                    c.ContextOwnerMarshalId == request.MarshalId &&
+                    c.CompletionContextType == contextType &&
+                    c.CompletionContextId == contextId &&
+                    !c.IsDeleted);
+            }
+            else
+            {
+                // Use standard context-based check for other scopes
+                isAlreadyCompleted = ChecklistScopeHelper.IsItemCompletedInContext(item, context, checkpointLookup, itemCompletions);
+            }
+
+            if (isAlreadyCompleted)
+            {
+                return new BadRequestObjectResult(new { message = Constants.ErrorChecklistAlreadyCompleted });
             }
 
             // For linked tasks, ensure we use Checkpoint context with the checkpoint ID
@@ -136,24 +155,18 @@ public class ChecklistCompletionFunctions
             }
 
             // Determine actor (who is actually performing this action)
+            // Priority: ActorMarshalId (if provided) > Admin email header
+            // This ensures that when a user is both admin and marshal, completing a task
+            // as an area lead uses their marshal identity, not their admin identity.
             string actorType;
             string actorId;
             string actorName;
             string adminEmail = req.Headers[Constants.AdminEmailHeader].ToString();
 
-            if (!string.IsNullOrWhiteSpace(adminEmail))
-            {
-                // Admin is completing this on behalf of the marshal
-                actorType = Constants.ActorTypeEventAdmin;
-                actorId = adminEmail;
-
-                // Try to get admin name, default to email if not found or empty
-                AdminUserEntity? admin = await _adminUserRepository.GetByEmailAsync(adminEmail);
-                actorName = !string.IsNullOrWhiteSpace(admin?.Name) ? admin.Name : adminEmail;
-            }
-            else if (!string.IsNullOrWhiteSpace(request.ActorMarshalId))
+            if (!string.IsNullOrWhiteSpace(request.ActorMarshalId))
             {
                 // A marshal (e.g., area lead) is completing this on behalf of another marshal
+                // Prioritize this over admin email to use the correct identity
                 MarshalEntity? actorMarshal = await _marshalRepository.GetAsync(eventId, request.ActorMarshalId);
                 if (actorMarshal == null)
                 {
@@ -163,6 +176,16 @@ public class ChecklistCompletionFunctions
                 actorType = Constants.ActorTypeMarshal;
                 actorId = request.ActorMarshalId;
                 actorName = actorMarshal.Name;
+            }
+            else if (!string.IsNullOrWhiteSpace(adminEmail))
+            {
+                // Admin is completing this on behalf of the marshal (no ActorMarshalId provided)
+                actorType = Constants.ActorTypeEventAdmin;
+                actorId = adminEmail;
+
+                // Try to get admin name, default to email if not found or empty
+                AdminUserEntity? admin = await _adminUserRepository.GetByEmailAsync(adminEmail);
+                actorName = !string.IsNullOrWhiteSpace(admin?.Name) ? admin.Name : adminEmail;
             }
             else
             {
@@ -351,24 +374,18 @@ public class ChecklistCompletionFunctions
             }
 
             // Determine actor (who is actually performing this action)
+            // Priority: ActorMarshalId (if provided) > Admin email header
+            // This ensures that when a user is both admin and marshal, uncompleting a task
+            // as an area lead uses their marshal identity, not their admin identity.
             string actorType;
             string actorId;
             string actorName;
             string adminEmail = req.Headers[Constants.AdminEmailHeader].ToString();
 
-            if (!string.IsNullOrWhiteSpace(adminEmail))
-            {
-                // Admin is uncompleting this
-                actorType = Constants.ActorTypeEventAdmin;
-                actorId = adminEmail;
-
-                // Try to get admin name, default to email if not found or empty
-                AdminUserEntity? admin = await _adminUserRepository.GetByEmailAsync(adminEmail);
-                actorName = !string.IsNullOrWhiteSpace(admin?.Name) ? admin.Name : adminEmail;
-            }
-            else if (!string.IsNullOrWhiteSpace(request.ActorMarshalId))
+            if (!string.IsNullOrWhiteSpace(request.ActorMarshalId))
             {
                 // A marshal (e.g., area lead) is uncompleting this
+                // Prioritize this over admin email to use the correct identity
                 MarshalEntity? actorMarshal = await _marshalRepository.GetAsync(eventId, request.ActorMarshalId);
                 if (actorMarshal == null)
                 {
@@ -378,6 +395,16 @@ public class ChecklistCompletionFunctions
                 actorType = Constants.ActorTypeMarshal;
                 actorId = request.ActorMarshalId;
                 actorName = actorMarshal.Name;
+            }
+            else if (!string.IsNullOrWhiteSpace(adminEmail))
+            {
+                // Admin is uncompleting this (no ActorMarshalId provided)
+                actorType = Constants.ActorTypeEventAdmin;
+                actorId = adminEmail;
+
+                // Try to get admin name, default to email if not found or empty
+                AdminUserEntity? admin = await _adminUserRepository.GetByEmailAsync(adminEmail);
+                actorName = !string.IsNullOrWhiteSpace(admin?.Name) ? admin.Name : adminEmail;
             }
             else
             {

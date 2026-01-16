@@ -402,6 +402,7 @@ public class AssignmentFunctions
     /// Returns basic location data for map display plus only the authenticated marshal's assignments.
     /// This significantly reduces payload size compared to GetEventStatus.
     /// </summary>
+#pragma warning disable MA0051 // Method is too long - complex endpoint assembling multiple data sources
     [Function("GetMarshalEventStatus")]
     public async Task<IActionResult> GetMarshalEventStatus(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/{eventId}/marshal-status")] HttpRequest req,
@@ -517,6 +518,7 @@ public class AssignmentFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     /// <summary>
     /// Resolved checkpoint style containing all style properties

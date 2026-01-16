@@ -107,6 +107,9 @@
             <CommonMap
               :locations="checkpoints"
               :route="route"
+              :route-color="routeColor"
+              :route-style="routeStyle"
+              :route-weight="routeWeight"
               :center="incidentMapCenter"
               :zoom="15"
               :user-location="incidentMarker"
@@ -242,6 +245,18 @@ const props = defineProps({
   route: {
     type: Array,
     default: () => [],
+  },
+  routeColor: {
+    type: String,
+    default: '',
+  },
+  routeStyle: {
+    type: String,
+    default: '',
+  },
+  routeWeight: {
+    type: Number,
+    default: null,
   },
   checkpoints: {
     type: Array,

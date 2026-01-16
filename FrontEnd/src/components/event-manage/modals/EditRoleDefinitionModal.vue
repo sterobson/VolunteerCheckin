@@ -126,8 +126,7 @@
             type="button"
             @click="handleDelete"
             class="btn btn-danger"
-            :disabled="role?.usageCount > 0"
-            :title="role?.usageCount > 0 ? 'Cannot delete role that is in use' : 'Delete this role'"
+            title="Delete this role"
           >
             Delete
           </button>
@@ -193,7 +192,6 @@ const emit = defineEmits([
   'delete',
   'update:isDirty',
   'load-people',
-  'toggle-person-role',
 ]);
 
 const showErrorModal = ref(false);
@@ -202,6 +200,17 @@ const peopleSearchQuery = ref('');
 
 // Track initial hasRole state for stable sorting (only update on reload)
 const initialHasRoleMap = ref(new Map());
+
+// Local copy of people with pending changes applied
+const localPeople = ref([]);
+
+// Track pending assignment changes (only saved when Save button is clicked)
+const pendingChanges = ref({
+  marshalIdsToAdd: new Set(),
+  marshalIdsToRemove: new Set(),
+  contactIdsToAdd: new Set(),
+  contactIdsToRemove: new Set(),
+});
 
 // Tab configuration
 const tabs = [
@@ -227,6 +236,15 @@ watch(() => [props.show, props.role], ([show, role]) => {
     activeTab.value = props.initialTab;
     peopleSearchQuery.value = '';
     initialHasRoleMap.value = new Map(); // Reset so it captures fresh state when people are loaded
+    localPeople.value = []; // Reset local people
+
+    // Reset pending assignment changes
+    pendingChanges.value = {
+      marshalIdsToAdd: new Set(),
+      marshalIdsToRemove: new Set(),
+      contactIdsToAdd: new Set(),
+      contactIdsToRemove: new Set(),
+    };
 
     if (role) {
       form.value = {
@@ -253,14 +271,20 @@ watch(activeTab, (newTab) => {
 });
 
 // Capture initial hasRole state when people are loaded (for stable sorting)
+// Also sync local people from props
 watch(() => props.people, (newPeople) => {
-  if (newPeople.length > 0 && initialHasRoleMap.value.size === 0) {
-    // Only set initial state when first loaded
-    const map = new Map();
-    for (const person of newPeople) {
-      map.set(person.id, person.hasRole);
+  if (newPeople.length > 0) {
+    // Sync local people from props (deep copy to avoid mutating props)
+    localPeople.value = newPeople.map(p => ({ ...p }));
+
+    // Only set initial state when first loaded (for stable sorting)
+    if (initialHasRoleMap.value.size === 0) {
+      const map = new Map();
+      for (const person of newPeople) {
+        map.set(person.id, person.hasRole);
+      }
+      initialHasRoleMap.value = map;
     }
-    initialHasRoleMap.value = map;
   }
 }, { immediate: true });
 
@@ -279,7 +303,7 @@ const formatPersonType = (type) => {
 
 // Filter and sort people - initially checked first (based on load state), then by name
 const filteredPeople = computed(() => {
-  let result = [...props.people];
+  let result = [...localPeople.value];
 
   // Filter by search query if present
   if (peopleSearchQuery.value.trim()) {
@@ -300,28 +324,75 @@ const filteredPeople = computed(() => {
 
 // Check if all people are selected
 const allSelected = computed(() => {
-  return props.people.length > 0 && props.people.every(p => p.hasRole);
+  return localPeople.value.length > 0 && localPeople.value.every(p => p.hasRole);
+});
+
+// Check if there are any pending assignment changes
+const hasAssignmentChanges = computed(() => {
+  return pendingChanges.value.marshalIdsToAdd.size > 0 ||
+    pendingChanges.value.marshalIdsToRemove.size > 0 ||
+    pendingChanges.value.contactIdsToAdd.size > 0 ||
+    pendingChanges.value.contactIdsToRemove.size > 0;
 });
 
 // Toggle select all / deselect all
 const toggleSelectAll = () => {
   const shouldAdd = !allSelected.value;
-  for (const person of props.people) {
+  for (const person of localPeople.value) {
     if (person.hasRole !== shouldAdd) {
-      emit('toggle-person-role', {
-        person,
-        addRole: shouldAdd,
-      });
+      applyPersonRoleChange(person, shouldAdd);
     }
   }
 };
 
-// Toggle role assignment for a person
+// Apply role change to local state and track pending changes
+const applyPersonRoleChange = (person, addRole) => {
+  // Find the person in localPeople and update their hasRole
+  const localPerson = localPeople.value.find(p => p.id === person.id);
+  if (localPerson) {
+    localPerson.hasRole = addRole;
+  }
+
+  // Track the pending change
+  if (person.personType === 'Marshal' || person.personType === 'Linked') {
+    if (addRole) {
+      // If removing was pending, cancel it; otherwise add to pending adds
+      if (pendingChanges.value.marshalIdsToRemove.has(person.marshalId)) {
+        pendingChanges.value.marshalIdsToRemove.delete(person.marshalId);
+      } else {
+        pendingChanges.value.marshalIdsToAdd.add(person.marshalId);
+      }
+    } else {
+      // If adding was pending, cancel it; otherwise add to pending removes
+      if (pendingChanges.value.marshalIdsToAdd.has(person.marshalId)) {
+        pendingChanges.value.marshalIdsToAdd.delete(person.marshalId);
+      } else {
+        pendingChanges.value.marshalIdsToRemove.add(person.marshalId);
+      }
+    }
+  } else if (person.personType === 'Contact') {
+    if (addRole) {
+      if (pendingChanges.value.contactIdsToRemove.has(person.contactId)) {
+        pendingChanges.value.contactIdsToRemove.delete(person.contactId);
+      } else {
+        pendingChanges.value.contactIdsToAdd.add(person.contactId);
+      }
+    } else {
+      if (pendingChanges.value.contactIdsToAdd.has(person.contactId)) {
+        pendingChanges.value.contactIdsToAdd.delete(person.contactId);
+      } else {
+        pendingChanges.value.contactIdsToRemove.add(person.contactId);
+      }
+    }
+  }
+
+  // Mark form as dirty
+  emit('update:isDirty', true);
+};
+
+// Toggle role assignment for a person (local state only, persisted on Save)
 const togglePersonRole = (person) => {
-  emit('toggle-person-role', {
-    person,
-    addRole: !person.hasRole,
-  });
+  applyPersonRoleChange(person, !person.hasRole);
 };
 
 // Handle save
@@ -337,16 +408,18 @@ const handleSave = () => {
     name: form.value.name.trim(),
     notes: form.value.notes.trim(),
     canManageAreaCheckpoints: form.value.canManageAreaCheckpoints,
+    // Include pending assignment changes (convert Sets to Arrays for API)
+    assignmentChanges: {
+      marshalIdsToAdd: Array.from(pendingChanges.value.marshalIdsToAdd),
+      marshalIdsToRemove: Array.from(pendingChanges.value.marshalIdsToRemove),
+      contactIdsToAdd: Array.from(pendingChanges.value.contactIdsToAdd),
+      contactIdsToRemove: Array.from(pendingChanges.value.contactIdsToRemove),
+    },
   });
 };
 
 // Handle delete
 const handleDelete = () => {
-  if (props.role?.usageCount > 0) {
-    errorMessage.value = 'Cannot delete a role that is still assigned to people. Remove the role from all people first.';
-    showErrorModal.value = true;
-    return;
-  }
   emit('delete', props.role.roleId);
 };
 

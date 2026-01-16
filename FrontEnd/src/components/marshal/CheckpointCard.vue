@@ -31,6 +31,9 @@
           ref="mapRef"
           :locations="allLocations"
           :route="route"
+          :route-color="routeColor"
+          :route-style="routeStyle"
+          :route-weight="routeWeight"
           :center="{ lat: assignment.location.latitude, lng: assignment.location.longitude }"
           :zoom="16"
           :user-location="userLocation"
@@ -284,6 +287,18 @@ const props = defineProps({
   route: {
     type: Array,
     default: () => [],
+  },
+  routeColor: {
+    type: String,
+    default: '',
+  },
+  routeStyle: {
+    type: String,
+    default: '',
+  },
+  routeWeight: {
+    type: Number,
+    default: null,
   },
   userLocation: {
     type: Object,

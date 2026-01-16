@@ -576,6 +576,8 @@ export const roleDefinitionsApi = {
   updatePeople: (eventId, roleId, data) => api.put(`/events/${eventId}/role-definitions/${roleId}/people`, data),
   // Reorder role definitions
   reorder: (eventId, items) => api.post(`/events/${eventId}/role-definitions/reorder`, { items }),
+  // Get current marshal's assigned roles with notes (marshal mode)
+  getMyRoles: (eventId) => api.get(`/events/${eventId}/my-roles`),
 };
 
 // Incidents API

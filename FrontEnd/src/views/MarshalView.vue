@@ -103,6 +103,13 @@
 
         <!-- Accordion Sections -->
         <div class="accordion">
+          <!-- Your Roles Section (if user has roles with notes) -->
+          <MarshalRolesSection
+            :roles="myRoles"
+            :is-expanded="expandedSection === 'roles'"
+            @toggle="toggleSection('roles')"
+          />
+
           <!-- Assignments Section -->
           <MarshalAssignmentsSection
             ref="assignmentsSectionRef"
@@ -111,6 +118,9 @@
             :expanded-checkpoint-id="expandedCheckpoint"
             :all-locations="allLocations"
             :route="eventRoute"
+            :route-color="event?.routeColor"
+            :route-style="event?.routeStyle"
+            :route-weight="event?.routeWeight"
             :user-location="userLocation"
             :has-dynamic-assignment="hasDynamicAssignment"
             :current-marshal-id="currentMarshalId"
@@ -204,6 +214,9 @@
             :event-id="route.params.eventId"
             :marshal-id="currentMarshalId"
             :route="eventRoute"
+            :route-color="event?.routeColor"
+            :route-style="event?.routeStyle"
+            :route-weight="event?.routeWeight"
             @toggle="toggleSection('areaLead')"
             @toggle-filter="toggleAreaFilter"
             @checklist-updated="loadChecklist"
@@ -234,6 +247,9 @@
             :selecting-location-name="updatingLocationFor?.location?.name || ''"
             :locations="courseMapLocations"
             :route="eventRoute"
+            :route-color="event?.routeColor"
+            :route-style="event?.routeStyle"
+            :route-weight="event?.routeWeight"
             :center="mapCenter"
             :highlight-location-ids="assignmentLocationIds"
             :clickable="selectingLocationOnMap || canUpdateFirstDynamicAssignment"
@@ -254,6 +270,12 @@
             @toggle="toggleSection('eventDetails')"
           />
         </div>
+
+        <!-- Subtle refresh indicator -->
+        <div v-if="refreshing" class="refresh-indicator">
+          <span class="refresh-spinner"></span>
+          <span>Updating...</span>
+        </div>
       </div>
     </div>
 
@@ -273,6 +295,9 @@
       :initial-location="userLocation"
       :checkpoints="allLocations"
       :route="eventRoute"
+      :route-color="event?.routeColor"
+      :route-style="event?.routeStyle"
+      :route-weight="event?.routeWeight"
       @close="showReportIncident = false"
       @submit="handleReportIncident"
     />
@@ -281,6 +306,9 @@
       :show="showIncidentDetail"
       :incident="selectedIncident"
       :route="eventRoute"
+      :route-color="event?.routeColor"
+      :route-style="event?.routeStyle"
+      :route-weight="event?.routeWeight"
       :checkpoints="allLocations"
       :can-manage="isAreaLead"
       @close="showIncidentDetail = false"
@@ -398,7 +426,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, provide, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { eventsApi, assignmentsApi, areasApi, notesApi, contactsApi, marshalsApi, getOfflineMode } from '../services/api';
+import { eventsApi, assignmentsApi, areasApi, notesApi, contactsApi, marshalsApi, roleDefinitionsApi, getOfflineMode } from '../services/api';
 import ConfirmModal from '../components/ConfirmModal.vue';
 import BaseModal from '../components/BaseModal.vue';
 import EmergencyContactModal from '../components/event-manage/modals/EmergencyContactModal.vue';
@@ -417,6 +445,7 @@ import MarshalRouteSection from '../components/marshal/MarshalRouteSection.vue';
 import MarshalAreaLeadSection from '../components/marshal/MarshalAreaLeadSection.vue';
 import MarshalMarshalsList from '../components/marshal/MarshalMarshalsList.vue';
 import MarshalAssignmentsSection from '../components/marshal/MarshalAssignmentsSection.vue';
+import MarshalRolesSection from '../components/marshal/MarshalRolesSection.vue';
 import { setTerminology, useTerminology } from '../composables/useTerminology';
 import { useMarshalBranding } from '../composables/useMarshalBranding';
 import { useLocationTracking } from '../composables/useLocationTracking';
@@ -558,6 +587,7 @@ const allLocations = ref([]);
 const assignments = ref([]);
 const areas = ref([]);
 const loading = ref(true);
+const refreshing = ref(false); // Background refresh indicator
 
 // Branding styles from composable (pass eventId for caching)
 const {
@@ -606,8 +636,8 @@ const {
   longitude: eventLocationLng,
 });
 
-// Accordion state
-const expandedSection = ref('assignments');
+// Accordion state - start collapsed by default
+const expandedSection = ref(null);
 
 // Track when each section's data was last loaded (for stale data refresh)
 const STALE_DATA_THRESHOLD_MS = 60000; // 60 seconds
@@ -623,6 +653,9 @@ const areaLeadCheckpoints = ref([]);
 
 // Notes state
 const notes = ref([]);
+
+// Roles state (roles assigned to current marshal with notes)
+const myRoles = ref([]);
 
 // Area Lead section ref (accesses areaLeadRef via areaLeadSectionRef.value?.areaLeadRef?.value)
 const areaLeadSectionRef = ref(null);
@@ -1207,15 +1240,9 @@ const hasEmergencyInfo = computed(() => {
   return emergencyContacts.value.length > 0 || emergencyNotes.value.length > 0;
 });
 
-// Get notes that are scoped to a specific checkpoint (area and checkpoint scopes only, not marshal scopes)
-const getNotesForCheckpoint = (locationId, passedAreaIds = []) => {
+// Get notes that are scoped specifically to a checkpoint (not area-based scopes)
+const getNotesForCheckpoint = (locationId) => {
   if (!notes.value || notes.value.length === 0) return [];
-
-  // Get area IDs from the location directly as a fallback (matching NotesView behavior)
-  const location = allLocations.value.find(l => l.id === locationId);
-  const locationAreaIds = location?.areaIds || location?.AreaIds || [];
-  // Use passed areaIds if available, otherwise use location's areaIds
-  const areaIds = passedAreaIds.length > 0 ? passedAreaIds : locationAreaIds;
 
   const matchedNotes = [];
   const seenNoteIds = new Set();
@@ -1234,39 +1261,25 @@ const getNotesForCheckpoint = (locationId, passedAreaIds = []) => {
         const itemType = config.itemType || config.ItemType;
         const ids = config.ids || config.Ids || [];
 
-        // Check checkpoint-specific scope
+        // Only match checkpoint-specific scopes (not area-based)
         if (itemType === 'Checkpoint') {
           if (ids.includes(locationId) || ids.includes('ALL_CHECKPOINTS')) {
             matched = true;
             break;
           }
         }
-
-        // Check area-based scope (notes scoped to area apply to checkpoints in that area)
-        if (itemType === 'Area') {
-          const areaMatch = ids.includes('ALL_AREAS') || (areaIds.length > 0 && areaIds.some(areaId => ids.includes(areaId)));
-          if (areaMatch) {
-            matched = true;
-            break;
-          }
-        }
       }
     } else {
-      // Fallback: use matchedScope from my-notes API to determine if note applies to checkpoint/area
-      // matchedScope indicates why the note was included for this marshal
+      // Fallback: use matchedScope from my-notes API to determine if note applies to checkpoint
+      // Only checkpoint scopes should show under the checkpoint card
       const matchedScope = note.matchedScope || note.MatchedScope || '';
 
-      // Area and checkpoint scopes should show in checkpoint section
-      // Marshal-specific scopes (SpecificPeople, AllMarshals) should NOT show in checkpoint section
-      const areaOrCheckpointScopes = [
-        'EveryoneInAreas',
-        'EveryAreaLead',
+      const checkpointOnlyScopes = [
         'EveryoneAtCheckpoints',
-        'Area',
         'Checkpoint',
       ];
 
-      if (areaOrCheckpointScopes.some(scope => matchedScope.includes(scope) || matchedScope === scope)) {
+      if (checkpointOnlyScopes.some(scope => matchedScope.includes(scope) || matchedScope === scope)) {
         matched = true;
       }
     }
@@ -1350,6 +1363,7 @@ const populateFromCache = (cachedData) => {
   checklistItems.value = cachedData.checklist || [];
   myContacts.value = cachedData.contacts || [];
   notes.value = cachedData.notes || [];
+  myRoles.value = cachedData.roles || [];
 
   // Load area lead checkpoints for marshal name lookup
   if (cachedData.areaLeadDashboard?.checkpoints) {
@@ -1399,6 +1413,11 @@ const loadEventData = async () => {
       console.warn('No cached data available while offline');
       return;
     }
+  }
+
+  // Show subtle refresh indicator if we have cached data
+  if (hasCachedData) {
+    refreshing.value = true;
   }
 
   // Fetch fresh data in background (silently if we have cached data)
@@ -1459,7 +1478,8 @@ const loadEventData = async () => {
     loadChecklist(),
     loadContacts(),
     loadNotes(),
-    loadMyIncidents()
+    loadMyIncidents(),
+    loadRoles()
   ];
 
   // Add area lead dashboard load if user is an area lead
@@ -1479,6 +1499,7 @@ const loadEventData = async () => {
       checklist: checklistItems.value,
       contacts: myContacts.value,
       notes: notes.value,
+      roles: myRoles.value,
       marshalId: currentMarshalId.value
     };
 
@@ -1498,6 +1519,9 @@ const loadEventData = async () => {
 
   // Start polling for dynamic checkpoint positions if any exist
   startDynamicCheckpointPolling();
+
+  // Clear the refreshing indicator
+  refreshing.value = false;
 };
 
 // Set up auth callback now that loadEventData is defined
@@ -1598,6 +1622,18 @@ const loadContacts = async () => {
     myContacts.value = [];
   } finally {
     contactsLoading.value = false;
+  }
+};
+
+const loadRoles = async () => {
+  const eventIdVal = route.params.eventId;
+  try {
+    const response = await roleDefinitionsApi.getMyRoles(eventIdVal);
+    myRoles.value = response.data || [];
+    console.log('Roles loaded:', myRoles.value.length);
+  } catch (error) {
+    console.warn('Failed to load roles:', error);
+    myRoles.value = [];
   }
 };
 
@@ -2215,5 +2251,37 @@ onUnmounted(() => {
 
 .qr-error-state {
   color: var(--danger);
+}
+
+/* Subtle refresh indicator */
+.refresh-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  margin-top: 1rem;
+  background: var(--glass-bg);
+  border-radius: 20px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.refresh-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border-light);
+  border-top-color: var(--brand-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

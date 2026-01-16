@@ -6,6 +6,9 @@
         ref="mapViewRef"
         :locations="filteredLocations"
         :route="filteredRoute"
+        :route-color="routeColor"
+        :route-style="routeStyle"
+        :route-weight="routeWeight"
         :areas="filteredAreas"
         :center="center"
         :zoom="zoom"
@@ -83,6 +86,8 @@
           ref="fullscreenMapViewRef"
           :locations="filteredLocations"
           :route="filteredRoute"
+          :route-color="routeColor"
+          :route-style="routeStyle"
           :areas="filteredAreas"
           :center="center"
           :zoom="zoom"
@@ -149,6 +154,18 @@ const props = defineProps({
   route: {
     type: Array,
     default: () => [],
+  },
+  routeColor: {
+    type: String,
+    default: '',
+  },
+  routeStyle: {
+    type: String,
+    default: '',
+  },
+  routeWeight: {
+    type: Number,
+    default: null,
   },
   areas: {
     type: Array,

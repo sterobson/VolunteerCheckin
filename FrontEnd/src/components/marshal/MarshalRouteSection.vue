@@ -24,12 +24,15 @@
           ref="mapRef"
           :locations="locations"
           :route="route"
+          :route-color="routeColor"
+          :route-style="routeStyle"
+          :route-weight="routeWeight"
           :center="center"
           :zoom="15"
           :user-location="userLocation"
           :highlight-location-ids="highlightLocationIds"
           :marshal-mode="true"
-          :simplify-non-highlighted="true"
+          :simplify-non-highlighted="false"
           :clickable="clickable"
           :show-fullscreen="true"
           :fullscreen-title="terms.course"
@@ -98,6 +101,18 @@ defineProps({
   route: {
     type: Array,
     default: () => [],
+  },
+  routeColor: {
+    type: String,
+    default: '',
+  },
+  routeStyle: {
+    type: String,
+    default: '',
+  },
+  routeWeight: {
+    type: Number,
+    default: null,
   },
   center: {
     type: Object,

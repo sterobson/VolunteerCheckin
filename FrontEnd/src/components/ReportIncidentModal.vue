@@ -146,6 +146,9 @@
               v-if="mapVisible"
               :locations="availableCheckpoints"
               :route="route"
+              :route-color="routeColor"
+              :route-style="routeStyle"
+              :route-weight="routeWeight"
               :center="mapCenter"
               :zoom="14"
               mode="select-point"
@@ -220,6 +223,18 @@ const props = defineProps({
   route: {
     type: Array,
     default: () => [],
+  },
+  routeColor: {
+    type: String,
+    default: '',
+  },
+  routeStyle: {
+    type: String,
+    default: '',
+  },
+  routeWeight: {
+    type: Number,
+    default: null,
   },
 });
 

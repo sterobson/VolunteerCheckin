@@ -148,6 +148,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  nextDisplayOrder: {
+    type: Number,
+    default: 0,
+  },
 });
 
 const emit = defineEmits([
@@ -238,7 +242,7 @@ watch(() => props.show, (newVal) => {
           itemType: null,
           ids: []
         }],
-        displayOrder: 0,
+        displayOrder: props.nextDisplayOrder,
         isRequired: true,
         visibleFrom: null,
         visibleUntil: null,

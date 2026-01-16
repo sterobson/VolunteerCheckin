@@ -17,12 +17,13 @@
           class="task-group"
           :class="{ 'all-completed': group.allCompleted, 'has-modified': group.hasModified }"
         >
-        <DragHandle v-if="allowReorder" class="task-drag-handle" />
-        <button
-          type="button"
-          class="task-group-header"
-          @click="toggleGroup(group.itemId)"
-        >
+        <div class="task-group-header-row">
+          <DragHandle v-if="allowReorder" class="task-drag-handle" />
+          <button
+            type="button"
+            class="task-group-header"
+            @click="toggleGroup(group.itemId)"
+          >
           <div class="task-header-content">
             <div class="task-checkbox-area">
               <span class="task-status-icon" :class="getStatusClass(group)">
@@ -55,7 +56,8 @@
             </div>
           </div>
           <span class="expand-arrow">{{ expandedGroups.has(group.itemId) ? '▲' : '▼' }}</span>
-        </button>
+          </button>
+        </div>
 
         <div v-if="expandedGroups.has(group.itemId)" class="task-group-details">
           <div
@@ -316,11 +318,16 @@ const formatDateTime = (dateString) => {
 
 .task-group {
   display: flex;
-  align-items: stretch;
+  flex-direction: column;
   border: 1px solid var(--border-light);
   border-radius: 8px;
   background: var(--card-bg);
   overflow: hidden;
+}
+
+.task-group-header-row {
+  display: flex;
+  align-items: stretch;
 }
 
 .task-drag-handle {

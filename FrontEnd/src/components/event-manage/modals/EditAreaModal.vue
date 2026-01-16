@@ -52,6 +52,9 @@
             mode="edit-polygon"
             :editing-polygon="form.polygon"
             :route="route"
+            :route-color="routeColor"
+            :route-style="routeStyle"
+            :route-weight="routeWeight"
             :locations="checkpoints"
             :areas="otherAreas"
             :all-locations-for-bounds="polygonBoundsLocations"
@@ -566,6 +569,18 @@ const props = defineProps({
   route: {
     type: Array,
     default: () => [],
+  },
+  routeColor: {
+    type: String,
+    default: '',
+  },
+  routeStyle: {
+    type: String,
+    default: '',
+  },
+  routeWeight: {
+    type: Number,
+    default: null,
   },
 });
 

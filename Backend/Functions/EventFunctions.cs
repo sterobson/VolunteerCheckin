@@ -225,7 +225,10 @@ public class EventFunctions
                 brandingLogoPosition: request.BrandingLogoPosition,
                 brandingAccentColor: request.BrandingAccentColor,
                 brandingPageGradientStart: request.BrandingPageGradientStart,
-                brandingPageGradientEnd: request.BrandingPageGradientEnd
+                brandingPageGradientEnd: request.BrandingPageGradientEnd,
+                routeColor: request.RouteColor,
+                routeStyle: request.RouteStyle,
+                routeWeight: request.RouteWeight
             );
 
             await _eventRepository.UpdateAsync(eventEntity);

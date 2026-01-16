@@ -36,6 +36,9 @@
           :checkpoints="locationStatuses"
           :areas="areas"
           :route="event?.route || []"
+          :route-color="event?.routeColor || ''"
+          :route-style="event?.routeStyle || ''"
+          :route-weight="event?.routeWeight"
           :selected-area-id="selectedAreaId"
           :drawing-mode="isDrawingAreaBoundary"
           @map-click="handleMapClick"
@@ -52,6 +55,7 @@
           @add-many-checkpoints-from-map="handleAddMultipleCheckpointsClick"
           @add-area-from-map="handleAddAreaFromMap"
           @fullscreen="handleCourseFullscreen"
+          @update:route-settings="handleRouteSettingsChange"
         />
 
         <CheckpointsList
@@ -335,6 +339,9 @@
       :marshals="marshals"
       :areas="areas"
       :route="event?.route || []"
+      :route-color="event?.routeColor || ''"
+      :route-style="event?.routeStyle || ''"
+      :route-weight="event?.routeWeight"
       :is-dirty="formDirty"
       :event-id="route.params.eventId"
       :all-locations="locationStatuses"
@@ -376,6 +383,7 @@
       :locations="locationStatuses"
       :marshals="marshals"
       :is-dirty="formDirty"
+      :next-display-order="nextChecklistDisplayOrder"
       @close="closeEditChecklistItemModal"
       @save="handleSaveChecklistItem"
       @delete="handleDeleteChecklistItem"
@@ -400,6 +408,9 @@
       :show="showIncidentDetail"
       :incident="selectedIncident"
       :route="event?.route || []"
+      :route-color="event?.routeColor || ''"
+      :route-style="event?.routeStyle || ''"
+      :route-weight="event?.routeWeight"
       :checkpoints="locationStatuses"
       :can-manage="true"
       @close="closeIncidentDetailModal"
@@ -446,6 +457,9 @@
       :initial-location="null"
       :checkpoints="locationStatuses"
       :route="event?.route || []"
+      :route-color="event?.routeColor || ''"
+      :route-style="event?.routeStyle || ''"
+      :route-weight="event?.routeWeight"
       @close="showReportIncident = false"
       @submit="handleSubmitIncident"
     />
@@ -481,7 +495,6 @@
       @delete="handleDeleteRole"
       @update:isDirty="markFormDirty"
       @load-people="handleLoadPeopleForRole"
-      @toggle-person-role="handleTogglePersonRole"
     />
 
     <!-- Fullscreen Map Overlay -->
@@ -496,6 +509,9 @@
       :locations="displayCheckpoints"
       :areas="displayAreas"
       :route="event?.route || []"
+      :route-color="event?.routeColor || ''"
+      :route-style="event?.routeStyle || ''"
+      :route-weight="event?.routeWeight"
       :selected-area-id="selectedAreaId"
       :center="savedMapCenter"
       :zoom="savedMapZoom"
@@ -788,6 +804,12 @@ const checklistItems = ref([]);
 const selectedChecklistItem = ref(null);
 const showEditChecklistItem = ref(false);
 const checklistItemInitialTab = ref('details');
+// Calculate the next display order for new checklist items (add at the end)
+const nextChecklistDisplayOrder = computed(() => {
+  if (!checklistItems.value || checklistItems.value.length === 0) return 0;
+  const maxOrder = Math.max(...checklistItems.value.map(item => item.displayOrder || 0));
+  return maxOrder + 1;
+});
 const checklistCompletionReport = ref(null);
 const checklistDetailedReport = ref(null);
 const isLoadingDetailedReport = ref(false);
@@ -1100,6 +1122,25 @@ const handleShiftCheckpointTimesCancel = () => {
   loadEventData();
 };
 
+// Handle route settings change - save all at once to avoid race conditions
+const handleRouteSettingsChange = async ({ routeColor, routeStyle, routeWeight }) => {
+  if (!event.value) return;
+  try {
+    await eventsStore.updateEvent(route.params.eventId, {
+      name: event.value.name,
+      description: event.value.description,
+      eventDate: event.value.eventDate,
+      timeZoneId: event.value.timeZoneId,
+      routeColor,
+      routeStyle,
+      routeWeight,
+    });
+    event.value = { ...event.value, routeColor, routeStyle, routeWeight };
+  } catch (error) {
+    console.error('Failed to update route settings:', error);
+  }
+};
+
 const tryCloseModal = (closeFunction) => {
   if (formDirty.value || pendingAssignments.value.length > 0 || pendingDeleteAssignments.value.length > 0 ||
       pendingMarshalAssignments.value.length > 0 || pendingMarshalDeleteAssignments.value.length > 0) {
@@ -1157,7 +1198,7 @@ const loadEventData = async () => {
       setTerminology(event.value);
     }
 
-    // Phase 2: Load all other data in parallel (9 independent calls)
+    // Phase 2: Load all other data in parallel (10 independent calls)
     const results = await Promise.allSettled([
       eventsStore.fetchLocations(route.params.eventId),
       eventsStore.fetchEventStatus(route.params.eventId),
@@ -1168,6 +1209,7 @@ const loadEventData = async () => {
       loadNotes(),
       loadIncidents(),
       loadContacts(),
+      loadRoleDefinitions(),
     ]);
 
     // Update state from store after parallel fetches
@@ -1177,7 +1219,7 @@ const loadEventData = async () => {
     // Log any failures for debugging
     results.forEach((result, index) => {
       if (result.status === 'rejected') {
-        const names = ['locations', 'eventStatus', 'admins', 'marshals', 'areas', 'checklists', 'notes', 'contacts'];
+        const names = ['locations', 'eventStatus', 'admins', 'marshals', 'areas', 'checklists', 'notes', 'contacts', 'roles'];
         console.error(`Failed to load ${names[index]}:`, result.reason);
       }
     });
@@ -1963,12 +2005,26 @@ const handleSelectRole = (role) => {
 
 const handleSaveRole = async (formData) => {
   try {
-    if (selectedRole.value?.roleId) {
+    const roleId = selectedRole.value?.roleId;
+    const { assignmentChanges, ...roleData } = formData;
+
+    if (roleId) {
       // Update existing role
-      await roleDefinitionsApi.update(route.params.eventId, selectedRole.value.roleId, formData);
+      await roleDefinitionsApi.update(route.params.eventId, roleId, roleData);
+
+      // Save assignment changes if any
+      const hasAssignmentChanges = assignmentChanges &&
+        (assignmentChanges.marshalIdsToAdd.length > 0 ||
+         assignmentChanges.marshalIdsToRemove.length > 0 ||
+         assignmentChanges.contactIdsToAdd.length > 0 ||
+         assignmentChanges.contactIdsToRemove.length > 0);
+
+      if (hasAssignmentChanges) {
+        await roleDefinitionsApi.updatePeople(route.params.eventId, roleId, assignmentChanges);
+      }
     } else {
       // Create new role
-      await roleDefinitionsApi.create(route.params.eventId, formData);
+      await roleDefinitionsApi.create(route.params.eventId, roleData);
     }
     await loadRoleDefinitions();
     closeEditRoleModal();
@@ -1980,7 +2036,15 @@ const handleSaveRole = async (formData) => {
 };
 
 const handleDeleteRole = async (roleId) => {
-  showConfirm('Delete role', 'Are you sure you want to delete this role?', async () => {
+  const usageCount = selectedRole.value?.usageCount || 0;
+
+  let message = 'Are you sure you want to delete this role?';
+  if (usageCount > 0) {
+    const peopleWord = usageCount === 1 ? termsLower.value.person : termsLower.value.people;
+    message = `This role is assigned to ${usageCount} ${peopleWord}. They will all be unassigned from this role. Are you sure you want to delete it?`;
+  }
+
+  showConfirm('Delete role', message, async () => {
     try {
       await roleDefinitionsApi.delete(route.params.eventId, roleId);
       await loadRoleDefinitions();
@@ -2008,42 +2072,6 @@ const handleLoadPeopleForRole = async (roleId) => {
     console.error('Failed to load people for role:', error);
   } finally {
     loadingRolePeople.value = false;
-  }
-};
-
-const handleTogglePersonRole = async ({ person, addRole }) => {
-  if (!selectedRole.value?.roleId) return;
-
-  const roleId = selectedRole.value.roleId;
-  const changes = {
-    marshalIdsToAdd: [],
-    marshalIdsToRemove: [],
-    contactIdsToAdd: [],
-    contactIdsToRemove: [],
-  };
-
-  if (person.personType === 'Marshal' || person.personType === 'Linked') {
-    if (addRole) {
-      changes.marshalIdsToAdd.push(person.marshalId);
-    } else {
-      changes.marshalIdsToRemove.push(person.marshalId);
-    }
-  } else if (person.personType === 'Contact') {
-    if (addRole) {
-      changes.contactIdsToAdd.push(person.contactId);
-    } else {
-      changes.contactIdsToRemove.push(person.contactId);
-    }
-  }
-
-  try {
-    const response = await roleDefinitionsApi.updatePeople(route.params.eventId, roleId, changes);
-    rolePeople.value = response.data;
-    // Reload role definitions to update usage counts
-    await loadRoleDefinitions();
-  } catch (error) {
-    console.error('Failed to update role assignment:', error);
-    alert('Failed to update role assignment. Please try again.');
   }
 };
 
@@ -3513,6 +3541,10 @@ watch(activeTab, (newTab) => {
     case 'marshals':
       if (isStale('marshals')) {
         loadMarshals();
+      }
+      // Also load role definitions for displaying roles in marshal edit modal
+      if (isStale('roles')) {
+        loadRoleDefinitions();
       }
       break;
     case 'areas':

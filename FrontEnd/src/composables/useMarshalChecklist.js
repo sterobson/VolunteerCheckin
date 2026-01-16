@@ -332,20 +332,18 @@ export function useMarshalChecklist({
           const response = await checklistApi.complete(evtId, item.itemId, actionData);
 
           // Handle linked check-in - update assignment state if check-in occurred
-          if (response.data?.linkedCheckIn) {
-            const linkedCheckIn = response.data.linkedCheckIn;
-            // Find assignment by locationId (consistent with checkout logic)
-            const assignment = assignments.value.find(a =>
-              a.locationId === linkedCheckIn.locationId ||
-              a.id === linkedCheckIn.assignmentId ||
-              a.assignmentId === linkedCheckIn.assignmentId
-            );
+          // Use item.linkedCheckpointId as primary source (consistent with uncomplete logic)
+          // Fall back to response.data.linkedCheckIn if available
+          const checkpointId = item.linkedCheckpointId || response.data?.linkedCheckIn?.locationId;
+          if (item.linksToCheckIn && checkpointId) {
+            const assignment = assignments.value.find(a => a.locationId === checkpointId);
             if (assignment) {
+              const checkedInAt = response.data?.linkedCheckIn?.checkedInAt || new Date().toISOString();
               assignment.isCheckedIn = true;
-              assignment.checkedInAt = linkedCheckIn.checkedInAt;
-              console.log(`Linked check-in: Checked in at ${linkedCheckIn.locationName}`);
+              assignment.checkedInAt = checkedInAt;
+              console.log(`Linked check-in: Checked in at ${item.linkedCheckpointName || checkpointId}`);
             } else {
-              console.warn('Could not find assignment for linked check-in:', linkedCheckIn);
+              console.warn('Could not find assignment for linked check-in:', { checkpointId, linkedCheckpointId: item.linkedCheckpointId });
             }
           }
 

@@ -31,6 +31,9 @@
         :area-ids="filteredAreaIds"
         :marshal-id="marshalId"
         :route="route"
+        :route-color="routeColor"
+        :route-style="routeStyle"
+        :route-weight="routeWeight"
         @checklist-updated="$emit('checklist-updated')"
       />
     </div>
@@ -77,6 +80,18 @@ defineProps({
   route: {
     type: Array,
     default: () => [],
+  },
+  routeColor: {
+    type: String,
+    default: '',
+  },
+  routeStyle: {
+    type: String,
+    default: '',
+  },
+  routeWeight: {
+    type: Number,
+    default: null,
   },
 });
 

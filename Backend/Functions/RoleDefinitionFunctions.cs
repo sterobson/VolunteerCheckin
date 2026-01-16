@@ -249,9 +249,10 @@ public class RoleDefinitionFunctions
 
     /// <summary>
     /// Delete a role definition.
-    /// Can only delete roles that are not in use.
+    /// If the role is assigned to people, they will be unassigned first.
     /// </summary>
     [Function("DeleteRoleDefinition")]
+#pragma warning disable MA0051 // Method handles cleanup of related entities before deletion
     public async Task<IActionResult> DeleteRoleDefinition(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "events/{eventId}/role-definitions/{roleId}")] HttpRequest req,
         string eventId,
@@ -272,19 +273,54 @@ public class RoleDefinitionFunctions
                 return new NotFoundObjectResult(new { message = "Role definition not found" });
             }
 
-            // Check if role is in use
+            // Remove the role from all marshals and contacts that have it
             IEnumerable<MarshalEntity> marshals = await _marshalRepository.GetByEventAsync(eventId);
             IEnumerable<EventContactEntity> contacts = await _contactRepository.GetByEventAsync(eventId);
-            int usageCount = CountRoleUsage(roleId, roleDefinition.Name, marshals, contacts);
 
-            if (usageCount > 0)
+            int unassignedCount = 0;
+
+            // Track which marshals had the role removed (for linked contact deduplication)
+            HashSet<string> unassignedMarshalIds = [];
+
+            // Remove from marshals
+            foreach (MarshalEntity marshal in marshals)
             {
-                return new ConflictObjectResult(new { message = $"Cannot delete role that is assigned to {usageCount} people. Remove the role from all people first." });
+                List<string> roles = GetRolesFromMarshal(marshal);
+                if (roles.Contains(roleId) || roles.Contains(roleDefinition.Name, StringComparer.OrdinalIgnoreCase))
+                {
+                    roles.Remove(roleId);
+                    roles.RemoveAll(r => r.Equals(roleDefinition.Name, StringComparison.OrdinalIgnoreCase));
+                    marshal.RolesJson = JsonSerializer.Serialize(roles);
+                    await _marshalRepository.UpdateAsync(marshal);
+                    unassignedCount++;
+                    unassignedMarshalIds.Add(marshal.MarshalId);
+                }
+            }
+
+            // Remove from contacts (avoid double-counting linked pairs)
+            foreach (EventContactEntity contact in contacts)
+            {
+                List<string> roles = GetRolesFromContact(contact);
+                if (roles.Contains(roleId) || roles.Contains(roleDefinition.Name, StringComparer.OrdinalIgnoreCase))
+                {
+                    roles.Remove(roleId);
+                    roles.RemoveAll(r => r.Equals(roleDefinition.Name, StringComparison.OrdinalIgnoreCase));
+                    SetRolesOnContact(contact, roles);
+                    contact.UpdatedAt = DateTime.UtcNow;
+                    await _contactRepository.UpdateAsync(contact);
+
+                    // Only count if not linked to a marshal we already counted
+                    if (string.IsNullOrEmpty(contact.MarshalId) || !unassignedMarshalIds.Contains(contact.MarshalId))
+                    {
+                        unassignedCount++;
+                    }
+                }
             }
 
             await _roleDefinitionRepository.DeleteAsync(eventId, roleId);
 
-            _logger.LogInformation("Role definition {RoleId} deleted for event {EventId} by {PersonId}", roleId, eventId, claims.PersonId);
+            _logger.LogInformation("Role definition {RoleId} deleted for event {EventId} by {PersonId}, unassigned from {UnassignedCount} people",
+                roleId, eventId, claims.PersonId, unassignedCount);
 
             return new NoContentResult();
         }
@@ -294,6 +330,7 @@ public class RoleDefinitionFunctions
             return new StatusCodeResult(500);
         }
     }
+#pragma warning restore MA0051
 
     /// <summary>
     /// Get unified list of people (marshals and contacts) for a role definition.
@@ -1070,4 +1107,66 @@ public class RoleDefinitionFunctions
 #pragma warning restore MA0051
 
     #endregion
+
+    /// <summary>
+    /// Get the current marshal's assigned roles with their notes.
+    /// Accessible by any authenticated marshal.
+    /// </summary>
+    [Function("GetMyRoles")]
+    public async Task<IActionResult> GetMyRoles(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/{eventId}/my-roles")] HttpRequest req,
+        string eventId)
+    {
+        try
+        {
+            // Authenticate - requires being a marshal
+            UserClaims? claims = await GetClaimsAsync(req, eventId);
+            if (claims == null || !claims.CanActAsMarshal || claims.MarshalId == null)
+            {
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            // Get the marshal's record
+            MarshalEntity? marshal = await _marshalRepository.GetAsync(eventId, claims.MarshalId);
+            if (marshal == null)
+            {
+                return new NotFoundObjectResult(new { message = "Marshal not found" });
+            }
+
+            // Get the role IDs assigned to this marshal
+            List<string> roleIds = GetRolesFromMarshal(marshal);
+            if (roleIds.Count == 0)
+            {
+                return new OkObjectResult(new List<MarshalRoleResponse>());
+            }
+
+            // Get all role definitions for this event
+            IEnumerable<EventRoleDefinitionEntity> allRoles = await _roleDefinitionRepository.GetByEventAsync(eventId);
+            Dictionary<string, EventRoleDefinitionEntity> roleMap = allRoles.ToDictionary(r => r.RoleId);
+
+            // Build the response with only roles that have notes
+            List<MarshalRoleResponse> responses = [];
+            foreach (string roleId in roleIds)
+            {
+                if (roleMap.TryGetValue(roleId, out EventRoleDefinitionEntity? role) && !string.IsNullOrWhiteSpace(role.Notes))
+                {
+                    responses.Add(new MarshalRoleResponse(
+                        RoleId: role.RoleId,
+                        Name: role.Name,
+                        Notes: role.Notes
+                    ));
+                }
+            }
+
+            // Sort by display order
+            responses = [.. responses.OrderBy(r => roleMap.TryGetValue(r.RoleId, out EventRoleDefinitionEntity? role) ? role.DisplayOrder : 0)];
+
+            return new OkObjectResult(responses);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting roles for marshal in event {EventId}", eventId);
+            return new StatusCodeResult(500);
+        }
+    }
 }

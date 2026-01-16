@@ -65,7 +65,11 @@ public record UpdateEventRequest(
     string? BrandingLogoPosition = null,
     string? BrandingAccentColor = null,
     string? BrandingPageGradientStart = null,
-    string? BrandingPageGradientEnd = null
+    string? BrandingPageGradientEnd = null,
+    // Route display settings (optional)
+    string? RouteColor = null,
+    string? RouteStyle = null,
+    int? RouteWeight = null
 );
 
 public record RoutePoint(
@@ -106,7 +110,11 @@ public record EventResponse(
     string BrandingLogoPosition,
     string BrandingAccentColor,
     string BrandingPageGradientStart,
-    string BrandingPageGradientEnd
+    string BrandingPageGradientEnd,
+    // Route display settings
+    string RouteColor,
+    string RouteStyle,
+    int? RouteWeight
 );
 
 public record CreateLocationRequest(
@@ -350,6 +358,60 @@ public record LocationStatusResponse(
     bool IsDynamic,
     List<ScopeConfiguration> LocationUpdateScopeConfigurations,
     DateTime? LastLocationUpdate
+);
+
+/// <summary>
+/// Slim marshal summary for display in checkpoint cards - minimal data to reduce payload.
+/// </summary>
+public record MarshalSummary(
+    string MarshalId,
+    string MarshalName,
+    bool IsCheckedIn,
+    DateTime? CheckInTime
+);
+
+/// <summary>
+/// Slim location response for marshal mode - excludes full assignment details to reduce payload size.
+/// Includes basic marshal summaries for display in checkpoint cards.
+/// </summary>
+public record MarshalLocationResponse(
+    string Id,
+    string Name,
+    string Description,
+    double Latitude,
+    double Longitude,
+    int RequiredMarshals,
+    int CheckedInCount,
+    int TotalAssigned,
+    string What3Words,
+    DateTime? StartTime,
+    DateTime? EndTime,
+    List<string> AreaIds,
+    // Slim marshal list for checkpoint cards (just names and check-in status)
+    List<MarshalSummary> Marshals,
+    // Only resolved styles (computed from checkpoint -> area -> event hierarchy)
+    string ResolvedStyleType,
+    string ResolvedStyleColor,
+    string ResolvedStyleBackgroundShape,
+    string ResolvedStyleBackgroundColor,
+    string ResolvedStyleBorderColor,
+    string ResolvedStyleIconColor,
+    string ResolvedStyleSize,
+    string ResolvedStyleMapRotation,
+    // Dynamic checkpoint settings
+    bool IsDynamic,
+    List<ScopeConfiguration> LocationUpdateScopeConfigurations,
+    DateTime? LastLocationUpdate
+);
+
+/// <summary>
+/// Slim event status response for marshal mode.
+/// Contains basic location data for map display plus only the current marshal's assignments.
+/// </summary>
+public record MarshalEventStatusResponse(
+    string EventId,
+    List<MarshalLocationResponse> Locations,
+    List<AssignmentResponse> MyAssignments
 );
 
 public record UserEventMappingResponse(
@@ -1211,4 +1273,14 @@ public record UpdateRoleAssignmentsRequest(
     List<string> MarshalIdsToRemove,
     List<string> ContactIdsToAdd,
     List<string> ContactIdsToRemove
+);
+
+/// <summary>
+/// Simplified role information for marshals to view their assigned roles.
+/// Only includes name and notes (no admin-level details).
+/// </summary>
+public record MarshalRoleResponse(
+    string RoleId,
+    string Name,
+    string Notes
 );

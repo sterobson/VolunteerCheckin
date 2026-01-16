@@ -24,6 +24,9 @@
           :is-expanded="expandedCheckpointId === assign.id"
           :all-locations="allLocations"
           :route="route"
+          :route-color="routeColor"
+          :route-style="routeStyle"
+          :route-weight="routeWeight"
           :user-location="userLocation"
           :toolbar-actions="getToolbarActions(assign.id)"
           :has-dynamic-assignment="hasDynamicAssignment"
@@ -34,7 +37,7 @@
           :checking-in-marshal-id="checkingInMarshalId"
           :is-area-lead-for-checkpoint="isAreaLeadForAreas(assign.areaIds)"
           :expanded-marshal-id="expandedMarshalId"
-          :notes="getNotesForCheckpoint(assign.locationId, assign.areaIds)"
+          :notes="getNotesForCheckpoint(assign.locationId)"
           :updating-location="updatingLocation"
           :auto-update-enabled="autoUpdateEnabled"
           :area-lead-area-ids="areaLeadAreaIds"
@@ -84,6 +87,18 @@ const props = defineProps({
   route: {
     type: Array,
     default: () => [],
+  },
+  routeColor: {
+    type: String,
+    default: '',
+  },
+  routeStyle: {
+    type: String,
+    default: '',
+  },
+  routeWeight: {
+    type: Number,
+    default: null,
   },
   userLocation: {
     type: Object,

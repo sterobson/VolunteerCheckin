@@ -54,6 +54,11 @@ public class EventEntity : ITableEntity
     public string BrandingPageGradientStart { get; set; } = string.Empty; // Hex color, default #667eea
     public string BrandingPageGradientEnd { get; set; } = string.Empty;   // Hex color, default #764ba2
 
+    // Route display settings
+    public string RouteColor { get; set; } = string.Empty; // Hex color, default #3388ff (Leaflet blue)
+    public string RouteStyle { get; set; } = string.Empty; // line, dash, dash-long, dash-short, dot, dot-sparse, dash-dot, dash-dot-dot, etc.
+    public int? RouteWeight { get; set; } // Line thickness in pixels (default: 4)
+
     /// <summary>
     /// Apply updates from an UpdateEventRequest, only updating properties that are provided (non-null).
     /// </summary>
@@ -81,7 +86,10 @@ public class EventEntity : ITableEntity
         string? brandingLogoPosition = null,
         string? brandingAccentColor = null,
         string? brandingPageGradientStart = null,
-        string? brandingPageGradientEnd = null)
+        string? brandingPageGradientEnd = null,
+        string? routeColor = null,
+        string? routeStyle = null,
+        int? routeWeight = null)
     {
         // Required fields
         Name = name;
@@ -98,6 +106,7 @@ public class EventEntity : ITableEntity
         ApplyBrandingUpdates(brandingHeaderGradientStart, brandingHeaderGradientEnd,
             brandingLogoUrl, brandingLogoPosition, brandingAccentColor,
             brandingPageGradientStart, brandingPageGradientEnd);
+        ApplyRouteUpdates(routeColor, routeStyle, routeWeight);
     }
 
     /// <summary>
@@ -159,5 +168,18 @@ public class EventEntity : ITableEntity
         if (accentColor != null) BrandingAccentColor = accentColor;
         if (pageGradientStart != null) BrandingPageGradientStart = pageGradientStart;
         if (pageGradientEnd != null) BrandingPageGradientEnd = pageGradientEnd;
+    }
+
+    /// <summary>
+    /// Apply route display updates (only non-null values).
+    /// </summary>
+    public void ApplyRouteUpdates(
+        string? routeColor = null,
+        string? routeStyle = null,
+        int? routeWeight = null)
+    {
+        if (routeColor != null) RouteColor = routeColor;
+        if (routeStyle != null) RouteStyle = routeStyle;
+        if (routeWeight != null) RouteWeight = routeWeight;
     }
 }

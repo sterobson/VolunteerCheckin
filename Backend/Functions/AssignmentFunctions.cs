@@ -398,6 +398,127 @@ public class AssignmentFunctions
 #pragma warning restore MA0051
 
     /// <summary>
+    /// Gets a slim event status optimized for marshal mode.
+    /// Returns basic location data for map display plus only the authenticated marshal's assignments.
+    /// This significantly reduces payload size compared to GetEventStatus.
+    /// </summary>
+    [Function("GetMarshalEventStatus")]
+    public async Task<IActionResult> GetMarshalEventStatus(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/{eventId}/marshal-status")] HttpRequest req,
+        string eventId)
+    {
+        try
+        {
+            // Get marshalId from the authenticated session
+            string? marshalId = req.Headers["X-Marshal-Id"].FirstOrDefault();
+            if (string.IsNullOrEmpty(marshalId))
+            {
+                return new UnauthorizedResult();
+            }
+
+            // Load all data in parallel for efficiency
+            Task<IEnumerable<LocationEntity>> locationsTask = _locationRepository.GetByEventAsync(eventId);
+            Task<IEnumerable<AssignmentEntity>> assignmentsTask = _assignmentRepository.GetByEventAsync(eventId);
+            Task<EventEntity?> eventTask = _eventRepository.GetAsync(eventId);
+            Task<IEnumerable<AreaEntity>> areasTask = _areaRepository.GetByEventAsync(eventId);
+
+            await Task.WhenAll(locationsTask, assignmentsTask, eventTask, areasTask);
+
+            List<LocationEntity> locationsList = [.. await locationsTask];
+            IEnumerable<AssignmentEntity> allAssignments = await assignmentsTask;
+            EventEntity? eventEntity = await eventTask;
+            List<AreaEntity> areasList = [.. await areasTask];
+
+            // Calculate area checkpoint counts for style resolution
+            Dictionary<string, int> areaCheckpointCounts = [];
+            foreach (LocationEntity location in locationsList)
+            {
+                List<string> locationAreaIds = JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson ?? "[]") ?? [];
+                foreach (string areaId in locationAreaIds)
+                {
+                    areaCheckpointCounts[areaId] = areaCheckpointCounts.GetValueOrDefault(areaId, 0) + 1;
+                }
+            }
+
+            // Group assignments by location ID
+            Dictionary<string, List<AssignmentEntity>> assignmentsByLocation = allAssignments
+                .GroupBy(a => a.LocationId)
+                .ToDictionary(g => g.Key, g => (List<AssignmentEntity>)[.. g]);
+
+            // Get only this marshal's assignments
+            List<AssignmentResponse> myAssignments = [.. allAssignments
+                .Where(a => a.MarshalId == marshalId)
+                .Select(a => a.ToResponse())];
+
+            List<MarshalLocationResponse> locationStatuses = [];
+
+            foreach (LocationEntity location in locationsList)
+            {
+                List<AssignmentEntity> locationAssignments = assignmentsByLocation
+                    .GetValueOrDefault(location.RowKey, []);
+
+                int checkedInCount = locationAssignments.Count(a => a.IsCheckedIn);
+                int totalAssigned = locationAssignments.Count;
+
+                // Create slim marshal summaries for checkpoint display
+                List<MarshalSummary> marshalSummaries = [.. locationAssignments
+                    .Select(a => new MarshalSummary(
+                        a.MarshalId,
+                        a.MarshalName,
+                        a.IsCheckedIn,
+                        a.CheckInTime
+                    ))];
+
+                List<string> areaIds = JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson ?? "[]") ?? [];
+
+                // Resolve checkpoint style from hierarchy
+                ResolvedCheckpointStyle resolvedStyle = ResolveCheckpointStyle(
+                    location, areaIds, eventEntity, areasList, areaCheckpointCounts);
+
+                // Parse location update scope configurations
+                List<ScopeConfiguration> locationUpdateScopeConfigs =
+                    JsonSerializer.Deserialize<List<ScopeConfiguration>>(location.LocationUpdateScopeJson ?? "[]", FunctionHelpers.JsonOptions) ?? [];
+
+                locationStatuses.Add(new MarshalLocationResponse(
+                    location.RowKey,
+                    location.Name,
+                    location.Description,
+                    location.Latitude,
+                    location.Longitude,
+                    location.RequiredMarshals,
+                    checkedInCount,
+                    totalAssigned,
+                    location.What3Words,
+                    location.StartTime,
+                    location.EndTime,
+                    areaIds,
+                    marshalSummaries,
+                    resolvedStyle.Type,
+                    resolvedStyle.Color,
+                    resolvedStyle.BackgroundShape,
+                    resolvedStyle.BackgroundColor,
+                    resolvedStyle.BorderColor,
+                    resolvedStyle.IconColor,
+                    resolvedStyle.Size,
+                    resolvedStyle.MapRotation,
+                    location.IsDynamic,
+                    locationUpdateScopeConfigs,
+                    location.LastLocationUpdate
+                ));
+            }
+
+            MarshalEventStatusResponse response = new(eventId, locationStatuses, myAssignments);
+
+            return new OkObjectResult(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting marshal event status");
+            return new StatusCodeResult(500);
+        }
+    }
+
+    /// <summary>
     /// Resolved checkpoint style containing all style properties
     /// </summary>
     private sealed record ResolvedCheckpointStyle(

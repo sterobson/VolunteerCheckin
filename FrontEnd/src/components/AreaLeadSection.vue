@@ -51,6 +51,9 @@
             <CommonMap
               :locations="[{ id: checkpoint.checkpointId, name: checkpoint.name, description: checkpoint.description, latitude: checkpoint.latitude, longitude: checkpoint.longitude }]"
               :route="route"
+              :route-color="routeColor"
+              :route-style="routeStyle"
+              :route-weight="routeWeight"
               :center="{ lat: checkpoint.latitude, lng: checkpoint.longitude }"
               :zoom="16"
               :highlight-location-id="checkpoint.checkpointId"
@@ -296,6 +299,18 @@ const props = defineProps({
   route: {
     type: Array,
     default: () => [],
+  },
+  routeColor: {
+    type: String,
+    default: '',
+  },
+  routeStyle: {
+    type: String,
+    default: '',
+  },
+  routeWeight: {
+    type: Number,
+    default: null,
   },
 });
 

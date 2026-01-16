@@ -80,40 +80,42 @@
           class="note-item"
           :class="{ pinned: note.isPinned }"
         >
-          <div class="note-header">
-            <div class="note-title-row">
-              <span v-if="note.isPinned" class="pin-icon" title="Pinned">📌</span>
-              <span class="priority-indicator" :class="(note.priority || 'Normal').toLowerCase()"></span>
-              <strong class="note-title">{{ note.title }}</strong>
+          <div class="note-item-content">
+            <div class="note-header">
+              <div class="note-title-row">
+                <span v-if="note.isPinned" class="pin-icon" title="Pinned">📌</span>
+                <span class="priority-indicator" :class="(note.priority || 'Normal').toLowerCase()"></span>
+                <strong class="note-title">{{ note.title }}</strong>
+              </div>
+              <div class="note-meta">
+                <span v-if="note.category" class="category-badge">{{ note.category }}</span>
+                <span class="priority-badge" :class="(note.priority || 'Normal').toLowerCase()">
+                  {{ note.priority || 'Normal' }}
+                </span>
+              </div>
             </div>
-            <div class="note-meta">
-              <span v-if="note.category" class="category-badge">{{ note.category }}</span>
-              <span class="priority-badge" :class="(note.priority || 'Normal').toLowerCase()">
-                {{ note.priority || 'Normal' }}
+
+            <div v-if="note.content" class="note-content">
+              {{ note.content }}
+            </div>
+
+            <div class="note-footer">
+              <span class="created-info">
+                Created by {{ note.createdByName || 'Unknown' }} · {{ formatRelativeTime(note.createdAt) }}
+              </span>
+              <ScopedAssignmentPills
+                v-if="note.scopeConfigurations?.length && showScope"
+                class="scope-pills"
+                :scope-configurations="note.scopeConfigurations"
+                :areas="areas"
+                :locations="locations"
+                :marshals="marshals"
+                :max-expanded-items="3"
+              />
+              <span v-else-if="note.matchedScope && showScope" class="scope-info">
+                {{ note.matchedScope }}
               </span>
             </div>
-          </div>
-
-          <div v-if="note.content" class="note-content">
-            {{ note.content }}
-          </div>
-
-          <div class="note-footer">
-            <span class="created-info">
-              Created by {{ note.createdByName || 'Unknown' }} · {{ formatRelativeTime(note.createdAt) }}
-            </span>
-            <ScopedAssignmentPills
-              v-if="note.scopeConfigurations?.length && showScope"
-              class="scope-pills"
-              :scope-configurations="note.scopeConfigurations"
-              :areas="areas"
-              :locations="locations"
-              :marshals="marshals"
-              :max-expanded-items="3"
-            />
-            <span v-else-if="note.matchedScope && showScope" class="scope-info">
-              {{ note.matchedScope }}
-            </span>
           </div>
         </div>
       </div>
@@ -577,8 +579,9 @@ defineExpose({
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 1rem;
+  gap: 0.5rem 1rem;
   margin-bottom: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .note-title-row {
@@ -708,5 +711,33 @@ defineExpose({
 .btn-small {
   padding: 0.3rem 0.6rem;
   font-size: 0.8rem;
+}
+
+/* Mobile responsive styles */
+@media (max-width: 480px) {
+  .note-header {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .note-title-row {
+    width: 100%;
+  }
+
+  .note-meta {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .note-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .scope-pills {
+    justify-content: flex-start;
+    width: 100%;
+  }
 }
 </style>

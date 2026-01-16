@@ -39,6 +39,18 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  routeColor: {
+    type: String,
+    default: '',
+  },
+  routeStyle: {
+    type: String,
+    default: '',
+  },
+  routeWeight: {
+    type: Number,
+    default: null,
+  },
   center: {
     type: Object,
     default: null,
@@ -552,10 +564,62 @@ const updateRoute = () => {
 
   const routeCoordinates = props.route.map((point) => [point.lat, point.lng]);
 
+  // Determine route color (default: Leaflet blue)
+  const color = props.routeColor || '#3388ff';
+
+  // Determine route weight (default: 4)
+  const weight = props.routeWeight || 4;
+
+  // Determine dash pattern based on style
+  let dashArray = null;
+  let lineCap = 'butt';
+
+  switch (props.routeStyle) {
+    case 'dash':
+      dashArray = '10, 10';
+      break;
+    case 'dash-long':
+      dashArray = '20, 12';
+      break;
+    case 'dash-short':
+      dashArray = '6, 6';
+      break;
+    case 'dash-dense':
+      dashArray = '6, 3';
+      break;
+    case 'dot':
+      dashArray = '2, 8';
+      lineCap = 'round';
+      break;
+    case 'dot-sparse':
+      dashArray = '2, 14';
+      lineCap = 'round';
+      break;
+    case 'dot-dense':
+      dashArray = '2, 2';
+      lineCap = 'round';
+      break;
+    case 'dash-dot':
+      dashArray = '16, 8, 4, 8';
+      break;
+    case 'dash-dot-dot':
+      dashArray = '16, 6, 4, 6, 4, 6';
+      break;
+    case 'long-short':
+      dashArray = '16, 4, 6, 4';
+      break;
+    case 'double-dash':
+      dashArray = '8, 3, 8, 8';
+      break;
+    // 'line' and default: no dash array (solid line)
+  }
+
   routePolyline = L.polyline(routeCoordinates, {
-    color: 'blue',
-    weight: 4,
+    color,
+    weight,
     opacity: 0.7,
+    dashArray,
+    lineCap,
   }).addTo(map);
 };
 
@@ -1320,6 +1384,14 @@ watch(
     }
   },
   { deep: true }
+);
+
+// Update route when color, style or weight changes
+watch(
+  () => [props.routeColor, props.routeStyle, props.routeWeight],
+  () => {
+    updateRoute();
+  }
 );
 
 watch(

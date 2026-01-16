@@ -39,7 +39,10 @@ public static class EntityExtensions
             entity.BrandingLogoPosition,
             entity.BrandingAccentColor,
             entity.BrandingPageGradientStart,
-            entity.BrandingPageGradientEnd
+            entity.BrandingPageGradientEnd,
+            entity.RouteColor,
+            entity.RouteStyle,
+            entity.RouteWeight
         );
     }
 

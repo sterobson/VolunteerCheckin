@@ -84,6 +84,13 @@ export function useMarshalBranding(event, eventId = null) {
     return getGradientContrastTextColor(start, end);
   });
 
+  // Page text color (contrasts with page background gradient)
+  const pageTextColor = computed(() => {
+    const start = getBrandingValue('brandingPageGradientStart', DEFAULT_COLORS.pageGradientStart);
+    const end = getBrandingValue('brandingPageGradientEnd', DEFAULT_COLORS.pageGradientEnd);
+    return getGradientContrastTextColor(start, end);
+  });
+
   // Accent color for buttons and highlights
   const accentColor = computed(() => {
     return getBrandingValue('brandingAccentColor', DEFAULT_COLORS.accentColor);
@@ -120,6 +127,7 @@ export function useMarshalBranding(event, eventId = null) {
     pageBackgroundStyle,
     headerStyle,
     headerTextColor,
+    pageTextColor,
     accentColor,
     accentTextColor,
     accentButtonStyle,

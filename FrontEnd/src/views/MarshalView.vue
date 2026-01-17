@@ -112,6 +112,7 @@
 
           <!-- Assignments Section -->
           <MarshalAssignmentsSection
+            v-if="assignmentsWithDetails.length > 0"
             ref="assignmentsSectionRef"
             :is-expanded="expandedSection === 'assignments'"
             :assignments="assignmentsWithDetails"
@@ -152,6 +153,7 @@
 
           <!-- Checklist Section -->
           <MarshalChecklistSection
+            v-if="myChecklistItems.length > 0 || areaChecklistItems.length > 0"
             :loading="checklistLoading"
             :error="checklistError"
             :is-expanded="expandedSection === 'checklist'"
@@ -177,6 +179,7 @@
 
           <!-- Notes Section -->
           <MarshalNotesSection
+            v-if="notes.length > 0"
             :event-id="route.params.eventId"
             :notes="notes"
             :locations="allLocations"
@@ -189,6 +192,7 @@
 
           <!-- Contacts Section -->
           <MarshalContactsSection
+            v-if="eventContacts.length > 0"
             :contacts="eventContacts"
             :loading="contactsLoading"
             :is-expanded="expandedSection === 'eventContacts'"
@@ -278,6 +282,11 @@
         <div v-if="refreshing" class="refresh-indicator">
           <span class="refresh-spinner"></span>
           <span>Updating...</span>
+        </div>
+
+        <!-- Logged in info -->
+        <div class="logged-in-info" :style="{ color: pageTextColor }">
+          Logged in as {{ currentMarshalName }}
         </div>
       </div>
     </div>
@@ -598,6 +607,7 @@ const {
   pageBackgroundStyle,
   headerStyle,
   headerTextColor,
+  pageTextColor,
   accentColor,
   accentTextColor,
   accentButtonStyle,
@@ -640,8 +650,8 @@ const {
   longitude: eventLocationLng,
 });
 
-// Accordion state - start collapsed by default
-const expandedSection = ref(null);
+// Accordion state - start with assignments section expanded
+const expandedSection = ref('assignments');
 
 // Track when each section's data was last loaded (for stale data refresh)
 const STALE_DATA_THRESHOLD_MS = 60000; // 60 seconds
@@ -946,12 +956,6 @@ const toggleCheckpoint = (assignId) => {
   expandedCheckpoint.value = expandedCheckpoint.value === assignId ? null : assignId;
 };
 
-// Auto-expand if there's only one assignment
-watch(() => assignments.value, (newAssignments) => {
-  if (newAssignments.length === 1 && expandedCheckpoint.value === null) {
-    expandedCheckpoint.value = newAssignments[0].id;
-  }
-}, { immediate: true });
 
 // Track if any map is currently visible (course map or checkpoint card map)
 const isAnyMapVisible = computed(() => {
@@ -2296,5 +2300,11 @@ onUnmounted(() => {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Logged in info */
+.logged-in-info {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
 }
 </style>

@@ -179,3 +179,27 @@ export const sortByCaseInsensitiveProperty = (key, ascending = true) => {
     return sortCaseInsensitive(a[key], b[key], ascending);
   };
 };
+
+/**
+ * Sort tasks/checklist items by displayOrder, then text, then context
+ * @param {Array} items - Array of task items to sort
+ * @param {Function} getContextSortKey - Function that takes an item and returns the context sort key string
+ * @returns {Array} Sorted array (new array, original unchanged)
+ */
+export const sortTasks = (items, getContextSortKey) => {
+  return [...items].sort((a, b) => {
+    // First by displayOrder
+    const orderA = a.displayOrder || 0;
+    const orderB = b.displayOrder || 0;
+    if (orderA !== orderB) return orderA - orderB;
+
+    // Then by text (case-insensitive)
+    const textCompare = a.text.localeCompare(b.text, undefined, { sensitivity: 'base' });
+    if (textCompare !== 0) return textCompare;
+
+    // Then by context name (numeric-aware sorting)
+    const contextA = getContextSortKey(a);
+    const contextB = getContextSortKey(b);
+    return contextA.localeCompare(contextB, undefined, { numeric: true, sensitivity: 'base' });
+  });
+};

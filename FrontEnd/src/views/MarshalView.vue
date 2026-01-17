@@ -156,6 +156,7 @@
             :error="checklistError"
             :is-expanded="expandedSection === 'checklist'"
             :is-area-lead="isAreaLead"
+            :led-area-count="areaLeadAreaIds.length"
             :my-items="myChecklistItems"
             :area-items="areaChecklistItems"
             :area-items-with-local-state="areaChecklistItemsWithLocalState"

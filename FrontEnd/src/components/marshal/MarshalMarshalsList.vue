@@ -125,6 +125,7 @@
 import { defineProps, defineEmits } from 'vue';
 import { getIcon } from '../../utils/icons';
 import { useTerminology } from '../../composables/useTerminology';
+import { sortTasks } from '../../utils/sortingHelpers';
 import CheckInToggleButton from '../common/CheckInToggleButton.vue';
 
 const { terms, termsLower } = useTerminology();
@@ -276,14 +277,8 @@ const getProcessedTasks = (marshal) => {
     textCounts.set(task.text, (textCounts.get(task.text) || 0) + 1);
   }
 
-  // Sort: by text first, then by context name for items with same text
-  const sorted = [...uniqueTasks].sort((a, b) => {
-    const textCompare = a.text.localeCompare(b.text, undefined, { sensitivity: 'base' });
-    if (textCompare !== 0) return textCompare;
-    const contextA = getContextSortKey(a, marshal);
-    const contextB = getContextSortKey(b, marshal);
-    return contextA.localeCompare(contextB, undefined, { numeric: true, sensitivity: 'base' });
-  });
+  // Sort by displayOrder, then text, then context name
+  const sorted = sortTasks(uniqueTasks, (task) => getContextSortKey(task, marshal));
 
   // Add disambiguation info
   return sorted.map(task => ({

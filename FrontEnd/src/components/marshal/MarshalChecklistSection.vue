@@ -8,7 +8,7 @@
       <span class="accordion-title">
         <span class="section-icon" v-html="getIcon('checklist')"></span>
         <template v-if="isAreaLead">
-          Your {{ termsLower.checklists }} <span class="header-count">(You: {{ myOutstandingCount }}, Your {{ termsLower.area }}: {{ areaOutstandingCount }})</span>
+          Your {{ termsLower.checklists }} <span class="header-count">(You: {{ myOutstandingCount }}, Your {{ areaTermForHeader }}: {{ areaOutstandingCount }})</span>
         </template>
         <template v-else>
           Your {{ termsLower.checklists }} <span class="header-count">({{ visibleOutstandingCount }})</span>
@@ -27,9 +27,9 @@
       <template v-else-if="isAreaLead">
         <!-- Your jobs section (simple list) -->
         <div class="checklist-section">
-          <h4 class="checklist-section-title">Your jobs</h4>
+          <h4 class="checklist-section-title">Your {{ termsLower.checklists }}</h4>
           <div v-if="sortedMyItems.length === 0" class="empty-state small">
-            <p>No jobs assigned to you.</p>
+            <p>No {{ termsLower.checklists }} assigned to you.</p>
           </div>
           <div v-else class="my-jobs-list">
             <div
@@ -62,7 +62,7 @@
 
         <!-- Your area's jobs section -->
         <div v-if="areaItems.length > 0" class="checklist-section">
-          <h4 class="checklist-section-title">Your {{ termsLower.area }}'s jobs</h4>
+          <h4 class="checklist-section-title">Your {{ areaPossessive }} {{ termsLower.checklists }}</h4>
           <GroupedTasksList
             :items="areaItemsWithLocalState"
             :locations="locations"
@@ -157,6 +157,7 @@
 import { defineProps, defineEmits, computed } from 'vue';
 import { getIcon } from '../../utils/icons';
 import { useTerminology } from '../../composables/useTerminology';
+import { sortTasks } from '../../utils/sortingHelpers';
 import GroupedTasksList from '../event-manage/GroupedTasksList.vue';
 
 const { terms, termsLower } = useTerminology();
@@ -177,6 +178,10 @@ const props = defineProps({
   isAreaLead: {
     type: Boolean,
     default: false,
+  },
+  ledAreaCount: {
+    type: Number,
+    default: 1,
   },
   myItems: {
     type: Array,
@@ -233,6 +238,20 @@ const props = defineProps({
 });
 
 defineEmits(['toggle', 'toggle-item', 'toggle-group']);
+
+// Area term based on count (singular vs plural)
+const areaTermForHeader = computed(() => {
+  return props.ledAreaCount === 1 ? termsLower.value.area : termsLower.value.areas;
+});
+
+// Possessive form of area term: "zone's" (singular) vs "zones'" (plural)
+const areaPossessive = computed(() => {
+  if (props.ledAreaCount === 1) {
+    return `${termsLower.value.area}'s`;
+  }
+  // Plural possessive - add apostrophe after the s
+  return `${termsLower.value.areas}'`;
+});
 
 // Shared scope types where one person completes for the whole group
 const sharedScopes = ['OnePerCheckpoint', 'OnePerArea', 'OneLeadPerArea'];
@@ -415,17 +434,8 @@ const sortedMyItems = computed(() => {
     textCounts.set(item.text, (textCounts.get(item.text) || 0) + 1);
   }
 
-  // Sort: by text first, then by context name for items with same text
-  const sorted = [...props.myItems].sort((a, b) => {
-    // First by text
-    const textCompare = a.text.localeCompare(b.text, undefined, { sensitivity: 'base' });
-    if (textCompare !== 0) return textCompare;
-
-    // Then by context name (using numeric-aware sorting)
-    const contextA = getContextSortKey(a);
-    const contextB = getContextSortKey(b);
-    return contextA.localeCompare(contextB, undefined, { numeric: true, sensitivity: 'base' });
-  });
+  // Sort by displayOrder, then text, then context name
+  const sorted = sortTasks(props.myItems, getContextSortKey);
 
   // Mark items that need disambiguation
   return sorted.map(item => ({

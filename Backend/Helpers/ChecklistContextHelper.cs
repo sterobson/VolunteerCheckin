@@ -383,6 +383,7 @@ public class ChecklistContextHelper
     private static readonly Dictionary<string, string> FieldMap = new()
     {
         // Response level
+        ["g"] = "refs (GUIDs)",
         ["s"] = "scopes",
         ["at"] = "actorTypes",
         ["ct"] = "contextTypes",
@@ -391,22 +392,26 @@ public class ChecklistContextHelper
         ["d"] = "items (definitions)",
         ["n"] = "instances",
         // Marshal/Context reference
-        ["m.i"] = "id",
+        ["m.r"] = "refIndex",
         ["m.n"] = "name",
-        ["c.i"] = "id",
+        ["c.r"] = "refIndex",
         ["c.t"] = "typeIndex",
         // Item definition
-        ["d.i"] = "itemId",
+        ["d.r"] = "itemRefIndex",
         ["d.t"] = "text",
         ["d.sc"] = "scopeConfigurations",
         ["d.o"] = "displayOrder",
-        ["d.r"] = "isRequired",
+        ["d.r2"] = "isRequired",
         ["d.vf"] = "visibleFrom",
         ["d.vu"] = "visibleUntil",
         ["d.mb"] = "mustCompleteBy",
         ["d.l"] = "linksToCheckIn",
-        ["d.lc"] = "linkedCheckpointId",
+        ["d.lc"] = "linkedCheckpointRefIndex",
         ["d.ln"] = "linkedCheckpointName",
+        // ScopeConfiguration (inside d.sc array)
+        ["sc.s"] = "scopeIndex",
+        ["sc.t"] = "itemType",
+        ["sc.i"] = "refIndexes",
         // Instance
         ["n.i"] = "itemIndex",
         ["n.c"] = "isCompleted",
@@ -422,10 +427,12 @@ public class ChecklistContextHelper
     /// <summary>
     /// Converts a list of ChecklistItemWithStatus to a normalized response with lookup tables.
     /// This significantly reduces payload size by deduplicating repeated strings and item definitions.
+    /// All GUIDs are stored in a refs array and referenced by index.
     /// </summary>
     public static NormalizedChecklistResponse BuildNormalizedResponse(List<ChecklistItemWithStatus> items)
     {
         // Build lookup tables
+        List<string> refs = [];          // All unique GUIDs
         List<string> scopes = [];
         List<string> actorTypes = [];
         List<string> contextTypes = [];
@@ -435,12 +442,25 @@ public class ChecklistContextHelper
         List<ChecklistInstance> instances = [];
 
         // Dictionaries for index lookups
+        Dictionary<string, int> refIndex = [];      // GUID -> index in refs
         Dictionary<string, int> scopeIndex = [];
         Dictionary<string, int> actorTypeIndex = [];
         Dictionary<string, int> contextTypeIndex = [];
         Dictionary<string, int> marshalIndex = [];  // keyed by marshal ID
         Dictionary<string, int> contextIndex = [];  // keyed by "contextType:contextId"
         Dictionary<string, int> itemIndex = [];     // keyed by itemId
+
+        int GetOrAddRef(string? guid)
+        {
+            if (string.IsNullOrEmpty(guid)) return -1;
+            if (!refIndex.TryGetValue(guid, out int index))
+            {
+                index = refs.Count;
+                refIndex[guid] = index;
+                refs.Add(guid);
+            }
+            return index;
+        }
 
         int GetOrAddScope(string scope)
         {
@@ -485,7 +505,8 @@ public class ChecklistContextHelper
             {
                 index = marshals.Count;
                 marshalIndex[marshalId] = index;
-                marshals.Add(new MarshalReference(marshalId, marshalName ?? ""));
+                int rIdx = GetOrAddRef(marshalId);
+                marshals.Add(new MarshalReference(rIdx, marshalName ?? ""));
             }
             return index;
         }
@@ -496,9 +517,10 @@ public class ChecklistContextHelper
             if (!contextIndex.TryGetValue(key, out int index))
             {
                 int typeIdx = GetOrAddContextType(contextType);
+                int rIdx = GetOrAddRef(contextId);
                 index = contexts.Count;
                 contextIndex[key] = index;
-                contexts.Add(new ContextReference(contextId, typeIdx));
+                contexts.Add(new ContextReference(rIdx, typeIdx));
             }
             return index;
         }
@@ -509,17 +531,33 @@ public class ChecklistContextHelper
             {
                 index = itemDefinitions.Count;
                 itemIndex[item.ItemId] = index;
+
+                int itemRefIdx = GetOrAddRef(item.ItemId);
+
+                // Convert ScopeConfiguration to CompactScopeConfiguration with ref indexes
+                List<CompactScopeConfiguration> compactScopes = item.ScopeConfigurations
+                    .Select(sc => new CompactScopeConfiguration(
+                        GetOrAddScope(sc.Scope),
+                        sc.ItemType,
+                        sc.Ids.Select(id => GetOrAddRef(id)).ToList()
+                    ))
+                    .ToList();
+
+                int? linkedCpRefIdx = string.IsNullOrEmpty(item.LinkedCheckpointId)
+                    ? null
+                    : GetOrAddRef(item.LinkedCheckpointId);
+
                 itemDefinitions.Add(new ChecklistItemDefinition(
-                    item.ItemId,
+                    itemRefIdx,
                     item.Text,
-                    item.ScopeConfigurations,
+                    compactScopes,
                     item.DisplayOrder,
                     item.IsRequired,
                     item.VisibleFrom,
                     item.VisibleUntil,
                     item.MustCompleteBy,
                     item.LinksToCheckIn,
-                    item.LinkedCheckpointId,
+                    linkedCpRefIdx,
                     item.LinkedCheckpointName
                 ));
             }
@@ -565,6 +603,7 @@ public class ChecklistContextHelper
 
         return new NormalizedChecklistResponse(
             FieldMap,
+            refs,
             scopes,
             actorTypes,
             contextTypes,

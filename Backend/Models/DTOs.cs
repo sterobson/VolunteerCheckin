@@ -1289,38 +1289,49 @@ public record MarshalRoleResponse(
 
 // Normalized Checklist Response DTOs
 // Field names are shortened to reduce payload size. See FieldMap (_) for mappings.
+// GUIDs are stored in the refs array and referenced by index to eliminate duplication.
 
 /// <summary>
-/// Reference to a marshal with just ID and name for lookup tables.
+/// Reference to a marshal with ref index and name for lookup tables.
 /// </summary>
 public record MarshalReference(
-    [property: JsonPropertyName("i")] string Id,
+    [property: JsonPropertyName("r")] int RefIndex,
     [property: JsonPropertyName("n")] string Name
 );
 
 /// <summary>
-/// Reference to a completion context with ID and type index.
+/// Reference to a completion context with ref index and type index.
 /// </summary>
 public record ContextReference(
-    [property: JsonPropertyName("i")] string Id,
+    [property: JsonPropertyName("r")] int RefIndex,
     [property: JsonPropertyName("t")] int TypeIndex
 );
 
 /// <summary>
+/// Compact scope configuration for normalized API responses.
+/// Uses indexes: s=scope index into scopes array, t=itemType, i=ref indexes into refs array
+/// </summary>
+public record CompactScopeConfiguration(
+    [property: JsonPropertyName("s")] int ScopeIndex,
+    [property: JsonPropertyName("t")] string? ItemType,
+    [property: JsonPropertyName("i")] List<int> RefIndexes
+);
+
+/// <summary>
 /// Static checklist item definition (shared across all instances).
-/// Does not include eventId as it's implicit from the request context.
+/// Uses ref indexes for GUIDs. Does not include eventId as it's implicit from the request context.
 /// </summary>
 public record ChecklistItemDefinition(
-    [property: JsonPropertyName("i")] string ItemId,
+    [property: JsonPropertyName("r")] int ItemRefIndex,
     [property: JsonPropertyName("t")] string Text,
-    [property: JsonPropertyName("sc")] List<ScopeConfiguration> ScopeConfigurations,
+    [property: JsonPropertyName("sc")] List<CompactScopeConfiguration> ScopeConfigurations,
     [property: JsonPropertyName("o")] int DisplayOrder,
-    [property: JsonPropertyName("r")] bool IsRequired,
+    [property: JsonPropertyName("r2")] bool IsRequired,
     [property: JsonPropertyName("vf")] DateTime? VisibleFrom,
     [property: JsonPropertyName("vu")] DateTime? VisibleUntil,
     [property: JsonPropertyName("mb")] DateTime? MustCompleteBy,
     [property: JsonPropertyName("l")] bool LinksToCheckIn,
-    [property: JsonPropertyName("lc")] string? LinkedCheckpointId,
+    [property: JsonPropertyName("lc")] int? LinkedCheckpointRefIndex,
     [property: JsonPropertyName("ln")] string? LinkedCheckpointName
 );
 
@@ -1342,12 +1353,14 @@ public record ChecklistInstance(
 
 /// <summary>
 /// Normalized checklist response with lookup tables to reduce payload size.
+/// All GUIDs are stored in the refs array and referenced by index.
 /// Scopes, actor types, context types, marshals, and contexts are stored in arrays.
 /// Instances reference these arrays by index instead of repeating strings.
 /// The FieldMap (_) provides human-readable mappings for debugging.
 /// </summary>
 public record NormalizedChecklistResponse(
     [property: JsonPropertyName("_")] Dictionary<string, string> FieldMap,
+    [property: JsonPropertyName("g")] List<string> Refs,
     [property: JsonPropertyName("s")] List<string> Scopes,
     [property: JsonPropertyName("at")] List<string> ActorTypes,
     [property: JsonPropertyName("ct")] List<string> ContextTypes,

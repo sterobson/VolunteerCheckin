@@ -7,10 +7,12 @@ import { checklistApi, queueOfflineAction, getOfflineMode } from '../services/ap
  * from the reduced network payload size.
  *
  * Short field names (see response._ for mapping):
- *   Response: s=scopes, at=actorTypes, ct=contextTypes, m=marshals, c=contexts, d=items, n=instances
- *   Marshal/Context: i=id, n=name, t=typeIndex
- *   Item: i=itemId, t=text, sc=scopeConfigurations, o=displayOrder, r=isRequired,
- *         vf=visibleFrom, vu=visibleUntil, mb=mustCompleteBy, l=linksToCheckIn, lc=linkedCheckpointId, ln=linkedCheckpointName
+ *   Response: g=refs, s=scopes, at=actorTypes, ct=contextTypes, m=marshals, c=contexts, d=items, n=instances
+ *   Marshal: r=refIndex, n=name
+ *   Context: r=refIndex, t=typeIndex
+ *   Item: r=itemRefIndex, t=text, sc=scopeConfigurations, o=displayOrder, r2=isRequired,
+ *         vf=visibleFrom, vu=visibleUntil, mb=mustCompleteBy, l=linksToCheckIn, lc=linkedCheckpointRefIndex, ln=linkedCheckpointName
+ *   ScopeConfiguration: s=scopeIndex, t=itemType, i=refIndexes (array of indexes into refs)
  *   Instance: i=itemIndex, c=isCompleted, m=canBeCompletedByMe, a=actorIndex, at=actorTypeIndex,
  *             ca=completedAt, x=contextIndex, s=scopeIndex, o=ownerIndex
  *
@@ -29,6 +31,7 @@ function denormalizeChecklistResponse(response) {
   }
 
   const {
+    g: refs = [],
     s: scopes = [],
     at: actorTypes = [],
     ct: contextTypes = [],
@@ -37,6 +40,12 @@ function denormalizeChecklistResponse(response) {
     d: items = [],
     n: instances = [],
   } = response;
+
+  // Helper to resolve a ref index to an actual GUID
+  const resolveRef = (refIndex) => {
+    if (refIndex == null || refIndex < 0 || refIndex >= refs.length) return null;
+    return refs[refIndex];
+  };
 
   return instances.map(instance => {
     const itemDef = items[instance.i] || {};
@@ -52,7 +61,7 @@ function denormalizeChecklistResponse(response) {
       const actor = marshals[instance.a];
       if (actor) {
         completedByActorName = actor.n;
-        completedByActorId = actor.i;
+        completedByActorId = resolveRef(actor.r);
       }
       if (instance.at != null && instance.at >= 0) {
         completedByActorType = actorTypes[instance.at];
@@ -66,21 +75,29 @@ function denormalizeChecklistResponse(response) {
       const owner = marshals[instance.o];
       if (owner) {
         contextOwnerName = owner.n;
-        contextOwnerMarshalId = owner.i;
+        contextOwnerMarshalId = resolveRef(owner.r);
       }
     }
 
+    // Expand scope configurations back to long property names
+    // sc.s is now a scope index, sc.i is now an array of ref indexes
+    const scopeConfigurations = (itemDef.sc || []).map(sc => ({
+      scope: scopes[sc.s] || '',
+      itemType: sc.t,
+      ids: (sc.i || []).map(refIdx => resolveRef(refIdx)).filter(id => id != null),
+    }));
+
     return {
-      itemId: itemDef.i,
+      itemId: resolveRef(itemDef.r),
       text: itemDef.t,
-      scopeConfigurations: itemDef.sc || [],
+      scopeConfigurations,
       displayOrder: itemDef.o,
-      isRequired: itemDef.r,
+      isRequired: itemDef.r2,
       visibleFrom: itemDef.vf,
       visibleUntil: itemDef.vu,
       mustCompleteBy: itemDef.mb,
       linksToCheckIn: itemDef.l,
-      linkedCheckpointId: itemDef.lc,
+      linkedCheckpointId: itemDef.lc != null ? resolveRef(itemDef.lc) : null,
       linkedCheckpointName: itemDef.ln,
       isCompleted: instance.c,
       canBeCompletedByMe: instance.m,
@@ -89,7 +106,7 @@ function denormalizeChecklistResponse(response) {
       completedByActorId,
       completedAt: instance.ca,
       completionContextType: contextType,
-      completionContextId: context.i,
+      completionContextId: resolveRef(context.r),
       matchedScope: scope,
       contextOwnerName,
       contextOwnerMarshalId,

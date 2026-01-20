@@ -78,7 +78,7 @@ public class ChecklistQueryFunctions
                 }
             }
 
-            return new OkObjectResult(relevantItems);
+            return new OkObjectResult(ChecklistContextHelper.BuildNormalizedResponse(relevantItems));
         }
         catch (Exception ex)
         {
@@ -200,7 +200,7 @@ public class ChecklistQueryFunctions
                 }
             }
 
-            return new OkObjectResult(relevantItems);
+            return new OkObjectResult(ChecklistContextHelper.BuildNormalizedResponse(relevantItems));
         }
         catch (Exception ex)
         {
@@ -351,7 +351,7 @@ public class ChecklistQueryFunctions
                 }
             }
 
-            return new OkObjectResult(relevantItems);
+            return new OkObjectResult(ChecklistContextHelper.BuildNormalizedResponse(relevantItems));
         }
         catch (Exception ex)
         {

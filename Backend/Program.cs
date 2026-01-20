@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,6 +9,16 @@ using VolunteerCheckin.Functions.Repositories;
 FunctionsApplicationBuilder builder = FunctionsApplication.CreateBuilder(args);
 
 builder.ConfigureFunctionsWebApplication();
+
+// Configure JSON serialization to omit null values (reduces payload size)
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+});
+builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(options =>
+{
+    options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+});
 
 builder.Services
     .AddApplicationInsightsTelemetryWorkerService()

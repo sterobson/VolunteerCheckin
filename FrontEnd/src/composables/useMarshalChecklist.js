@@ -2,6 +2,102 @@ import { ref, computed } from 'vue';
 import { checklistApi, queueOfflineAction, getOfflineMode } from '../services/api';
 
 /**
+ * Denormalizes a normalized checklist response back to a flat array of items.
+ * This allows the existing frontend logic to work unchanged while benefiting
+ * from the reduced network payload size.
+ *
+ * Short field names (see response._ for mapping):
+ *   Response: s=scopes, at=actorTypes, ct=contextTypes, m=marshals, c=contexts, d=items, n=instances
+ *   Marshal/Context: i=id, n=name, t=typeIndex
+ *   Item: i=itemId, t=text, sc=scopeConfigurations, o=displayOrder, r=isRequired,
+ *         vf=visibleFrom, vu=visibleUntil, mb=mustCompleteBy, l=linksToCheckIn, lc=linkedCheckpointId, ln=linkedCheckpointName
+ *   Instance: i=itemIndex, c=isCompleted, m=canBeCompletedByMe, a=actorIndex, at=actorTypeIndex,
+ *             ca=completedAt, x=contextIndex, s=scopeIndex, o=ownerIndex
+ *
+ * @param {Object} response - The normalized checklist response
+ * @returns {Array} - Flat array of checklist items with all fields expanded
+ */
+function denormalizeChecklistResponse(response) {
+  // If response is already an array (old format), return as-is
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  // If response doesn't have the expected normalized structure, return empty
+  if (!response || !response.n || !response.d) {
+    return [];
+  }
+
+  const {
+    s: scopes = [],
+    at: actorTypes = [],
+    ct: contextTypes = [],
+    m: marshals = [],
+    c: contexts = [],
+    d: items = [],
+    n: instances = [],
+  } = response;
+
+  return instances.map(instance => {
+    const itemDef = items[instance.i] || {};
+    const context = contexts[instance.x] || {};
+    const contextType = contextTypes[context.t] || '';
+    const scope = scopes[instance.s] || '';
+
+    // Get actor info if completed
+    let completedByActorName = null;
+    let completedByActorType = null;
+    let completedByActorId = null;
+    if (instance.c && instance.a != null && instance.a >= 0) {
+      const actor = marshals[instance.a];
+      if (actor) {
+        completedByActorName = actor.n;
+        completedByActorId = actor.i;
+      }
+      if (instance.at != null && instance.at >= 0) {
+        completedByActorType = actorTypes[instance.at];
+      }
+    }
+
+    // Get owner info
+    let contextOwnerName = null;
+    let contextOwnerMarshalId = null;
+    if (instance.o != null && instance.o >= 0) {
+      const owner = marshals[instance.o];
+      if (owner) {
+        contextOwnerName = owner.n;
+        contextOwnerMarshalId = owner.i;
+      }
+    }
+
+    return {
+      itemId: itemDef.i,
+      text: itemDef.t,
+      scopeConfigurations: itemDef.sc || [],
+      displayOrder: itemDef.o,
+      isRequired: itemDef.r,
+      visibleFrom: itemDef.vf,
+      visibleUntil: itemDef.vu,
+      mustCompleteBy: itemDef.mb,
+      linksToCheckIn: itemDef.l,
+      linkedCheckpointId: itemDef.lc,
+      linkedCheckpointName: itemDef.ln,
+      isCompleted: instance.c,
+      canBeCompletedByMe: instance.m,
+      completedByActorName,
+      completedByActorType,
+      completedByActorId,
+      completedAt: instance.ca,
+      completionContextType: contextType,
+      completionContextId: context.i,
+      matchedScope: scope,
+      contextOwnerName,
+      contextOwnerMarshalId,
+    };
+  });
+}
+
+/**
  * Composable for managing marshal checklist functionality
  */
 export function useMarshalChecklist({
@@ -260,14 +356,14 @@ export function useMarshalChecklist({
     try {
       const evtId = eventId.value;
       const marshalResponse = await checklistApi.getMarshalChecklist(evtId, currentMarshalId.value);
-      let allItems = marshalResponse.data || [];
+      let allItems = denormalizeChecklistResponse(marshalResponse.data);
 
       // For area leads, also fetch checklist items for their areas
       if (isAreaLead.value && areaLeadAreaIds.value.length > 0) {
         const areaPromises = areaLeadAreaIds.value.map(areaId =>
           checklistApi.getAreaChecklist(evtId, areaId).catch(err => {
             console.warn(`Failed to fetch checklist for area ${areaId}:`, err);
-            return { data: [] };
+            return { data: null };
           })
         );
         const areaResponses = await Promise.all(areaPromises);
@@ -289,7 +385,8 @@ export function useMarshalChecklist({
           itemMap.set(buildKey(item), item);
         }
         for (const response of areaResponses) {
-          for (const item of (response.data || [])) {
+          const areaItems = denormalizeChecklistResponse(response.data);
+          for (const item of areaItems) {
             const key = buildKey(item);
             if (!itemMap.has(key)) {
               itemMap.set(key, item);

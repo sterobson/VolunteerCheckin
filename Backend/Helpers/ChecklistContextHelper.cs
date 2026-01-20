@@ -376,4 +376,202 @@ public class ChecklistContextHelper
             linkedCheckpointName
         );
     }
+
+    /// <summary>
+    /// Field mapping for debugging - maps short field names to full names.
+    /// </summary>
+    private static readonly Dictionary<string, string> FieldMap = new()
+    {
+        // Response level
+        ["s"] = "scopes",
+        ["at"] = "actorTypes",
+        ["ct"] = "contextTypes",
+        ["m"] = "marshals",
+        ["c"] = "contexts",
+        ["d"] = "items (definitions)",
+        ["n"] = "instances",
+        // Marshal/Context reference
+        ["m.i"] = "id",
+        ["m.n"] = "name",
+        ["c.i"] = "id",
+        ["c.t"] = "typeIndex",
+        // Item definition
+        ["d.i"] = "itemId",
+        ["d.t"] = "text",
+        ["d.sc"] = "scopeConfigurations",
+        ["d.o"] = "displayOrder",
+        ["d.r"] = "isRequired",
+        ["d.vf"] = "visibleFrom",
+        ["d.vu"] = "visibleUntil",
+        ["d.mb"] = "mustCompleteBy",
+        ["d.l"] = "linksToCheckIn",
+        ["d.lc"] = "linkedCheckpointId",
+        ["d.ln"] = "linkedCheckpointName",
+        // Instance
+        ["n.i"] = "itemIndex",
+        ["n.c"] = "isCompleted",
+        ["n.m"] = "canBeCompletedByMe",
+        ["n.a"] = "actorIndex",
+        ["n.at"] = "actorTypeIndex",
+        ["n.ca"] = "completedAt",
+        ["n.x"] = "contextIndex",
+        ["n.s"] = "scopeIndex",
+        ["n.o"] = "ownerIndex"
+    };
+
+    /// <summary>
+    /// Converts a list of ChecklistItemWithStatus to a normalized response with lookup tables.
+    /// This significantly reduces payload size by deduplicating repeated strings and item definitions.
+    /// </summary>
+    public static NormalizedChecklistResponse BuildNormalizedResponse(List<ChecklistItemWithStatus> items)
+    {
+        // Build lookup tables
+        List<string> scopes = [];
+        List<string> actorTypes = [];
+        List<string> contextTypes = [];
+        List<MarshalReference> marshals = [];
+        List<ContextReference> contexts = [];
+        List<ChecklistItemDefinition> itemDefinitions = [];
+        List<ChecklistInstance> instances = [];
+
+        // Dictionaries for index lookups
+        Dictionary<string, int> scopeIndex = [];
+        Dictionary<string, int> actorTypeIndex = [];
+        Dictionary<string, int> contextTypeIndex = [];
+        Dictionary<string, int> marshalIndex = [];  // keyed by marshal ID
+        Dictionary<string, int> contextIndex = [];  // keyed by "contextType:contextId"
+        Dictionary<string, int> itemIndex = [];     // keyed by itemId
+
+        int GetOrAddScope(string scope)
+        {
+            if (string.IsNullOrEmpty(scope)) scope = "";
+            if (!scopeIndex.TryGetValue(scope, out int index))
+            {
+                index = scopes.Count;
+                scopeIndex[scope] = index;
+                scopes.Add(scope);
+            }
+            return index;
+        }
+
+        int GetOrAddActorType(string? type)
+        {
+            if (string.IsNullOrEmpty(type)) return -1;
+            if (!actorTypeIndex.TryGetValue(type, out int index))
+            {
+                index = actorTypes.Count;
+                actorTypeIndex[type] = index;
+                actorTypes.Add(type);
+            }
+            return index;
+        }
+
+        int GetOrAddContextType(string contextType)
+        {
+            if (string.IsNullOrEmpty(contextType)) contextType = "";
+            if (!contextTypeIndex.TryGetValue(contextType, out int index))
+            {
+                index = contextTypes.Count;
+                contextTypeIndex[contextType] = index;
+                contextTypes.Add(contextType);
+            }
+            return index;
+        }
+
+        int GetOrAddMarshal(string? marshalId, string? marshalName)
+        {
+            if (string.IsNullOrEmpty(marshalId)) return -1;
+            if (!marshalIndex.TryGetValue(marshalId, out int index))
+            {
+                index = marshals.Count;
+                marshalIndex[marshalId] = index;
+                marshals.Add(new MarshalReference(marshalId, marshalName ?? ""));
+            }
+            return index;
+        }
+
+        int GetOrAddContext(string contextType, string contextId)
+        {
+            string key = $"{contextType}:{contextId}";
+            if (!contextIndex.TryGetValue(key, out int index))
+            {
+                int typeIdx = GetOrAddContextType(contextType);
+                index = contexts.Count;
+                contextIndex[key] = index;
+                contexts.Add(new ContextReference(contextId, typeIdx));
+            }
+            return index;
+        }
+
+        int GetOrAddItem(ChecklistItemWithStatus item)
+        {
+            if (!itemIndex.TryGetValue(item.ItemId, out int index))
+            {
+                index = itemDefinitions.Count;
+                itemIndex[item.ItemId] = index;
+                itemDefinitions.Add(new ChecklistItemDefinition(
+                    item.ItemId,
+                    item.Text,
+                    item.ScopeConfigurations,
+                    item.DisplayOrder,
+                    item.IsRequired,
+                    item.VisibleFrom,
+                    item.VisibleUntil,
+                    item.MustCompleteBy,
+                    item.LinksToCheckIn,
+                    item.LinkedCheckpointId,
+                    item.LinkedCheckpointName
+                ));
+            }
+            return index;
+        }
+
+        // Process all items
+        foreach (ChecklistItemWithStatus item in items)
+        {
+            int itemIdx = GetOrAddItem(item);
+            int scopeIdx = GetOrAddScope(item.MatchedScope);
+            int ctxIdx = GetOrAddContext(item.CompletionContextType, item.CompletionContextId);
+
+            // Actor info (only if completed)
+            int? actorIdx = null;
+            int? actorTypeIdx = null;
+            if (item.IsCompleted && !string.IsNullOrEmpty(item.CompletedByActorId))
+            {
+                actorIdx = GetOrAddMarshal(item.CompletedByActorId, item.CompletedByActorName);
+                int atIdx = GetOrAddActorType(item.CompletedByActorType);
+                actorTypeIdx = atIdx >= 0 ? atIdx : null;
+            }
+
+            // Owner info
+            int? ownerIdx = null;
+            if (!string.IsNullOrEmpty(item.ContextOwnerMarshalId))
+            {
+                ownerIdx = GetOrAddMarshal(item.ContextOwnerMarshalId, item.ContextOwnerName);
+            }
+
+            instances.Add(new ChecklistInstance(
+                itemIdx,
+                item.IsCompleted,
+                item.CanBeCompletedByMe,
+                actorIdx,
+                actorTypeIdx,
+                item.CompletedAt,
+                ctxIdx,
+                scopeIdx,
+                ownerIdx
+            ));
+        }
+
+        return new NormalizedChecklistResponse(
+            FieldMap,
+            scopes,
+            actorTypes,
+            contextTypes,
+            marshals,
+            contexts,
+            itemDefinitions,
+            instances
+        );
+    }
 }

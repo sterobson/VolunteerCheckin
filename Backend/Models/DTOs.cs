@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace VolunteerCheckin.Functions.Models;
 
 public record EmergencyContact(
@@ -1283,4 +1285,74 @@ public record MarshalRoleResponse(
     string RoleId,
     string Name,
     string Notes
+);
+
+// Normalized Checklist Response DTOs
+// Field names are shortened to reduce payload size. See FieldMap (_) for mappings.
+
+/// <summary>
+/// Reference to a marshal with just ID and name for lookup tables.
+/// </summary>
+public record MarshalReference(
+    [property: JsonPropertyName("i")] string Id,
+    [property: JsonPropertyName("n")] string Name
+);
+
+/// <summary>
+/// Reference to a completion context with ID and type index.
+/// </summary>
+public record ContextReference(
+    [property: JsonPropertyName("i")] string Id,
+    [property: JsonPropertyName("t")] int TypeIndex
+);
+
+/// <summary>
+/// Static checklist item definition (shared across all instances).
+/// Does not include eventId as it's implicit from the request context.
+/// </summary>
+public record ChecklistItemDefinition(
+    [property: JsonPropertyName("i")] string ItemId,
+    [property: JsonPropertyName("t")] string Text,
+    [property: JsonPropertyName("sc")] List<ScopeConfiguration> ScopeConfigurations,
+    [property: JsonPropertyName("o")] int DisplayOrder,
+    [property: JsonPropertyName("r")] bool IsRequired,
+    [property: JsonPropertyName("vf")] DateTime? VisibleFrom,
+    [property: JsonPropertyName("vu")] DateTime? VisibleUntil,
+    [property: JsonPropertyName("mb")] DateTime? MustCompleteBy,
+    [property: JsonPropertyName("l")] bool LinksToCheckIn,
+    [property: JsonPropertyName("lc")] string? LinkedCheckpointId,
+    [property: JsonPropertyName("ln")] string? LinkedCheckpointName
+);
+
+/// <summary>
+/// Per-instance checklist data with indexes referencing lookup tables.
+/// Null fields (actorIndex, actorTypeIndex, completedAt) are omitted when not completed.
+/// </summary>
+public record ChecklistInstance(
+    [property: JsonPropertyName("i")] int ItemIndex,
+    [property: JsonPropertyName("c")] bool IsCompleted,
+    [property: JsonPropertyName("m")] bool CanBeCompletedByMe,
+    [property: JsonPropertyName("a")] int? ActorIndex,
+    [property: JsonPropertyName("at")] int? ActorTypeIndex,
+    [property: JsonPropertyName("ca")] DateTime? CompletedAt,
+    [property: JsonPropertyName("x")] int ContextIndex,
+    [property: JsonPropertyName("s")] int ScopeIndex,
+    [property: JsonPropertyName("o")] int? OwnerIndex
+);
+
+/// <summary>
+/// Normalized checklist response with lookup tables to reduce payload size.
+/// Scopes, actor types, context types, marshals, and contexts are stored in arrays.
+/// Instances reference these arrays by index instead of repeating strings.
+/// The FieldMap (_) provides human-readable mappings for debugging.
+/// </summary>
+public record NormalizedChecklistResponse(
+    [property: JsonPropertyName("_")] Dictionary<string, string> FieldMap,
+    [property: JsonPropertyName("s")] List<string> Scopes,
+    [property: JsonPropertyName("at")] List<string> ActorTypes,
+    [property: JsonPropertyName("ct")] List<string> ContextTypes,
+    [property: JsonPropertyName("m")] List<MarshalReference> Marshals,
+    [property: JsonPropertyName("c")] List<ContextReference> Contexts,
+    [property: JsonPropertyName("d")] List<ChecklistItemDefinition> Items,
+    [property: JsonPropertyName("n")] List<ChecklistInstance> Instances
 );

@@ -277,6 +277,7 @@ import { useTerminology } from '../composables/useTerminology';
 import { alphanumericCompare } from '../utils/sortUtils';
 import { getCachedEventData, updateCachedField, cacheEventData } from '../services/offlineDb';
 import { useOffline } from '../composables/useOffline';
+import { denormalizeAreaLeadDashboard } from '../utils/denormalize';
 import CommonMap from './common/CommonMap.vue';
 import BaseModal from './BaseModal.vue';
 
@@ -379,8 +380,9 @@ const loadDashboard = async () => {
 
   try {
     const response = await areasApi.getAreaLeadDashboard(props.eventId);
-    areas.value = response.data.areas || [];
-    checkpoints.value = response.data.checkpoints || [];
+    const denormalized = denormalizeAreaLeadDashboard(response.data);
+    areas.value = denormalized.areas || [];
+    checkpoints.value = denormalized.checkpoints || [];
 
     // Cache the dashboard data
     try {

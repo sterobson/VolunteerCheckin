@@ -439,7 +439,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, provide, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { eventsApi, assignmentsApi, areasApi, notesApi, contactsApi, marshalsApi, roleDefinitionsApi, getOfflineMode } from '../services/api';
-import { denormalizeEventStatus } from '../utils/denormalize';
+import { denormalizeEventStatus, denormalizeAreaLeadDashboard } from '../utils/denormalize';
 import { setSkipLoadingOverlayForGets } from '../services/loadingOverlay';
 import ConfirmModal from '../components/ConfirmModal.vue';
 import BaseModal from '../components/BaseModal.vue';
@@ -1556,31 +1556,39 @@ const preloadOfflineData = async () => {
 
   // Preload area lead dashboard (even if not currently an area lead, in case roles change)
   // This data is useful for area leads to see their checkpoints offline
-  try {
-    const dashboardResponse = await areasApi.getAreaLeadDashboard(eventId);
-    if (dashboardResponse.data) {
-      // Store checkpoints for marshal name lookup in checklists
-      areaLeadCheckpoints.value = dashboardResponse.data.checkpoints || [];
+  // Skip if already loaded (area leads load this in phase 2 of loadEventData)
+  if (areaLeadCheckpoints.value.length > 0) {
+    console.log('Area lead dashboard already loaded, skipping preload');
+  } else {
+    try {
+      const dashboardResponse = await areasApi.getAreaLeadDashboard(eventId);
+      if (dashboardResponse.data) {
+        // Denormalize the response
+        const denormalized = denormalizeAreaLeadDashboard(dashboardResponse.data);
 
-      // Convert to plain object to avoid IndexedDB serialization issues
-      const areaLeadDashboard = JSON.parse(JSON.stringify({
-        areas: dashboardResponse.data.areas || [],
-        checkpoints: dashboardResponse.data.checkpoints || []
-      }));
+        // Store checkpoints for marshal name lookup in checklists
+        areaLeadCheckpoints.value = denormalized.checkpoints || [];
 
-      // Try to update existing cache, or create new entry
-      const existingCache = await getCachedEventData(eventId);
-      if (existingCache) {
-        await updateCachedField(eventId, 'areaLeadDashboard', areaLeadDashboard);
-      } else {
-        await cacheEventData(eventId, { areaLeadDashboard });
+        // Convert to plain object to avoid IndexedDB serialization issues
+        const areaLeadDashboard = JSON.parse(JSON.stringify({
+          areas: denormalized.areas || [],
+          checkpoints: denormalized.checkpoints || []
+        }));
+
+        // Try to update existing cache, or create new entry
+        const existingCache = await getCachedEventData(eventId);
+        if (existingCache) {
+          await updateCachedField(eventId, 'areaLeadDashboard', areaLeadDashboard);
+        } else {
+          await cacheEventData(eventId, { areaLeadDashboard });
+        }
+        console.log('Area lead dashboard cached for offline access');
       }
-      console.log('Area lead dashboard cached for offline access');
-    }
-  } catch (error) {
-    // This might fail if user isn't an area lead - that's fine
-    if (error.response?.status !== 403) {
-      console.warn('Failed to preload area lead dashboard:', error);
+    } catch (error) {
+      // This might fail if user isn't an area lead - that's fine
+      if (error.response?.status !== 403) {
+        console.warn('Failed to preload area lead dashboard:', error);
+      }
     }
   }
 
@@ -1594,8 +1602,9 @@ const loadAreaLeadDashboard = async () => {
   const eventIdVal = route.params.eventId;
   try {
     const response = await areasApi.getAreaLeadDashboard(eventIdVal);
-    if (response.data?.checkpoints) {
-      areaLeadCheckpoints.value = response.data.checkpoints;
+    if (response.data) {
+      const denormalized = denormalizeAreaLeadDashboard(response.data);
+      areaLeadCheckpoints.value = denormalized.checkpoints || [];
       console.log('Area lead dashboard loaded:', areaLeadCheckpoints.value.length, 'checkpoints');
     }
   } catch (error) {

@@ -972,6 +972,84 @@ public record AreaLeadTaskInfo(
     string? MarshalId
 );
 
+// Normalized Area Lead Dashboard DTOs
+
+/// <summary>
+/// Deduplicated task definition (itemId + text pair).
+/// </summary>
+public record AreaLeadTaskDefinition(
+    [property: JsonPropertyName("r")] int RefIndex,
+    [property: JsonPropertyName("t")] string Text
+);
+
+/// <summary>
+/// Compact task instance using indexes.
+/// </summary>
+public record CompactAreaLeadTask(
+    [property: JsonPropertyName("ti")] int TaskDefIndex,
+    [property: JsonPropertyName("si")] int ScopeIndex,
+    [property: JsonPropertyName("cti")] int ContextTypeIndex,
+    [property: JsonPropertyName("ci")] int ContextRefIndex,
+    [property: JsonPropertyName("mi"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? MarshalRefIndex
+);
+
+/// <summary>
+/// Compact marshal info using indexes.
+/// </summary>
+public record CompactAreaLeadMarshal(
+    [property: JsonPropertyName("r")] int RefIndex,
+    [property: JsonPropertyName("ar")] int AssignmentRefIndex,
+    [property: JsonPropertyName("n")] string Name,
+    [property: JsonPropertyName("e"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Email,
+    [property: JsonPropertyName("p"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? PhoneNumber,
+    [property: JsonPropertyName("ci"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? IsCheckedIn,
+    [property: JsonPropertyName("cit"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? CheckInTime,
+    [property: JsonPropertyName("cmi"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? CheckInMethodIndex,
+    [property: JsonPropertyName("la"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? LastAccessedAt,
+    [property: JsonPropertyName("otc")] int OutstandingTaskCount,
+    [property: JsonPropertyName("ot"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<CompactAreaLeadTask>? OutstandingTasks
+);
+
+/// <summary>
+/// Compact area info using ref index.
+/// </summary>
+public record CompactAreaLeadArea(
+    [property: JsonPropertyName("r")] int RefIndex,
+    [property: JsonPropertyName("n")] string Name,
+    [property: JsonPropertyName("c")] string Color
+);
+
+/// <summary>
+/// Compact checkpoint info using indexes.
+/// </summary>
+public record CompactAreaLeadCheckpoint(
+    [property: JsonPropertyName("r")] int RefIndex,
+    [property: JsonPropertyName("n")] string Name,
+    [property: JsonPropertyName("de"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Description,
+    [property: JsonPropertyName("lat")] double Latitude,
+    [property: JsonPropertyName("lng")] double Longitude,
+    [property: JsonPropertyName("ani"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? AreaNameIndex,
+    [property: JsonPropertyName("ai"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<int>? AreaRefIndexes,
+    [property: JsonPropertyName("ms"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<CompactAreaLeadMarshal>? Marshals,
+    [property: JsonPropertyName("otc")] int OutstandingTaskCount,
+    [property: JsonPropertyName("ot"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<CompactAreaLeadTask>? OutstandingTasks
+);
+
+/// <summary>
+/// Normalized area lead dashboard response with lookup tables.
+/// </summary>
+public record NormalizedAreaLeadDashboardResponse(
+    [property: JsonPropertyName("_")] Dictionary<string, string> FieldMap,
+    [property: JsonPropertyName("_d")] Dictionary<string, bool> Defaults,
+    [property: JsonPropertyName("g")] List<string> Refs,
+    [property: JsonPropertyName("sc")] List<string> Scopes,
+    [property: JsonPropertyName("ct")] List<string> ContextTypes,
+    [property: JsonPropertyName("cm")] List<string> CheckInMethods,
+    [property: JsonPropertyName("td")] List<AreaLeadTaskDefinition> TaskDefinitions,
+    [property: JsonPropertyName("ar")] List<CompactAreaLeadArea> Areas,
+    [property: JsonPropertyName("cp")] List<CompactAreaLeadCheckpoint> Checkpoints
+);
+
 // Dynamic Checkpoint Location Update DTOs
 
 /// <summary>

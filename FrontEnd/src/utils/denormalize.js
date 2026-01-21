@@ -143,3 +143,123 @@ export function denormalizeEventStatus(response) {
     locations: expandedLocations,
   };
 }
+
+/**
+ * Denormalizes a normalized area lead dashboard response back to the original structure.
+ *
+ * Short field names (see response._ for mapping):
+ *   Response: _d=defaults (bool), g=refs, sc=scopes, ct=contextTypes, cm=checkInMethods,
+ *             td=taskDefinitions, ar=areas, cp=checkpoints
+ *   TaskDefinition: r=refIndex (itemId), t=text
+ *   CompactTask: ti=taskDefIndex, si=scopeIndex, cti=contextTypeIndex, ci=contextRefIndex, mi=marshalRefIndex
+ *   Area: r=refIndex (areaId), n=name, c=color
+ *   Checkpoint: r=refIndex, n=name, de=description, lat=latitude, lng=longitude,
+ *               ani=areaNameIndex, ai=areaRefIndexes, ms=marshals, otc=outstandingTaskCount, ot=outstandingTasks
+ *   Marshal: r=refIndex, ar=assignmentRefIndex, n=name, e=email, p=phoneNumber,
+ *            ci=isCheckedIn, cit=checkInTime, cmi=checkInMethodIndex, la=lastAccessedAt,
+ *            otc=outstandingTaskCount, ot=outstandingTasks
+ *
+ * @param {Object} response - The normalized area lead dashboard response
+ * @returns {Object} - Dashboard in original format with all fields expanded
+ */
+export function denormalizeAreaLeadDashboard(response) {
+  // If response has the field map (_), it's normalized and needs expansion
+  // Otherwise it's already in final form (debug mode or legacy)
+  if (!response || !response._) {
+    return response;
+  }
+
+  const {
+    _d: defaults = {},
+    g: refs = [],
+    sc: scopes = [],
+    ct: contextTypes = [],
+    cm: checkInMethods = [],
+    td: taskDefinitions = [],
+    ar: areas = [],
+    cp: checkpoints = [],
+  } = response;
+
+  // Helper to resolve a ref index to an actual GUID
+  const resolveRef = (refIndex) => {
+    if (refIndex == null || refIndex < 0 || refIndex >= refs.length) return null;
+    return refs[refIndex];
+  };
+
+  // Helper to expand a task
+  const expandTask = (task) => {
+    const taskDef = taskDefinitions[task.ti] || {};
+    return {
+      itemId: resolveRef(taskDef.r),
+      text: taskDef.t || '',
+      scope: task.si != null && task.si >= 0 ? scopes[task.si] || '' : '',
+      contextType: task.cti != null && task.cti >= 0 ? contextTypes[task.cti] || '' : '',
+      contextId: resolveRef(task.ci),
+      marshalId: task.mi != null ? resolveRef(task.mi) : null,
+    };
+  };
+
+  // Expand areas
+  const expandedAreas = areas.map(area => ({
+    areaId: resolveRef(area.r),
+    name: area.n || '',
+    color: area.c || '',
+  }));
+
+  // Expand checkpoints
+  const expandedCheckpoints = checkpoints.map(cp => {
+    // Get area name from areas array if index provided
+    const areaName = cp.ani != null && cp.ani >= 0 && cp.ani < expandedAreas.length
+      ? expandedAreas[cp.ani].name
+      : null;
+
+    // Expand area IDs
+    const areaIds = (cp.ai || [])
+      .map(refIdx => resolveRef(refIdx))
+      .filter(id => id != null);
+
+    // Expand checkpoint outstanding tasks
+    const outstandingTasks = (cp.ot || []).map(expandTask);
+
+    // Expand marshals
+    const marshals = (cp.ms || []).map(marshal => {
+      // Apply default for isCheckedIn
+      const isCheckedIn = marshal.ci ?? defaults['m.ci'] ?? false;
+
+      // Expand marshal outstanding tasks
+      const marshalTasks = (marshal.ot || []).map(expandTask);
+
+      return {
+        marshalId: resolveRef(marshal.r),
+        assignmentId: resolveRef(marshal.ar),
+        name: marshal.n || '',
+        email: marshal.e || null,
+        phoneNumber: marshal.p || null,
+        isCheckedIn,
+        checkInTime: marshal.cit || null,
+        checkInMethod: marshal.cmi != null && marshal.cmi >= 0 ? checkInMethods[marshal.cmi] || '' : null,
+        lastAccessedAt: marshal.la || null,
+        outstandingTaskCount: marshal.otc || 0,
+        outstandingTasks: marshalTasks,
+      };
+    });
+
+    return {
+      checkpointId: resolveRef(cp.r),
+      name: cp.n || '',
+      description: cp.de || '',
+      latitude: cp.lat,
+      longitude: cp.lng,
+      areaName,
+      areaIds,
+      marshals,
+      outstandingTaskCount: cp.otc || 0,
+      outstandingTasks,
+    };
+  });
+
+  return {
+    areas: expandedAreas,
+    checkpoints: expandedCheckpoints,
+  };
+}

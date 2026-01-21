@@ -756,7 +756,14 @@ public class AreaFunctions
                 .Where(a => leadAreaIds.Contains(a.RowKey))
                 .Select(a => new AreaLeadAreaInfo(a.RowKey, a.Name, a.Color))];
 
-            return new OkObjectResult(new AreaLeadDashboardResponse(areaInfos, checkpointInfos));
+            AreaLeadDashboardResponse response = new(areaInfos, checkpointInfos);
+
+            if (AreaLeadDashboardHelper.IsDebugRequest(req))
+            {
+                return new OkObjectResult(response);
+            }
+
+            return new OkObjectResult(AreaLeadDashboardHelper.BuildNormalizedResponse(response));
         }
         catch (Exception ex)
         {

@@ -7,7 +7,7 @@ import { checklistApi, queueOfflineAction, getOfflineMode } from '../services/ap
  * from the reduced network payload size.
  *
  * Short field names (see response._ for mapping):
- *   Response: g=refs, s=scopes, at=actorTypes, ct=contextTypes, m=marshals, c=contexts, d=items, n=instances
+ *   Response: _d=defaults, g=refs, s=scopes, at=actorTypes, ct=contextTypes, m=marshals, c=contexts, d=items, n=instances
  *   Marshal: r=refIndex, n=name
  *   Context: r=refIndex, t=typeIndex
  *   Item: r=itemRefIndex, t=text, sc=scopeConfigurations, o=displayOrder, r2=isRequired,
@@ -16,21 +16,21 @@ import { checklistApi, queueOfflineAction, getOfflineMode } from '../services/ap
  *   Instance: i=itemIndex, c=isCompleted, m=canBeCompletedByMe, a=actorIndex, at=actorTypeIndex,
  *             ca=completedAt, x=contextIndex, s=scopeIndex, o=ownerIndex
  *
+ * Defaults (_d): Boolean properties omitted from items/instances use defaults from _d.
+ *   n.c=isCompleted, n.m=canBeCompletedByMe, d.r2=isRequired, d.l=linksToCheckIn
+ *
  * @param {Object} response - The normalized checklist response
  * @returns {Array} - Flat array of checklist items with all fields expanded
  */
 function denormalizeChecklistResponse(response) {
-  // If response is already an array (old format), return as-is
-  if (Array.isArray(response)) {
-    return response;
-  }
-
-  // If response doesn't have the expected normalized structure, return empty
-  if (!response || !response.n || !response.d) {
-    return [];
+  // If response has the field map (_), it's normalized and needs expansion
+  // Otherwise it's already in final form (debug mode or legacy)
+  if (!response || !response._) {
+    return Array.isArray(response) ? response : [];
   }
 
   const {
+    _d: defaults = {},
     g: refs = [],
     s: scopes = [],
     at: actorTypes = [],
@@ -53,11 +53,17 @@ function denormalizeChecklistResponse(response) {
     const contextType = contextTypes[context.t] || '';
     const scope = scopes[instance.s] || '';
 
+    // Apply defaults for boolean properties (null/undefined means use default)
+    const isCompleted = instance.c ?? defaults['n.c'] ?? false;
+    const canBeCompletedByMe = instance.m ?? defaults['n.m'] ?? false;
+    const isRequired = itemDef.r2 ?? defaults['d.r2'] ?? false;
+    const linksToCheckIn = itemDef.l ?? defaults['d.l'] ?? false;
+
     // Get actor info if completed
     let completedByActorName = null;
     let completedByActorType = null;
     let completedByActorId = null;
-    if (instance.c && instance.a != null && instance.a >= 0) {
+    if (isCompleted && instance.a != null && instance.a >= 0) {
       const actor = marshals[instance.a];
       if (actor) {
         completedByActorName = actor.n;
@@ -92,15 +98,15 @@ function denormalizeChecklistResponse(response) {
       text: itemDef.t,
       scopeConfigurations,
       displayOrder: itemDef.o,
-      isRequired: itemDef.r2,
+      isRequired,
       visibleFrom: itemDef.vf,
       visibleUntil: itemDef.vu,
       mustCompleteBy: itemDef.mb,
-      linksToCheckIn: itemDef.l,
+      linksToCheckIn,
       linkedCheckpointId: itemDef.lc != null ? resolveRef(itemDef.lc) : null,
       linkedCheckpointName: itemDef.ln,
-      isCompleted: instance.c,
-      canBeCompletedByMe: instance.m,
+      isCompleted,
+      canBeCompletedByMe,
       completedByActorName,
       completedByActorType,
       completedByActorId,

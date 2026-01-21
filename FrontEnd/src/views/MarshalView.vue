@@ -439,6 +439,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, provide, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { eventsApi, assignmentsApi, areasApi, notesApi, contactsApi, marshalsApi, roleDefinitionsApi, getOfflineMode } from '../services/api';
+import { denormalizeEventStatus } from '../utils/denormalize';
 import { setSkipLoadingOverlayForGets } from '../services/loadingOverlay';
 import ConfirmModal from '../components/ConfirmModal.vue';
 import BaseModal from '../components/BaseModal.vue';
@@ -1463,7 +1464,8 @@ const loadEventData = async () => {
 
   // Process event status result
   if (statusResult.status === 'fulfilled') {
-    allLocations.value = statusResult.value.data?.locations || [];
+    const denormalized = denormalizeEventStatus(statusResult.value.data);
+    allLocations.value = denormalized?.locations || [];
     console.log('Locations loaded:', allLocations.value.length);
 
     // Find ALL of current marshal's assignments from all locations

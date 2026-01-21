@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { eventsApi, locationsApi, assignmentsApi } from '../services/api';
+import { denormalizeEventStatus } from '../utils/denormalize';
 
 export const useEventsStore = defineStore('events', () => {
   const events = ref([]);
@@ -198,8 +199,13 @@ export const useEventsStore = defineStore('events', () => {
     error.value = null;
     try {
       const response = await assignmentsApi.getEventStatus(eventId);
-      eventStatus.value = response.data;
-      return response.data;
+      const denormalized = denormalizeEventStatus(response.data);
+      // Ensure eventId is set (may not be in normalized response)
+      if (denormalized && !denormalized.eventId) {
+        denormalized.eventId = eventId;
+      }
+      eventStatus.value = denormalized;
+      return denormalized;
     } catch (err) {
       error.value = err.message;
       throw err;

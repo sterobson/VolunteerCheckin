@@ -78,7 +78,7 @@ public class ChecklistQueryFunctions
                 }
             }
 
-            return new OkObjectResult(ChecklistContextHelper.BuildNormalizedResponse(relevantItems));
+            return BuildChecklistResponse(req, relevantItems);
         }
         catch (Exception ex)
         {
@@ -200,7 +200,7 @@ public class ChecklistQueryFunctions
                 }
             }
 
-            return new OkObjectResult(ChecklistContextHelper.BuildNormalizedResponse(relevantItems));
+            return BuildChecklistResponse(req, relevantItems);
         }
         catch (Exception ex)
         {
@@ -351,7 +351,7 @@ public class ChecklistQueryFunctions
                 }
             }
 
-            return new OkObjectResult(ChecklistContextHelper.BuildNormalizedResponse(relevantItems));
+            return BuildChecklistResponse(req, relevantItems);
         }
         catch (Exception ex)
         {
@@ -360,6 +360,20 @@ public class ChecklistQueryFunctions
         }
     }
 #pragma warning restore MA0051
+
+    /// <summary>
+    /// Returns true if the X-Debug header is present, indicating raw (non-normalized) response is requested.
+    /// </summary>
+    private static bool IsDebugRequest(HttpRequest req) =>
+        req.Headers.ContainsKey("X-Debug");
+
+    /// <summary>
+    /// Returns either the normalized response or raw items based on X-Debug header.
+    /// </summary>
+    private static IActionResult BuildChecklistResponse(HttpRequest req, List<ChecklistItemWithStatus> items) =>
+        IsDebugRequest(req)
+            ? new OkObjectResult(items)
+            : new OkObjectResult(ChecklistContextHelper.BuildNormalizedResponse(items));
 
     /// <summary>
     /// Determines if a scope context should be included for a checkpoint view.

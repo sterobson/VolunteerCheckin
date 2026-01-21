@@ -362,60 +362,6 @@ public record LocationStatusResponse(
     DateTime? LastLocationUpdate
 );
 
-/// <summary>
-/// Slim marshal summary for display in checkpoint cards - minimal data to reduce payload.
-/// </summary>
-public record MarshalSummary(
-    string MarshalId,
-    string MarshalName,
-    bool IsCheckedIn,
-    DateTime? CheckInTime
-);
-
-/// <summary>
-/// Slim location response for marshal mode - excludes full assignment details to reduce payload size.
-/// Includes basic marshal summaries for display in checkpoint cards.
-/// </summary>
-public record MarshalLocationResponse(
-    string Id,
-    string Name,
-    string Description,
-    double Latitude,
-    double Longitude,
-    int RequiredMarshals,
-    int CheckedInCount,
-    int TotalAssigned,
-    string What3Words,
-    DateTime? StartTime,
-    DateTime? EndTime,
-    List<string> AreaIds,
-    // Slim marshal list for checkpoint cards (just names and check-in status)
-    List<MarshalSummary> Marshals,
-    // Only resolved styles (computed from checkpoint -> area -> event hierarchy)
-    string ResolvedStyleType,
-    string ResolvedStyleColor,
-    string ResolvedStyleBackgroundShape,
-    string ResolvedStyleBackgroundColor,
-    string ResolvedStyleBorderColor,
-    string ResolvedStyleIconColor,
-    string ResolvedStyleSize,
-    string ResolvedStyleMapRotation,
-    // Dynamic checkpoint settings
-    bool IsDynamic,
-    List<ScopeConfiguration> LocationUpdateScopeConfigurations,
-    DateTime? LastLocationUpdate
-);
-
-/// <summary>
-/// Slim event status response for marshal mode.
-/// Contains basic location data for map display plus only the current marshal's assignments.
-/// </summary>
-public record MarshalEventStatusResponse(
-    string EventId,
-    List<MarshalLocationResponse> Locations,
-    List<AssignmentResponse> MyAssignments
-);
-
 public record UserEventMappingResponse(
     string EventId,
     string UserEmail,
@@ -1326,23 +1272,23 @@ public record ChecklistItemDefinition(
     [property: JsonPropertyName("t")] string Text,
     [property: JsonPropertyName("sc")] List<CompactScopeConfiguration> ScopeConfigurations,
     [property: JsonPropertyName("o")] int DisplayOrder,
-    [property: JsonPropertyName("r2")] bool IsRequired,
+    [property: JsonPropertyName("r2")] bool? IsRequired,
     [property: JsonPropertyName("vf")] DateTime? VisibleFrom,
     [property: JsonPropertyName("vu")] DateTime? VisibleUntil,
     [property: JsonPropertyName("mb")] DateTime? MustCompleteBy,
-    [property: JsonPropertyName("l")] bool LinksToCheckIn,
+    [property: JsonPropertyName("l")] bool? LinksToCheckIn,
     [property: JsonPropertyName("lc")] int? LinkedCheckpointRefIndex,
     [property: JsonPropertyName("ln")] string? LinkedCheckpointName
 );
 
 /// <summary>
 /// Per-instance checklist data with indexes referencing lookup tables.
-/// Null fields (actorIndex, actorTypeIndex, completedAt) are omitted when not completed.
+/// Null fields are omitted from serialization. Boolean properties use defaults from _d when null.
 /// </summary>
 public record ChecklistInstance(
     [property: JsonPropertyName("i")] int ItemIndex,
-    [property: JsonPropertyName("c")] bool IsCompleted,
-    [property: JsonPropertyName("m")] bool CanBeCompletedByMe,
+    [property: JsonPropertyName("c")] bool? IsCompleted,
+    [property: JsonPropertyName("m")] bool? CanBeCompletedByMe,
     [property: JsonPropertyName("a")] int? ActorIndex,
     [property: JsonPropertyName("at")] int? ActorTypeIndex,
     [property: JsonPropertyName("ca")] DateTime? CompletedAt,
@@ -1357,9 +1303,11 @@ public record ChecklistInstance(
 /// Scopes, actor types, context types, marshals, and contexts are stored in arrays.
 /// Instances reference these arrays by index instead of repeating strings.
 /// The FieldMap (_) provides human-readable mappings for debugging.
+/// The Defaults (_d) provides default values for boolean properties - omitted properties use these defaults.
 /// </summary>
 public record NormalizedChecklistResponse(
     [property: JsonPropertyName("_")] Dictionary<string, string> FieldMap,
+    [property: JsonPropertyName("_d")] Dictionary<string, bool> Defaults,
     [property: JsonPropertyName("g")] List<string> Refs,
     [property: JsonPropertyName("s")] List<string> Scopes,
     [property: JsonPropertyName("at")] List<string> ActorTypes,
@@ -1368,4 +1316,92 @@ public record NormalizedChecklistResponse(
     [property: JsonPropertyName("c")] List<ContextReference> Contexts,
     [property: JsonPropertyName("d")] List<ChecklistItemDefinition> Items,
     [property: JsonPropertyName("n")] List<ChecklistInstance> Instances
+);
+
+// ============================================================================
+// Normalized Event Status Response DTOs
+// Field names are shortened to reduce payload size. See FieldMap (_) for mappings.
+// GUIDs are stored in the refs array and referenced by index.
+// ============================================================================
+
+/// <summary>
+/// Compact assignment for normalized status response.
+/// Removes redundant eventId/locationId, uses indexes for marshals and check-in methods.
+/// </summary>
+public record CompactAssignment(
+    [property: JsonPropertyName("r")] int RefIndex,              // Assignment ID
+    [property: JsonPropertyName("m")] int MarshalIndex,          // Index into marshals array
+    [property: JsonPropertyName("ci")] bool? IsCheckedIn,        // Nullable for defaults
+    [property: JsonPropertyName("ct")] DateTime? CheckInTime,
+    [property: JsonPropertyName("cla")] double? CheckInLatitude,
+    [property: JsonPropertyName("clo")] double? CheckInLongitude,
+    [property: JsonPropertyName("cm")] int? CheckInMethodIndex,  // Index into checkInMethods array
+    [property: JsonPropertyName("cb")] int? CheckedInByIndex     // Index into marshals array
+);
+
+/// <summary>
+/// Compact location update scope configuration using indexes.
+/// </summary>
+public record CompactLocationUpdateScope(
+    [property: JsonPropertyName("s")] int ScopeIndex,
+    [property: JsonPropertyName("t")] string? ItemType,
+    [property: JsonPropertyName("i")] List<int> RefIndexes
+);
+
+/// <summary>
+/// Compact location for normalized status response.
+/// Uses ref indexes for IDs and area IDs, contains compact assignments.
+/// </summary>
+public record CompactLocation(
+    [property: JsonPropertyName("r")] int RefIndex,              // Location ID
+    [property: JsonPropertyName("n")] string Name,
+    [property: JsonPropertyName("de")] string? Description,
+    [property: JsonPropertyName("lat")] double Latitude,
+    [property: JsonPropertyName("lng")] double Longitude,
+    [property: JsonPropertyName("rm")] int RequiredMarshals,
+    [property: JsonPropertyName("cc")] int CheckedInCount,
+    [property: JsonPropertyName("a")] List<CompactAssignment> Assignments,
+    [property: JsonPropertyName("w")] string? What3Words,
+    [property: JsonPropertyName("st")] DateTime? StartTime,
+    [property: JsonPropertyName("et")] DateTime? EndTime,
+    [property: JsonPropertyName("ai")] List<int> AreaRefIndexes,
+    // Raw style properties
+    [property: JsonPropertyName("sty")] string? StyleType,
+    [property: JsonPropertyName("sc")] string? StyleColor,
+    [property: JsonPropertyName("sbs")] string? StyleBackgroundShape,
+    [property: JsonPropertyName("sbc")] string? StyleBackgroundColor,
+    [property: JsonPropertyName("sboc")] string? StyleBorderColor,
+    [property: JsonPropertyName("sic")] string? StyleIconColor,
+    [property: JsonPropertyName("ssz")] string? StyleSize,
+    [property: JsonPropertyName("smr")] string? StyleMapRotation,
+    // Resolved style properties
+    [property: JsonPropertyName("rsty")] string? ResolvedStyleType,
+    [property: JsonPropertyName("rsc")] string? ResolvedStyleColor,
+    [property: JsonPropertyName("rsbs")] string? ResolvedStyleBackgroundShape,
+    [property: JsonPropertyName("rsbc")] string? ResolvedStyleBackgroundColor,
+    [property: JsonPropertyName("rsboc")] string? ResolvedStyleBorderColor,
+    [property: JsonPropertyName("rsic")] string? ResolvedStyleIconColor,
+    [property: JsonPropertyName("rssz")] string? ResolvedStyleSize,
+    [property: JsonPropertyName("rsmr")] string? ResolvedStyleMapRotation,
+    // Terminology
+    [property: JsonPropertyName("pt")] string? PeopleTerm,
+    [property: JsonPropertyName("cpt")] string? CheckpointTerm,
+    // Dynamic checkpoint settings
+    [property: JsonPropertyName("dy")] bool? IsDynamic,
+    [property: JsonPropertyName("lus")] List<CompactLocationUpdateScope>? LocationUpdateScopes,
+    [property: JsonPropertyName("llu")] DateTime? LastLocationUpdate
+);
+
+/// <summary>
+/// Normalized event status response with lookup tables to reduce payload size.
+/// </summary>
+public record NormalizedEventStatusResponse(
+    [property: JsonPropertyName("_")] Dictionary<string, string> FieldMap,
+    [property: JsonPropertyName("_d")] Dictionary<string, bool> Defaults,
+    [property: JsonPropertyName("_ds")] Dictionary<string, string> StringDefaults,
+    [property: JsonPropertyName("g")] List<string> Refs,
+    [property: JsonPropertyName("m")] List<MarshalReference> Marshals,
+    [property: JsonPropertyName("cm")] List<string> CheckInMethods,
+    [property: JsonPropertyName("sc")] List<string> Scopes,
+    [property: JsonPropertyName("l")] List<CompactLocation> Locations
 );

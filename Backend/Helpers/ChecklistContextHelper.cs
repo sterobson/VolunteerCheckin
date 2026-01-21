@@ -383,6 +383,7 @@ public class ChecklistContextHelper
     private static readonly Dictionary<string, string> FieldMap = new()
     {
         // Response level
+        ["_d"] = "defaults (bool defaults for omitted properties)",
         ["g"] = "refs (GUIDs)",
         ["s"] = "scopes",
         ["at"] = "actorTypes",
@@ -428,6 +429,7 @@ public class ChecklistContextHelper
     /// Converts a list of ChecklistItemWithStatus to a normalized response with lookup tables.
     /// This significantly reduces payload size by deduplicating repeated strings and item definitions.
     /// All GUIDs are stored in a refs array and referenced by index.
+    /// Boolean properties use computed defaults - omitted values use the default from _d.
     /// </summary>
     public static NormalizedChecklistResponse BuildNormalizedResponse(List<ChecklistItemWithStatus> items)
     {
@@ -449,6 +451,40 @@ public class ChecklistContextHelper
         Dictionary<string, int> marshalIndex = [];  // keyed by marshal ID
         Dictionary<string, int> contextIndex = [];  // keyed by "contextType:contextId"
         Dictionary<string, int> itemIndex = [];     // keyed by itemId
+
+        // Compute defaults for boolean properties by counting occurrences
+        // Instance booleans
+        int isCompletedTrue = items.Count(i => i.IsCompleted);
+        int canBeCompletedByMeTrue = items.Count(i => i.CanBeCompletedByMe);
+
+        // Item definition booleans (count unique items only)
+        HashSet<string> seenItemIds = [];
+        int isRequiredTrue = 0;
+        int linksToCheckInTrue = 0;
+        int uniqueItemCount = 0;
+        foreach (ChecklistItemWithStatus item in items)
+        {
+            if (seenItemIds.Add(item.ItemId))
+            {
+                uniqueItemCount++;
+                if (item.IsRequired) isRequiredTrue++;
+                if (item.LinksToCheckIn) linksToCheckInTrue++;
+            }
+        }
+
+        // Defaults are the majority value (>= 50% means default is true)
+        bool defaultIsCompleted = isCompletedTrue >= items.Count - isCompletedTrue;
+        bool defaultCanBeCompletedByMe = canBeCompletedByMeTrue >= items.Count - canBeCompletedByMeTrue;
+        bool defaultIsRequired = isRequiredTrue >= uniqueItemCount - isRequiredTrue;
+        bool defaultLinksToCheckIn = linksToCheckInTrue >= uniqueItemCount - linksToCheckInTrue;
+
+        Dictionary<string, bool> defaults = new()
+        {
+            ["n.c"] = defaultIsCompleted,
+            ["n.m"] = defaultCanBeCompletedByMe,
+            ["d.r2"] = defaultIsRequired,
+            ["d.l"] = defaultLinksToCheckIn
+        };
 
         int GetOrAddRef(string? guid)
         {
@@ -525,6 +561,9 @@ public class ChecklistContextHelper
             return index;
         }
 
+        // Track which items have been added to avoid duplicate definitions
+        HashSet<string> addedItemIds = [];
+
         int GetOrAddItem(ChecklistItemWithStatus item)
         {
             if (!itemIndex.TryGetValue(item.ItemId, out int index))
@@ -547,19 +586,25 @@ public class ChecklistContextHelper
                     ? null
                     : GetOrAddRef(item.LinkedCheckpointId);
 
+                // Use null for booleans that match their default (will be omitted from JSON)
+                bool? isRequired = item.IsRequired == defaultIsRequired ? null : item.IsRequired;
+                bool? linksToCheckIn = item.LinksToCheckIn == defaultLinksToCheckIn ? null : item.LinksToCheckIn;
+
                 itemDefinitions.Add(new ChecklistItemDefinition(
                     itemRefIdx,
                     item.Text,
                     compactScopes,
                     item.DisplayOrder,
-                    item.IsRequired,
+                    isRequired,
                     item.VisibleFrom,
                     item.VisibleUntil,
                     item.MustCompleteBy,
-                    item.LinksToCheckIn,
+                    linksToCheckIn,
                     linkedCpRefIdx,
                     item.LinkedCheckpointName
                 ));
+
+                addedItemIds.Add(item.ItemId);
             }
             return index;
         }
@@ -588,10 +633,14 @@ public class ChecklistContextHelper
                 ownerIdx = GetOrAddMarshal(item.ContextOwnerMarshalId, item.ContextOwnerName);
             }
 
+            // Use null for booleans that match their default (will be omitted from JSON)
+            bool? isCompleted = item.IsCompleted == defaultIsCompleted ? null : item.IsCompleted;
+            bool? canBeCompletedByMe = item.CanBeCompletedByMe == defaultCanBeCompletedByMe ? null : item.CanBeCompletedByMe;
+
             instances.Add(new ChecklistInstance(
                 itemIdx,
-                item.IsCompleted,
-                item.CanBeCompletedByMe,
+                isCompleted,
+                canBeCompletedByMe,
                 actorIdx,
                 actorTypeIdx,
                 item.CompletedAt,
@@ -603,6 +652,7 @@ public class ChecklistContextHelper
 
         return new NormalizedChecklistResponse(
             FieldMap,
+            defaults,
             refs,
             scopes,
             actorTypes,

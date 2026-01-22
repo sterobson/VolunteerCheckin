@@ -4,7 +4,7 @@
 
 param(
     [Parameter(Mandatory=$false)]
-    [ValidateSet("local", "testing")]
+    [ValidateSet("local", "testing", "production")]
     [string]$Environment,
 
     [Parameter(Mandatory=$false)]
@@ -74,6 +74,15 @@ $config = @{
             Url = "https://sterobson-volunteercheckin-testing.azurewebsites.net/api"
         }
     }
+    production = @{
+        Frontend = @{
+            DeployPath = "/"
+            ApiUrl = "https://sterobson-volunteercheckin-testing.azurewebsites.net/api"
+            FrontendUrl = "https://ambitious-ground-04b5e4603.4.azurestaticapps.net"
+            StaticWebAppName = "OnTheDayUi"
+            ResourceGroup = "VolunteerCheckIn"
+        }
+    }
 }
 
 # Banner
@@ -87,16 +96,18 @@ Write-Host ""
 if (-not $Environment) {
     Write-Warning "Select deployment environment:"
     Write-Host "  1. Local (Start local development servers)" -ForegroundColor White
-    Write-Host "  2. Testing (Deploy to GitHub Pages + Azure)" -ForegroundColor White
+    Write-Host "  2. Testing (GitHub Pages + Azure Functions)" -ForegroundColor White
+    Write-Host "  3. Production (Azure Static Web Apps)" -ForegroundColor White
     Write-Host ""
 
-    $choice = Read-Host "Enter choice (1 or 2)"
+    $choice = Read-Host "Enter choice (1, 2, or 3)"
 
     switch ($choice) {
         "1" { $Environment = "local" }
         "2" { $Environment = "testing" }
+        "3" { $Environment = "production" }
         default {
-            Write-ErrorMessage "Invalid choice. Please select 1 or 2."
+            Write-ErrorMessage "Invalid choice. Please select 1, 2, or 3."
             exit 1
         }
     }
@@ -275,33 +286,49 @@ if ($Environment -ne "local") {
 # Ask what to deploy if not specified
 if (-not $Frontend -and -not $Backend) {
     Write-Host ""
-    Write-Warning "What would you like to deploy?"
-    Write-Host "  1. Frontend" -ForegroundColor White
-    Write-Host "  2. Backend (Azure Functions)" -ForegroundColor White
-    Write-Host "  3. Both" -ForegroundColor White
-    Write-Host ""
 
-    $choice = Read-Host "Enter choice (1, 2, or 3)"
+    # Production only supports frontend deployment
+    if ($Environment -eq "production") {
+        Write-Info "Production environment only supports frontend deployment."
+        $Frontend = $true
+    } else {
+        Write-Warning "What would you like to deploy?"
+        Write-Host "  1. Frontend" -ForegroundColor White
+        Write-Host "  2. Backend (Azure Functions)" -ForegroundColor White
+        Write-Host "  3. Both" -ForegroundColor White
+        Write-Host ""
 
-    switch ($choice) {
-        "1" { $Frontend = $true }
-        "2" { $Backend = $true }
-        "3" {
-            $Frontend = $true
-            $Backend = $true
-        }
-        default {
-            Write-ErrorMessage "Invalid choice."
-            exit 1
+        $choice = Read-Host "Enter choice (1, 2, or 3)"
+
+        switch ($choice) {
+            "1" { $Frontend = $true }
+            "2" { $Backend = $true }
+            "3" {
+                $Frontend = $true
+                $Backend = $true
+            }
+            default {
+                Write-ErrorMessage "Invalid choice."
+                exit 1
+            }
         }
     }
+}
+
+# Warn if backend is requested for production
+if ($Environment -eq "production" -and $Backend) {
+    Write-Warning "Backend deployment is not configured for production environment."
+    Write-Warning "Only frontend will be deployed."
+    $Backend = $false
 }
 
 Write-Host ""
 if ($Environment -eq "local") {
     Write-Info "Starting local development environment"
-} else {
-    Write-Info "Deploying to: $Environment"
+} elseif ($Environment -eq "testing") {
+    Write-Info "Deploying to: Testing (GitHub Pages + Azure Functions)"
+} elseif ($Environment -eq "production") {
+    Write-Info "Deploying to: Production (Azure Static Web Apps)"
 }
 if ($Frontend) { Write-Gray "  - Frontend" }
 if ($Backend) { Write-Gray "  - Backend (Azure Functions)" }
@@ -517,12 +544,12 @@ if ($Environment -eq "local" -and $Frontend) {
 }
 
 # ============================================================================
-# Deploy Frontend to Testing
+# Deploy Frontend to Testing (GitHub Pages)
 # ============================================================================
 if ($Environment -eq "testing" -and $Frontend) {
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
-    Write-Info "  Deploying Frontend to Testing"
+    Write-Info "  Deploying Frontend to GitHub Pages"
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Host ""
 
@@ -696,6 +723,266 @@ if ($Environment -eq "testing" -and $Frontend) {
 }
 
 # ============================================================================
+# Deploy Frontend to Production (Azure Static Web Apps)
+# ============================================================================
+if ($Environment -eq "production" -and $Frontend) {
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Info "  Deploying Frontend to Azure Static Web Apps"
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host ""
+
+    $frontendPath = Join-Path $PSScriptRoot "FrontEnd"
+
+    if (-not (Test-Path $frontendPath)) {
+        Write-ErrorMessage "Frontend directory not found at: $frontendPath"
+        $deploymentSuccess = $false
+    } else {
+        # Check if SWA CLI is installed
+        Write-Info "Checking Azure Static Web Apps CLI..."
+
+        $swaVersion = swa --version 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Azure Static Web Apps CLI not found."
+            Write-Host ""
+            Write-Host "Would you like to install it now?" -ForegroundColor Cyan
+            Write-Host "  1. Yes, install @azure/static-web-apps-cli globally" -ForegroundColor White
+            Write-Host "  2. No, cancel deployment" -ForegroundColor White
+            Write-Host ""
+
+            $installChoice = Read-Host "Enter choice (1 or 2)"
+
+            if ($installChoice -eq "1") {
+                Write-Host ""
+                Write-Info "Installing Azure Static Web Apps CLI..."
+                npm install -g @azure/static-web-apps-cli
+
+                if ($LASTEXITCODE -ne 0) {
+                    Write-ErrorMessage "Failed to install SWA CLI"
+                    $deploymentSuccess = $false
+                } else {
+                    Write-Success "SWA CLI installed successfully"
+                    $swaVersion = swa --version 2>&1
+                }
+            } else {
+                Write-Info "Deployment cancelled."
+                exit 0
+            }
+        }
+
+        if ($deploymentSuccess) {
+            Write-Success "SWA CLI found (v$swaVersion)"
+
+            # Check for deployment token (stored securely with DPAPI)
+            Write-Info "Checking deployment token..."
+
+            $tokenFile = Join-Path $env:USERPROFILE ".swa-deploy-token"
+            $deploymentToken = $null
+
+            # Try to load existing token
+            if (Test-Path $tokenFile) {
+                try {
+                    $encrypted = Get-Content $tokenFile -Raw
+                    $secureToken = ConvertTo-SecureString $encrypted -ErrorAction Stop
+                    $credential = New-Object System.Management.Automation.PSCredential("token", $secureToken)
+                    $deploymentToken = $credential.GetNetworkCredential().Password
+                    Write-Success "Deployment token loaded from secure storage"
+                } catch {
+                    Write-Warning "Failed to decrypt stored token. It may have been created by a different user."
+                    Remove-Item $tokenFile -Force -ErrorAction SilentlyContinue
+                }
+            }
+
+            if (-not $deploymentToken) {
+                Write-Warning "Deployment token not found."
+                Write-Host ""
+                Write-Host "The deployment token is required to deploy to Azure Static Web Apps." -ForegroundColor Gray
+                Write-Host ""
+                Write-Host "How would you like to provide the token?" -ForegroundColor Cyan
+                Write-Host "  1. Fetch automatically from Azure (requires Azure CLI)" -ForegroundColor White
+                Write-Host "  2. Enter manually (copy from Azure Portal)" -ForegroundColor White
+                Write-Host "  3. Cancel deployment" -ForegroundColor White
+                Write-Host ""
+
+                $tokenChoice = Read-Host "Enter choice (1, 2, or 3)"
+
+                switch ($tokenChoice) {
+                    "1" {
+                        Write-Host ""
+                        Write-Info "Fetching deployment token from Azure..."
+
+                        # Check if Azure CLI is available
+                        $azCommand = Get-Command az -ErrorAction SilentlyContinue
+                        if (-not $azCommand) {
+                            Write-ErrorMessage "Azure CLI not found. Please install it from https://aka.ms/installazurecliwindows"
+                            $deploymentSuccess = $false
+                        } else {
+                            # Check if logged in
+                            $ErrorActionPreference = "Continue"
+                            $azAccount = az account show 2>&1
+                            $azLoggedIn = $LASTEXITCODE -eq 0
+                            $ErrorActionPreference = "Stop"
+
+                            if (-not $azLoggedIn) {
+                                Write-Warning "Not logged in to Azure CLI. Opening login..."
+                                az login
+                                if ($LASTEXITCODE -ne 0) {
+                                    Write-ErrorMessage "Azure login failed"
+                                    $deploymentSuccess = $false
+                                }
+                            }
+
+                            if ($deploymentSuccess) {
+                                $ErrorActionPreference = "Continue"
+                                $deploymentToken = az staticwebapp secrets list `
+                                    --name $selectedConfig.Frontend.StaticWebAppName `
+                                    --resource-group $selectedConfig.Frontend.ResourceGroup `
+                                    --query "properties.apiKey" -o tsv 2>&1
+                                $tokenResult = $LASTEXITCODE
+                                $ErrorActionPreference = "Stop"
+
+                                if ($tokenResult -ne 0 -or -not $deploymentToken -or $deploymentToken -like "*ERROR*") {
+                                    Write-ErrorMessage "Failed to fetch deployment token"
+                                    Write-Gray "Error: $deploymentToken"
+                                    $deploymentSuccess = $false
+                                } else {
+                                    Write-Success "Deployment token retrieved"
+                                }
+                            }
+                        }
+                    }
+                    "2" {
+                        Write-Host ""
+                        Write-Gray "You can find the token in Azure Portal:"
+                        Write-Gray "  Static Web Apps > $($selectedConfig.Frontend.StaticWebAppName) > Manage deployment token"
+                        Write-Host ""
+                        $deploymentToken = Read-Host "Enter deployment token"
+
+                        if ([string]::IsNullOrWhiteSpace($deploymentToken)) {
+                            Write-ErrorMessage "No token provided"
+                            $deploymentSuccess = $false
+                        }
+                    }
+                    default {
+                        Write-Info "Deployment cancelled."
+                        exit 0
+                    }
+                }
+
+                # Save the token securely if we got one
+                if ($deploymentSuccess -and $deploymentToken) {
+                    Write-Host ""
+                    Write-Host "Would you like to save this token securely for future deployments?" -ForegroundColor Cyan
+                    Write-Gray "The token will be encrypted and stored in your user profile."
+                    Write-Host "  1. Yes, save securely" -ForegroundColor White
+                    Write-Host "  2. No, just use for this deployment" -ForegroundColor White
+                    Write-Host ""
+
+                    $saveChoice = Read-Host "Enter choice (1 or 2)"
+
+                    if ($saveChoice -eq "1") {
+                        try {
+                            $secureToken = ConvertTo-SecureString $deploymentToken -AsPlainText -Force
+                            $encrypted = ConvertFrom-SecureString $secureToken
+                            $encrypted | Set-Content $tokenFile -Force
+                            Write-Success "Token saved securely to $tokenFile"
+                        } catch {
+                            Write-Warning "Failed to save token: $_"
+                        }
+                    }
+                }
+            }
+
+            # Set for SWA CLI to use
+            if ($deploymentToken) {
+                $env:SWA_CLI_DEPLOYMENT_TOKEN = $deploymentToken
+            }
+        }
+
+        if ($deploymentSuccess) {
+            Push-Location $frontendPath
+
+            try {
+                # Install dependencies
+                Write-Info "Installing dependencies..."
+                npm install --silent
+
+                if ($LASTEXITCODE -ne 0) {
+                    Write-ErrorMessage "Failed to install dependencies"
+                    $deploymentSuccess = $false
+                } else {
+                    Write-Success "Dependencies installed"
+
+                    # Build
+                    Write-Host ""
+                    Write-Info "Building frontend..."
+
+                    $env:VITE_API_BASE_URL = $selectedConfig.Frontend.ApiUrl
+                    $env:VITE_BASE_PATH = $selectedConfig.Frontend.DeployPath
+                    $env:VITE_FRONTEND_URL = $selectedConfig.Frontend.FrontendUrl
+
+                    npm run build
+
+                    if ($LASTEXITCODE -ne 0) {
+                        Write-ErrorMessage "Frontend build failed"
+                        $deploymentSuccess = $false
+                    } else {
+                        Write-Success "Frontend build completed"
+
+                        $distPath = Join-Path $frontendPath "dist"
+
+                        if (-not (Test-Path $distPath)) {
+                            Write-ErrorMessage "Build output not found at: $distPath"
+                            $deploymentSuccess = $false
+                        } else {
+                            # Deploy to Azure Static Web Apps
+                            Write-Host ""
+                            Write-Info "Deploying to Azure Static Web Apps..."
+                            Write-Gray "App: $($selectedConfig.Frontend.StaticWebAppName)"
+                            Write-Host ""
+
+                            $ErrorActionPreference = "Continue"
+                            swa deploy $distPath `
+                                --deployment-token $env:SWA_CLI_DEPLOYMENT_TOKEN `
+                                --env production 2>&1 | ForEach-Object {
+                                    if ($_ -is [System.Management.Automation.ErrorRecord]) {
+                                        if ($_.Exception.Message -and $_.Exception.Message.Trim()) {
+                                            Write-Host $_.Exception.Message
+                                        }
+                                    } else {
+                                        Write-Host $_
+                                    }
+                                }
+                            $swaResult = $LASTEXITCODE
+                            $ErrorActionPreference = "Stop"
+
+                            if ($swaResult -eq 0) {
+                                Write-Host ""
+                                Write-Success "Frontend deployed to Azure Static Web Apps!"
+                                Write-Gray "URL: $($selectedConfig.Frontend.FrontendUrl)"
+                            } else {
+                                Write-ErrorMessage "Static Web Apps deployment failed"
+                                Write-Host ""
+                                Write-Warning "Check the error messages above for details."
+                                Write-Host ""
+                                $deploymentSuccess = $false
+                            }
+                        }
+                    }
+                }
+            } finally {
+                Pop-Location
+
+                # Clean up environment variables
+                Remove-Item Env:\VITE_API_BASE_URL -ErrorAction SilentlyContinue
+                Remove-Item Env:\VITE_BASE_PATH -ErrorAction SilentlyContinue
+                Remove-Item Env:\VITE_FRONTEND_URL -ErrorAction SilentlyContinue
+            }
+        }
+    }
+}
+
+# ============================================================================
 # Deploy Backend to Testing (Azure Functions)
 # ============================================================================
 if ($Environment -eq "testing" -and $Backend) {
@@ -823,8 +1110,8 @@ if ($deploymentSuccess) {
                 Write-Host "  [OK] Subpath  -> http://localhost:5175/VolunteerCheckin/testing/" -ForegroundColor Green
             }
         }
-    } else {
-        Write-Host "Deployed to: $Environment" -ForegroundColor White
+    } elseif ($Environment -eq "testing") {
+        Write-Host "Deployed to: Testing (GitHub Pages)" -ForegroundColor White
         if ($Frontend) {
             $pageUrl = if ($selectedConfig.Frontend.DestinationDir) {
                 "https://sterobson.github.io/VolunteerCheckin/$($selectedConfig.Frontend.DestinationDir)/"
@@ -835,6 +1122,11 @@ if ($deploymentSuccess) {
         }
         if ($Backend) {
             Write-Host "  [OK] Backend  -> $($selectedConfig.Backend.Url)" -ForegroundColor Green
+        }
+    } elseif ($Environment -eq "production") {
+        Write-Host "Deployed to: Production (Azure Static Web Apps)" -ForegroundColor White
+        if ($Frontend) {
+            Write-Host "  [OK] Frontend -> $($selectedConfig.Frontend.FrontendUrl)" -ForegroundColor Green
         }
     }
     Write-Host ""

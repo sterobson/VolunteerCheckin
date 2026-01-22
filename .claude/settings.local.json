@@ -29,7 +29,8 @@
       "Bash(xargs:*)",
       "Bash(npm run lint:*)",
       "Bash(dir \"C:\\\\Users\\\\stero\\\\OneDrive\\\\Pictures\\\\screenshots\" /O-D /B)",
-      "Bash(dotnet test:*)"
+      "Bash(dotnet test:*)",
+      "WebSearch"
     ]
   }
 }

@@ -1,0 +1,23 @@
+{
+  "environments": {
+    "production": {
+      "slots": [
+        "onthedayapp-production-01",
+        "onthedayapp-production-02"
+      ],
+      "lastDeployedSlot": null,
+      "resourceGroup": "VolunteerCheckIn",
+      "cors": [
+        "https://portal.azure.com",
+        "https://sterobson.github.io",
+        "https://ambitious-ground-04b5e4603.4.azurestaticapps.net",
+        "https://www.onthedayapp.com",
+        "https://onthedayapp.com"
+      ],
+      "frontend": {
+        "staticWebAppName": "OnTheDayUi",
+        "url": "https://onthedayapp.com"
+      }
+    }
+  }
+}

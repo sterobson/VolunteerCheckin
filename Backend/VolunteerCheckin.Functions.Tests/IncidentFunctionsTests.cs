@@ -379,7 +379,7 @@ public class IncidentFunctionsTests
             .ReturnsAsync([incident]);
 
         SetupClaimsForMarshal(MarshalM3aId, PersonM3aId, "Marshal M3a");
-        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m3a");
+        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m3a", debug: true);
 
         // Act
         IActionResult result = await _functions.GetIncidents(request, EventId);
@@ -409,7 +409,7 @@ public class IncidentFunctionsTests
             .ReturnsAsync([incident]);
 
         SetupClaimsForMarshal(MarshalM3bId, PersonM3bId, "Marshal M3b");
-        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m3b");
+        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m3b", debug: true);
 
         // Act
         IActionResult result = await _functions.GetIncidents(request, EventId);
@@ -438,7 +438,7 @@ public class IncidentFunctionsTests
             .ReturnsAsync([incident]);
 
         SetupClaimsForMarshal(MarshalM1Id, PersonM1Id, "Marshal M1");
-        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m1");
+        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m1", debug: true);
 
         // Act
         IActionResult result = await _functions.GetIncidents(request, EventId);
@@ -467,7 +467,7 @@ public class IncidentFunctionsTests
             .ReturnsAsync([incident]);
 
         SetupClaimsForMarshal(MarshalM2Id, PersonM2Id, "Marshal M2");
-        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m2");
+        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m2", debug: true);
 
         // Act
         IActionResult result = await _functions.GetIncidents(request, EventId);
@@ -496,7 +496,7 @@ public class IncidentFunctionsTests
             .ReturnsAsync([incident]);
 
         SetupClaimsForAreaLead(PersonL1Id, "Lead L1", [AreaA1Id]);
-        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-l1");
+        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-l1", debug: true);
 
         // Act
         IActionResult result = await _functions.GetIncidents(request, EventId);
@@ -525,7 +525,7 @@ public class IncidentFunctionsTests
             .ReturnsAsync([incident]);
 
         SetupClaimsForAdmin(PersonAdmin1Id, "Admin Admin1");
-        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-admin1");
+        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-admin1", debug: true);
 
         // Act
         IActionResult result = await _functions.GetIncidents(request, EventId);
@@ -566,7 +566,7 @@ public class IncidentFunctionsTests
             .ReturnsAsync([incident]);
 
         SetupClaimsForMarshal(MarshalM3aId, PersonM3aId, "Marshal M3a");
-        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m3a");
+        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m3a", debug: true);
 
         // Act
         IActionResult result = await _functions.GetIncidents(request, EventId);
@@ -598,7 +598,7 @@ public class IncidentFunctionsTests
             .ReturnsAsync([incident]);
 
         SetupClaimsForMarshal(MarshalM3bId, PersonM3bId, "Marshal M3b");
-        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m3b");
+        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m3b", debug: true);
 
         // Act
         IActionResult result = await _functions.GetIncidents(request, EventId);
@@ -630,7 +630,7 @@ public class IncidentFunctionsTests
             .ReturnsAsync([incident]);
 
         SetupClaimsForMarshal(MarshalM4Id, PersonM4Id, "Marshal M4");
-        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m4");
+        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m4", debug: true);
 
         // Act
         IActionResult result = await _functions.GetIncidents(request, EventId);
@@ -662,7 +662,7 @@ public class IncidentFunctionsTests
             .ReturnsAsync([incident]);
 
         SetupClaimsForAreaLead(PersonL1Id, "Lead L1", [AreaA1Id]);
-        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-l1");
+        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-l1", debug: true);
 
         // Act
         IActionResult result = await _functions.GetIncidents(request, EventId);
@@ -694,7 +694,7 @@ public class IncidentFunctionsTests
             .ReturnsAsync([incident]);
 
         SetupClaimsForAdmin(PersonAdmin1Id, "Admin Admin1");
-        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-admin1");
+        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-admin1", debug: true);
 
         // Act
         IActionResult result = await _functions.GetIncidents(request, EventId);
@@ -726,7 +726,7 @@ public class IncidentFunctionsTests
             .ReturnsAsync([incident]);
 
         SetupClaimsForMarshal(MarshalM1Id, PersonM1Id, "Marshal M1");
-        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m1");
+        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m1", debug: true);
 
         // Act
         IActionResult result = await _functions.GetIncidents(request, EventId);
@@ -758,7 +758,7 @@ public class IncidentFunctionsTests
             .ReturnsAsync([incident]);
 
         SetupClaimsForMarshal(MarshalM2Id, PersonM2Id, "Marshal M2");
-        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m2");
+        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m2", debug: true);
 
         // Act
         IActionResult result = await _functions.GetIncidents(request, EventId);
@@ -790,7 +790,7 @@ public class IncidentFunctionsTests
             .ReturnsAsync([incident]);
 
         SetupClaimsForMarshal(MarshalM5Id, PersonM5Id, "Marshal M5");
-        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m5");
+        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m5", debug: true);
 
         // Act
         IActionResult result = await _functions.GetIncidents(request, EventId);
@@ -829,7 +829,7 @@ public class IncidentFunctionsTests
             .ReturnsAsync([incident]);
 
         SetupClaimsForMarshal(MarshalM5Id, PersonM5Id, "Marshal M5");
-        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m5");
+        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m5", debug: true);
 
         // Act
         IActionResult result = await _functions.GetIncidents(request, EventId);
@@ -860,7 +860,7 @@ public class IncidentFunctionsTests
             .ReturnsAsync([incident]);
 
         SetupClaimsForAreaLead(PersonL1Id, "Lead L1", [AreaA1Id]);
-        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-l1");
+        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-l1", debug: true);
 
         // Act
         IActionResult result = await _functions.GetIncidents(request, EventId);
@@ -891,7 +891,7 @@ public class IncidentFunctionsTests
             .ReturnsAsync([incident]);
 
         SetupClaimsForAdmin(PersonAdmin1Id, "Admin Admin1");
-        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-admin1");
+        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-admin1", debug: true);
 
         // Act
         IActionResult result = await _functions.GetIncidents(request, EventId);
@@ -922,7 +922,7 @@ public class IncidentFunctionsTests
             .ReturnsAsync([incident]);
 
         SetupClaimsForMarshal(MarshalM1Id, PersonM1Id, "Marshal M1");
-        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m1");
+        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m1", debug: true);
 
         // Act
         IActionResult result = await _functions.GetIncidents(request, EventId);
@@ -953,7 +953,7 @@ public class IncidentFunctionsTests
             .ReturnsAsync([incident]);
 
         SetupClaimsForMarshal(MarshalM2Id, PersonM2Id, "Marshal M2");
-        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m2");
+        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m2", debug: true);
 
         // Act
         IActionResult result = await _functions.GetIncidents(request, EventId);
@@ -984,7 +984,7 @@ public class IncidentFunctionsTests
             .ReturnsAsync([incident]);
 
         SetupClaimsForMarshal(MarshalM3aId, PersonM3aId, "Marshal M3a");
-        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m3a");
+        HttpRequest request = TestHelpers.CreateEmptyHttpRequestWithAuth("token-m3a", debug: true);
 
         // Act
         IActionResult result = await _functions.GetIncidents(request, EventId);

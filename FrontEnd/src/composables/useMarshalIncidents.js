@@ -1,14 +1,12 @@
 import { ref, computed } from 'vue';
 import { incidentsApi } from '../services/api';
+import { denormalizeIncidentsList } from '../utils/denormalize';
 
 /**
  * Composable for managing marshal incidents functionality
  */
 export function useMarshalIncidents({
   eventId,
-  currentMarshalId,
-  isAreaLead,
-  areaLeadAreaIds,
   sectionLastLoadedAt,
   showMessage,
 }) {
@@ -31,45 +29,20 @@ export function useMarshalIncidents({
   });
 
   // Load incidents for "Your incidents" section
-  // Shows: incidents I reported + incidents in areas I'm a lead for
+  // The backend filters incidents based on user role:
+  // - Admins see all incidents
+  // - Area leads see incidents they reported, at their checkpoints, or in their areas
+  // - Marshals see incidents they reported or at their checkpoints
   const loadMyIncidents = async () => {
     const evtId = eventId.value;
     incidentsLoading.value = true;
 
     try {
-      const incidentMap = new Map();
+      const response = await incidentsApi.getAll(evtId);
+      const denormalized = denormalizeIncidentsList(response.data);
+      const incidents = denormalized.incidents || [];
 
-      // For area leads, load incidents from their areas
-      if (isAreaLead.value && areaLeadAreaIds.value.length > 0) {
-        for (const areaId of areaLeadAreaIds.value) {
-          try {
-            const response = await incidentsApi.getForArea(evtId, areaId);
-            const areaIncidents = response.data.incidents || [];
-            for (const incident of areaIncidents) {
-              incidentMap.set(incident.incidentId, incident);
-            }
-          } catch (err) {
-            console.warn(`Failed to load incidents for area ${areaId}:`, err);
-          }
-        }
-      }
-
-      // Also try to get all incidents and filter to ones I reported
-      // (in case I reported an incident outside my area)
-      try {
-        const response = await incidentsApi.getAll(evtId);
-        const allIncidents = response.data.incidents || [];
-        for (const incident of allIncidents) {
-          if (incident.reportedBy?.marshalId === currentMarshalId.value) {
-            incidentMap.set(incident.incidentId, incident);
-          }
-        }
-      } catch (err) {
-        // Non-leads may not have access to getAll, which is fine
-        console.debug('Could not load all incidents:', err);
-      }
-
-      myIncidents.value = Array.from(incidentMap.values()).sort((a, b) => {
+      myIncidents.value = incidents.sort((a, b) => {
         // Sort by date, most recent first
         return new Date(b.incidentTime || b.createdAt) - new Date(a.incidentTime || a.createdAt);
       });

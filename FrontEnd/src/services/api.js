@@ -584,10 +584,8 @@ export const roleDefinitionsApi = {
 export const incidentsApi = {
   // Create new incident (marshal)
   create: (eventId, data) => api.post(`/events/${eventId}/incidents`, data),
-  // Get all incidents for event (admin)
+  // Get incidents visible to current user (filtered by role on backend)
   getAll: (eventId, params = {}) => api.get(`/events/${eventId}/incidents`, { params }),
-  // Get incidents for area (area lead)
-  getForArea: (eventId, areaId) => api.get(`/events/${eventId}/areas/${areaId}/incidents`),
   // Get single incident
   get: (eventId, incidentId) => api.get(`/events/${eventId}/incidents/${incidentId}`),
   // Update status (admin/area lead)

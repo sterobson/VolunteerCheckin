@@ -19,7 +19,7 @@
           <div v-if="canManage" class="status-dropdown-container" ref="statusDropdownRef">
             <button
               type="button"
-              class="status-badge status-dropdown-trigger"
+              class="status-badge status-dropdown-trigger disable-on-load"
               :class="incident?.status"
               @click="toggleStatusDropdown"
               :disabled="updating"
@@ -206,7 +206,7 @@
           </div>
           <button
             type="button"
-            class="btn btn-primary add-note-btn"
+            class="btn btn-primary add-note-btn disable-on-load"
             @click="$emit('open-add-note')"
           >
             Add update

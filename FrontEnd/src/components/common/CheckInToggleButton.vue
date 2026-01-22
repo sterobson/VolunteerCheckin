@@ -1,7 +1,7 @@
 <template>
   <div class="check-in-toggle-container">
     <button
-      class="check-in-toggle"
+      class="check-in-toggle disable-on-load"
       :class="{ 'is-checked-in': isCheckedIn }"
       :disabled="disabled || isLoading"
       @click="$emit('toggle')"

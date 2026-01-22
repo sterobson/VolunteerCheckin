@@ -438,6 +438,7 @@ import ContactsGrid from '../ContactsGrid.vue';
 import CheckpointsGrid from '../CheckpointsGrid.vue';
 import { AREA_COLORS, DEFAULT_AREA_COLOR, getNextAvailableColor } from '../../../constants/areaColors';
 import { checklistApi } from '../../../services/api';
+import { denormalizeChecklist } from '../../../utils/denormalize';
 import { useTerminology, terminologyOptions, getCheckpointOptionLabel, getSingularTerm, getPluralTerm } from '../../../composables/useTerminology';
 import {
   generateCheckpointSvg,
@@ -927,7 +928,7 @@ const loadChecklistStatus = async (checkpointId) => {
 
   try {
     const response = await checklistApi.getCheckpointChecklist(props.eventId, checkpointId);
-    const items = response.data || [];
+    const items = denormalizeChecklist(response.data) || [];
 
     checkpointChecklistStatus.value[checkpointId] = {
       total: items.length,

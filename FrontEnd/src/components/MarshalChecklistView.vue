@@ -31,6 +31,7 @@
 import { ref, computed, watch, defineProps, defineEmits } from 'vue';
 import { checklistApi } from '../services/api';
 import { useTerminology } from '../composables/useTerminology';
+import { denormalizeChecklist } from '../utils/denormalize';
 import GroupedTasksList from './event-manage/GroupedTasksList.vue';
 
 const { terms, termsLower } = useTerminology();
@@ -91,7 +92,7 @@ const loadChecklist = async () => {
 
   try {
     const response = await checklistApi.getMarshalChecklist(props.eventId, props.marshalId);
-    items.value = response.data || [];
+    items.value = denormalizeChecklist(response.data) || [];
 
     // Initialize local completions from modelValue if provided
     if (props.modelValue && props.modelValue.length > 0) {

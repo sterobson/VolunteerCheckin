@@ -107,11 +107,15 @@ namespace VolunteerCheckin.Functions.Tests
         /// <summary>
         /// Creates an empty HttpRequest with a session token (for GET/DELETE operations)
         /// </summary>
-        public static HttpRequest CreateEmptyHttpRequestWithAuth(string sessionToken)
+        public static HttpRequest CreateEmptyHttpRequestWithAuth(string sessionToken, bool debug = false)
         {
             DefaultHttpContext context = new();
             HttpRequest request = context.Request;
             request.Headers["Authorization"] = $"Bearer {sessionToken}";
+            if (debug)
+            {
+                request.Headers["X-Debug"] = "true";
+            }
             return request;
         }
 

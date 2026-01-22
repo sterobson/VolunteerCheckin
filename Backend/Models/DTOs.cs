@@ -1205,6 +1205,94 @@ public record IncidentsListResponse(
     List<IncidentResponse> Incidents
 );
 
+// Normalized Incidents DTOs
+
+/// <summary>
+/// Person reference for normalized incidents (personId + name pair).
+/// </summary>
+public record IncidentPersonRef(
+    [property: JsonPropertyName("r")] int RefIndex,
+    [property: JsonPropertyName("n")] string Name,
+    [property: JsonPropertyName("m"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? MarshalRefIndex
+);
+
+/// <summary>
+/// Compact marshal info for incident context.
+/// </summary>
+public record CompactIncidentMarshal(
+    [property: JsonPropertyName("r")] int RefIndex,
+    [property: JsonPropertyName("n")] string Name,
+    [property: JsonPropertyName("ci"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? WasCheckedIn,
+    [property: JsonPropertyName("cit"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? CheckInTime,
+    [property: JsonPropertyName("cmi"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? CheckInMethodIndex
+);
+
+/// <summary>
+/// Compact checkpoint info for incident context.
+/// </summary>
+public record CompactIncidentCheckpoint(
+    [property: JsonPropertyName("r")] int RefIndex,
+    [property: JsonPropertyName("n")] string Name,
+    [property: JsonPropertyName("de"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Description,
+    [property: JsonPropertyName("lat")] double Latitude,
+    [property: JsonPropertyName("lng")] double Longitude,
+    [property: JsonPropertyName("ai"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<int>? AreaRefIndexes,
+    [property: JsonPropertyName("an"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<string>? AreaNames
+);
+
+/// <summary>
+/// Compact context info for incident.
+/// </summary>
+public record CompactIncidentContext(
+    [property: JsonPropertyName("cp"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CompactIncidentCheckpoint? Checkpoint,
+    [property: JsonPropertyName("ms"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<CompactIncidentMarshal>? MarshalsPresentAtCheckpoint
+);
+
+/// <summary>
+/// Compact update/note for incident.
+/// </summary>
+public record CompactIncidentUpdate(
+    [property: JsonPropertyName("r")] int RefIndex,
+    [property: JsonPropertyName("ts")] DateTime Timestamp,
+    [property: JsonPropertyName("ap")] int AuthorPersonIndex,
+    [property: JsonPropertyName("no")] string Note,
+    [property: JsonPropertyName("sc"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? StatusChangeIndex
+);
+
+/// <summary>
+/// Compact incident using indexes.
+/// </summary>
+public record CompactIncident(
+    [property: JsonPropertyName("r")] int RefIndex,
+    [property: JsonPropertyName("ti")] string Title,
+    [property: JsonPropertyName("de"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Description,
+    [property: JsonPropertyName("sv")] int SeverityIndex,
+    [property: JsonPropertyName("it")] DateTime IncidentTime,
+    [property: JsonPropertyName("ca")] DateTime CreatedAt,
+    [property: JsonPropertyName("lat"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] double? Latitude,
+    [property: JsonPropertyName("lng"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] double? Longitude,
+    [property: JsonPropertyName("st")] int StatusIndex,
+    [property: JsonPropertyName("rb")] int ReportedByPersonIndex,
+    [property: JsonPropertyName("ar"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? AreaRefIndex,
+    [property: JsonPropertyName("an"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? AreaName,
+    [property: JsonPropertyName("ctx"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] CompactIncidentContext? Context,
+    [property: JsonPropertyName("up"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<CompactIncidentUpdate>? Updates
+);
+
+/// <summary>
+/// Normalized incidents list response with lookup tables.
+/// </summary>
+public record NormalizedIncidentsListResponse(
+    [property: JsonPropertyName("_")] Dictionary<string, string> FieldMap,
+    [property: JsonPropertyName("_d")] Dictionary<string, bool> Defaults,
+    [property: JsonPropertyName("g")] List<string> Refs,
+    [property: JsonPropertyName("sv")] List<string> Severities,
+    [property: JsonPropertyName("st")] List<string> Statuses,
+    [property: JsonPropertyName("cm")] List<string> CheckInMethods,
+    [property: JsonPropertyName("p")] List<IncidentPersonRef> Persons,
+    [property: JsonPropertyName("i")] List<CompactIncident> Incidents
+);
+
 // Reorder DTOs
 
 /// <summary>

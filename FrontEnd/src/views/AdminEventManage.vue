@@ -552,6 +552,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useEventsStore } from '../stores/events';
 import { authApi, checkInApi, eventAdminsApi, eventsApi, locationsApi, marshalsApi, areasApi, checklistApi, notesApi, contactsApi, incidentsApi, roleDefinitionsApi } from '../services/api';
+import { setSkipLoadingOverlayForGets } from '../services/loadingOverlay';
 
 // Composables
 import { useTabs } from '../composables/useTabs';
@@ -572,6 +573,7 @@ import { isValidWhat3Words } from '../utils/validators';
 import { calculateDistance } from '../utils/coordinateUtils';
 import { getCheckpointsInPolygon } from '../utils/geometryUtils';
 import { cleanOrphanedScopeConfigurations } from '../utils/scopeUtils';
+import { denormalizeIncidentsList } from '../utils/denormalize';
 import { CHECK_IN_RADIUS_METERS } from '../constants/app';
 
 // Tab Components
@@ -1288,7 +1290,8 @@ const loadIncidents = async () => {
   incidentsLoading.value = true;
   try {
     const response = await incidentsApi.getAll(route.params.eventId);
-    incidents.value = response.data.incidents || [];
+    const denormalized = denormalizeIncidentsList(response.data);
+    incidents.value = denormalized.incidents || [];
     dataLastLoadedAt.value.incidents = Date.now();
   } catch (error) {
     console.error('Failed to load incidents:', error);
@@ -3595,6 +3598,9 @@ watch(activeTab, (newTab) => {
 
 // Lifecycle
 onMounted(async () => {
+  // In admin mode, never show the loading overlay for GET requests
+  setSkipLoadingOverlayForGets(true);
+
   await loadEventData();
 
   // Fetch user claims to check if user has marshal access
@@ -3620,6 +3626,7 @@ watch(event, (newEvent) => {
 
 onUnmounted(() => {
   stopDynamicCheckpointPolling();
+  setSkipLoadingOverlayForGets(false);
 });
 </script>
 

@@ -178,7 +178,7 @@
         </button>
         <button
           type="button"
-          class="btn btn-primary"
+          class="btn btn-primary disable-on-load"
           @click="handleSubmit"
           :disabled="!isValid || submitting"
         >

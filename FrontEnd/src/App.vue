@@ -8,11 +8,22 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, watchEffect } from 'vue';
 import { useRouter } from 'vue-router';
 import LoadingOverlay from './components/LoadingOverlay.vue';
+import { useGlobalLoadingOverlay } from './services/loadingOverlay';
 
 const router = useRouter();
+
+// Add/remove body class for disabling inputs during long network operations
+const { shouldDisableInputs } = useGlobalLoadingOverlay();
+watchEffect(() => {
+  if (shouldDisableInputs.value) {
+    document.body.classList.add('has-network-activity');
+  } else {
+    document.body.classList.remove('has-network-activity');
+  }
+});
 const transitionName = ref('');
 
 // Define page order for slide direction
@@ -93,5 +104,12 @@ body {
 .slide-right-leave-to {
   transform: translateX(100%);
   opacity: 0;
+}
+
+/* Disable inputs and save/delete buttons during long network operations */
+body.has-network-activity .disable-on-load {
+  pointer-events: none;
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>

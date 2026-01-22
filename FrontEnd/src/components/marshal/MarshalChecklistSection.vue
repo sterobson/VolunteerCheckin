@@ -40,6 +40,7 @@
             >
               <input
                 type="checkbox"
+                class="disable-on-load"
                 :checked="item.isCompleted"
                 :disabled="saving || !item.canBeCompletedByMe"
                 @change="$emit('toggle-item', item)"
@@ -86,6 +87,7 @@
             <div class="item-checkbox">
               <input
                 type="checkbox"
+                class="disable-on-load"
                 :checked="item.isCompleted"
                 :disabled="!item.canBeCompletedByMe || saving"
                 @change="$emit('toggle-item', item)"
@@ -132,6 +134,7 @@
                 <div class="item-checkbox">
                   <input
                     type="checkbox"
+                    class="disable-on-load"
                     :checked="item.isCompleted"
                     :disabled="!item.canBeCompletedByMe || saving"
                     @change="$emit('toggle-item', item)"

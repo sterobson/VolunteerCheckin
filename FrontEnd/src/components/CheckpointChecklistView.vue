@@ -37,6 +37,7 @@
 import { ref, computed, watch, defineProps, defineEmits } from 'vue';
 import { checklistApi } from '../services/api';
 import { useTerminology } from '../composables/useTerminology';
+import { denormalizeChecklist } from '../utils/denormalize';
 import GroupedTasksList from './event-manage/GroupedTasksList.vue';
 
 const { terms, termsLower } = useTerminology();
@@ -115,7 +116,7 @@ const loadChecklist = async () => {
     const response = props.locationId
       ? await checklistApi.getCheckpointChecklist(props.eventId, props.locationId)
       : await checklistApi.getAreaChecklist(props.eventId, props.areaId);
-    items.value = response.data || [];
+    items.value = denormalizeChecklist(response.data) || [];
 
     // Initialize local completions from modelValue if provided
     if (props.modelValue && props.modelValue.length > 0) {

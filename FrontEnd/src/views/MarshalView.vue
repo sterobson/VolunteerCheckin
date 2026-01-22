@@ -350,7 +350,7 @@
           </button>
           <button
             type="button"
-            class="btn btn-primary"
+            class="btn btn-primary disable-on-load"
             @click="submitIncidentNote"
             :disabled="!incidentNoteText.trim() || submittingIncidentNote"
           >
@@ -890,9 +890,6 @@ const {
   submitIncidentNote,
 } = useMarshalIncidents({
   eventId,
-  currentMarshalId,
-  isAreaLead,
-  areaLeadAreaIds,
   sectionLastLoadedAt,
   showMessage,
 });

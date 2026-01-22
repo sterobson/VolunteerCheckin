@@ -192,8 +192,14 @@ public class IncidentFunctions
             }
 
             List<IncidentResponse> responses = [.. incidents.Select(ToIncidentResponse)];
+            IncidentsListResponse listResponse = new(responses);
 
-            return new OkObjectResult(new IncidentsListResponse(responses));
+            if (IncidentsHelper.IsDebugRequest(req))
+            {
+                return new OkObjectResult(listResponse);
+            }
+
+            return new OkObjectResult(IncidentsHelper.BuildNormalizedResponse(listResponse));
         }
         catch (Exception ex)
         {
@@ -202,47 +208,6 @@ public class IncidentFunctions
         }
     }
 #pragma warning restore MA0051
-
-    /// <summary>
-    /// Get incidents for a specific area (area lead view).
-    /// Area leads can only see incidents in their areas.
-    /// </summary>
-    [Function("GetIncidentsForArea")]
-    public async Task<IActionResult> GetIncidentsForArea(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/{eventId}/areas/{areaId}/incidents")] HttpRequest req,
-        string eventId,
-        string areaId)
-    {
-        try
-        {
-            // Authenticate
-            UserClaims? claims = await GetClaimsAsync(req, eventId);
-            if (claims == null)
-            {
-                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
-            }
-
-            // Check if user is admin or area lead for this area
-            bool isAdmin = claims.IsEventAdmin;
-            bool isAreaLead = claims.IsAreaLead(areaId);
-
-            if (!isAdmin && !isAreaLead)
-            {
-                return new UnauthorizedObjectResult(new { message = "You are not authorized to view incidents for this area" });
-            }
-
-            IEnumerable<IncidentEntity> incidents = await _incidentRepository.GetByAreaAsync(eventId, areaId);
-
-            List<IncidentResponse> responses = [.. incidents.Select(ToIncidentResponse)];
-
-            return new OkObjectResult(new IncidentsListResponse(responses));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting incidents for area {AreaId} in event {EventId}", areaId, eventId);
-            return new StatusCodeResult(500);
-        }
-    }
 
     /// <summary>
     /// Get a specific incident by ID.

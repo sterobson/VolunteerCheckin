@@ -263,3 +263,261 @@ export function denormalizeAreaLeadDashboard(response) {
     checkpoints: expandedCheckpoints,
   };
 }
+
+/**
+ * Denormalizes a normalized incidents list response back to the original structure.
+ *
+ * Short field names (see response._ for mapping):
+ *   Response: _d=defaults, g=refs, sv=severities, st=statuses, cm=checkInMethods, p=persons, i=incidents
+ *   Person: r=refIndex, n=name, m=marshalRefIndex
+ *   Incident: r=refIndex, ti=title, de=description, sv=severityIndex, it=incidentTime, ca=createdAt,
+ *             lat=latitude, lng=longitude, st=statusIndex, rb=reportedByPersonIndex,
+ *             ar=areaRefIndex, an=areaName, ctx=context, up=updates
+ *   Context: cp=checkpoint, ms=marshalsPresentAtCheckpoint
+ *   Checkpoint: r=refIndex, n=name, de=description, lat=latitude, lng=longitude, ai=areaRefIndexes, an=areaNames
+ *   Marshal: r=refIndex, n=name, ci=wasCheckedIn, cit=checkInTime, cmi=checkInMethodIndex
+ *   Update: r=refIndex, ts=timestamp, ap=authorPersonIndex, no=note, sc=statusChangeIndex
+ *
+ * @param {Object} response - The normalized incidents list response
+ * @returns {Object} - Incidents list in original format with all fields expanded
+ */
+export function denormalizeIncidentsList(response) {
+  // If response has the field map (_), it's normalized and needs expansion
+  // Otherwise it's already in final form (debug mode or legacy)
+  if (!response || !response._) {
+    return response;
+  }
+
+  const {
+    _d: defaults = {},
+    g: refs = [],
+    sv: severities = [],
+    st: statuses = [],
+    cm: checkInMethods = [],
+    p: persons = [],
+    i: incidents = [],
+  } = response;
+
+  // Helper to resolve a ref index to an actual GUID
+  const resolveRef = (refIndex) => {
+    if (refIndex == null || refIndex < 0 || refIndex >= refs.length) return null;
+    return refs[refIndex];
+  };
+
+  // Helper to get person info
+  const getPerson = (personIndex) => {
+    if (personIndex == null || personIndex < 0 || personIndex >= persons.length) {
+      return { personId: null, name: '', marshalId: null };
+    }
+    const person = persons[personIndex];
+    return {
+      personId: resolveRef(person.r),
+      name: person.n || '',
+      marshalId: person.m != null ? resolveRef(person.m) : null,
+    };
+  };
+
+  // Expand incidents
+  const expandedIncidents = incidents.map(inc => {
+    const reportedBy = getPerson(inc.rb);
+
+    // Expand context
+    let context = { checkpoint: null, marshalsPresentAtCheckpoint: [] };
+    if (inc.ctx) {
+      // Expand checkpoint
+      let checkpoint = null;
+      if (inc.ctx.cp) {
+        const cp = inc.ctx.cp;
+        checkpoint = {
+          checkpointId: resolveRef(cp.r),
+          name: cp.n || '',
+          description: cp.de || '',
+          latitude: cp.lat,
+          longitude: cp.lng,
+          areaIds: (cp.ai || []).map(refIdx => resolveRef(refIdx)).filter(id => id != null),
+          areaNames: cp.an || [],
+        };
+      }
+
+      // Expand marshals present at checkpoint
+      const marshalsPresentAtCheckpoint = (inc.ctx.ms || []).map(marshal => ({
+        marshalId: resolveRef(marshal.r),
+        name: marshal.n || '',
+        wasCheckedIn: marshal.ci ?? defaults['m.ci'] ?? false,
+        checkInTime: marshal.cit || null,
+        checkInMethod: marshal.cmi != null && marshal.cmi >= 0 ? checkInMethods[marshal.cmi] || '' : null,
+      }));
+
+      context = { checkpoint, marshalsPresentAtCheckpoint };
+    }
+
+    // Expand updates
+    const updates = (inc.up || []).map(update => {
+      const author = getPerson(update.ap);
+      return {
+        updateId: resolveRef(update.r),
+        timestamp: update.ts,
+        authorPersonId: author.personId,
+        authorName: author.name,
+        note: update.no || '',
+        statusChange: update.sc != null && update.sc >= 0 ? statuses[update.sc] || null : null,
+      };
+    });
+
+    return {
+      incidentId: resolveRef(inc.r),
+      eventId: null, // Will be set from context if needed
+      title: inc.ti || '',
+      description: inc.de || '',
+      severity: inc.sv != null && inc.sv >= 0 ? severities[inc.sv] || '' : '',
+      incidentTime: inc.it,
+      createdAt: inc.ca,
+      latitude: inc.lat ?? null,
+      longitude: inc.lng ?? null,
+      status: inc.st != null && inc.st >= 0 ? statuses[inc.st] || '' : '',
+      reportedBy: {
+        personId: reportedBy.personId,
+        name: reportedBy.name,
+        marshalId: reportedBy.marshalId,
+      },
+      area: inc.ar != null ? {
+        areaId: resolveRef(inc.ar),
+        areaName: inc.an || '',
+      } : null,
+      context,
+      updates,
+    };
+  });
+
+  return {
+    incidents: expandedIncidents,
+  };
+}
+
+/**
+ * Denormalizes a normalized checklist response back to the original flat array structure.
+ * This allows existing frontend logic to work unchanged while benefiting
+ * from reduced network payload size.
+ *
+ * Short field names (see response._ for mapping):
+ *   Response: _d=defaults (bool), g=refs, s=scopes, at=actorTypes, ct=contextTypes,
+ *             m=marshals, c=contexts, d=items (definitions), n=instances
+ *   Marshal: r=refIndex, n=name
+ *   Context: r=refIndex, t=typeIndex
+ *   ScopeConfiguration: s=scopeIndex, t=itemType, i=refIndexes
+ *   ItemDefinition: r=itemRefIndex, t=text, sc=scopeConfigurations, o=displayOrder,
+ *                   r2=isRequired, vf=visibleFrom, vu=visibleUntil, mb=mustCompleteBy,
+ *                   l=linksToCheckIn, lc=linkedCheckpointRefIndex, ln=linkedCheckpointName
+ *   Instance: i=itemIndex, c=isCompleted, m=canBeCompletedByMe, a=actorIndex,
+ *             at=actorTypeIndex, ca=completedAt, x=contextIndex, s=scopeIndex, o=ownerIndex
+ *
+ * @param {Object} response - The normalized checklist response
+ * @returns {Array} - Flat array of checklist items with all fields expanded
+ */
+export function denormalizeChecklist(response) {
+  // If response is an array, it's already in flat format (debug mode or legacy)
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  // If response doesn't have the field map (_), it's not normalized
+  if (!response || !response._) {
+    return response;
+  }
+
+  const {
+    _d: defaults = {},
+    g: refs = [],
+    s: scopes = [],
+    at: actorTypes = [],
+    ct: contextTypes = [],
+    m: marshals = [],
+    c: contexts = [],
+    d: items = [],
+    n: instances = [],
+  } = response;
+
+  // Helper to resolve a ref index to an actual GUID
+  const resolveRef = (refIndex) => {
+    if (refIndex == null || refIndex < 0 || refIndex >= refs.length) return null;
+    return refs[refIndex];
+  };
+
+  // Helper to get marshal info by index
+  const getMarshal = (marshalIndex) => {
+    if (marshalIndex == null || marshalIndex < 0 || marshalIndex >= marshals.length) {
+      return { id: null, name: null };
+    }
+    const marshal = marshals[marshalIndex];
+    return {
+      id: resolveRef(marshal.r),
+      name: marshal.n || '',
+    };
+  };
+
+  // Helper to get context info by index
+  const getContext = (contextIndex) => {
+    if (contextIndex == null || contextIndex < 0 || contextIndex >= contexts.length) {
+      return { type: '', id: null };
+    }
+    const ctx = contexts[contextIndex];
+    return {
+      type: ctx.t != null && ctx.t >= 0 ? contextTypes[ctx.t] || '' : '',
+      id: resolveRef(ctx.r),
+    };
+  };
+
+  // Expand each instance back to full ChecklistItemWithStatus
+  return instances.map(instance => {
+    const itemDef = items[instance.i] || {};
+
+    // Expand scope configurations
+    const scopeConfigurations = (itemDef.sc || []).map(sc => ({
+      scope: sc.s != null && sc.s >= 0 ? scopes[sc.s] || '' : '',
+      itemType: sc.t || null,
+      ids: (sc.i || []).map(refIdx => resolveRef(refIdx)).filter(id => id != null),
+    }));
+
+    // Get context info
+    const ctx = getContext(instance.x);
+
+    // Get actor info (who completed it)
+    const actor = getMarshal(instance.a);
+    const actorType = instance.at != null && instance.at >= 0 ? actorTypes[instance.at] || null : null;
+
+    // Get owner info (whose task it is)
+    const owner = getMarshal(instance.o);
+
+    // Apply defaults for boolean properties
+    const isCompleted = instance.c ?? defaults['n.c'] ?? false;
+    const canBeCompletedByMe = instance.m ?? defaults['n.m'] ?? false;
+    const isRequired = itemDef.r2 ?? defaults['d.r2'] ?? false;
+    const linksToCheckIn = itemDef.l ?? defaults['d.l'] ?? false;
+
+    return {
+      itemId: resolveRef(itemDef.r),
+      eventId: null, // Not included in normalized response, will be set from context if needed
+      text: itemDef.t || '',
+      scopeConfigurations,
+      displayOrder: itemDef.o || 0,
+      isRequired,
+      visibleFrom: itemDef.vf || null,
+      visibleUntil: itemDef.vu || null,
+      mustCompleteBy: itemDef.mb || null,
+      isCompleted,
+      canBeCompletedByMe,
+      completedByActorName: actor.name || null,
+      completedByActorType: actorType,
+      completedByActorId: actor.id,
+      completedAt: instance.ca || null,
+      completionContextType: ctx.type,
+      completionContextId: ctx.id,
+      matchedScope: instance.s != null && instance.s >= 0 ? scopes[instance.s] || '' : '',
+      contextOwnerName: owner.name || null,
+      contextOwnerMarshalId: owner.id,
+      linksToCheckIn,
+      linkedCheckpointId: resolveRef(itemDef.lc),
+      linkedCheckpointName: itemDef.ln || null,
+    };
+  });
+}

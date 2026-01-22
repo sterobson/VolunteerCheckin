@@ -352,12 +352,34 @@ function Get-AzureFunctionAppSettings($resourceGroup, $appName) {
 }
 
 function Set-AzureFunctionAppSetting($resourceGroup, $appName, $name, $value) {
+    Write-Gray "  Setting $name on $appName..."
     $ErrorActionPreference = "Continue"
     $result = az functionapp config appsettings set --resource-group $resourceGroup --name $appName --settings "$name=$value" 2>&1
     $exitCode = $LASTEXITCODE
     $ErrorActionPreference = "Stop"
 
-    return $exitCode -eq 0
+    if ($exitCode -ne 0) {
+        Write-ErrorMessage "  Failed to set $name"
+        Write-Gray "  $result"
+        return $false
+    }
+
+    return $true
+}
+
+function Restart-AzureFunctionApp($resourceGroup, $appName) {
+    Write-Gray "  Restarting $appName..."
+    $ErrorActionPreference = "Continue"
+    $result = az functionapp restart --resource-group $resourceGroup --name $appName 2>&1
+    $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = "Stop"
+
+    if ($exitCode -ne 0) {
+        Write-Warning "  Failed to restart $appName (this may be okay)"
+        return $false
+    }
+
+    return $true
 }
 
 function Set-AzureFunctionAppCors($resourceGroup, $appName, $origins) {
@@ -928,6 +950,12 @@ function Deploy-ProductionBackend($envConfig, $slotName) {
         return $false
     }
     Write-Success "DEPLOYMENT_VERSION set to $expectedVersion"
+
+    # Restart the function app to pick up the new settings
+    Write-Info "Restarting function app to apply settings..."
+    Restart-AzureFunctionApp $resourceGroup $slotName
+    Write-Gray "Waiting for app to restart..."
+    Start-Sleep -Seconds 15
 
     # Wait for CORS job to complete
     Write-Info "Waiting for CORS configuration to complete..."

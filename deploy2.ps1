@@ -44,6 +44,125 @@ function Write-ErrorMessage($message) { Write-Host $message -ForegroundColor Red
 function Write-Gray($message) { Write-Host $message -ForegroundColor Gray }
 
 # ============================================================================
+# Dependency Management
+# ============================================================================
+function Test-WingetAvailable {
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    return $null -ne $winget
+}
+
+function Install-WithWinget($packageId, $packageName) {
+    if (-not (Test-WingetAvailable)) {
+        Write-ErrorMessage "winget is not available. Please install $packageName manually."
+        return $false
+    }
+
+    Write-Info "Installing $packageName via winget..."
+    winget install --id $packageId --accept-source-agreements --accept-package-agreements
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-ErrorMessage "Failed to install $packageName"
+        return $false
+    }
+
+    Write-Success "$packageName installed successfully"
+    Write-Warning "You may need to restart your terminal for the changes to take effect."
+    return $true
+}
+
+function Ensure-Dependency($command, $packageName, $wingetId, $manualInstallUrl) {
+    $cmd = Get-Command $command -ErrorAction SilentlyContinue
+    if ($cmd) {
+        return $true
+    }
+
+    Write-Warning "$packageName is not installed."
+    Write-Host ""
+    Write-Host "Would you like to install it now?" -ForegroundColor Cyan
+
+    if (Test-WingetAvailable) {
+        Write-Host "  1. Yes, install via winget (Recommended)" -ForegroundColor White
+        Write-Host "  2. No, I'll install it manually" -ForegroundColor White
+        Write-Host ""
+
+        $choice = Read-Host "Enter choice (1 or 2)"
+
+        if ($choice -eq "1") {
+            $result = Install-WithWinget $wingetId $packageName
+
+            if ($result) {
+                # Refresh PATH
+                $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+
+                # Check again
+                $cmd = Get-Command $command -ErrorAction SilentlyContinue
+                if ($cmd) {
+                    return $true
+                } else {
+                    Write-Warning "$packageName was installed but the command is not yet available."
+                    Write-Warning "Please restart your terminal and run the script again."
+                    exit 0
+                }
+            }
+            return $false
+        }
+    } else {
+        Write-Host "  winget is not available for automatic installation." -ForegroundColor Gray
+    }
+
+    Write-Host ""
+    Write-Info "Please install $packageName manually from:"
+    Write-Gray "  $manualInstallUrl"
+    Write-Host ""
+    Write-Host "After installation, restart your terminal and run this script again."
+    exit 0
+}
+
+function Ensure-ProductionDependencies {
+    Write-Info "Checking dependencies..."
+    Write-Host ""
+
+    # Azure CLI
+    $azInstalled = Ensure-Dependency "az" "Azure CLI" "Microsoft.AzureCLI" "https://aka.ms/installazurecliwindows"
+    if (-not $azInstalled) { exit 1 }
+
+    # Azure Functions Core Tools
+    $funcInstalled = Ensure-Dependency "func" "Azure Functions Core Tools" "Microsoft.Azure.FunctionsCoreTools" "https://docs.microsoft.com/azure/azure-functions/functions-run-local"
+    if (-not $funcInstalled) { exit 1 }
+
+    # .NET SDK (needed for building backend)
+    $dotnetInstalled = Ensure-Dependency "dotnet" ".NET SDK" "Microsoft.DotNet.SDK.8" "https://dotnet.microsoft.com/download"
+    if (-not $dotnetInstalled) { exit 1 }
+
+    # Node.js (needed for frontend and SWA CLI)
+    $npmInstalled = Ensure-Dependency "npm" "Node.js" "OpenJS.NodeJS.LTS" "https://nodejs.org/"
+    if (-not $npmInstalled) { exit 1 }
+
+    Write-Success "All dependencies are installed"
+    Write-Host ""
+}
+
+function Ensure-LocalDependencies {
+    Write-Info "Checking dependencies..."
+    Write-Host ""
+
+    # .NET SDK (needed for building backend)
+    $dotnetInstalled = Ensure-Dependency "dotnet" ".NET SDK" "Microsoft.DotNet.SDK.8" "https://dotnet.microsoft.com/download"
+    if (-not $dotnetInstalled) { exit 1 }
+
+    # Node.js (needed for frontend)
+    $npmInstalled = Ensure-Dependency "npm" "Node.js" "OpenJS.NodeJS.LTS" "https://nodejs.org/"
+    if (-not $npmInstalled) { exit 1 }
+
+    # Azure Functions Core Tools (for local backend)
+    $funcInstalled = Ensure-Dependency "func" "Azure Functions Core Tools" "Microsoft.Azure.FunctionsCoreTools" "https://docs.microsoft.com/azure/azure-functions/functions-run-local"
+    if (-not $funcInstalled) { exit 1 }
+
+    Write-Success "All dependencies are installed"
+    Write-Host ""
+}
+
+# ============================================================================
 # State File Management
 # ============================================================================
 function Get-DeploymentState {
@@ -1235,6 +1354,15 @@ if ($Backend) { Write-Gray "  - Backend" }
 Write-Host ""
 
 $deploymentSuccess = $true
+
+# ============================================================================
+# Dependency Check
+# ============================================================================
+if ($Environment -eq "local") {
+    Ensure-LocalDependencies
+} elseif ($Environment -eq "production") {
+    Ensure-ProductionDependencies
+}
 
 # ============================================================================
 # Local Deployment

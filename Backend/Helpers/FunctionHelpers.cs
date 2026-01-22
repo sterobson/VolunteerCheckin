@@ -10,6 +10,22 @@ public static class FunctionHelpers
     public static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     /// <summary>
+    /// Detects if the requesting frontend uses hash-based routing by checking for # in the Referer header.
+    /// Falls back to USE_HASH_ROUTING environment variable if no Referer is present.
+    /// </summary>
+    public static bool UsesHashRouting(HttpRequest req)
+    {
+        string? refererValue = req.Headers["Referer"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(refererValue))
+        {
+            return refererValue.Contains('#');
+        }
+
+        // Fall back to environment variable
+        return Environment.GetEnvironmentVariable("USE_HASH_ROUTING")?.ToLower() == "true";
+    }
+
+    /// <summary>
     /// Extracts the frontend URL from the request referer header, origin header, or falls back to environment variable.
     /// For hash-based routing (e.g., GitHub Pages), extracts everything before the # as the deployment base.
     /// </summary>

@@ -399,9 +399,12 @@ const getFrontendUrl = () => {
   return url.endsWith('/') ? url.slice(0, -1) : url;
 };
 
+// Check if this build uses hash routing (set at build time)
+const usesHashRouting = () => import.meta.env.VITE_USE_HASH_ROUTING === 'true';
+
 // Auth API
 export const authApi = {
-  requestLogin: (email) => api.post('/auth/request-login', { email, frontendUrl: getFrontendUrl() }),
+  requestLogin: (email) => api.post('/auth/request-login', { email, frontendUrl: getFrontendUrl(), useHashRouting: usesHashRouting() }),
   verifyToken: (token) => api.post('/auth/verify-token', { token }),
   instantLogin: (email) => api.post('/auth/instant-login', { email }),
   createAdmin: (email) => api.post('/auth/create-admin', { email }),
@@ -493,8 +496,8 @@ export const marshalsApi = {
   getById: (eventId, marshalId) => api.get(`/marshals/${eventId}/${marshalId}`),
   update: (eventId, marshalId, data) => api.put(`/marshals/${eventId}/${marshalId}`, data),
   delete: (eventId, marshalId) => api.delete(`/marshals/${eventId}/${marshalId}`),
-  getMagicLink: (eventId, marshalId) => api.get(`/marshals/${eventId}/${marshalId}/magic-link`, { params: { frontendUrl: getFrontendUrl() } }),
-  sendMagicLink: (eventId, marshalId) => api.post(`/marshals/${eventId}/${marshalId}/send-magic-link`, { frontendUrl: getFrontendUrl() }),
+  getMagicLink: (eventId, marshalId) => api.get(`/marshals/${eventId}/${marshalId}/magic-link`, { params: { frontendUrl: getFrontendUrl(), useHashRouting: usesHashRouting() } }),
+  sendMagicLink: (eventId, marshalId) => api.post(`/marshals/${eventId}/${marshalId}/send-magic-link`, { frontendUrl: getFrontendUrl(), useHashRouting: usesHashRouting() }),
   importCsv: (eventId, file) => {
     const formData = new FormData();
     formData.append('csv', file);

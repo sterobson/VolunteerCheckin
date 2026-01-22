@@ -117,7 +117,7 @@ public class AuthServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        bool result = await _authService.RequestMagicLinkAsync(Email, IpAddress, BaseUrl);
+        bool result = await _authService.RequestMagicLinkAsync(Email, IpAddress, BaseUrl, true);
 
         // Assert
         result.ShouldBeTrue();
@@ -154,7 +154,7 @@ public class AuthServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        bool result = await _authService.RequestMagicLinkAsync(Email, IpAddress, BaseUrl);
+        bool result = await _authService.RequestMagicLinkAsync(Email, IpAddress, BaseUrl, true);
 
         // Assert
         result.ShouldBeTrue();
@@ -167,7 +167,7 @@ public class AuthServiceTests
     public async Task RequestMagicLinkAsync_InvalidEmail_ReturnsFalse()
     {
         // Act
-        bool result = await _authService.RequestMagicLinkAsync("not-an-email", IpAddress, BaseUrl);
+        bool result = await _authService.RequestMagicLinkAsync("not-an-email", IpAddress, BaseUrl, true);
 
         // Assert
         result.ShouldBeFalse();
@@ -178,7 +178,7 @@ public class AuthServiceTests
     public async Task RequestMagicLinkAsync_EmptyEmail_ReturnsFalse()
     {
         // Act
-        bool result = await _authService.RequestMagicLinkAsync("", IpAddress, BaseUrl);
+        bool result = await _authService.RequestMagicLinkAsync("", IpAddress, BaseUrl, true);
 
         // Assert
         result.ShouldBeFalse();
@@ -209,7 +209,7 @@ public class AuthServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        bool result = await _authService.RequestMagicLinkAsync(uppercaseEmail, IpAddress, BaseUrl);
+        bool result = await _authService.RequestMagicLinkAsync(uppercaseEmail, IpAddress, BaseUrl, true);
 
         // Assert
         result.ShouldBeTrue();

@@ -470,7 +470,8 @@ public record MarshalMagicLinkResponse(
 /// Request to send a marshal magic link via email.
 /// </summary>
 public record SendMarshalMagicLinkRequest(
-    string? FrontendUrl = null
+    string? FrontendUrl = null,
+    bool? UseHashRouting = null
 );
 
 public record BulkUpdateLocationTimesRequest(
@@ -678,7 +679,8 @@ public record UserClaims(
 /// </summary>
 public record RequestLoginRequest(
     string Email,
-    string? FrontendUrl = null
+    string? FrontendUrl = null,
+    bool? UseHashRouting = null
 );
 
 /// <summary>

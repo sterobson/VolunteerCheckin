@@ -79,7 +79,10 @@ public class AuthFunctions
                 ? request.FrontendUrl.TrimEnd('/')
                 : FunctionHelpers.GetFrontendUrl(req);
 
-            bool success = await _authService.RequestMagicLinkAsync(request.Email, ipAddress, frontendUrl);
+            // Use routing mode from request body if provided, otherwise detect from referer header
+            bool useHashRouting = request.UseHashRouting ?? FunctionHelpers.UsesHashRouting(req);
+
+            bool success = await _authService.RequestMagicLinkAsync(request.Email, ipAddress, frontendUrl, useHashRouting);
 
             if (success)
             {

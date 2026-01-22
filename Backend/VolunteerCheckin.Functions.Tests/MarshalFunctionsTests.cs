@@ -505,9 +505,10 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetAsync(eventId, marshalId))
                 .ReturnsAsync(marshal);
 
-            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuthAndQuery(
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuthQueryAndHeaders(
                 TestSessionToken,
-                new Dictionary<string, string> { { "frontendUrl", frontendUrl } }
+                new Dictionary<string, string> { { "frontendUrl", frontendUrl } },
+                new Dictionary<string, string> { { "Referer", $"{frontendUrl}/#/admin" } }
             );
 
             // Act
@@ -681,7 +682,11 @@ namespace VolunteerCheckin.Functions.Tests
             );
 
             SendMarshalMagicLinkRequest request = new(frontendUrl);
-            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAuth(request, TestSessionToken);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAuthAndHeaders(
+                request,
+                TestSessionToken,
+                new Dictionary<string, string> { { "Referer", $"{frontendUrl}/#/admin" } }
+            );
 
             // Act
             IActionResult result = await functionsWithEmail.SendMarshalMagicLink(httpRequest, eventId, marshalId);

@@ -618,7 +618,14 @@ public class MarshalFunctions
             string frontendUrl = !string.IsNullOrWhiteSpace(frontendUrlParam)
                 ? frontendUrlParam.TrimEnd('/')
                 : FunctionHelpers.GetFrontendUrl(req);
-            string magicLink = $"{frontendUrl}/#/event/{eventId}?code={marshalEntity.MagicCode}";
+
+            // Use routing mode from query param if provided, otherwise detect from referer header
+            string? useHashRoutingParam = req.Query["useHashRouting"].FirstOrDefault();
+            bool useHashRouting = useHashRoutingParam != null
+                ? useHashRoutingParam.Equals("true", StringComparison.OrdinalIgnoreCase)
+                : FunctionHelpers.UsesHashRouting(req);
+            string routePrefix = useHashRouting ? "/#" : "";
+            string magicLink = $"{frontendUrl}{routePrefix}/event/{eventId}?code={marshalEntity.MagicCode}";
 
             return new OkObjectResult(new MarshalMagicLinkResponse(
                 marshalEntity.MagicCode,
@@ -698,7 +705,11 @@ public class MarshalFunctions
             string frontendUrl = !string.IsNullOrWhiteSpace(request?.FrontendUrl)
                 ? request.FrontendUrl.TrimEnd('/')
                 : FunctionHelpers.GetFrontendUrl(req);
-            string magicLink = $"{frontendUrl}/#/event/{eventId}?code={marshalEntity.MagicCode}";
+
+            // Use routing mode from request body if provided, otherwise detect from referer header
+            bool useHashRouting = request?.UseHashRouting ?? FunctionHelpers.UsesHashRouting(req);
+            string routePrefix = useHashRouting ? "/#" : "";
+            string magicLink = $"{frontendUrl}{routePrefix}/event/{eventId}?code={marshalEntity.MagicCode}";
 
             // Send the email
             await _emailService.SendMarshalMagicLinkEmailAsync(

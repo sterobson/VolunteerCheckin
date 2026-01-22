@@ -120,7 +120,7 @@ namespace VolunteerCheckin.Functions.Tests
         {
             // Arrange
             _mockAuthService.Setup(a => a.RequestMagicLinkAsync(
-                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()
             )).ReturnsAsync(true);
 
             RequestLoginRequest body = new("user@example.com");
@@ -141,7 +141,7 @@ namespace VolunteerCheckin.Functions.Tests
         {
             // Arrange
             _mockAuthService.Setup(a => a.RequestMagicLinkAsync(
-                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()
             )).ReturnsAsync(false);
 
             RequestLoginRequest body = new("invalid@example.com");
@@ -162,8 +162,8 @@ namespace VolunteerCheckin.Functions.Tests
             string? capturedFrontendUrl = null;
 
             _mockAuthService.Setup(a => a.RequestMagicLinkAsync(
-                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()
-            )).Callback<string, string, string>((email, ip, frontendUrl) => capturedFrontendUrl = frontendUrl)
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()
+            )).Callback<string, string, string, bool>((email, ip, frontendUrl, useHash) => capturedFrontendUrl = frontendUrl)
               .ReturnsAsync(true);
 
             RequestLoginRequest body = new("user@example.com", expectedFrontendUrl);
@@ -184,8 +184,8 @@ namespace VolunteerCheckin.Functions.Tests
             string? capturedFrontendUrl = null;
 
             _mockAuthService.Setup(a => a.RequestMagicLinkAsync(
-                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()
-            )).Callback<string, string, string>((email, ip, frontendUrl) => capturedFrontendUrl = frontendUrl)
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()
+            )).Callback<string, string, string, bool>((email, ip, frontendUrl, useHash) => capturedFrontendUrl = frontendUrl)
               .ReturnsAsync(true);
 
             // URL with trailing slash

@@ -1,4 +1,4 @@
-import { createRouter, createWebHashHistory } from 'vue-router';
+import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router';
 import { getSession, hasSessions, getMagicCode, migrateLegacyStorage, cleanupOldSessions } from '../services/marshalSessionService';
 import { setAuthContext } from '../services/api';
 
@@ -67,8 +67,14 @@ const routes = [
   },
 ];
 
+// Use hash routing for local dev and GitHub Pages (static file hosting without server config)
+// Use history routing for Azure Static Web Apps and other hosts with proper routing support
+const useHashRouting = import.meta.env.VITE_USE_HASH_ROUTING === 'true';
+
 const router = createRouter({
-  history: createWebHashHistory(import.meta.env.BASE_URL),
+  history: useHashRouting
+    ? createWebHashHistory(import.meta.env.BASE_URL)
+    : createWebHistory(import.meta.env.BASE_URL),
   routes,
 });
 

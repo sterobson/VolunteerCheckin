@@ -39,7 +39,7 @@ public class AuthService
     /// Request a magic link to be sent to an email address.
     /// Creates or updates the person record and sends them a login link.
     /// </summary>
-    public virtual async Task<bool> RequestMagicLinkAsync(string email, string ipAddress, string baseUrl)
+    public virtual async Task<bool> RequestMagicLinkAsync(string email, string ipAddress, string baseUrl, bool useHashRouting)
     {
         // Validate email
         if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
@@ -91,7 +91,9 @@ public class AuthService
         await _tokenRepository.AddAsync(authToken);
 
         // Send email with magic link (pointing to frontend)
-        string magicLink = $"{baseUrl}/#/admin/verify?token={token}";
+        // Use hash routing for GitHub Pages, history routing for Azure Static Web Apps
+        string routePrefix = useHashRouting ? "/#" : "";
+        string magicLink = $"{baseUrl}{routePrefix}/admin/verify?token={token}";
         await _emailService.SendMagicLinkEmailAsync(email, magicLink);
 
         return true;

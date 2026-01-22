@@ -78,7 +78,7 @@ $config = @{
         Frontend = @{
             DeployPath = "/"
             ApiUrl = "https://sterobson-volunteercheckin-testing.azurewebsites.net/api"
-            FrontendUrl = "https://ambitious-ground-04b5e4603.4.azurestaticapps.net"
+            FrontendUrl = "https://onthedayapp.com"
             StaticWebAppName = "OnTheDayUi"
             ResourceGroup = "VolunteerCheckIn"
         }
@@ -579,6 +579,7 @@ if ($Environment -eq "testing" -and $Frontend) {
                 $env:VITE_API_BASE_URL = $selectedConfig.Frontend.ApiUrl
                 $env:VITE_BASE_PATH = $selectedConfig.Frontend.DeployPath
                 $env:VITE_FRONTEND_URL = $selectedConfig.Frontend.FrontendUrl
+                $env:VITE_USE_HASH_ROUTING = "true"
 
                 npm run build
 
@@ -718,6 +719,7 @@ if ($Environment -eq "testing" -and $Frontend) {
             Remove-Item Env:\VITE_API_BASE_URL -ErrorAction SilentlyContinue
             Remove-Item Env:\VITE_BASE_PATH -ErrorAction SilentlyContinue
             Remove-Item Env:\VITE_FRONTEND_URL -ErrorAction SilentlyContinue
+            Remove-Item Env:\VITE_USE_HASH_ROUTING -ErrorAction SilentlyContinue
         }
     }
 }
@@ -741,8 +743,8 @@ if ($Environment -eq "production" -and $Frontend) {
         # Check if SWA CLI is installed
         Write-Info "Checking Azure Static Web Apps CLI..."
 
-        $swaVersion = swa --version 2>&1
-        if ($LASTEXITCODE -ne 0) {
+        $swaCommand = Get-Command swa -ErrorAction SilentlyContinue
+        if (-not $swaCommand) {
             Write-Warning "Azure Static Web Apps CLI not found."
             Write-Host ""
             Write-Host "Would you like to install it now?" -ForegroundColor Cyan
@@ -762,7 +764,6 @@ if ($Environment -eq "production" -and $Frontend) {
                     $deploymentSuccess = $false
                 } else {
                     Write-Success "SWA CLI installed successfully"
-                    $swaVersion = swa --version 2>&1
                 }
             } else {
                 Write-Info "Deployment cancelled."
@@ -771,7 +772,8 @@ if ($Environment -eq "production" -and $Frontend) {
         }
 
         if ($deploymentSuccess) {
-            Write-Success "SWA CLI found (v$swaVersion)"
+            $swaVersion = (swa --version 2>$null) -replace '\s.*', ''
+            Write-Success "SWA CLI ready (v$swaVersion)"
 
             # Check for deployment token (stored securely with DPAPI)
             Write-Info "Checking deployment token..."
@@ -782,7 +784,7 @@ if ($Environment -eq "production" -and $Frontend) {
             # Try to load existing token
             if (Test-Path $tokenFile) {
                 try {
-                    $encrypted = Get-Content $tokenFile -Raw
+                    $encrypted = (Get-Content $tokenFile -Raw).Trim()
                     $secureToken = ConvertTo-SecureString $encrypted -ErrorAction Stop
                     $credential = New-Object System.Management.Automation.PSCredential("token", $secureToken)
                     $deploymentToken = $credential.GetNetworkCredential().Password
@@ -884,7 +886,7 @@ if ($Environment -eq "production" -and $Frontend) {
                         try {
                             $secureToken = ConvertTo-SecureString $deploymentToken -AsPlainText -Force
                             $encrypted = ConvertFrom-SecureString $secureToken
-                            $encrypted | Set-Content $tokenFile -Force
+                            $encrypted | Set-Content $tokenFile -Force -NoNewline
                             Write-Success "Token saved securely to $tokenFile"
                         } catch {
                             Write-Warning "Failed to save token: $_"
@@ -920,6 +922,7 @@ if ($Environment -eq "production" -and $Frontend) {
                     $env:VITE_API_BASE_URL = $selectedConfig.Frontend.ApiUrl
                     $env:VITE_BASE_PATH = $selectedConfig.Frontend.DeployPath
                     $env:VITE_FRONTEND_URL = $selectedConfig.Frontend.FrontendUrl
+                    $env:VITE_USE_HASH_ROUTING = "false"
 
                     npm run build
 
@@ -977,6 +980,7 @@ if ($Environment -eq "production" -and $Frontend) {
                 Remove-Item Env:\VITE_API_BASE_URL -ErrorAction SilentlyContinue
                 Remove-Item Env:\VITE_BASE_PATH -ErrorAction SilentlyContinue
                 Remove-Item Env:\VITE_FRONTEND_URL -ErrorAction SilentlyContinue
+                Remove-Item Env:\VITE_USE_HASH_ROUTING -ErrorAction SilentlyContinue
             }
         }
     }

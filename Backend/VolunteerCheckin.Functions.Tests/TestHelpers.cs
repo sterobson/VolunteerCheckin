@@ -153,6 +153,36 @@ namespace VolunteerCheckin.Functions.Tests
         }
 
         /// <summary>
+        /// Creates an HttpRequest with auth header, query parameters, and optional headers
+        /// </summary>
+        public static HttpRequest CreateEmptyHttpRequestWithAuthQueryAndHeaders(
+            string sessionToken,
+            Dictionary<string, string> queryParams,
+            Dictionary<string, string>? headers = null)
+        {
+            DefaultHttpContext context = new();
+            HttpRequest request = context.Request;
+            request.Headers["Authorization"] = $"Bearer {sessionToken}";
+
+            QueryString queryString = QueryString.Empty;
+            foreach (KeyValuePair<string, string> param in queryParams)
+            {
+                queryString = queryString.Add(param.Key, param.Value);
+            }
+            request.QueryString = queryString;
+
+            if (headers != null)
+            {
+                foreach (KeyValuePair<string, string> header in headers)
+                {
+                    request.Headers[header.Key] = header.Value;
+                }
+            }
+
+            return request;
+        }
+
+        /// <summary>
         /// Creates an HttpRequest with auth header, custom headers, and a body
         /// </summary>
         public static HttpRequest CreateHttpRequestWithAuthAndHeaders(object body, string sessionToken, Dictionary<string, string> headers)

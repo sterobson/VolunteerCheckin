@@ -301,12 +301,38 @@ function Ensure-AzureCliLoggedIn {
     }
 
     if (-not (Test-AzureCliLoggedIn)) {
-        Write-Warning "Not logged in to Azure CLI. Opening login..."
-        az login
+        Write-Warning "Not logged in to Azure CLI."
+        Write-Host ""
+        Write-Host "How would you like to authenticate?" -ForegroundColor Cyan
+        Write-Host "  1. Device code (Recommended - works with MFA)" -ForegroundColor White
+        Write-Host "  2. Browser login" -ForegroundColor White
+        Write-Host ""
+
+        $loginChoice = Read-Host "Enter choice (1 or 2, default: 1)"
+
+        if ([string]::IsNullOrWhiteSpace($loginChoice) -or $loginChoice -eq "1") {
+            Write-Info "Starting device code authentication..."
+            Write-Gray "A code will be displayed. Open a browser, go to https://microsoft.com/devicelogin"
+            Write-Gray "and enter the code to authenticate."
+            Write-Host ""
+
+            az login --use-device-code
+        } else {
+            Write-Info "Opening browser for authentication..."
+            az login
+        }
+
         if ($LASTEXITCODE -ne 0) {
             Write-ErrorMessage "Azure login failed."
+            Write-Host ""
+            Write-Host "If you have MFA enabled, try these steps:" -ForegroundColor Yellow
+            Write-Host "  1. Run: az login --use-device-code" -ForegroundColor Gray
+            Write-Host "  2. Or run: az login --tenant YOUR_TENANT_ID" -ForegroundColor Gray
+            Write-Host ""
             exit 1
         }
+
+        Write-Success "Successfully logged in to Azure"
     }
 }
 

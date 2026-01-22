@@ -575,14 +575,14 @@ function Sync-EnvironmentVariables($resourceGroup, $slotName) {
 # Slot Selection
 # ============================================================================
 function Select-DeploymentSlot($envConfig) {
-    $slots = $envConfig.slots
+    $slots = @($envConfig.slots)
     $lastSlot = $envConfig.lastDeployedSlot
 
     if ($slots.Count -eq 1) {
         return $slots[0]
     }
 
-    # Suggest the "other" slot
+    # Determine the recommended slot (the "other" slot from last deployment)
     $suggestedSlot = $null
     if ($lastSlot) {
         $lastIndex = [array]::IndexOf($slots, $lastSlot)
@@ -596,11 +596,14 @@ function Select-DeploymentSlot($envConfig) {
         $suggestedSlot = $slots[0]
     }
 
+    # Reorder slots so recommended is first
+    $orderedSlots = @($suggestedSlot) + ($slots | Where-Object { $_ -ne $suggestedSlot })
+
     Write-Host ""
     Write-Info "Select deployment slot:"
 
-    for ($i = 0; $i -lt $slots.Count; $i++) {
-        $slot = $slots[$i]
+    for ($i = 0; $i -lt $orderedSlots.Count; $i++) {
+        $slot = $orderedSlots[$i]
         $marker = ""
         if ($slot -eq $suggestedSlot) {
             $marker = " (Recommended)"
@@ -612,19 +615,19 @@ function Select-DeploymentSlot($envConfig) {
     }
 
     Write-Host ""
-    $choice = Read-Host "Enter choice (1-$($slots.Count), default: 1)"
+    $choice = Read-Host "Enter choice (1-$($orderedSlots.Count), default: 1)"
 
     if ([string]::IsNullOrWhiteSpace($choice)) {
         $choice = "1"
     }
 
     $index = [int]$choice - 1
-    if ($index -lt 0 -or $index -ge $slots.Count) {
+    if ($index -lt 0 -or $index -ge $orderedSlots.Count) {
         Write-ErrorMessage "Invalid choice."
         exit 1
     }
 
-    return $slots[$index]
+    return $orderedSlots[$index]
 }
 
 # ============================================================================

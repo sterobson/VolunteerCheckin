@@ -631,7 +631,13 @@ function Select-DeploymentSlot($envConfig) {
 # Version Verification
 # ============================================================================
 function Get-ExpectedVersion {
-    $timestamp = Get-Date -Format "yyyy.MM.dd.HH.mm"
+    # Read timestamp from version file (written by Ensure-GitClean)
+    if (Test-Path $script:VersionFilePath) {
+        $timestamp = Get-Content $script:VersionFilePath -Raw
+    } else {
+        $timestamp = Get-Date -Format "yyyy.MM.dd.HH.mm"
+    }
+
     $gitHash = git rev-parse --short HEAD 2>$null
     if ($LASTEXITCODE -ne 0 -or -not $gitHash) {
         $gitHash = "unknown"
@@ -677,6 +683,8 @@ function Test-BackendVersion($slotName, $expectedVersion, $maxRetries = 10) {
 # ============================================================================
 # Git Status Check
 # ============================================================================
+$script:VersionFilePath = Join-Path $PSScriptRoot ".deployment\version.txt"
+
 function Test-GitClean {
     $status = git status --porcelain 2>$null
     return [string]::IsNullOrWhiteSpace($status)
@@ -686,7 +694,78 @@ function Get-GitCommitHash {
     return git rev-parse --short HEAD 2>$null
 }
 
+function Get-GitChangedFiles {
+    $status = git status --porcelain 2>$null
+    if ([string]::IsNullOrWhiteSpace($status)) {
+        return @()
+    }
+    # Extract just the file paths (remove status prefix like "M ", "?? ", etc.)
+    return $status -split "`n" | ForEach-Object { $_.Substring(3).Trim() } | Where-Object { $_ }
+}
+
+function Test-OnlyVersionFileChanged {
+    $changedFiles = Get-GitChangedFiles
+    if ($changedFiles.Count -eq 0) {
+        return $false
+    }
+    if ($changedFiles.Count -eq 1 -and $changedFiles[0] -eq ".deployment/version.txt") {
+        return $true
+    }
+    return $false
+}
+
+function Write-VersionFile {
+    $timestamp = Get-Date -Format "yyyy.MM.dd.HH.mm"
+    $versionDir = Split-Path $script:VersionFilePath -Parent
+
+    if (-not (Test-Path $versionDir)) {
+        New-Item -ItemType Directory -Path $versionDir -Force | Out-Null
+    }
+
+    Set-Content -Path $script:VersionFilePath -Value $timestamp -NoNewline
+    return $timestamp
+}
+
+function Commit-AndPush($message) {
+    Write-Info "Committing changes..."
+    git add -A
+    if ($LASTEXITCODE -ne 0) {
+        Write-ErrorMessage "Failed to stage changes."
+        exit 1
+    }
+
+    git commit -m "$message"
+    if ($LASTEXITCODE -ne 0) {
+        Write-ErrorMessage "Failed to commit changes."
+        exit 1
+    }
+
+    Write-Success "Changes committed."
+
+    Write-Info "Pushing to origin..."
+    git push
+    if ($LASTEXITCODE -ne 0) {
+        Write-ErrorMessage "Failed to push. You may need to pull first or resolve conflicts."
+        exit 1
+    }
+
+    Write-Success "Changes pushed to origin."
+}
+
 function Ensure-GitClean {
+    # First, write the version file
+    Write-Info "Writing version file..."
+    $timestamp = Write-VersionFile
+    Write-Success "Version file written: $timestamp"
+
+    # Check if only the version file changed
+    if (Test-OnlyVersionFileChanged) {
+        Write-Info "Only version file changed, auto-committing..."
+        Commit-AndPush "Deployment $timestamp"
+        return
+    }
+
+    # Check if there are other uncommitted changes
     if (-not (Test-GitClean)) {
         Write-Host ""
         Write-Host "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" -ForegroundColor Red
@@ -719,29 +798,7 @@ function Ensure-GitClean {
                     exit 1
                 }
 
-                Write-Info "Committing changes..."
-                git add -A
-                if ($LASTEXITCODE -ne 0) {
-                    Write-ErrorMessage "Failed to stage changes."
-                    exit 1
-                }
-
-                git commit -m "$commitMessage"
-                if ($LASTEXITCODE -ne 0) {
-                    Write-ErrorMessage "Failed to commit changes."
-                    exit 1
-                }
-
-                Write-Success "Changes committed."
-
-                Write-Info "Pushing to origin..."
-                git push
-                if ($LASTEXITCODE -ne 0) {
-                    Write-ErrorMessage "Failed to push. You may need to pull first or resolve conflicts."
-                    exit 1
-                }
-
-                Write-Success "Changes pushed to origin."
+                Commit-AndPush $commitMessage
             }
             default {
                 Write-Info "Deployment cancelled."

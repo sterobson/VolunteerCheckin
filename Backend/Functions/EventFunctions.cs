@@ -171,6 +171,36 @@ public class EventFunctions
         }
     }
 
+    [Function("GetAllEventsSummary")]
+    public async Task<IActionResult> GetAllEventsSummary(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "events/summary")] HttpRequest req)
+    {
+        try
+        {
+            // Get admin email from header
+            (string? adminEmail, IActionResult? error) = FunctionHelpers.GetAdminEmailFromHeader(req);
+            if (error != null) return error;
+            if (string.IsNullOrEmpty(adminEmail)) return new UnauthorizedObjectResult(new { message = "Admin email required" });
+
+            // Get all events where user is an admin
+            IEnumerable<UserEventMappingEntity> userMappings = await _userEventMappingRepository.GetByUserAsync(adminEmail);
+            HashSet<string> userEventIds = userMappings.Select(m => m.EventId).ToHashSet();
+
+            // Fetch all events and filter by user access, return summary only
+            IEnumerable<EventEntity> allEvents = await _eventRepository.GetAllAsync();
+            List<EventSummaryResponse> summaries = [.. allEvents
+                .Where(e => userEventIds.Contains(e.RowKey))
+                .Select(e => e.ToSummaryResponse())];
+
+            return new OkObjectResult(summaries);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting event summaries");
+            return new StatusCodeResult(500);
+        }
+    }
+
 #pragma warning disable MA0051
     [Function("UpdateEvent")]
     public async Task<IActionResult> UpdateEvent(

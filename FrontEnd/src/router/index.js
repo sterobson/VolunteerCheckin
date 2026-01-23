@@ -67,9 +67,10 @@ const routes = [
   },
 ];
 
-// Use hash routing for local dev and GitHub Pages (static file hosting without server config)
-// Use history routing for Azure Static Web Apps and other hosts with proper routing support
-const useHashRouting = import.meta.env.VITE_USE_HASH_ROUTING === 'true';
+// Use history routing for localhost and Azure Static Web Apps
+// Use hash routing only when explicitly enabled (e.g., GitHub Pages)
+const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const useHashRouting = !isLocalhost && import.meta.env.VITE_USE_HASH_ROUTING === 'true';
 
 const router = createRouter({
   history: useHashRouting

@@ -425,6 +425,7 @@ export const profileApi = {
 export const eventsApi = {
   create: (data) => api.post('/events', data),
   getAll: () => api.get('/events'),
+  getAllSummary: () => api.get('/events/summary'),
   getById: (id) => api.get(`/events/${id}`),
   update: (id, data) => api.put(`/events/${id}`, data),
   delete: (id) => api.delete(`/events/${id}`),

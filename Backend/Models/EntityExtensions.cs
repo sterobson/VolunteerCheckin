@@ -4,6 +4,15 @@ namespace VolunteerCheckin.Functions.Models;
 
 public static class EntityExtensions
 {
+    public static EventSummaryResponse ToSummaryResponse(this EventEntity entity)
+    {
+        return new EventSummaryResponse(
+            entity.RowKey,
+            entity.Name,
+            entity.EventDate
+        );
+    }
+
     public static EventResponse ToResponse(this EventEntity entity)
     {
         List<EmergencyContact> emergencyContacts = JsonSerializer.Deserialize<List<EmergencyContact>>(entity.EmergencyContactsJson) ?? [];

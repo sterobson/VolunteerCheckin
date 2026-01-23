@@ -45,9 +45,12 @@
             </div>
             <div class="session-info">
               <div class="event-name">{{ event.name }}</div>
-              <div class="role-name">Admin</div>
               <div v-if="event.eventDate" class="event-date">
-                {{ formatDate(event.eventDate) }}
+                {{ formatDateTime(event.eventDate) }}
+              </div>
+              <div class="user-name">Admin</div>
+              <div v-if="getAdminLastAccessed(event.id)" class="last-accessed">
+                Last accessed: {{ formatDateTime(getAdminLastAccessed(event.id)) }}
               </div>
             </div>
             <button
@@ -86,9 +89,12 @@
           </div>
           <div class="session-info">
             <div class="event-name">{{ session.eventName || 'Event' }}</div>
-            <div class="role-name">{{ session.marshalName || 'Marshal' }}</div>
             <div v-if="session.eventDate" class="event-date">
-              {{ formatDate(session.eventDate) }}
+              {{ formatDateTime(session.eventDate) }}
+            </div>
+            <div class="user-name">{{ session.marshalName || 'Marshal' }}</div>
+            <div v-if="session.lastAccessed" class="last-accessed">
+              Last accessed: {{ formatDateTime(session.lastAccessed) }}
             </div>
           </div>
           <button
@@ -215,6 +221,11 @@ const eventForm = ref({
 const adminEmail = computed(() => localStorage.getItem('adminEmail'));
 const hasAdminSession = computed(() => !!adminEmail.value);
 
+const getAdminLastAccessed = (eventId) => {
+  const accessTimes = JSON.parse(localStorage.getItem('adminEventAccessTimes') || '{}');
+  return accessTimes[eventId] || null;
+};
+
 const loadSessions = () => {
   sessions.value = getSessionsForDisplay();
 };
@@ -263,6 +274,7 @@ const confirmAdminLogout = () => {
 
 const adminLogoutConfirmed = async () => {
   await authStore.logout();
+  localStorage.removeItem('adminEventAccessTimes');
   adminEvents.value = [];
   showAdminLogoutModal.value = false;
 };
@@ -291,18 +303,21 @@ const handleProfileSave = async (formData) => {
 
 const handleProfileLogout = async () => {
   await authStore.logout();
+  localStorage.removeItem('adminEventAccessTimes');
   adminEvents.value = [];
   showProfileModal.value = false;
 };
 
-const formatDate = (dateString) => {
+const formatDateTime = (dateString) => {
   if (!dateString) return '';
   const date = new Date(dateString);
   return date.toLocaleDateString(undefined, {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
-    year: 'numeric'
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
   });
 };
 
@@ -311,7 +326,7 @@ const loadAdminEvents = async () => {
 
   try {
     setAuthContext('admin');
-    const response = await eventsApi.getAll();
+    const response = await eventsApi.getAllSummary();
     adminEvents.value = response.data || [];
   } catch (error) {
     console.error('Failed to load admin events:', error);
@@ -320,6 +335,10 @@ const loadAdminEvents = async () => {
 };
 
 const goToAdminEvent = (eventId) => {
+  // Update last accessed timestamp for this specific event
+  const accessTimes = JSON.parse(localStorage.getItem('adminEventAccessTimes') || '{}');
+  accessTimes[eventId] = new Date().toISOString();
+  localStorage.setItem('adminEventAccessTimes', JSON.stringify(accessTimes));
   router.push(`/admin/event/${eventId}`);
 };
 
@@ -517,14 +536,20 @@ onMounted(async () => {
   margin-bottom: 0.25rem;
 }
 
-.role-name {
-  font-size: 0.9rem;
-  color: #aaa;
+.event-date {
+  font-size: 0.85rem;
+  color: #667eea;
 }
 
-.event-date {
-  font-size: 0.8rem;
-  color: #667eea;
+.user-name {
+  font-size: 0.9rem;
+  color: #aaa;
+  margin-top: 0.25rem;
+}
+
+.last-accessed {
+  font-size: 0.75rem;
+  color: #666;
   margin-top: 0.25rem;
 }
 

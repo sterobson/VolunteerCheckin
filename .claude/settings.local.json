@@ -30,7 +30,9 @@
       "Bash(npm run lint:*)",
       "Bash(dir \"C:\\\\Users\\\\stero\\\\OneDrive\\\\Pictures\\\\screenshots\" /O-D /B)",
       "Bash(dotnet test:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(nvm:*)",
+      "Bash(winget:*)"
     ]
   }
 }

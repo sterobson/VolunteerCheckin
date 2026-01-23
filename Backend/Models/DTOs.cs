@@ -79,6 +79,12 @@ public record RoutePoint(
     double Lng
 );
 
+public record EventSummaryResponse(
+    string Id,
+    string Name,
+    DateTime EventDate
+);
+
 public record EventResponse(
     string Id,
     string Name,

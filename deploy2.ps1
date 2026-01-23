@@ -552,24 +552,40 @@ function Sync-EnvironmentVariables($resourceGroup, $slotName) {
         }
     }
 
-    # Apply updates to Azure
+    # Return updates to be applied later (in parallel with deployment)
     if ($needsUpdate -and $updates.Count -gt 0) {
         Write-Host ""
-        Write-Info "Applying $($updates.Count) setting(s) to Azure..."
-
-        foreach ($key in $updates.Keys) {
-            Write-Gray "  Setting $key..."
-            $success = Set-AzureFunctionAppSetting $resourceGroup $slotName $key $updates[$key]
-            if (-not $success) {
-                Write-ErrorMessage "Failed to set $key"
-                exit 1
-            }
-        }
-
-        Write-Success "All settings applied to Azure"
+        Write-Info "$($updates.Count) setting(s) will be applied to Azure during deployment"
     }
 
     Write-Host ""
+    return $updates
+}
+
+function Start-EnvVarUpdateJob($resourceGroup, $slotName, $updates) {
+    if (-not $updates -or $updates.Count -eq 0) {
+        return $null
+    }
+
+    # Convert hashtable to array for passing to job
+    $updatesList = @()
+    foreach ($key in $updates.Keys) {
+        $updatesList += @{ Name = $key; Value = $updates[$key] }
+    }
+
+    $job = Start-Job -ScriptBlock {
+        param($resourceGroup, $slotName, $updatesList)
+
+        foreach ($update in $updatesList) {
+            az functionapp config appsettings set --resource-group $resourceGroup --name $slotName --settings "$($update.Name)=$($update.Value)" 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                throw "Failed to set $($update.Name)"
+            }
+        }
+        return $true
+    } -ArgumentList $resourceGroup, $slotName, $updatesList
+
+    return $job
 }
 
 # ============================================================================
@@ -656,22 +672,26 @@ function Test-BackendVersion($slotName, $expectedVersion, $maxRetries = 10) {
     Write-Gray "  Expected version: $expectedVersion"
     Write-Gray "  URL: $baseUrl"
 
-    # Headers to prevent caching
+    # Headers to prevent caching and handle CORS
     $headers = @{
         "Cache-Control" = "no-cache, no-store, must-revalidate"
         "Pragma" = "no-cache"
+        "Origin" = "https://portal.azure.com"
     }
 
     for ($i = 1; $i -le $maxRetries; $i++) {
         Write-Gray "  Attempt $i of $maxRetries..."
 
         try {
-            # Add cache-busting query parameter
+            # Add cache-busting query parameter and timestamp
             $cacheBuster = [System.Guid]::NewGuid().ToString("N")
-            $url = "$baseUrl`?_=$cacheBuster"
+            $timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+            $url = "$baseUrl`?_=$cacheBuster&t=$timestamp"
 
-            $response = Invoke-RestMethod -Uri $url -Method Get -Headers $headers -TimeoutSec 10
-            $actualVersion = $response.version
+            # Use WebRequest with fresh session to avoid any caching
+            $response = Invoke-WebRequest -Uri $url -Method Get -Headers $headers -TimeoutSec 10 -UseBasicParsing -DisableKeepAlive
+            $json = $response.Content | ConvertFrom-Json
+            $actualVersion = $json.version
 
             Write-Gray "  Actual version: $actualVersion"
 
@@ -953,9 +973,58 @@ function Start-LocalFrontend {
 }
 
 # ============================================================================
+# Production Backend Build (Background Job)
+# ============================================================================
+function Start-BackendBuildJob {
+    $backendPath = Join-Path $script:ScriptRoot "Backend"
+
+    $job = Start-Job -ScriptBlock {
+        param($backendPath)
+
+        Set-Location $backendPath
+        dotnet build --configuration Release --nologo --verbosity quiet 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "Backend build failed"
+        }
+        return $true
+    } -ArgumentList $backendPath
+
+    return $job
+}
+
+function Wait-ForBackendBuild($buildJob) {
+    if (-not $buildJob) {
+        return $true
+    }
+
+    Write-Info "Waiting for backend build to complete..."
+    $null = Wait-Job $buildJob -Timeout 300
+    $buildState = $buildJob.State
+
+    if ($buildState -ne "Completed") {
+        Write-ErrorMessage "Backend build job failed or timed out (state: $buildState)"
+        $jobOutput = Receive-Job $buildJob
+        Write-Gray $jobOutput
+        Remove-Job $buildJob -Force -ErrorAction SilentlyContinue
+        return $false
+    }
+
+    try {
+        $buildResult = Receive-Job $buildJob -ErrorAction Stop
+        Write-Success "Backend build completed"
+        Remove-Job $buildJob -Force -ErrorAction SilentlyContinue
+        return $true
+    } catch {
+        Write-ErrorMessage "Backend build failed: $($_.Exception.Message)"
+        Remove-Job $buildJob -Force -ErrorAction SilentlyContinue
+        return $false
+    }
+}
+
+# ============================================================================
 # Production Backend Deployment
 # ============================================================================
-function Deploy-ProductionBackend($envConfig, $slotName) {
+function Deploy-ProductionBackend($envConfig, $slotName, $backendBuildJob) {
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Info "  Deploying Backend to $slotName"
@@ -965,37 +1034,45 @@ function Deploy-ProductionBackend($envConfig, $slotName) {
     $resourceGroup = $envConfig.resourceGroup
     $backendPath = Join-Path $script:ScriptRoot "Backend"
 
-    # Sync environment variables
-    Sync-EnvironmentVariables $resourceGroup $slotName
+    # Sync environment variables (interactive - collects what needs updating)
+    $envVarUpdates = Sync-EnvironmentVariables $resourceGroup $slotName
 
     # Get expected version before deployment
     $expectedVersion = Get-ExpectedVersion
 
-    # Build the backend
-    Write-Info "Building backend..."
-    Push-Location $backendPath
-    try {
-        dotnet build --configuration Release --nologo --verbosity quiet
-        if ($LASTEXITCODE -ne 0) {
-            Write-ErrorMessage "Backend build failed"
-            return $false
-        }
-        Write-Success "Backend build completed"
-    } finally {
-        Pop-Location
-    }
+    # Start parallel jobs immediately: CORS, DEPLOYMENT_VERSION, and env var updates
+    # These all run while we wait for backend build and during deployment
+    Write-Info "Starting parallel configuration (CORS + version + env vars)..."
 
-    # Start CORS configuration in background
-    Write-Info "Configuring CORS (parallel)..."
     $corsJob = Start-Job -ScriptBlock {
         param($resourceGroup, $slotName, $origins)
-
         foreach ($origin in $origins) {
             az functionapp cors add --resource-group $resourceGroup --name $slotName --allowed-origins $origin 2>&1 | Out-Null
         }
     } -ArgumentList $resourceGroup, $slotName, $envConfig.cors
 
-    # Deploy to Azure
+    $versionJob = Start-Job -ScriptBlock {
+        param($resourceGroup, $slotName, $expectedVersion)
+        az functionapp config appsettings set --resource-group $resourceGroup --name $slotName --settings "DEPLOYMENT_VERSION=$expectedVersion" 2>&1 | Out-Null
+        return $LASTEXITCODE -eq 0
+    } -ArgumentList $resourceGroup, $slotName, $expectedVersion
+
+    $envVarJob = Start-EnvVarUpdateJob $resourceGroup $slotName $envVarUpdates
+
+    # Wait for backend build to complete (started earlier in parallel)
+    # CORS, version, and env var jobs continue running during this wait
+    if (-not (Wait-ForBackendBuild $backendBuildJob)) {
+        Stop-Job $corsJob -ErrorAction SilentlyContinue
+        Stop-Job $versionJob -ErrorAction SilentlyContinue
+        if ($envVarJob) { Stop-Job $envVarJob -ErrorAction SilentlyContinue }
+        Remove-Job $corsJob -Force -ErrorAction SilentlyContinue
+        Remove-Job $versionJob -Force -ErrorAction SilentlyContinue
+        if ($envVarJob) { Remove-Job $envVarJob -Force -ErrorAction SilentlyContinue }
+        return $false
+    }
+
+    # Deploy to Azure (main blocking operation)
+    # CORS and version jobs continue running during deployment
     Write-Host ""
     Write-Info "Deploying to Azure Functions..."
     Write-Gray "This may take a few minutes..."
@@ -1024,24 +1101,34 @@ function Deploy-ProductionBackend($envConfig, $slotName) {
         Pop-Location
     }
 
-    # Set deployment version
-    Write-Info "Setting deployment version..."
-    $success = Set-AzureFunctionAppSetting $resourceGroup $slotName "DEPLOYMENT_VERSION" $expectedVersion
-    if (-not $success) {
+    # Wait for parallel jobs to complete
+    Write-Info "Waiting for parallel configuration to complete..."
+    $null = Wait-Job $corsJob -Timeout 60
+    $null = Wait-Job $versionJob -Timeout 60
+    if ($envVarJob) { $null = Wait-Job $envVarJob -Timeout 120 }
+
+    $versionSuccess = Receive-Job $versionJob -ErrorAction SilentlyContinue
+    $envVarSuccess = if ($envVarJob) { Receive-Job $envVarJob -ErrorAction SilentlyContinue } else { $true }
+
+    Remove-Job $corsJob -Force -ErrorAction SilentlyContinue
+    Remove-Job $versionJob -Force -ErrorAction SilentlyContinue
+    if ($envVarJob) { Remove-Job $envVarJob -Force -ErrorAction SilentlyContinue }
+
+    if ($versionSuccess -eq $false) {
         Write-ErrorMessage "Failed to set DEPLOYMENT_VERSION"
         return $false
     }
+    if ($envVarSuccess -eq $false) {
+        Write-ErrorMessage "Failed to set environment variables"
+        return $false
+    }
     Write-Success "DEPLOYMENT_VERSION set to $expectedVersion"
+    Write-Success "CORS configuration completed"
+    if ($envVarJob) { Write-Success "Environment variables updated" }
 
     # Restart the function app to pick up the new settings
     Write-Info "Restarting function app to apply settings..."
     Restart-AzureFunctionApp $resourceGroup $slotName
-
-    # Wait for CORS job to complete
-    Write-Info "Waiting for CORS configuration to complete..."
-    $null = Wait-Job $corsJob -Timeout 60
-    Remove-Job $corsJob -Force -ErrorAction SilentlyContinue
-    Write-Success "CORS configuration completed"
 
     # Verify deployment
     Write-Host ""
@@ -1520,6 +1607,13 @@ if ($Environment -eq "production") {
     # Require clean git state
     Ensure-GitClean
 
+    # Start backend build early (runs in parallel with Azure login, slot selection, etc.)
+    $backendBuildJob = $null
+    if ($Backend) {
+        Write-Info "Starting backend build in background..."
+        $backendBuildJob = Start-BackendBuildJob
+    }
+
     # Ensure Azure CLI is available and logged in
     Ensure-AzureCliLoggedIn
 
@@ -1559,12 +1653,12 @@ if ($Environment -eq "production") {
     Write-Host ""
 
     if ($Backend -and $Frontend) {
-        # Both - build frontend in background while deploying backend
+        # Both - start frontend build in background too
         Write-Info "Starting frontend build in background..."
         $frontendBuildJob = Start-FrontendBuildJob $envConfig $selectedSlot
 
-        # Deploy backend
-        $backendResult = Deploy-ProductionBackend $envConfig $selectedSlot
+        # Deploy backend (build job passed in, already running)
+        $backendResult = Deploy-ProductionBackend $envConfig $selectedSlot $backendBuildJob
         if (-not $backendResult) {
             $deploymentSuccess = $false
             # Cancel frontend job
@@ -1577,7 +1671,7 @@ if ($Environment -eq "production") {
         }
 
     } elseif ($Backend) {
-        $result = Deploy-ProductionBackend $envConfig $selectedSlot
+        $result = Deploy-ProductionBackend $envConfig $selectedSlot $backendBuildJob
         if (-not $result) { $deploymentSuccess = $false }
 
     } elseif ($Frontend) {

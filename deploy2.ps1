@@ -1030,18 +1030,18 @@ function Wait-ForBackendBuild($buildJob) {
         Write-ErrorMessage "Backend build job failed or timed out (state: $buildState)"
         $jobOutput = Receive-Job $buildJob
         Write-Gray $jobOutput
-        Remove-Job $buildJob -Force -ErrorAction SilentlyContinue
+        $null = Remove-Job $buildJob -Force -ErrorAction SilentlyContinue
         return $false
     }
 
     try {
         $buildResult = Receive-Job $buildJob -ErrorAction Stop
         Write-Success "Backend build completed"
-        Remove-Job $buildJob -Force -ErrorAction SilentlyContinue
+        $null = Remove-Job $buildJob -Force -ErrorAction SilentlyContinue
         return $true
     } catch {
         Write-ErrorMessage "Backend build failed: $($_.Exception.Message)"
-        Remove-Job $buildJob -Force -ErrorAction SilentlyContinue
+        $null = Remove-Job $buildJob -Force -ErrorAction SilentlyContinue
         return $false
     }
 }
@@ -1089,10 +1089,10 @@ function Deploy-ProductionBackend($envConfig, $slotName, $backendBuildJob, $also
     # Wait for backend build to complete (started earlier in parallel)
     # CORS and env var jobs continue running during this wait
     if (-not (Wait-ForBackendBuild $backendBuildJob)) {
-        Stop-Job $corsJob -ErrorAction SilentlyContinue
-        if ($envVarJob) { Stop-Job $envVarJob -ErrorAction SilentlyContinue }
-        Remove-Job $corsJob -Force -ErrorAction SilentlyContinue
-        if ($envVarJob) { Remove-Job $envVarJob -Force -ErrorAction SilentlyContinue }
+        $null = Stop-Job $corsJob -ErrorAction SilentlyContinue
+        if ($envVarJob) { $null = Stop-Job $envVarJob -ErrorAction SilentlyContinue }
+        $null = Remove-Job $corsJob -Force -ErrorAction SilentlyContinue
+        if ($envVarJob) { $null = Remove-Job $envVarJob -Force -ErrorAction SilentlyContinue }
         return $false
     }
 
@@ -1133,8 +1133,8 @@ function Deploy-ProductionBackend($envConfig, $slotName, $backendBuildJob, $also
 
     $envVarSuccess = if ($envVarJob) { Receive-Job $envVarJob -ErrorAction SilentlyContinue } else { $true }
 
-    Remove-Job $corsJob -Force -ErrorAction SilentlyContinue
-    if ($envVarJob) { Remove-Job $envVarJob -Force -ErrorAction SilentlyContinue }
+    $null = Remove-Job $corsJob -Force -ErrorAction SilentlyContinue
+    if ($envVarJob) { $null = Remove-Job $envVarJob -Force -ErrorAction SilentlyContinue }
 
     if ($envVarSuccess -eq $false) {
         Write-ErrorMessage "Failed to set environment variables (including DEPLOYMENT_VERSION)"
@@ -1274,7 +1274,7 @@ function Deploy-ProductionFrontend($envConfig, $backendSlot) {
         }
 
         # Save token
-        Set-SwaDeploymentToken $deploymentToken
+        $null = Set-SwaDeploymentToken $deploymentToken
         Write-Success "Deployment token saved"
     }
 
@@ -1421,20 +1421,20 @@ function Deploy-FrontendFromBuildJob($envConfig, $backendSlot, $buildJob) {
         Write-ErrorMessage "Frontend build job failed or timed out (state: $buildState)"
         $jobOutput = Receive-Job $buildJob
         Write-Gray $jobOutput
-        Remove-Job $buildJob -Force -ErrorAction SilentlyContinue
+        $null = Remove-Job $buildJob -Force -ErrorAction SilentlyContinue
         return $false
     }
 
     try {
-        $buildResult = Receive-Job $buildJob -ErrorAction Stop
+        $null = Receive-Job $buildJob -ErrorAction Stop
         Write-Success "Frontend build completed"
     } catch {
         Write-ErrorMessage "Frontend build failed: $($_.Exception.Message)"
-        Remove-Job $buildJob -Force -ErrorAction SilentlyContinue
+        $null = Remove-Job $buildJob -Force -ErrorAction SilentlyContinue
         return $false
     }
 
-    Remove-Job $buildJob -Force -ErrorAction SilentlyContinue
+    $null = Remove-Job $buildJob -Force -ErrorAction SilentlyContinue
 
     # Get deployment token
     $deploymentToken = Get-SwaDeploymentToken
@@ -1486,7 +1486,7 @@ function Deploy-FrontendFromBuildJob($envConfig, $backendSlot, $buildJob) {
             }
         }
 
-        Set-SwaDeploymentToken $deploymentToken
+        $null = Set-SwaDeploymentToken $deploymentToken
         Write-Success "Deployment token saved"
     }
 
@@ -1684,8 +1684,8 @@ if ($Environment -eq "production") {
         if ($backendResult -eq $false) {
             $deploymentSuccess = $false
             # Cancel frontend job
-            Stop-Job $frontendBuildJob -ErrorAction SilentlyContinue
-            Remove-Job $frontendBuildJob -Force -ErrorAction SilentlyContinue
+            $null = Stop-Job $frontendBuildJob -ErrorAction SilentlyContinue
+            $null = Remove-Job $frontendBuildJob -Force -ErrorAction SilentlyContinue
         } else {
             # Deploy frontend (using already-built files)
             # This runs if backend succeeded ($true) or user chose "frontend-only"

@@ -22,6 +22,7 @@
       ref="detailsTabRef"
       :form="form"
       :event-id="eventId"
+      :event-name="eventName"
       :marshal-id="isEditing ? marshal?.id : null"
       :validation-errors="validationErrors"
       @update:form="updateForm"
@@ -189,6 +190,10 @@ const props = defineProps({
   eventId: {
     type: String,
     required: true,
+  },
+  eventName: {
+    type: String,
+    default: '',
   },
   assignments: {
     type: Array,

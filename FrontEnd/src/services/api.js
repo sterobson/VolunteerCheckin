@@ -394,13 +394,15 @@ const getFrontendUrl = () => {
     return import.meta.env.VITE_FRONTEND_URL.replace(/\/?#?\/?$/, '');
   }
 
-  // Otherwise detect from current URL (everything before the #)
-  const url = window.location.href.split('#')[0];
-  return url.endsWith('/') ? url.slice(0, -1) : url;
+  // Otherwise detect from current URL - just use origin (protocol + host)
+  return window.location.origin;
 };
 
-// Check if this build uses hash routing (set at build time)
-const usesHashRouting = () => import.meta.env.VITE_USE_HASH_ROUTING === 'true';
+// Check if this build uses hash routing (matches router logic)
+const usesHashRouting = () => {
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  return !isLocalhost && import.meta.env.VITE_USE_HASH_ROUTING === 'true';
+};
 
 // Auth API
 export const authApi = {

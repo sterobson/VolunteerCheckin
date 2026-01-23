@@ -161,6 +161,10 @@ const props = defineProps({
     type: String,
     default: null,
   },
+  eventName: {
+    type: String,
+    default: '',
+  },
   marshalId: {
     type: String,
     default: null,
@@ -268,10 +272,13 @@ const copyLink = async () => {
 const shareLink = async () => {
   if (!navigator.share || !magicLink.value) return;
 
+  const marshalName = props.form.name || 'Hi';
+  const eventName = props.eventName || 'the event';
+
   try {
     await navigator.share({
-      title: 'Your event login link',
-      text: `Use this link to access your event dashboard: ${props.form.name || 'Marshal'}`,
+      title: 'Your OnTheDayApp login link',
+      text: `${marshalName}, here's your magic link for ${eventName} in OnTheDayApp`,
       url: magicLink.value,
     });
   } catch (error) {

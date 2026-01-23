@@ -268,6 +268,7 @@
       :show="showEditMarshal"
       :marshal="selectedMarshal"
       :event-id="route.params.eventId"
+      :event-name="event?.name"
       :assignments="marshalAssignmentsForEdit"
       :available-locations="availableMarshalLocations"
       :all-locations="locationStatuses"

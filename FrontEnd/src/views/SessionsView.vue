@@ -326,7 +326,14 @@ const loadAdminEvents = async () => {
 
   try {
     setAuthContext('admin');
-    const response = await eventsApi.getAllSummary();
+    // Try summary endpoint first, fall back to full endpoint if not available
+    let response;
+    try {
+      response = await eventsApi.getAllSummary();
+    } catch (summaryError) {
+      // Summary endpoint might not exist yet, fall back to full endpoint
+      response = await eventsApi.getAll();
+    }
     adminEvents.value = response.data || [];
   } catch (error) {
     console.error('Failed to load admin events:', error);

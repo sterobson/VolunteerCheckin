@@ -1508,19 +1508,22 @@ function Deploy-FrontendFromBuildJob($envConfig, $backendSlot, $buildJob) {
     Write-Info "Deploying to Azure Static Web Apps..."
 
     $ErrorActionPreference = "Continue"
-    swa deploy $distPath `
+    $swaOutput = swa deploy $distPath `
         --deployment-token $deploymentToken `
-        --env production 2>&1 | ForEach-Object {
-            if ($_ -is [System.Management.Automation.ErrorRecord]) {
-                if ($_.Exception.Message -and $_.Exception.Message.Trim()) {
-                    Write-Host $_.Exception.Message
-                }
-            } else {
-                Write-Host $_
-            }
-        }
+        --env production 2>&1
     $swaResult = $LASTEXITCODE
     $ErrorActionPreference = "Stop"
+
+    # Display output
+    $swaOutput | ForEach-Object {
+        if ($_ -is [System.Management.Automation.ErrorRecord]) {
+            if ($_.Exception.Message -and $_.Exception.Message.Trim()) {
+                Write-Host $_.Exception.Message
+            }
+        } else {
+            Write-Host $_
+        }
+    }
 
     if ($swaResult -ne 0) {
         Write-ErrorMessage "Frontend deployment failed"

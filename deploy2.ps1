@@ -1049,7 +1049,7 @@ function Wait-ForBackendBuild($buildJob) {
 # ============================================================================
 # Production Backend Deployment
 # ============================================================================
-function Deploy-ProductionBackend($envConfig, $slotName, $backendBuildJob) {
+function Deploy-ProductionBackend($envConfig, $slotName, $backendBuildJob, $alsoDeployingFrontend = $false) {
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Info "  Deploying Backend to $slotName"
@@ -1067,9 +1067,15 @@ function Deploy-ProductionBackend($envConfig, $slotName, $backendBuildJob) {
     # Get expected version before deployment
     $expectedVersion = Get-ExpectedVersion
 
-    # Start parallel jobs immediately: CORS, DEPLOYMENT_VERSION, and env var updates
-    # These all run while we wait for backend build and during deployment
-    Write-Info "Starting parallel configuration (CORS + version + env vars)..."
+    # Add DEPLOYMENT_VERSION to the env var updates (avoids race condition with separate job)
+    if (-not $envVarUpdates) {
+        $envVarUpdates = @{}
+    }
+    $envVarUpdates["DEPLOYMENT_VERSION"] = $expectedVersion
+
+    # Start parallel jobs: CORS and env var updates (including DEPLOYMENT_VERSION)
+    # These run while we wait for backend build and during deployment
+    Write-Info "Starting parallel configuration (CORS + env vars)..."
 
     $corsJob = Start-Job -ScriptBlock {
         param($resourceGroup, $slotName, $origins)
@@ -1078,22 +1084,14 @@ function Deploy-ProductionBackend($envConfig, $slotName, $backendBuildJob) {
         }
     } -ArgumentList $resourceGroup, $slotName, $envConfig.cors
 
-    $versionJob = Start-Job -ScriptBlock {
-        param($resourceGroup, $slotName, $expectedVersion)
-        az functionapp config appsettings set --resource-group $resourceGroup --name $slotName --settings "DEPLOYMENT_VERSION=$expectedVersion" 2>&1 | Out-Null
-        return $LASTEXITCODE -eq 0
-    } -ArgumentList $resourceGroup, $slotName, $expectedVersion
-
     $envVarJob = Start-EnvVarUpdateJob $resourceGroup $slotName $envVarUpdates
 
     # Wait for backend build to complete (started earlier in parallel)
-    # CORS, version, and env var jobs continue running during this wait
+    # CORS and env var jobs continue running during this wait
     if (-not (Wait-ForBackendBuild $backendBuildJob)) {
         Stop-Job $corsJob -ErrorAction SilentlyContinue
-        Stop-Job $versionJob -ErrorAction SilentlyContinue
         if ($envVarJob) { Stop-Job $envVarJob -ErrorAction SilentlyContinue }
         Remove-Job $corsJob -Force -ErrorAction SilentlyContinue
-        Remove-Job $versionJob -Force -ErrorAction SilentlyContinue
         if ($envVarJob) { Remove-Job $envVarJob -Force -ErrorAction SilentlyContinue }
         return $false
     }
@@ -1131,27 +1129,19 @@ function Deploy-ProductionBackend($envConfig, $slotName, $backendBuildJob) {
     # Wait for parallel jobs to complete
     Write-Info "Waiting for parallel configuration to complete..."
     $null = Wait-Job $corsJob -Timeout 60
-    $null = Wait-Job $versionJob -Timeout 60
     if ($envVarJob) { $null = Wait-Job $envVarJob -Timeout 120 }
 
-    $versionSuccess = Receive-Job $versionJob -ErrorAction SilentlyContinue
     $envVarSuccess = if ($envVarJob) { Receive-Job $envVarJob -ErrorAction SilentlyContinue } else { $true }
 
     Remove-Job $corsJob -Force -ErrorAction SilentlyContinue
-    Remove-Job $versionJob -Force -ErrorAction SilentlyContinue
     if ($envVarJob) { Remove-Job $envVarJob -Force -ErrorAction SilentlyContinue }
 
-    if ($versionSuccess -eq $false) {
-        Write-ErrorMessage "Failed to set DEPLOYMENT_VERSION"
-        return $false
-    }
     if ($envVarSuccess -eq $false) {
-        Write-ErrorMessage "Failed to set environment variables"
+        Write-ErrorMessage "Failed to set environment variables (including DEPLOYMENT_VERSION)"
         return $false
     }
-    Write-Success "DEPLOYMENT_VERSION set to $expectedVersion"
     Write-Success "CORS configuration completed"
-    if ($envVarJob) { Write-Success "Environment variables updated" }
+    if ($envVarJob) { Write-Success "Environment variables updated (DEPLOYMENT_VERSION: $expectedVersion)" }
 
     # Restart the function app to pick up the new settings
     Write-Info "Restarting function app to apply settings..."
@@ -1163,15 +1153,20 @@ function Deploy-ProductionBackend($envConfig, $slotName, $backendBuildJob) {
     if (-not $verified) {
         Write-ErrorMessage "Backend verification failed. The deployment may have issues."
         Write-Host ""
-        Write-Host "Would you like to continue anyway?" -ForegroundColor Cyan
-        Write-Host "  1. Yes, continue" -ForegroundColor White
-        Write-Host "  2. No, abort" -ForegroundColor White
-        Write-Host ""
-
-        $choice = Read-Host "Enter choice (1 or 2)"
-        if ($choice -ne "1") {
-            return $false
+        Write-Host "What would you like to do?" -ForegroundColor Cyan
+        Write-Host "  1. Abort" -ForegroundColor White
+        if ($alsoDeployingFrontend) {
+            Write-Host "  2. Abort but still deploy frontend" -ForegroundColor White
+            Write-Host ""
+            $choice = Read-Host "Enter choice (1 or 2)"
+            if ($choice -eq "2") {
+                return "frontend-only"
+            }
+        } else {
+            Write-Host ""
+            $null = Read-Host "Press Enter to abort"
         }
+        return $false
     }
 
     # Update state with last deployed slot
@@ -1685,14 +1680,18 @@ if ($Environment -eq "production") {
         $frontendBuildJob = Start-FrontendBuildJob $envConfig $selectedSlot
 
         # Deploy backend (build job passed in, already running)
-        $backendResult = Deploy-ProductionBackend $envConfig $selectedSlot $backendBuildJob
-        if (-not $backendResult) {
+        $backendResult = Deploy-ProductionBackend $envConfig $selectedSlot $backendBuildJob $true
+        if ($backendResult -eq $false) {
             $deploymentSuccess = $false
             # Cancel frontend job
             Stop-Job $frontendBuildJob -ErrorAction SilentlyContinue
             Remove-Job $frontendBuildJob -Force -ErrorAction SilentlyContinue
         } else {
             # Deploy frontend (using already-built files)
+            # This runs if backend succeeded ($true) or user chose "frontend-only"
+            if ($backendResult -eq "frontend-only") {
+                $deploymentSuccess = $false
+            }
             $frontendResult = Deploy-FrontendFromBuildJob $envConfig $selectedSlot $frontendBuildJob
             if (-not $frontendResult) { $deploymentSuccess = $false }
         }

@@ -31,6 +31,7 @@ $script:RequiredEnvVars = @(
     "FRONTEND_URL",
     "SMTP_HOST",
     "SMTP_PASSWORD",
+    "SMTP_PORT",
     "SMTP_USERNAME"
 )
 
@@ -649,17 +650,27 @@ function Get-ExpectedVersion {
 }
 
 function Test-BackendVersion($slotName, $expectedVersion, $maxRetries = 10) {
-    $url = "https://$slotName.azurewebsites.net/api/version"
+    $baseUrl = "https://$slotName.azurewebsites.net/api/version"
 
     Write-Info "Verifying backend deployment..."
     Write-Gray "  Expected version: $expectedVersion"
-    Write-Gray "  URL: $url"
+    Write-Gray "  URL: $baseUrl"
+
+    # Headers to prevent caching
+    $headers = @{
+        "Cache-Control" = "no-cache, no-store, must-revalidate"
+        "Pragma" = "no-cache"
+    }
 
     for ($i = 1; $i -le $maxRetries; $i++) {
         Write-Gray "  Attempt $i of $maxRetries..."
 
         try {
-            $response = Invoke-RestMethod -Uri $url -Method Get -TimeoutSec 10
+            # Add cache-busting query parameter
+            $cacheBuster = [System.Guid]::NewGuid().ToString("N")
+            $url = "$baseUrl`?_=$cacheBuster"
+
+            $response = Invoke-RestMethod -Uri $url -Method Get -Headers $headers -TimeoutSec 10
             $actualVersion = $response.version
 
             Write-Gray "  Actual version: $actualVersion"
@@ -1014,8 +1025,8 @@ function Deploy-ProductionBackend($envConfig, $slotName) {
     # Restart the function app to pick up the new settings
     Write-Info "Restarting function app to apply settings..."
     Restart-AzureFunctionApp $resourceGroup $slotName
-    Write-Gray "Waiting for app to restart..."
-    Start-Sleep -Seconds 15
+    Write-Gray "Waiting for app to restart (this may take up to a minute)..."
+    Start-Sleep -Seconds 45
 
     # Wait for CORS job to complete
     Write-Info "Waiting for CORS configuration to complete..."

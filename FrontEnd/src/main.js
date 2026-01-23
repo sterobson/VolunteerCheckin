@@ -1,3 +1,8 @@
+// Redirect www to apex domain to ensure consistent localStorage/IndexedDB
+if (window.location.hostname.startsWith('www.')) {
+  window.location.replace(window.location.href.replace(window.location.hostname, window.location.hostname.slice(4)))
+}
+
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'

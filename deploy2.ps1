@@ -717,15 +717,26 @@ function Get-GitChangedFiles {
     return $status -split "`n" | ForEach-Object { $_.Substring(3).Trim() } | Where-Object { $_ }
 }
 
-function Test-OnlyVersionFileChanged {
+function Test-OnlyDeploymentFilesChanged {
     $changedFiles = Get-GitChangedFiles
     if ($changedFiles.Count -eq 0) {
         return $false
     }
-    if ($changedFiles.Count -eq 1 -and $changedFiles[0] -eq ".deployment/version.txt") {
-        return $true
+
+    # Auto-commit if only deployment-related files changed
+    $deploymentFiles = @(
+        ".deployment/version.txt",
+        ".deployment/state.json",
+        "deploy2.ps1"
+    )
+
+    foreach ($file in $changedFiles) {
+        if ($deploymentFiles -notcontains $file) {
+            return $false
+        }
     }
-    return $false
+
+    return $true
 }
 
 function Write-VersionFile {
@@ -772,9 +783,9 @@ function Ensure-GitClean {
     $timestamp = Write-VersionFile
     Write-Success "Version file written: $timestamp"
 
-    # Check if only the version file changed
-    if (Test-OnlyVersionFileChanged) {
-        Write-Info "Only version file changed, auto-committing..."
+    # Check if only deployment files changed (version.txt and/or state.json)
+    if (Test-OnlyDeploymentFilesChanged) {
+        Write-Info "Only deployment files changed, auto-committing..."
         Commit-AndPush "Deployment $timestamp"
         return
     }
@@ -1025,8 +1036,6 @@ function Deploy-ProductionBackend($envConfig, $slotName) {
     # Restart the function app to pick up the new settings
     Write-Info "Restarting function app to apply settings..."
     Restart-AzureFunctionApp $resourceGroup $slotName
-    Write-Gray "Waiting for app to restart (this may take up to a minute)..."
-    Start-Sleep -Seconds 45
 
     # Wait for CORS job to complete
     Write-Info "Waiting for CORS configuration to complete..."

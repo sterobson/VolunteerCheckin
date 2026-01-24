@@ -6,7 +6,7 @@
                                                           "onthedayapp-production-02"
                                                       ],
                                             "lastDeployedSlot":  "onthedayapp-production-01",
-                                            "resourceGroup":  "VolunteerCheckIn",
+                                            "resourceGroup":  "OnTheDayApp-Production",
                                             "cors":  [
                                                          "https://portal.azure.com",
                                                          "https://sterobson.github.io",

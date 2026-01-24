@@ -34,7 +34,8 @@
       "Bash(nvm:*)",
       "Bash(winget:*)",
       "Bash(powershell.exe -Command \"cd ''C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\Backend''; dotnet build 2>&1\")",
-      "Bash(powershell.exe -Command \"cd ''C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\Backend''; dotnet test --no-build 2>&1\")"
+      "Bash(powershell.exe -Command \"cd ''C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\Backend''; dotnet test --no-build 2>&1\")",
+      "Bash(powershell:*)"
     ]
   }
 }

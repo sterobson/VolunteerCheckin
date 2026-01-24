@@ -415,6 +415,196 @@ function Set-AzureFunctionAppCors($resourceGroup, $appName, $origins) {
 }
 
 # ============================================================================
+# Azure Resource Verification
+# ============================================================================
+function Test-AzureFunctionAppExists($resourceGroup, $appName) {
+    $ErrorActionPreference = "Continue"
+    $result = az functionapp show --resource-group $resourceGroup --name $appName 2>&1
+    $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = "Stop"
+    return $exitCode -eq 0
+}
+
+function Get-AzureResourceGroups {
+    $ErrorActionPreference = "Continue"
+    $result = az group list --query "[].name" -o tsv 2>&1
+    $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = "Stop"
+
+    if ($exitCode -ne 0) {
+        return @()
+    }
+    return $result -split "`n" | Where-Object { $_ }
+}
+
+function Get-AzureFunctionAppsInResourceGroup($resourceGroup) {
+    $ErrorActionPreference = "Continue"
+    $result = az functionapp list --resource-group $resourceGroup --query "[].name" -o tsv 2>&1
+    $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = "Stop"
+
+    if ($exitCode -ne 0) {
+        return @()
+    }
+    return $result -split "`n" | Where-Object { $_ }
+}
+
+function Verify-AzureResources($envConfig) {
+    $resourceGroup = $envConfig.resourceGroup
+    $slots = @($envConfig.slots)
+
+    Write-Info "Verifying Azure resources..."
+    Write-Gray "  Resource group: $resourceGroup"
+    Write-Gray "  Function apps: $($slots -join ', ')"
+
+    # Test if we can access the first slot
+    $testSlot = $slots[0]
+    $accessible = Test-AzureFunctionAppExists $resourceGroup $testSlot
+
+    if ($accessible) {
+        Write-Success "Azure resources verified"
+        return $envConfig
+    }
+
+    Write-Host ""
+    Write-Warning "Cannot access Function App '$testSlot' in resource group '$resourceGroup'"
+    Write-Host ""
+    Write-Host "This could mean:" -ForegroundColor Cyan
+    Write-Host "  - The resource group name has changed" -ForegroundColor Gray
+    Write-Host "  - The Function App name has changed" -ForegroundColor Gray
+    Write-Host "  - You don't have access to these resources" -ForegroundColor Gray
+    Write-Host ""
+
+    Write-Host "Would you like to update the Azure resource configuration?" -ForegroundColor Cyan
+    Write-Host "  1. Yes, let me update the settings" -ForegroundColor White
+    Write-Host "  2. No, abort deployment" -ForegroundColor White
+    Write-Host ""
+
+    $choice = Read-Host "Enter choice (1 or 2)"
+
+    if ($choice -ne "1") {
+        Write-Info "Deployment cancelled."
+        exit 0
+    }
+
+    # Get available resource groups
+    Write-Host ""
+    Write-Info "Fetching available resource groups..."
+    $resourceGroups = Get-AzureResourceGroups
+
+    if ($resourceGroups.Count -eq 0) {
+        Write-ErrorMessage "No resource groups found. Check your Azure CLI login and subscription."
+        exit 1
+    }
+
+    Write-Host ""
+    Write-Host "Available resource groups:" -ForegroundColor Cyan
+    for ($i = 0; $i -lt $resourceGroups.Count; $i++) {
+        $marker = if ($resourceGroups[$i] -eq $resourceGroup) { " (current)" } else { "" }
+        Write-Host "  $($i + 1). $($resourceGroups[$i])$marker" -ForegroundColor White
+    }
+    Write-Host ""
+
+    $rgChoice = Read-Host "Select resource group (1-$($resourceGroups.Count)) or enter a new name"
+
+    $newResourceGroup = $null
+    if ($rgChoice -match '^\d+$') {
+        $index = [int]$rgChoice - 1
+        if ($index -ge 0 -and $index -lt $resourceGroups.Count) {
+            $newResourceGroup = $resourceGroups[$index]
+        }
+    }
+
+    if (-not $newResourceGroup) {
+        $newResourceGroup = $rgChoice
+    }
+
+    # Get function apps in the selected resource group
+    Write-Host ""
+    Write-Info "Fetching Function Apps in '$newResourceGroup'..."
+    $functionApps = Get-AzureFunctionAppsInResourceGroup $newResourceGroup
+
+    if ($functionApps.Count -eq 0) {
+        Write-Warning "No Function Apps found in '$newResourceGroup'"
+        Write-Host ""
+        $manualName = Read-Host "Enter the Function App name manually (or press Enter to abort)"
+
+        if ([string]::IsNullOrWhiteSpace($manualName)) {
+            Write-Info "Deployment cancelled."
+            exit 0
+        }
+
+        $functionApps = @($manualName)
+    }
+
+    # Let user select/update slots
+    $newSlots = @()
+
+    Write-Host ""
+    Write-Host "Available Function Apps in '$newResourceGroup':" -ForegroundColor Cyan
+    for ($i = 0; $i -lt $functionApps.Count; $i++) {
+        Write-Host "  $($i + 1). $($functionApps[$i])" -ForegroundColor White
+    }
+    Write-Host ""
+
+    Write-Host "Select Function App(s) for deployment slots." -ForegroundColor Cyan
+    Write-Host "Current slots: $($slots -join ', ')" -ForegroundColor Gray
+    Write-Host ""
+
+    foreach ($currentSlot in $slots) {
+        $slotChoice = Read-Host "Replacement for '$currentSlot' (1-$($functionApps.Count), or enter name, or press Enter to keep)"
+
+        if ([string]::IsNullOrWhiteSpace($slotChoice)) {
+            $newSlots += $currentSlot
+        } elseif ($slotChoice -match '^\d+$') {
+            $index = [int]$slotChoice - 1
+            if ($index -ge 0 -and $index -lt $functionApps.Count) {
+                $newSlots += $functionApps[$index]
+            } else {
+                $newSlots += $currentSlot
+            }
+        } else {
+            $newSlots += $slotChoice
+        }
+    }
+
+    # Verify the new configuration
+    Write-Host ""
+    Write-Info "Verifying new configuration..."
+    Write-Gray "  Resource group: $newResourceGroup"
+    Write-Gray "  Slots: $($newSlots -join ', ')"
+
+    $verifySlot = $newSlots[0]
+    $newAccessible = Test-AzureFunctionAppExists $newResourceGroup $verifySlot
+
+    if (-not $newAccessible) {
+        Write-ErrorMessage "Still cannot access Function App '$verifySlot' in '$newResourceGroup'"
+        Write-Host ""
+        Write-Host "Please verify:" -ForegroundColor Yellow
+        Write-Host "  - The resource group and Function App names are correct" -ForegroundColor Gray
+        Write-Host "  - You have access to these resources" -ForegroundColor Gray
+        Write-Host "  - Run 'az account show' to check your subscription" -ForegroundColor Gray
+        exit 1
+    }
+
+    Write-Success "New configuration verified!"
+
+    # Update the state file
+    Write-Host ""
+    Write-Info "Updating deployment state..."
+
+    $state = Get-DeploymentState
+    $state.environments.production.resourceGroup = $newResourceGroup
+    $state.environments.production.slots = $newSlots
+    Save-DeploymentState $state
+
+    Write-Success "Deployment state updated"
+
+    # Return updated config
+    return Get-EnvironmentConfig "production"
+}
+
+# ============================================================================
 # Environment Variable Sync
 # ============================================================================
 function Sync-EnvironmentVariables($resourceGroup, $slotName, $allSlots) {
@@ -1644,6 +1834,9 @@ if ($Environment -eq "production") {
 
     # Load environment config
     $envConfig = Get-EnvironmentConfig "production"
+
+    # Verify Azure resources are accessible (offers to update if not)
+    $envConfig = Verify-AzureResources $envConfig
 
     # Select deployment slot
     $selectedSlot = $null

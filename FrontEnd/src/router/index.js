@@ -11,6 +11,8 @@ function initializeMarshalSessions() {
   cleanupOldSessions();
 }
 import Home from '../views/Home.vue';
+import PricingView from '../views/PricingView.vue';
+import AboutView from '../views/AboutView.vue';
 import AdminLogin from '../views/AdminLogin.vue';
 import AdminVerify from '../views/AdminVerify.vue';
 import AdminEventManage from '../views/AdminEventManage.vue';
@@ -24,6 +26,16 @@ const routes = [
     component: Home,
   },
   {
+    path: '/pricing',
+    name: 'Pricing',
+    component: PricingView,
+  },
+  {
+    path: '/about',
+    name: 'About',
+    component: AboutView,
+  },
+  {
     path: '/admin/login',
     name: 'AdminLogin',
     component: AdminLogin,
@@ -34,17 +46,21 @@ const routes = [
     component: AdminVerify,
   },
   {
-    path: '/sessions',
-    name: 'Sessions',
+    path: '/myevents',
+    name: 'MyEvents',
     component: SessionsView,
   },
   {
+    path: '/sessions',
+    redirect: '/myevents',
+  },
+  {
     path: '/admin/dashboard',
-    redirect: '/sessions',
+    redirect: '/myevents',
   },
   {
     path: '/admin/profile',
-    redirect: '/sessions',
+    redirect: '/myevents',
   },
   {
     path: '/admin/event/:eventId',
@@ -54,7 +70,7 @@ const routes = [
   },
   {
     path: '/marshal',
-    redirect: '/sessions',
+    redirect: '/myevents',
   },
   {
     path: '/event/:eventId',
@@ -95,7 +111,7 @@ router.beforeEach((to, from, next) => {
   if (to.meta.requiresAuth) {
     // Admin routes
     setAuthContext('admin');
-  } else if (to.name !== 'MarshalView' && to.name !== 'Sessions') {
+  } else if (to.name !== 'MarshalView' && to.name !== 'MyEvents') {
     // Non-auth routes (Home, login pages, etc.) - clear context
     setAuthContext(null);
   }
@@ -127,10 +143,10 @@ router.beforeEach((to, from, next) => {
       return;
     }
 
-    // No session and no magic code - redirect to sessions if we have other sessions
+    // No session and no magic code - redirect to my events if we have other sessions
     // Otherwise show the "no session" message in the view
     if (hasSessions()) {
-      next({ name: 'Sessions' });
+      next({ name: 'MyEvents' });
       return;
     }
   }

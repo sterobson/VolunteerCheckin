@@ -477,7 +477,31 @@ public record MarshalMagicLinkResponse(
 /// </summary>
 public record SendMarshalMagicLinkRequest(
     string? FrontendUrl = null,
-    bool? UseHashRouting = null
+    bool? UseHashRouting = null,
+    string? Email = null,
+    bool IncludeDetails = false
+);
+
+/// <summary>
+/// Note info for email (simplified).
+/// </summary>
+public record NoteEmailInfo(
+    string Title,
+    string Content,
+    string Priority,
+    bool IsPinned
+);
+
+/// <summary>
+/// Checkpoint assignment details for email.
+/// </summary>
+public record CheckpointEmailInfo(
+    string Name,
+    string? Description,
+    DateTime? ArrivalTime,
+    double? Latitude,
+    double? Longitude,
+    List<NoteEmailInfo> Notes
 );
 
 public record BulkUpdateLocationTimesRequest(
@@ -712,6 +736,14 @@ public record VerifyTokenResponse(
     string? SessionToken,
     PersonInfo? Person,
     string? Message
+);
+
+/// <summary>
+/// Request to verify a 6-digit login code
+/// </summary>
+public record VerifyCodeRequest(
+    string Email,
+    string Code
 );
 
 /// <summary>

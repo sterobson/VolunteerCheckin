@@ -11,6 +11,10 @@ public interface IAuthTokenRepository
     /// </summary>
     Task<AuthTokenEntity?> GetByTokenHashAsync(string tokenHash);
     Task<IEnumerable<AuthTokenEntity>> GetByPersonAsync(string personId);
+    /// <summary>
+    /// Get a valid (unused, not expired) token for a person with matching login code.
+    /// </summary>
+    Task<AuthTokenEntity?> GetValidTokenByPersonAndCodeAsync(string personId, string loginCode);
     Task UpdateAsync(AuthTokenEntity token);
     Task DeleteAsync(string tokenHash);
     Task DeleteExpiredTokensAsync();

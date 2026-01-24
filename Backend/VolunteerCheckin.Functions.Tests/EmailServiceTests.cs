@@ -91,15 +91,15 @@ public class EmailServiceTests
         // Arrange
         Mock<EmailService> mockService = new Mock<EmailService>() { CallBase = false };
         mockService
-            .Setup(s => s.SendMagicLinkEmailAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .Setup(s => s.SendMagicLinkEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
 
         // Act
-        await mockService.Object.SendMagicLinkEmailAsync("user@example.com", "https://example.com/login?token=abc123");
+        await mockService.Object.SendMagicLinkEmailAsync("user@example.com", "https://example.com/login?token=abc123", "123456");
 
         // Assert
         mockService.Verify(
-            s => s.SendMagicLinkEmailAsync("user@example.com", It.Is<string>(link => link.Contains("abc123"))),
+            s => s.SendMagicLinkEmailAsync("user@example.com", It.Is<string>(link => link.Contains("abc123")), It.IsAny<string>()),
             Times.Once);
     }
 
@@ -109,23 +109,26 @@ public class EmailServiceTests
         // Arrange
         string capturedEmail = string.Empty;
         string capturedLink = string.Empty;
+        string capturedCode = string.Empty;
 
         Mock<EmailService> mockService = new Mock<EmailService>() { CallBase = false };
         mockService
-            .Setup(s => s.SendMagicLinkEmailAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .Callback<string, string>((email, link) =>
+            .Setup(s => s.SendMagicLinkEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<string, string, string>((email, link, code) =>
             {
                 capturedEmail = email;
                 capturedLink = link;
+                capturedCode = code;
             })
             .Returns(Task.CompletedTask);
 
         // Act
-        await mockService.Object.SendMagicLinkEmailAsync("admin@company.com", "https://app.example.com/auth/verify?t=xyz789");
+        await mockService.Object.SendMagicLinkEmailAsync("admin@company.com", "https://app.example.com/auth/verify?t=xyz789", "654321");
 
         // Assert
         capturedEmail.ShouldBe("admin@company.com");
         capturedLink.ShouldBe("https://app.example.com/auth/verify?t=xyz789");
+        capturedCode.ShouldBe("654321");
     }
 
     [TestMethod]
@@ -134,14 +137,14 @@ public class EmailServiceTests
         // Arrange
         Mock<EmailService> mockService = new Mock<EmailService>() { CallBase = false };
         mockService
-            .Setup(s => s.SendMagicLinkEmailAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .Setup(s => s.SendMagicLinkEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
 
         // Act & Assert - Should not throw
-        await mockService.Object.SendMagicLinkEmailAsync("user+tag@example.com", "https://example.com/link");
-        await mockService.Object.SendMagicLinkEmailAsync("user.name@sub.example.com", "https://example.com/link");
+        await mockService.Object.SendMagicLinkEmailAsync("user+tag@example.com", "https://example.com/link", "111111");
+        await mockService.Object.SendMagicLinkEmailAsync("user.name@sub.example.com", "https://example.com/link", "222222");
 
-        mockService.Verify(s => s.SendMagicLinkEmailAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Exactly(2));
+        mockService.Verify(s => s.SendMagicLinkEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Exactly(2));
     }
 
     #endregion
@@ -291,7 +294,7 @@ public class EmailServiceTests
         int marshalEmailCount = 0;
 
         mockService
-            .Setup(s => s.SendMagicLinkEmailAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .Setup(s => s.SendMagicLinkEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
             .Callback(() => adminEmailCount++)
             .Returns(Task.CompletedTask);
 
@@ -305,8 +308,8 @@ public class EmailServiceTests
             .Returns(Task.CompletedTask);
 
         // Act - Send multiple emails of each type
-        await mockService.Object.SendMagicLinkEmailAsync("admin1@example.com", "link1");
-        await mockService.Object.SendMagicLinkEmailAsync("admin2@example.com", "link2");
+        await mockService.Object.SendMagicLinkEmailAsync("admin1@example.com", "link1", "111111");
+        await mockService.Object.SendMagicLinkEmailAsync("admin2@example.com", "link2", "222222");
         await mockService.Object.SendMarshalMagicLinkEmailAsync("m1@example.com", "Marshal 1", "Event", "link1");
         await mockService.Object.SendMarshalMagicLinkEmailAsync("m2@example.com", "Marshal 2", "Event", "link2");
         await mockService.Object.SendMarshalMagicLinkEmailAsync("m3@example.com", "Marshal 3", "Event", "link3");
@@ -322,12 +325,12 @@ public class EmailServiceTests
         // Arrange
         Mock<EmailService> mockService = new Mock<EmailService>() { CallBase = false };
         mockService
-            .Setup(s => s.SendMagicLinkEmailAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .Setup(s => s.SendMagicLinkEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
             .ThrowsAsync(new InvalidOperationException("SMTP server unavailable"));
 
         // Act & Assert
         await Should.ThrowAsync<InvalidOperationException>(async () =>
-            await mockService.Object.SendMagicLinkEmailAsync("user@example.com", "https://example.com/link"));
+            await mockService.Object.SendMagicLinkEmailAsync("user@example.com", "https://example.com/link", "123456"));
     }
 
     [TestMethod]
@@ -336,12 +339,12 @@ public class EmailServiceTests
         // Arrange
         Mock<EmailService> mockService = new Mock<EmailService>() { CallBase = false };
         mockService
-            .Setup(s => s.SendMagicLinkEmailAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .Setup(s => s.SendMagicLinkEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
             .ThrowsAsync(new TimeoutException("Connection timed out"));
 
         // Act & Assert
         await Should.ThrowAsync<TimeoutException>(async () =>
-            await mockService.Object.SendMagicLinkEmailAsync("user@example.com", "https://example.com/link"));
+            await mockService.Object.SendMagicLinkEmailAsync("user@example.com", "https://example.com/link", "123456"));
     }
 
     [TestMethod]
@@ -373,14 +376,14 @@ public class EmailServiceTests
         // Arrange
         Mock<EmailService> mockService = new Mock<EmailService>() { CallBase = false };
         mockService
-            .Setup(s => s.SendMagicLinkEmailAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .Setup(s => s.SendMagicLinkEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
 
         // Act - Empty email string
-        await mockService.Object.SendMagicLinkEmailAsync("", "https://example.com/link");
+        await mockService.Object.SendMagicLinkEmailAsync("", "https://example.com/link", "123456");
 
         // Assert
-        mockService.Verify(s => s.SendMagicLinkEmailAsync("", It.IsAny<string>()), Times.Once);
+        mockService.Verify(s => s.SendMagicLinkEmailAsync("", It.IsAny<string>(), It.IsAny<string>()), Times.Once);
     }
 
     [TestMethod]
@@ -412,7 +415,7 @@ public class EmailServiceTests
         // Arrange
         Mock<EmailService> mockService = new Mock<EmailService>() { CallBase = false };
         mockService
-            .Setup(s => s.SendMagicLinkEmailAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .Setup(s => s.SendMagicLinkEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
 
         // Generate a long URL
@@ -420,11 +423,11 @@ public class EmailServiceTests
         string longLink = $"https://example.com/auth/verify?token={longToken}";
 
         // Act
-        await mockService.Object.SendMagicLinkEmailAsync("user@example.com", longLink);
+        await mockService.Object.SendMagicLinkEmailAsync("user@example.com", longLink, "123456");
 
         // Assert
         mockService.Verify(
-            s => s.SendMagicLinkEmailAsync(It.IsAny<string>(), It.Is<string>(l => l.Length > 500)),
+            s => s.SendMagicLinkEmailAsync(It.IsAny<string>(), It.Is<string>(l => l.Length > 500), It.IsAny<string>()),
             Times.Once);
     }
 

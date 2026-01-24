@@ -69,25 +69,34 @@
       <div v-if="loadingMagicLink" class="loading-text">Loading link...</div>
 
       <div v-else-if="magicLink" class="magic-link-container">
-        <div class="magic-link-row">
-          <input
-            type="text"
-            :value="magicLink"
-            readonly
-            class="form-input magic-link-input"
-            @focus="$event.target.select()"
-          />
+        <input
+          type="text"
+          :value="magicLink"
+          readonly
+          class="form-input magic-link-input"
+          @focus="$event.target.select()"
+        />
+        <div class="magic-link-buttons">
           <button
             type="button"
-            class="btn btn-secondary"
+            class="btn btn-secondary btn-icon"
             @click="copyLink"
+            :title="copySuccess ? 'Copied!' : 'Copy link'"
           >
-            {{ copySuccess ? 'Copied!' : 'Copy link' }}
+            <!-- Checkmark icon when copied -->
+            <svg v-if="copySuccess" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            <!-- Copy icon -->
+            <svg v-else xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
           </button>
           <button
             v-if="canShare"
             type="button"
-            class="btn btn-secondary"
+            class="btn btn-secondary btn-icon"
             @click="shareLink"
             title="Share link"
           >
@@ -101,7 +110,7 @@
           </button>
           <button
             type="button"
-            class="btn btn-secondary"
+            class="btn btn-secondary btn-icon"
             @click="showQrCode = true"
             title="Show QR code"
           >
@@ -115,18 +124,20 @@
               <rect x="19" y="19" width="2" height="2"></rect>
             </svg>
           </button>
-        </div>
-        <p v-if="copyError" class="error-text">{{ copyError }}</p>
-        <div v-if="hasEmail" class="magic-link-actions">
           <button
             type="button"
-            class="btn btn-primary"
-            :disabled="sendingEmail"
-            @click="sendEmail"
+            class="btn btn-secondary btn-icon"
+            @click="openEmailModal"
+            title="Send via email"
           >
-            {{ sendingEmail ? 'Sending...' : 'Send via email' }}
+            <!-- Email icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+              <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
+            </svg>
           </button>
         </div>
+        <p v-if="copyError" class="error-text">{{ copyError }}</p>
         <p v-if="emailSentSuccess" class="success-text">Email sent successfully!</p>
         <p v-if="emailError" class="error-text">{{ emailError }}</p>
       </div>
@@ -141,6 +152,56 @@
       title="Scan to log in"
       @close="showQrCode = false"
     />
+
+    <!-- Email Modal -->
+    <Teleport to="body">
+      <div v-if="showEmailModal" class="modal-overlay" @click.self="closeEmailModal">
+        <div class="modal-content email-modal">
+          <div class="modal-header">
+            <h3>Send login link via email</h3>
+            <button type="button" class="close-btn" @click="closeEmailModal">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="emailInput">Email address</label>
+              <input
+                id="emailInput"
+                ref="emailModalInputRef"
+                v-model="emailModalAddress"
+                type="email"
+                class="form-input"
+                placeholder="Enter email address"
+                @keyup.enter="sendEmailFromModal"
+              />
+            </div>
+            <div class="form-group checkbox-group">
+              <label class="checkbox-label">
+                <input
+                  type="checkbox"
+                  v-model="includeDetails"
+                />
+                <span>Include event and {{ termsLower.checkpoint }} details</span>
+              </label>
+              <p v-if="includeDetails" class="help-text">
+                The email will include the event start time and your assigned {{ termsLower.checkpoints }} with arrival times.
+              </p>
+            </div>
+            <p v-if="emailModalError" class="error-text">{{ emailModalError }}</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" @click="closeEmailModal">Cancel</button>
+            <button
+              type="button"
+              class="btn btn-primary"
+              :disabled="!emailModalAddress || sendingEmail"
+              @click="sendEmailFromModal"
+            >
+              {{ sendingEmail ? 'Sending...' : 'Send' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -148,6 +209,9 @@
 import { ref, computed, watch, defineProps, defineEmits, defineExpose, nextTick } from 'vue';
 import { marshalsApi } from '../../../services/api';
 import QrCodeModal from '../../common/QrCodeModal.vue';
+import { useTerminology } from '../../../composables/useTerminology';
+
+const { termsLower } = useTerminology();
 
 // Check if Web Share API is available
 const canShare = computed(() => !!navigator.share);
@@ -192,6 +256,13 @@ const sendingEmail = ref(false);
 const emailSentSuccess = ref(false);
 const emailError = ref('');
 const showQrCode = ref(false);
+
+// Email modal state
+const showEmailModal = ref(false);
+const emailModalAddress = ref('');
+const emailModalInputRef = ref(null);
+const emailModalError = ref('');
+const includeDetails = ref(false);
 
 const handleInput = (field, value) => {
   emit('update:form', { ...props.form, [field]: value });
@@ -289,22 +360,46 @@ const shareLink = async () => {
   }
 };
 
-const sendEmail = async () => {
-  if (!props.eventId || !props.marshalId) return;
+// Email modal functions
+const openEmailModal = () => {
+  // Pre-fill with marshal's email if available
+  emailModalAddress.value = props.form.email || '';
+  emailModalError.value = '';
+  includeDetails.value = false;
+  showEmailModal.value = true;
+  nextTick(() => {
+    emailModalInputRef.value?.focus();
+  });
+};
+
+const closeEmailModal = () => {
+  showEmailModal.value = false;
+  emailModalAddress.value = '';
+  emailModalError.value = '';
+  includeDetails.value = false;
+};
+
+const sendEmailFromModal = async () => {
+  if (!props.eventId || !props.marshalId || !emailModalAddress.value) return;
 
   sendingEmail.value = true;
   emailSentSuccess.value = false;
   emailError.value = '';
+  emailModalError.value = '';
 
   try {
-    await marshalsApi.sendMagicLink(props.eventId, props.marshalId);
+    await marshalsApi.sendMagicLink(props.eventId, props.marshalId, {
+      email: emailModalAddress.value,
+      includeDetails: includeDetails.value,
+    });
     emailSentSuccess.value = true;
+    closeEmailModal();
     setTimeout(() => {
       emailSentSuccess.value = false;
     }, 3000);
   } catch (error) {
     console.error('Failed to send email:', error);
-    emailError.value = error.response?.data?.message || 'Failed to send email';
+    emailModalError.value = error.response?.data?.message || 'Failed to send email';
   } finally {
     sendingEmail.value = false;
   }
@@ -400,13 +495,10 @@ textarea.form-input {
 }
 
 .magic-link-container {
+  container-type: inline-size;
   display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.magic-link-row {
-  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
   gap: 0.5rem;
   align-items: stretch;
 }
@@ -419,9 +511,33 @@ textarea.form-input {
   font-size: 0.85rem;
 }
 
-.magic-link-row .btn {
+.magic-link-buttons {
+  display: flex;
+  gap: 0.5rem;
   flex-shrink: 0;
-  white-space: nowrap;
+}
+
+.btn-icon {
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-icon svg {
+  display: block;
+}
+
+/* When container is narrow, put buttons on their own row */
+@container (max-width: 400px) {
+  .magic-link-input {
+    flex-basis: 100%;
+  }
+
+  .magic-link-buttons {
+    flex-basis: 100%;
+    justify-content: center;
+  }
 }
 
 .magic-link-actions {
@@ -540,5 +656,104 @@ textarea.form-input {
   .contact-phone {
     flex: 1 1 50%;
   }
+}
+
+/* Email Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  padding: 1rem;
+}
+
+.modal-content.email-modal {
+  background: var(--bg-primary);
+  border-radius: 8px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 0;
+  line-height: 1;
+}
+
+.close-btn:hover {
+  color: var(--text-primary);
+}
+
+.modal-body {
+  padding: 1rem;
+}
+
+.modal-body .form-group {
+  margin-bottom: 1rem;
+}
+
+.modal-body .form-group:last-of-type {
+  margin-bottom: 0;
+}
+
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-weight: normal;
+}
+
+.checkbox-label input[type="checkbox"] {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+.checkbox-label span {
+  color: var(--text-primary);
+}
+
+.modal-body .help-text {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-top: 1px solid var(--border-color);
 }
 </style>

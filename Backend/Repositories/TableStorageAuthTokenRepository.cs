@@ -55,6 +55,22 @@ public class TableStorageAuthTokenRepository : IAuthTokenRepository
         return tokens;
     }
 
+    public async Task<AuthTokenEntity?> GetValidTokenByPersonAndCodeAsync(string personId, string loginCode)
+    {
+        DateTime now = DateTime.UtcNow;
+        await foreach (AuthTokenEntity token in _table.QueryAsync<AuthTokenEntity>(t => t.PartitionKey == "AUTHTOKEN"))
+        {
+            if (string.Equals(token.PersonId, personId, StringComparison.Ordinal) &&
+                string.Equals(token.LoginCode, loginCode, StringComparison.Ordinal) &&
+                token.UsedAt == null &&
+                token.ExpiresAt > now)
+            {
+                return token;
+            }
+        }
+        return null;
+    }
+
     public async Task UpdateAsync(AuthTokenEntity token)
     {
         await _table.UpdateEntityAsync(token, token.ETag);

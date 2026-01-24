@@ -113,7 +113,7 @@ public class AuthServiceTests
             .ReturnsAsync((AuthTokenEntity t) => t);
 
         _mockEmailService
-            .Setup(e => e.SendMagicLinkEmailAsync(Email, It.IsAny<string>()))
+            .Setup(e => e.SendMagicLinkEmailAsync(Email, It.IsAny<string>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
 
         // Act
@@ -125,9 +125,11 @@ public class AuthServiceTests
         capturedToken.PersonId.ShouldBe(PersonId);
         capturedToken.RequestIpAddress.ShouldBe(IpAddress);
         capturedToken.ExpiresAt.ShouldBeGreaterThan(DateTime.UtcNow);
+        capturedToken.LoginCode.ShouldNotBeNullOrEmpty();
+        capturedToken.LoginCode.Length.ShouldBe(6);
 
         _mockEmailService.Verify(
-            e => e.SendMagicLinkEmailAsync(Email, It.Is<string>(s => s.Contains(BaseUrl))),
+            e => e.SendMagicLinkEmailAsync(Email, It.Is<string>(s => s.Contains(BaseUrl)), It.IsAny<string>()),
             Times.Once);
     }
 
@@ -150,7 +152,7 @@ public class AuthServiceTests
             .ReturnsAsync((AuthTokenEntity t) => t);
 
         _mockEmailService
-            .Setup(e => e.SendMagicLinkEmailAsync(Email, It.IsAny<string>()))
+            .Setup(e => e.SendMagicLinkEmailAsync(Email, It.IsAny<string>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
 
         // Act
@@ -205,7 +207,7 @@ public class AuthServiceTests
             .ReturnsAsync((AuthTokenEntity t) => t);
 
         _mockEmailService
-            .Setup(e => e.SendMagicLinkEmailAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .Setup(e => e.SendMagicLinkEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
 
         // Act

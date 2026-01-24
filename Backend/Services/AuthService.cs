@@ -69,10 +69,11 @@ public class AuthService
             await _personRepository.AddAsync(person);
         }
 
-        // Generate token
+        // Generate token and 6-digit login code
         string token = GenerateSecureToken(32);
         string tokenHash = HashToken(token);
-        _logger.LogInformation("Generated token (length {TokenLength}), hash: {TokenHashPrefix}...", token.Length, tokenHash.Substring(0, Math.Min(10, tokenHash.Length)));
+        string loginCode = GenerateLoginCode();
+        _logger.LogInformation("Generated token (length {TokenLength}), hash: {TokenHashPrefix}..., code: {LoginCode}", token.Length, tokenHash.Substring(0, Math.Min(10, tokenHash.Length)), loginCode);
 
         // Create auth token
         string tokenId = Guid.NewGuid().ToString();
@@ -85,16 +86,17 @@ public class AuthService
             PersonId = person.PersonId,
             CreatedAt = DateTime.UtcNow,
             ExpiresAt = DateTime.UtcNow.AddMinutes(Constants.MagicLinkExpiryMinutes),
-            RequestIpAddress = ipAddress
+            RequestIpAddress = ipAddress,
+            LoginCode = loginCode
         };
 
         await _tokenRepository.AddAsync(authToken);
 
-        // Send email with magic link (pointing to frontend)
+        // Send email with magic link and login code (pointing to frontend)
         // Use hash routing for GitHub Pages, history routing for Azure Static Web Apps
         string routePrefix = useHashRouting ? "/#" : "";
         string magicLink = $"{baseUrl}{routePrefix}/admin/verify?token={token}";
-        await _emailService.SendMagicLinkEmailAsync(email, magicLink);
+        await _emailService.SendMagicLinkEmailAsync(email, magicLink, loginCode);
 
         return true;
     }
@@ -309,6 +311,73 @@ public class AuthService
         }
 
         return new string(code);
+    }
+
+    /// <summary>
+    /// Verify a 6-digit login code and create a session.
+    /// </summary>
+    public virtual async Task<(bool Success, string? SessionToken, PersonInfo? Person, string? Message)> VerifyLoginCodeAsync(string email, string code, string ipAddress)
+    {
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(code))
+        {
+            _logger.LogWarning("VerifyLoginCodeAsync called with null or empty email/code");
+            return (false, null, null, "Email and code are required");
+        }
+
+        email = email.Trim().ToLowerInvariant();
+        code = code.Trim();
+
+        _logger.LogInformation("VerifyLoginCodeAsync called for email: {Email}, code: {Code}", email, code);
+
+        // Find the person by email
+        PersonEntity? person = await _personRepository.GetByEmailAsync(email);
+        if (person == null)
+        {
+            _logger.LogWarning("Person not found for email: {Email}", email);
+            return (false, null, null, "Invalid code");
+        }
+
+        // Find a valid token for this person with matching code
+        AuthTokenEntity? authToken = await _tokenRepository.GetValidTokenByPersonAndCodeAsync(person.PersonId, code);
+        if (authToken == null)
+        {
+            _logger.LogWarning("No valid token found for person {PersonId} with code {Code}", person.PersonId, code);
+            return (false, null, null, "Invalid or expired code");
+        }
+
+        // Mark token as used
+        authToken.UsedAt = DateTime.UtcNow;
+        authToken.UseIpAddress = ipAddress;
+        await _tokenRepository.UpdateAsync(authToken);
+
+        // Create session (cross-event, no EventId lock)
+        string sessionToken = await _claimsService.CreateSessionAsync(
+            person.PersonId,
+            Constants.AuthMethodSecureEmailLink,
+            eventId: null,
+            ipAddress
+        );
+
+        PersonInfo personInfo = new PersonInfo(
+            person.PersonId,
+            person.Name,
+            person.Email,
+            person.Phone,
+            person.IsSystemAdmin
+        );
+
+        return (true, sessionToken, personInfo, "Login successful");
+    }
+
+    /// <summary>
+    /// Generate a random 6-digit login code (zero-padded).
+    /// </summary>
+    private static string GenerateLoginCode()
+    {
+        byte[] randomBytes = new byte[4];
+        RandomNumberGenerator.Fill(randomBytes);
+        int number = Math.Abs(BitConverter.ToInt32(randomBytes, 0)) % 1000000;
+        return number.ToString("D6");
     }
 
     /// <summary>

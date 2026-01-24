@@ -64,6 +64,12 @@ public class AuthTokenEntity : ITableEntity
     public string UseIpAddress { get; set; } = string.Empty;
 
     /// <summary>
+    /// 6-digit login code (zero-padded) as an alternative to the magic link.
+    /// This allows users to enter the code manually instead of clicking the link.
+    /// </summary>
+    public string LoginCode { get; set; } = string.Empty;
+
+    /// <summary>
     /// Check if this token is still valid
     /// </summary>
     public bool IsValid()

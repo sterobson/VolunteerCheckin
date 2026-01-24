@@ -65,7 +65,7 @@ builder.Services.AddSingleton(_ =>
     }
 
     int smtpPort = int.TryParse(smtpPortStr, out int port) ? port : 587;
-    string senderName = string.IsNullOrWhiteSpace(fromName) ? "Volunteer Check-in" : fromName;
+    string senderName = string.IsNullOrWhiteSpace(fromName) ? "OnTheDayApp" : fromName;
 
     return new EmailService(smtpHost, smtpPort, smtpUsername, smtpPassword, fromEmail, senderName);
 });

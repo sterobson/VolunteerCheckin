@@ -190,6 +190,82 @@ public class AuthFunctions
 #pragma warning restore MA0051
 
     /// <summary>
+    /// Verify a 6-digit login code and create a session.
+    /// POST /api/auth/verify-code
+    /// Body: { "Email": "user@example.com", "Code": "123456" }
+    /// Returns: { "Success": true, "SessionToken": "...", "Person": {...} }
+    /// </summary>
+#pragma warning disable MA0051
+    [Function("VerifyCode")]
+    public async Task<IActionResult> VerifyCode(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/verify-code")] HttpRequest req)
+    {
+        try
+        {
+            string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+            VerifyCodeRequest? request = JsonSerializer.Deserialize<VerifyCodeRequest>(requestBody, FunctionHelpers.JsonOptions);
+
+            if (request == null || string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Code))
+            {
+                return new BadRequestObjectResult(new VerifyTokenResponse(
+                    Success: false,
+                    SessionToken: null,
+                    Person: null,
+                    Message: "Email and code are required"
+                ));
+            }
+
+            // Get IP address for audit trail
+            string ipAddress = req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+            (bool success, string? sessionToken, PersonInfo? person, string? message) =
+                await _authService.VerifyLoginCodeAsync(request.Email, request.Code, ipAddress);
+
+            if (success && sessionToken != null)
+            {
+                // Set session cookie
+                req.HttpContext.Response.Cookies.Append("session", sessionToken, new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = true,
+                    SameSite = SameSiteMode.Strict,
+                    MaxAge = TimeSpan.FromHours(Constants.AdminSessionExpiryHours)
+                });
+
+                return new OkObjectResult(new VerifyTokenResponse(
+                    Success: true,
+                    SessionToken: sessionToken,
+                    Person: person,
+                    Message: message
+                ));
+            }
+            else
+            {
+                return new BadRequestObjectResult(new VerifyTokenResponse(
+                    Success: false,
+                    SessionToken: null,
+                    Person: null,
+                    Message: message
+                ));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error verifying code");
+            return new ObjectResult(new VerifyTokenResponse(
+                Success: false,
+                SessionToken: null,
+                Person: null,
+                Message: "An error occurred"
+            ))
+            {
+                StatusCode = 500
+            };
+        }
+    }
+#pragma warning restore MA0051
+
+    /// <summary>
     /// Authenticate as a marshal using a magic code.
     /// POST /api/auth/marshal-login
     /// Body: { "EventId": "...", "MagicCode": "ABC123" }

@@ -5,13 +5,35 @@
         <div class="modal-card">
           <button class="modal-close" @click="handleClose">&times;</button>
 
-          <!-- Email sent confirmation -->
-          <div v-if="emailSent" class="email-sent">
+          <!-- Email sent - show code input -->
+          <div v-if="emailSent" class="code-entry">
             <div class="check-icon">&#10003;</div>
             <h3>Check your email!</h3>
-            <p>We've sent a login link to <strong>{{ email }}</strong></p>
-            <p class="hint">The link will expire in 15 minutes.</p>
-            <button @click="resetForm" class="btn btn-secondary">
+            <p>We've sent a 6-digit code to <strong>{{ email }}</strong></p>
+
+            <form @submit.prevent="handleVerifyCode" class="code-form">
+              <div class="code-input-wrapper">
+                <input
+                  ref="codeInput"
+                  v-model="loginCode"
+                  type="text"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  maxlength="6"
+                  placeholder="000000"
+                  class="code-input"
+                  :disabled="verifying"
+                />
+              </div>
+              <button type="submit" class="btn btn-primary btn-full" :disabled="verifying || loginCode.length !== 6">
+                {{ verifying ? 'Verifying...' : 'Login' }}
+              </button>
+            </form>
+
+            <div v-if="codeError" class="error">{{ codeError }}</div>
+
+            <p class="hint">The code expires in 15 minutes.</p>
+            <button @click="resetForm" class="btn btn-secondary btn-small">
               Use a different email
             </button>
           </div>
@@ -46,7 +68,8 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, nextTick } from 'vue';
+import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 
 const props = defineProps({
@@ -62,12 +85,17 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'success']);
 
+const router = useRouter();
 const authStore = useAuthStore();
 
 const email = ref('');
 const loading = ref(false);
 const error = ref(null);
 const emailSent = ref(false);
+const loginCode = ref('');
+const verifying = ref(false);
+const codeError = ref(null);
+const codeInput = ref(null);
 
 async function handleLogin() {
   loading.value = true;
@@ -78,6 +106,10 @@ async function handleLogin() {
     if (response.success) {
       emailSent.value = true;
       emit('success', email.value);
+      // Focus the code input after it renders
+      nextTick(() => {
+        codeInput.value?.focus();
+      });
     } else {
       error.value = response.message || 'Failed to send login link. Please try again.';
     }
@@ -88,10 +120,34 @@ async function handleLogin() {
   }
 }
 
+async function handleVerifyCode() {
+  if (loginCode.value.length !== 6) return;
+
+  verifying.value = true;
+  codeError.value = null;
+
+  try {
+    const response = await authStore.verifyCode(email.value, loginCode.value);
+    if (response.success) {
+      emit('close');
+      router.push('/myevents');
+    } else {
+      codeError.value = response.message || 'Invalid code. Please try again.';
+    }
+  } catch (err) {
+    console.error('Verify code error:', err);
+    codeError.value = err.response?.data?.message || 'Failed to verify code. Please try again.';
+  } finally {
+    verifying.value = false;
+  }
+}
+
 function resetForm() {
   email.value = '';
   emailSent.value = false;
   error.value = null;
+  loginCode.value = '';
+  codeError.value = null;
 }
 
 function handleClose() {
@@ -256,26 +312,65 @@ watch(() => props.show, (newVal) => {
   font-size: 0.85rem;
 }
 
-.email-sent {
+.code-entry {
   text-align: center;
 }
 
-.email-sent h3 {
+.code-entry h3 {
   color: #4ade80;
   margin-bottom: 0.75rem;
   font-size: 1.25rem;
 }
 
-.email-sent p {
+.code-entry p {
   color: #ccc;
   margin-bottom: 0.5rem;
   font-size: 0.9rem;
 }
 
-.email-sent .hint {
+.code-entry .hint {
   font-size: 0.8rem;
   color: #888;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
+  margin-top: 1rem;
+}
+
+.code-form {
+  margin: 1.5rem 0;
+}
+
+.code-input-wrapper {
+  margin-bottom: 1rem;
+}
+
+.code-input {
+  width: 100%;
+  padding: 1rem;
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.5rem;
+  text-align: center;
+  border: 2px solid rgba(102, 126, 234, 0.3);
+  border-radius: 12px;
+  background: rgba(102, 126, 234, 0.1);
+  color: #667eea;
+  box-sizing: border-box;
+  font-family: monospace;
+}
+
+.code-input:focus {
+  outline: none;
+  border-color: #667eea;
+  background: rgba(102, 126, 234, 0.15);
+}
+
+.code-input::placeholder {
+  color: rgba(102, 126, 234, 0.3);
+}
+
+.btn-small {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
 }
 
 .check-icon {

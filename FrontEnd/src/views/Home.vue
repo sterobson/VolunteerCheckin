@@ -2,7 +2,7 @@
   <div class="home">
     <!-- Hero section with animation and overlaid title -->
     <section class="hero-section">
-      <HeroHeader title="OnTheDay" />
+      <HeroHeader />
       <p class="subtitle">Manage your event's marshals and volunteers with ease</p>
       <button class="btn btn-primary" @click="handleLoginClick">
         Join us or login
@@ -103,7 +103,7 @@ function hasAnySessions() {
 
 function handleLoginClick() {
   if (hasAnySessions()) {
-    router.push('/sessions');
+    router.push('/myevents');
   } else {
     showLoginModal.value = true;
   }
@@ -145,7 +145,7 @@ onMounted(() => {
   // Auto-open modal if login query param is present
   if (route.query.login) {
     if (hasAnySessions()) {
-      router.replace('/sessions');
+      router.replace('/myevents');
     } else {
       showLoginModal.value = true;
     }
@@ -177,7 +177,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: flex-start;
   padding: 1rem;
-  padding-top: 2rem;
+  padding-top: 4rem;
   min-height: 0;
   gap: 0.5rem;
 }

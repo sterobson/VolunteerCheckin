@@ -1037,7 +1037,7 @@ const handleSelectAreaIncident = (incident) => {
 
 // Methods
 const goBack = () => {
-  router.push('/sessions');
+  router.push('/myevents');
 };
 
 

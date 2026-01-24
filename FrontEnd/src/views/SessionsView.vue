@@ -1,8 +1,7 @@
 <template>
   <div class="sessions-view">
     <div class="sessions-container">
-      <!-- Hero animation with title overlay -->
-      <HeroHeader title="Your sessions" />
+      <h1 class="page-title">My events</h1>
 
       <div v-if="loading" class="loading-state">
         <p>Loading sessions...</p>
@@ -17,7 +16,14 @@
       </div>
 
       <div v-else class="sessions-list">
-        <!-- Admin section: show header and cards if admin, otherwise show sign-in button -->
+        <!-- Sign in button when no admin session -->
+        <div v-if="!hasAdminSession" class="sign-in-section">
+          <button class="btn btn-primary" @click="showLoginModal = true">
+            Sign in
+          </button>
+        </div>
+
+        <!-- Admin section -->
         <template v-if="hasAdminSession">
           <div class="section-header">
             <span class="section-label">Admin events</span>
@@ -63,13 +69,6 @@
           </div>
         </template>
 
-        <!-- Sign in button when no admin session -->
-        <div v-else class="sign-in-section">
-          <button class="btn btn-primary" @click="showLoginModal = true">
-            Sign in
-          </button>
-        </div>
-
         <!-- Marshal section header -->
         <div v-if="sessions.length > 0" class="section-header">
           <span class="section-label">Marshal sessions</span>
@@ -107,10 +106,6 @@
         </div>
       </div>
 
-      <!-- Back to home button -->
-      <button class="btn-back-home" @click="goToHome" title="Back to home">
-        &times;
-      </button>
     </div>
 
     <!-- Login Modal -->
@@ -145,7 +140,7 @@
         <div v-if="showAdminLogoutModal" class="modal-overlay" @click.self="showAdminLogoutModal = false">
           <div class="modal-card">
             <h3>Log out as admin?</h3>
-            <p>This will log you out from all admin events.</p>
+            <p>Logging out <strong>{{ adminEmail }}</strong> from all admin events.</p>
             <p class="hint">You can log back in using the sign-in button.</p>
             <div class="modal-actions">
               <button class="btn btn-secondary" @click="showAdminLogoutModal = false">Cancel</button>
@@ -162,7 +157,7 @@
         <div v-if="showConfirmModal" class="modal-overlay" @click.self="showConfirmModal = false">
           <div class="modal-card">
             <h3>Log out from session?</h3>
-            <p>This will log you out from <strong>{{ sessionToRemove?.eventName || 'this event' }}</strong>.</p>
+            <p>Logging out <strong>{{ sessionToRemove?.marshalName || 'Marshal' }}</strong> from <strong>{{ sessionToRemove?.eventName || 'this event' }}</strong>.</p>
             <p class="hint">You can log back in using the link from your event organiser.</p>
             <div class="modal-actions">
               <button class="btn btn-secondary" @click="showConfirmModal = false">Cancel</button>
@@ -176,9 +171,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import HeroHeader from '../components/HeroHeader.vue';
 import LoginModal from '../components/LoginModal.vue';
 import EditProfileModal from '../components/EditProfileModal.vue';
 import EventFormModal from '../components/event-manage/modals/EventFormModal.vue';
@@ -218,7 +212,7 @@ const eventForm = ref({
   emergencyContacts: [],
 });
 
-const adminEmail = computed(() => localStorage.getItem('adminEmail'));
+const adminEmail = computed(() => authStore.adminEmail);
 const hasAdminSession = computed(() => !!adminEmail.value);
 
 const getAdminLastAccessed = (eventId) => {
@@ -349,14 +343,17 @@ const goToAdminEvent = (eventId) => {
   router.push(`/admin/event/${eventId}`);
 };
 
-const goToHome = () => {
-  router.push('/');
-};
-
 const handleLoginSuccess = () => {
   // Login email sent - modal will show confirmation
   // User will receive email and verify via AdminVerify which redirects here
 };
+
+// Watch for admin session changes and load events when user logs in
+watch(hasAdminSession, async (newValue, oldValue) => {
+  if (newValue && !oldValue) {
+    await loadAdminEvents();
+  }
+});
 
 // Create event handlers
 const closeCreateEventModal = () => {
@@ -387,7 +384,7 @@ const handleCreateEvent = async (formData) => {
 };
 
 onMounted(async () => {
-  document.title = 'OnTheDay App - Sessions';
+  document.title = 'OnTheDay App - My events';
 
   // Migrate any legacy storage format
   migrateLegacyStorage();
@@ -414,7 +411,7 @@ onMounted(async () => {
   align-items: flex-start;
   justify-content: center;
   padding: 1rem;
-  padding-top: 2rem;
+  padding-top: 4rem;
   overflow-y: auto;
 }
 
@@ -422,6 +419,15 @@ onMounted(async () => {
   max-width: 400px;
   width: 100%;
   text-align: center;
+}
+
+.page-title {
+  font-size: 1.75rem;
+  margin-bottom: 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .loading-state,
@@ -575,33 +581,6 @@ onMounted(async () => {
 .btn-logout:hover {
   color: #ff6b6b;
   background: rgba(255, 107, 107, 0.1);
-}
-
-.btn-back-home {
-  position: fixed;
-  top: 0;
-  left: 0;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-left: none;
-  border-top: none;
-  border-radius: 0 0 8px 0;
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s;
-  z-index: 100;
-  font-size: 1.75rem;
-  line-height: 1;
-  font-weight: 300;
-  color: white;
-}
-
-.btn-back-home:hover {
-  background: rgba(255, 255, 255, 0.2);
 }
 
 /* Buttons */

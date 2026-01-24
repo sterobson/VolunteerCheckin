@@ -25,12 +25,15 @@ let hideTimeoutId = null;
 let disableTimeoutId = null;
 
 /**
- * Determine the message and delay based on HTTP method
+ * Determine the message and delay based on HTTP method and config
+ * @param {string} method - HTTP method
+ * @param {object} config - Axios request config (may contain loadingMessage override)
  */
-function getRequestInfo(method) {
+function getRequestInfo(method, config) {
   const upperMethod = (method || 'get').toUpperCase();
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(upperMethod)) {
-    return { message: 'Saving...', delay: DELAY_SAVING_MS, isSaving: true };
+    const message = config?.loadingMessage || 'Saving...';
+    return { message, delay: DELAY_SAVING_MS, isSaving: true };
   }
   return { message: 'Loading...', delay: DELAY_LOADING_MS, isSaving: false };
 }
@@ -64,7 +67,7 @@ export function startRequest(config) {
   cancelHideTimeout();
 
   const requestId = ++requestCounter;
-  const { message, delay, isSaving } = getRequestInfo(config.method);
+  const { message, delay, isSaving } = getRequestInfo(config.method, config);
 
   // Set up timeout for showing overlay (saving only) and disabling inputs (all)
   const overlayTimeoutId = isSaving ? setTimeout(() => {

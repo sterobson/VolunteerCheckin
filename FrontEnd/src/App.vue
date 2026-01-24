@@ -1,4 +1,5 @@
 <template>
+  <TopNav v-if="showTopNav" />
   <router-view v-slot="{ Component, route }">
     <Transition :name="transitionName" mode="out-in">
       <component :is="Component" :key="route.path" />
@@ -8,9 +9,10 @@
 </template>
 
 <script setup>
-import { ref, watch, watchEffect } from 'vue';
+import { ref, computed, watch, watchEffect } from 'vue';
 import { useRouter } from 'vue-router';
 import LoadingOverlay from './components/LoadingOverlay.vue';
+import TopNav from './components/TopNav.vue';
 import { useGlobalLoadingOverlay } from './services/loadingOverlay';
 
 const router = useRouter();
@@ -26,8 +28,11 @@ watchEffect(() => {
 });
 const transitionName = ref('');
 
-// Define page order for slide direction
-const pageOrder = ['/', '/sessions'];
+// Define page order for slide direction (matches nav menu order)
+const pageOrder = ['/', '/pricing', '/about', '/myevents'];
+
+// Show TopNav only on marketing pages
+const showTopNav = computed(() => pageOrder.includes(router.currentRoute.value.path));
 
 watch(() => router.currentRoute.value, (to, from) => {
   if (!from?.path) {
@@ -38,7 +43,7 @@ watch(() => router.currentRoute.value, (to, from) => {
   const toIndex = pageOrder.indexOf(to.path);
   const fromIndex = pageOrder.indexOf(from.path);
 
-  // Only apply slide transition between home and sessions
+  // Apply slide transition between pages in the nav order
   if (toIndex !== -1 && fromIndex !== -1) {
     transitionName.value = toIndex > fromIndex ? 'slide-left' : 'slide-right';
   } else {

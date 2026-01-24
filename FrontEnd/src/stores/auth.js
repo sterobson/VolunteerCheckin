@@ -31,6 +31,29 @@ export const useAuthStore = defineStore('auth', () => {
     return response.data;
   };
 
+  // Verify the 6-digit login code and complete login
+  const verifyCode = async (email, code) => {
+    try {
+      const response = await authApi.verifyCode(email, code);
+      if (response.data.success) {
+        adminEmail.value = response.data.person?.email;
+        isAuthenticated.value = true;
+        loginPending.value = false;
+        localStorage.setItem('adminEmail', response.data.person?.email);
+        localStorage.setItem('sessionToken', response.data.sessionToken);
+        // Set auth context to admin
+        setAuthContext('admin');
+      }
+      return response.data;
+    } catch (err) {
+      // Extract error message from response if available
+      if (err.response?.data) {
+        return err.response.data;
+      }
+      throw err;
+    }
+  };
+
   // Dev-only instant login (bypasses email)
   const instantLogin = async (email) => {
     const response = await authApi.instantLogin(email);
@@ -68,6 +91,7 @@ export const useAuthStore = defineStore('auth', () => {
     loginPending,
     requestLogin,
     verifyToken,
+    verifyCode,
     instantLogin,
     logout,
   };

@@ -905,7 +905,7 @@ function Start-LocalBackend {
     if (-not $azuriteRunning) {
         Write-Warning "Azurite not running. Starting Azurite..."
         try {
-            Start-Process -FilePath "azurite" -ArgumentList "--silent" -WindowStyle Hidden -ErrorAction Stop
+            Start-Process -FilePath "azurite" -ArgumentList "--silent", "-l", "$env:LOCALAPPDATA\.vstools\azurite" -WindowStyle Hidden -ErrorAction Stop
             Start-Sleep -Seconds 2
             Write-Success "Azurite started"
         } catch {

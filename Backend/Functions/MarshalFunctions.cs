@@ -676,9 +676,20 @@ public class MarshalFunctions
                 return new NotFoundObjectResult(new { message = "Marshal not found" });
             }
 
-            if (string.IsNullOrWhiteSpace(marshalEntity.Email))
+            // Parse request body
+            string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+            SendMarshalMagicLinkRequest? request = string.IsNullOrWhiteSpace(requestBody)
+                ? null
+                : JsonSerializer.Deserialize<SendMarshalMagicLinkRequest>(requestBody, FunctionHelpers.JsonOptions);
+
+            // Determine target email - use custom email if provided, otherwise marshal's stored email
+            string? targetEmail = !string.IsNullOrWhiteSpace(request?.Email)
+                ? request.Email
+                : marshalEntity.Email;
+
+            if (string.IsNullOrWhiteSpace(targetEmail))
             {
-                return new BadRequestObjectResult(new { message = "Marshal does not have an email address" });
+                return new BadRequestObjectResult(new { message = "No email address provided" });
             }
 
             if (_emailService == null)
@@ -693,15 +704,11 @@ public class MarshalFunctions
                 await _marshalRepository.UpdateAsync(marshalEntity);
             }
 
-            // Get event name
+            // Get event details
             EventEntity? eventEntity = await _eventRepository.GetAsync(eventId);
             string eventName = eventEntity?.Name ?? "Event";
 
             // Get frontend URL - prefer explicit value from request body, fall back to header detection
-            string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-            SendMarshalMagicLinkRequest? request = string.IsNullOrWhiteSpace(requestBody)
-                ? null
-                : JsonSerializer.Deserialize<SendMarshalMagicLinkRequest>(requestBody, FunctionHelpers.JsonOptions);
             string frontendUrl = !string.IsNullOrWhiteSpace(request?.FrontendUrl)
                 ? request.FrontendUrl.TrimEnd('/')
                 : FunctionHelpers.GetFrontendUrl(req);
@@ -711,15 +718,79 @@ public class MarshalFunctions
             string routePrefix = useHashRouting ? "/#" : "";
             string magicLink = $"{frontendUrl}{routePrefix}/event/{eventId}?code={marshalEntity.MagicCode}";
 
-            // Send the email
-            await _emailService.SendMarshalMagicLinkEmailAsync(
-                marshalEntity.Email,
-                marshalEntity.Name,
-                eventName,
-                magicLink
-            );
+            // Check if we should include event/checkpoint details
+            if (request?.IncludeDetails == true)
+            {
+                // Get marshal's assignments
+                IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByMarshalAsync(eventId, marshalId);
+                List<CheckpointEmailInfo> checkpointInfos = [];
 
-            _logger.LogInformation("Sent magic link email to marshal {MarshalId} at {Email}", marshalId, marshalEntity.Email);
+                // Get all notes for the event to filter checkpoint-specific ones
+                IEnumerable<NoteEntity> allNotes = await _noteRepository.GetByEventAsync(eventId);
+
+                foreach (AssignmentEntity assignment in assignments)
+                {
+                    LocationEntity? location = await _locationRepository.GetAsync(eventId, assignment.LocationId);
+                    if (location != null)
+                    {
+                        // Get notes specifically scoped to this checkpoint
+                        List<NoteEmailInfo> checkpointNotes = GetNotesForCheckpoint(allNotes, assignment.LocationId);
+
+                        // Only include lat/long if they're valid (not the default 0,0 point)
+                        bool hasValidCoordinates = Math.Abs(location.Latitude) > 0.0001 || Math.Abs(location.Longitude) > 0.0001;
+                        double? latitude = hasValidCoordinates ? location.Latitude : null;
+                        double? longitude = hasValidCoordinates ? location.Longitude : null;
+
+                        checkpointInfos.Add(new CheckpointEmailInfo(
+                            location.Name,
+                            location.Description,
+                            location.StartTime,
+                            latitude,
+                            longitude,
+                            checkpointNotes
+                        ));
+                    }
+                }
+
+                // Sort checkpoints by arrival time, then name
+                checkpointInfos = [.. checkpointInfos.OrderBy(c => c.ArrivalTime ?? DateTime.MaxValue).ThenBy(c => c.Name, StringComparer.Create(System.Globalization.CultureInfo.CurrentCulture, System.Globalization.CompareOptions.IgnoreCase))];
+
+                // Get checkpoint terminology
+                string checkpointTerm = eventEntity?.CheckpointTerm ?? "Checkpoint";
+                // Convert plural term to singular
+                string checkpointTermSingular = checkpointTerm switch
+                {
+                    "Checkpoints" => "Checkpoint",
+                    "Stations" => "Station",
+                    "Locations" => "Location",
+                    "Feed stations" => "Feed station",
+                    "Aid stations" => "Aid station",
+                    "Water stations" => "Water station",
+                    _ => checkpointTerm.TrimEnd('s')
+                };
+
+                await _emailService.SendMarshalMagicLinkWithDetailsEmailAsync(
+                    targetEmail,
+                    marshalEntity.Name,
+                    eventName,
+                    magicLink,
+                    eventEntity?.EventDate,
+                    checkpointTermSingular,
+                    checkpointInfos
+                );
+            }
+            else
+            {
+                // Send simple email without details
+                await _emailService.SendMarshalMagicLinkEmailAsync(
+                    targetEmail,
+                    marshalEntity.Name,
+                    eventName,
+                    magicLink
+                );
+            }
+
+            _logger.LogInformation("Sent magic link email to marshal {MarshalId} at {Email}", marshalId, targetEmail);
 
             return new OkObjectResult(new { message = "Magic link sent successfully" });
         }
@@ -997,5 +1068,66 @@ public class MarshalFunctions
 
         _logger.LogInformation("Synced roles from marshal {MarshalId} to linked contact {ContactId} in event {EventId}: {Roles}",
             marshalId, linkedContact.ContactId, eventId, string.Join(", ", roles));
+    }
+
+    /// <summary>
+    /// Gets notes that are specifically scoped to a checkpoint (not area-based scopes).
+    /// Matches the frontend logic in MarshalView.vue getNotesForCheckpoint().
+    /// </summary>
+    private static List<NoteEmailInfo> GetNotesForCheckpoint(IEnumerable<NoteEntity> allNotes, string locationId)
+    {
+        List<NoteEmailInfo> matchedNotes = [];
+        HashSet<string> seenNoteIds = [];
+
+        foreach (NoteEntity note in allNotes)
+        {
+            if (seenNoteIds.Contains(note.NoteId))
+            {
+                continue;
+            }
+
+            List<ScopeConfiguration> scopeConfigurations = JsonSerializer.Deserialize<List<ScopeConfiguration>>(
+                note.ScopeConfigurationsJson, FunctionHelpers.JsonOptions) ?? [];
+
+            bool matched = false;
+
+            foreach (ScopeConfiguration config in scopeConfigurations)
+            {
+                // Only match checkpoint-specific scopes (not area-based)
+                if (config.ItemType == "Checkpoint" &&
+                    (config.Ids.Contains(locationId) || config.Ids.Contains("ALL_CHECKPOINTS")))
+                {
+                    matched = true;
+                    break;
+                }
+            }
+
+            if (matched)
+            {
+                seenNoteIds.Add(note.NoteId);
+                matchedNotes.Add(new NoteEmailInfo(
+                    note.Title,
+                    note.Content,
+                    note.Priority,
+                    note.IsPinned
+                ));
+            }
+        }
+
+        // Sort by: Pinned first → Priority (Emergency > Urgent > High > Normal > Low) → DisplayOrder → CreatedAt (newest first)
+        Dictionary<string, int> priorityOrder = new()
+        {
+            { "Emergency", 0 },
+            { "Urgent", 1 },
+            { "High", 2 },
+            { "Normal", 3 },
+            { "Low", 4 }
+        };
+
+        return [.. matchedNotes
+            .OrderByDescending(n => n.IsPinned)
+            .ThenBy(n => priorityOrder.GetValueOrDefault(n.Priority, 3))
+            .ThenBy(n => allNotes.First(note => note.Title == n.Title && note.Content == n.Content).DisplayOrder)
+            .ThenByDescending(n => allNotes.First(note => note.Title == n.Title && note.Content == n.Content).CreatedAt)];
     }
 }

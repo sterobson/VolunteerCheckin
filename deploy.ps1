@@ -427,26 +427,48 @@ function Test-AzureFunctionAppExists($resourceGroup, $appName) {
 
 function Get-AzureResourceGroups {
     $ErrorActionPreference = "Continue"
-    $result = az group list --query "[].name" -o tsv 2>&1
+    $result = az group list --query "[].name" -o json 2>&1
     $exitCode = $LASTEXITCODE
     $ErrorActionPreference = "Stop"
 
     if ($exitCode -ne 0) {
         return @()
     }
-    return $result -split "`n" | Where-Object { $_ }
+
+    try {
+        $names = $result | ConvertFrom-Json
+        if ($names -is [array]) {
+            return $names | Sort-Object
+        } elseif ($names) {
+            return @($names)
+        }
+        return @()
+    } catch {
+        return @()
+    }
 }
 
 function Get-AzureFunctionAppsInResourceGroup($resourceGroup) {
     $ErrorActionPreference = "Continue"
-    $result = az functionapp list --resource-group $resourceGroup --query "[].name" -o tsv 2>&1
+    $result = az functionapp list --resource-group $resourceGroup --query "[].name" -o json 2>&1
     $exitCode = $LASTEXITCODE
     $ErrorActionPreference = "Stop"
 
     if ($exitCode -ne 0) {
         return @()
     }
-    return $result -split "`n" | Where-Object { $_ }
+
+    try {
+        $names = $result | ConvertFrom-Json
+        if ($names -is [array]) {
+            return $names | Sort-Object
+        } elseif ($names) {
+            return @($names)
+        }
+        return @()
+    } catch {
+        return @()
+    }
 }
 
 function Verify-AzureResources($envConfig) {
@@ -507,7 +529,7 @@ function Verify-AzureResources($envConfig) {
     Write-Host ""
     Write-Host "Available resource groups:" -ForegroundColor Cyan
     for ($i = 0; $i -lt $resourceGroups.Count; $i++) {
-        $marker = if ($resourceGroups[$i] -eq $resourceGroup) { " (current)" } else { "" }
+        $marker = if ($resourceGroups[$i] -eq $resourceGroup) { " (configured)" } else { "" }
         Write-Host "  $($i + 1). $($resourceGroups[$i])$marker" -ForegroundColor White
     }
     Write-Host ""
@@ -544,7 +566,7 @@ function Verify-AzureResources($envConfig) {
         $functionApps = @($manualName)
     }
 
-    # Let user select/update slots
+    # Let user select/update only the INACCESSIBLE slots
     $newSlots = @()
 
     Write-Host ""
@@ -554,24 +576,32 @@ function Verify-AzureResources($envConfig) {
     }
     Write-Host ""
 
-    Write-Host "Select Function App(s) for deployment slots." -ForegroundColor Cyan
-    Write-Host "Current slots: $($slots -join ', ')" -ForegroundColor Gray
-    Write-Host ""
+    if ($inaccessibleSlots.Count -lt $slots.Count) {
+        Write-Host "Only updating inaccessible slot(s). Accessible slots will be kept." -ForegroundColor Gray
+        Write-Host ""
+    }
 
     foreach ($currentSlot in $slots) {
-        $slotChoice = Read-Host "Replacement for '$currentSlot' (1-$($functionApps.Count), or enter name, or press Enter to keep)"
+        if ($inaccessibleSlots -contains $currentSlot) {
+            # This slot is inaccessible - prompt for replacement
+            $slotChoice = Read-Host "Replacement for '$currentSlot' (1-$($functionApps.Count), or enter name)"
 
-        if ([string]::IsNullOrWhiteSpace($slotChoice)) {
-            $newSlots += $currentSlot
-        } elseif ($slotChoice -match '^\d+$') {
-            $index = [int]$slotChoice - 1
-            if ($index -ge 0 -and $index -lt $functionApps.Count) {
-                $newSlots += $functionApps[$index]
-            } else {
+            if ([string]::IsNullOrWhiteSpace($slotChoice)) {
                 $newSlots += $currentSlot
+            } elseif ($slotChoice -match '^\d+$') {
+                $index = [int]$slotChoice - 1
+                if ($index -ge 0 -and $index -lt $functionApps.Count) {
+                    $newSlots += $functionApps[$index]
+                } else {
+                    $newSlots += $currentSlot
+                }
+            } else {
+                $newSlots += $slotChoice
             }
         } else {
-            $newSlots += $slotChoice
+            # This slot is accessible - keep it
+            Write-Gray "  Keeping '$currentSlot' (accessible)"
+            $newSlots += $currentSlot
         }
     }
 

@@ -246,34 +246,21 @@ function Save-StoredSecrets($secrets) {
     $encrypted | ConvertTo-Json -Depth 10 | Set-Content $script:SecretsFilePath -Encoding UTF8
 }
 
-function Get-SecretKey($slotName, $varName) {
-    return "$slotName`:$varName"
+function Get-SecretKey($envName, $varName) {
+    return "$envName`:$varName"
 }
 
-function Get-SlotSecret($slotName, $varName) {
+function Get-EnvironmentSecret($envName, $varName) {
     $secrets = Get-StoredSecrets
-    $key = Get-SecretKey $slotName $varName
+    $key = Get-SecretKey $envName $varName
     return $secrets[$key]
 }
 
-function Set-SlotSecret($slotName, $varName, $value) {
+function Set-EnvironmentSecret($envName, $varName, $value) {
     $secrets = Get-StoredSecrets
-    $key = Get-SecretKey $slotName $varName
+    $key = Get-SecretKey $envName $varName
     $secrets[$key] = $value
     Save-StoredSecrets $secrets
-}
-
-function Get-SlotSecretFromAnySlot($varName, $allSlots) {
-    # Try to find this variable in any slot (for shared config like SMTP settings)
-    $secrets = Get-StoredSecrets
-    foreach ($slot in $allSlots) {
-        $key = Get-SecretKey $slot $varName
-        $value = $secrets[$key]
-        if (-not [string]::IsNullOrEmpty($value)) {
-            return @{ Value = $value; Slot = $slot }
-        }
-    }
-    return $null
 }
 
 function Get-SwaDeploymentToken {
@@ -651,7 +638,7 @@ function Verify-AzureResources($envConfig) {
 # ============================================================================
 # Environment Variable Sync
 # ============================================================================
-function Sync-EnvironmentVariables($resourceGroup, $slotName, $allSlots) {
+function Sync-EnvironmentVariables($resourceGroup, $slotName, $envName) {
     Write-Info "Checking environment variables for $slotName..."
 
     $azureSettings = Get-AzureFunctionAppSettings $resourceGroup $slotName
@@ -670,43 +657,32 @@ function Sync-EnvironmentVariables($resourceGroup, $slotName, $allSlots) {
     $updates = @{}
 
     foreach ($varName in $script:RequiredEnvVars) {
-        $localValue = Get-SlotSecret $slotName $varName
+        # Secrets are stored per environment (e.g., "production"), not per slot
+        $localValue = Get-EnvironmentSecret $envName $varName
         $azureValue = $azureVars[$varName]
 
         $hasLocal = -not [string]::IsNullOrEmpty($localValue)
         $hasAzure = -not [string]::IsNullOrEmpty($azureValue)
 
         if (-not $hasLocal -and -not $hasAzure) {
-            # Neither has it - check if another slot has it locally
-            $otherSlotValue = Get-SlotSecretFromAnySlot $varName $allSlots
+            # Neither has it - need to get from user
+            Write-Warning "  $varName - NOT SET"
+            Write-Host ""
+            $newValue = Read-Host "  Enter value for $varName"
 
-            if ($otherSlotValue) {
-                # Found in another slot - use that value
-                Write-Info "  $varName - found in $($otherSlotValue.Slot), copying..."
-                Set-SlotSecret $slotName $varName $otherSlotValue.Value
-                $updates[$varName] = $otherSlotValue.Value
-                $needsUpdate = $true
-                Write-Success "  $varName - copied from $($otherSlotValue.Slot)"
-            } else {
-                # Not found anywhere - need to get from user
-                Write-Warning "  $varName - NOT SET anywhere"
-                Write-Host ""
-                $newValue = Read-Host "  Enter value for $varName"
-
-                if ([string]::IsNullOrWhiteSpace($newValue)) {
-                    Write-ErrorMessage "  $varName cannot be empty."
-                    exit 1
-                }
-
-                Set-SlotSecret $slotName $varName $newValue
-                $updates[$varName] = $newValue
-                $needsUpdate = $true
-                Write-Success "  $varName - saved locally and will be set in Azure"
+            if ([string]::IsNullOrWhiteSpace($newValue)) {
+                Write-ErrorMessage "  $varName cannot be empty."
+                exit 1
             }
+
+            Set-EnvironmentSecret $envName $varName $newValue
+            $updates[$varName] = $newValue
+            $needsUpdate = $true
+            Write-Success "  $varName - saved locally and will be set in Azure"
 
         } elseif (-not $hasLocal -and $hasAzure) {
             # Azure has it, store locally
-            Set-SlotSecret $slotName $varName $azureValue
+            Set-EnvironmentSecret $envName $varName $azureValue
             Write-Success "  $varName - fetched from Azure and stored locally"
 
         } elseif ($hasLocal -and -not $hasAzure) {
@@ -736,7 +712,7 @@ function Sync-EnvironmentVariables($resourceGroup, $slotName, $allSlots) {
                     Write-Success "  Using local value for $varName"
                 }
                 "2" {
-                    Set-SlotSecret $slotName $varName $azureValue
+                    Set-EnvironmentSecret $envName $varName $azureValue
                     Write-Success "  Using Azure value for $varName"
                 }
                 "3" {
@@ -745,7 +721,7 @@ function Sync-EnvironmentVariables($resourceGroup, $slotName, $allSlots) {
                         Write-ErrorMessage "  $varName cannot be empty."
                         exit 1
                     }
-                    Set-SlotSecret $slotName $varName $newValue
+                    Set-EnvironmentSecret $envName $varName $newValue
                     $updates[$varName] = $newValue
                     $needsUpdate = $true
                     Write-Success "  $varName updated"
@@ -773,10 +749,10 @@ function Sync-EnvironmentVariables($resourceGroup, $slotName, $allSlots) {
 
     if ($reviewChoice -eq "2") {
         Write-Host ""
-        Write-Info "Current values (stored locally):"
+        Write-Info "Current values (stored locally for $envName):"
 
         foreach ($varName in $script:RequiredEnvVars) {
-            $value = Get-SlotSecret $slotName $varName
+            $value = Get-EnvironmentSecret $envName $varName
             $displayValue = if ($value.Length -gt 30) { $value.Substring(0, 30) + '...' } else { $value }
             Write-Host "  $varName = $displayValue" -ForegroundColor Gray
         }
@@ -800,7 +776,7 @@ function Sync-EnvironmentVariables($resourceGroup, $slotName, $allSlots) {
             $newValue = Read-Host "New value for $varToChange"
 
             if (-not [string]::IsNullOrWhiteSpace($newValue)) {
-                Set-SlotSecret $slotName $varToChange $newValue
+                Set-EnvironmentSecret $envName $varToChange $newValue
                 $updates[$varToChange] = $newValue
                 $needsUpdate = $true
                 Write-Success "$varToChange updated"
@@ -1294,9 +1270,8 @@ function Deploy-ProductionBackend($envConfig, $slotName, $backendBuildJob, $also
     $backendPath = Join-Path $script:ScriptRoot "Backend"
 
     # Sync environment variables (interactive - collects what needs updating)
-    # Pass all slots so it can copy values from other slots if needed
-    $allSlots = @($envConfig.slots)
-    $envVarUpdates = Sync-EnvironmentVariables $resourceGroup $slotName $allSlots
+    # Secrets are shared across all slots in the same environment
+    $envVarUpdates = Sync-EnvironmentVariables $resourceGroup $slotName "production"
 
     # Get expected version before deployment
     $expectedVersion = Get-ExpectedVersion

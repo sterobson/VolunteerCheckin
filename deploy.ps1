@@ -457,17 +457,24 @@ function Verify-AzureResources($envConfig) {
     Write-Gray "  Resource group: $resourceGroup"
     Write-Gray "  Function apps: $($slots -join ', ')"
 
-    # Test if we can access the first slot
-    $testSlot = $slots[0]
-    $accessible = Test-AzureFunctionAppExists $resourceGroup $testSlot
+    # Test if we can access ALL slots
+    $inaccessibleSlots = @()
+    foreach ($slot in $slots) {
+        if (-not (Test-AzureFunctionAppExists $resourceGroup $slot)) {
+            $inaccessibleSlots += $slot
+        }
+    }
 
-    if ($accessible) {
+    if ($inaccessibleSlots.Count -eq 0) {
         Write-Success "Azure resources verified"
         return $envConfig
     }
 
     Write-Host ""
-    Write-Warning "Cannot access Function App '$testSlot' in resource group '$resourceGroup'"
+    Write-Warning "Cannot access Function App(s) in resource group '$resourceGroup':"
+    foreach ($slot in $inaccessibleSlots) {
+        Write-Gray "  - $slot"
+    }
     Write-Host ""
     Write-Host "This could mean:" -ForegroundColor Cyan
     Write-Host "  - The resource group name has changed" -ForegroundColor Gray
@@ -568,17 +575,24 @@ function Verify-AzureResources($envConfig) {
         }
     }
 
-    # Verify the new configuration
+    # Verify the new configuration - check ALL slots
     Write-Host ""
     Write-Info "Verifying new configuration..."
     Write-Gray "  Resource group: $newResourceGroup"
     Write-Gray "  Slots: $($newSlots -join ', ')"
 
-    $verifySlot = $newSlots[0]
-    $newAccessible = Test-AzureFunctionAppExists $newResourceGroup $verifySlot
+    $stillInaccessible = @()
+    foreach ($slot in $newSlots) {
+        if (-not (Test-AzureFunctionAppExists $newResourceGroup $slot)) {
+            $stillInaccessible += $slot
+        }
+    }
 
-    if (-not $newAccessible) {
-        Write-ErrorMessage "Still cannot access Function App '$verifySlot' in '$newResourceGroup'"
+    if ($stillInaccessible.Count -gt 0) {
+        Write-ErrorMessage "Still cannot access Function App(s) in '$newResourceGroup':"
+        foreach ($slot in $stillInaccessible) {
+            Write-Gray "  - $slot"
+        }
         Write-Host ""
         Write-Host "Please verify:" -ForegroundColor Yellow
         Write-Host "  - The resource group and Function App names are correct" -ForegroundColor Gray

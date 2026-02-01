@@ -125,6 +125,7 @@
 import { defineProps, defineEmits } from 'vue';
 import { getIcon } from '../../utils/icons';
 import { useTerminology } from '../../composables/useTerminology';
+import { useEventTimeZone } from '../../composables/useEventTimeZone';
 import { sortTasks } from '../../utils/sortingHelpers';
 import CheckInToggleButton from '../common/CheckInToggleButton.vue';
 
@@ -167,7 +168,14 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  timeZoneId: {
+    type: String,
+    default: 'UTC',
+  },
 });
+
+// Use event timezone for formatting
+const { formatDateTime } = useEventTimeZone(() => props.timeZoneId);
 
 defineEmits(['toggle', 'toggle-marshal', 'check-in', 'toggle-task', 'show-qr']);
 
@@ -297,18 +305,7 @@ const getCompletionText = (task) => {
   return task.completedByActorName || '';
 };
 
-// Format date/time - show just time if within 24 hours
-const formatDateTime = (dateString) => {
-  if (!dateString) return '';
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now - date;
-  const diffHours = diffMs / (1000 * 60 * 60);
-  if (diffHours < 24 && diffHours >= 0) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-  return date.toLocaleString();
-};
+// formatDateTime provided by useEventTimeZone composable
 
 // Get task counts based on deduped tasks
 const getTaskCounts = (marshal) => {

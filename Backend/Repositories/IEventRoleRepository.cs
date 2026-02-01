@@ -11,4 +11,6 @@ public interface IEventRoleRepository
     Task<IEnumerable<EventRoleEntity>> GetByEventAsync(string eventId);
     Task UpdateAsync(EventRoleEntity eventRole);
     Task DeleteAsync(string personId, string rowKey);
+    Task DeleteAllByEventAsync(string eventId);
+    Task<bool> HasRolesInOtherEventsAsync(string personId, string excludeEventId);
 }

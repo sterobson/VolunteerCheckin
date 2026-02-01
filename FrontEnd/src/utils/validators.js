@@ -14,17 +14,9 @@ export const isValidWhat3Words = (what3Words) => {
     return true;
   }
 
-  // Must be 3 words separated by dots or slashes
-  const pattern = /^[a-z]{1,20}[./][a-z]{1,20}[./][a-z]{1,20}$/;
-  if (!pattern.test(what3Words)) {
-    return false;
-  }
-
-  // Must use either dots OR slashes, not both
-  const hasDots = what3Words.includes('.');
-  const hasSlashes = what3Words.includes('/');
-
-  return hasDots !== hasSlashes; // XOR - one must be true, not both
+  // Must be 3 words separated by dots (word.word.word)
+  const pattern = /^[a-z]{1,20}\.[a-z]{1,20}\.[a-z]{1,20}$/;
+  return pattern.test(what3Words);
 };
 
 /**

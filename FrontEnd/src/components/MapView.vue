@@ -51,6 +51,10 @@ const props = defineProps({
     type: Number,
     default: null,
   },
+  layers: {
+    type: Array,
+    default: () => [],
+  },
   center: {
     type: Object,
     default: null,
@@ -79,6 +83,14 @@ const props = defineProps({
     type: Array,
     default: null,
   },
+  editingRoute: {
+    type: Array, // [{ lat, lng }, ...]
+    default: null,
+  },
+  drawingRouteMode: {
+    type: Boolean,
+    default: false,
+  },
   userLocation: {
     type: Object,
     default: null,
@@ -99,6 +111,14 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  showStaffingOverlay: {
+    type: Boolean,
+    default: true,
+  },
+  showStatusOverlay: {
+    type: Boolean,
+    default: true,
+  },
   simplifyNonHighlighted: {
     type: Boolean,
     default: false,
@@ -107,9 +127,13 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  skipAutoCentering: {
+    type: Boolean,
+    default: false,
+  },
 });
 
-const emit = defineEmits(['location-click', 'map-click', 'area-click', 'polygon-complete', 'polygon-drawing', 'polygon-update', 'visibility-change']);
+const emit = defineEmits(['location-click', 'map-click', 'area-click', 'polygon-complete', 'polygon-drawing', 'polygon-update', 'route-update', 'route-drawing', 'route-complete', 'visibility-change']);
 
 const mapContainer = ref(null);
 let map = null;
@@ -126,6 +150,21 @@ const editingPoints = ref([]);
 let editingPolygonLayer = null;
 let editingMarkersLayer = null;
 let justEmittedPolygonUpdate = false; // Flag to prevent watcher from rebuilding after our own emit
+
+// Route drawing state
+const routePoints = ref([]);
+const routeHistory = ref([]); // For undo - stores previous states
+const routeFuture = ref([]); // For redo - stores undone states
+let routePreviewLayer = null;
+let routeMarkersLayer = null;
+
+// Route editing state
+const editingRoutePoints = ref([]);
+const editingRouteHistory = ref([]); // For undo - stores previous states
+const editingRouteFuture = ref([]); // For redo - stores undone states
+let editingRouteLayer = null;
+let editingRouteMarkersLayer = null;
+let justEmittedRouteUpdate = false; // Flag to prevent watcher from rebuilding after our own emit
 
 // Track if user has manually panned the map (to avoid auto-recentering)
 const userHasPanned = ref(false);
@@ -185,6 +224,87 @@ const clearPolygonDrawing = () => {
   updatePolygonPreview();
 };
 
+// Route drawing methods
+const undoRoutePoint = () => {
+  if (routePoints.value.length > 0) {
+    // Save current state to future for redo
+    routeFuture.value.push([...routePoints.value]);
+    // Restore previous state
+    const previousState = routeHistory.value.pop() || [];
+    routePoints.value = previousState;
+    updateRoutePreview();
+    emit('route-drawing', routePoints.value);
+  }
+};
+
+const redoRoutePoint = () => {
+  if (routeFuture.value.length > 0) {
+    // Save current state to history for undo
+    routeHistory.value.push([...routePoints.value]);
+    // Restore future state
+    const futureState = routeFuture.value.pop();
+    routePoints.value = futureState;
+    updateRoutePreview();
+    emit('route-drawing', routePoints.value);
+  }
+};
+
+const canUndoRoute = () => routePoints.value.length > 0;
+const canRedoRoute = () => routeFuture.value.length > 0;
+const getRoutePointCount = () => routePoints.value.length;
+
+const completeRoute = () => {
+  if (routePoints.value.length >= 2) {
+    emit('route-complete', [...routePoints.value]);
+    clearRouteDrawing();
+  }
+};
+
+const clearRouteDrawing = () => {
+  routePoints.value = [];
+  routeHistory.value = [];
+  routeFuture.value = [];
+  updateRoutePreview();
+};
+
+// Route editing undo/redo methods
+const saveRouteEditState = () => {
+  // Save current state to history for undo
+  editingRouteHistory.value.push(editingRoutePoints.value.map(p => ({ lat: p.lat, lng: p.lng })));
+  // Clear redo stack when new changes are made
+  editingRouteFuture.value = [];
+};
+
+const undoRouteEdit = () => {
+  if (editingRouteHistory.value.length > 0) {
+    // Save current state to future for redo
+    editingRouteFuture.value.push(editingRoutePoints.value.map(p => ({ lat: p.lat, lng: p.lng })));
+    // Restore previous state
+    const previousState = editingRouteHistory.value.pop();
+    editingRoutePoints.value = previousState;
+    justEmittedRouteUpdate = true;
+    emit('route-update', [...editingRoutePoints.value]);
+    updateEditingRoute();
+  }
+};
+
+const redoRouteEdit = () => {
+  if (editingRouteFuture.value.length > 0) {
+    // Save current state to history for undo
+    editingRouteHistory.value.push(editingRoutePoints.value.map(p => ({ lat: p.lat, lng: p.lng })));
+    // Restore future state
+    const futureState = editingRouteFuture.value.pop();
+    editingRoutePoints.value = futureState;
+    justEmittedRouteUpdate = true;
+    emit('route-update', [...editingRoutePoints.value]);
+    updateEditingRoute();
+  }
+};
+
+const canUndoRouteEdit = () => editingRouteHistory.value.length > 0;
+const canRedoRouteEdit = () => editingRouteFuture.value.length > 0;
+const getEditingRoutePointCount = () => editingRoutePoints.value.length;
+
 // Function to recenter map on user's GPS location
 const recenterOnUserLocation = () => {
   if (!map || !props.userLocation) return;
@@ -229,6 +349,13 @@ const isLocationInView = (lat, lng) => {
   return bounds.contains(locationLatLng);
 };
 
+// Fit map to the editing route bounds
+const fitToEditingRouteBounds = (padding = [50, 50]) => {
+  if (!map || editingRoutePoints.value.length < 2) return;
+  const bounds = L.latLngBounds(editingRoutePoints.value.map(p => [p.lat, p.lng]));
+  map.fitBounds(bounds, { padding });
+};
+
 defineExpose({
   getMapCenter,
   getMapZoom,
@@ -239,6 +366,21 @@ defineExpose({
   getPolygonPointCount,
   completePolygon,
   clearPolygonDrawing,
+  // Route drawing methods
+  undoRoutePoint,
+  redoRoutePoint,
+  canUndoRoute,
+  canRedoRoute,
+  getRoutePointCount,
+  completeRoute,
+  clearRouteDrawing,
+  // Route editing methods
+  undoRouteEdit,
+  redoRouteEdit,
+  canUndoRouteEdit,
+  canRedoRouteEdit,
+  getEditingRoutePointCount,
+  fitToEditingRouteBounds,
   recenterOnUserLocation,
   recenterOnLocation,
   isLocationInView,
@@ -248,6 +390,7 @@ defineExpose({
 
 const markers = ref([]);
 let routePolyline = null;
+let routeOutlinePolyline = null;
 const isInitialLoad = ref(true);
 const hasCenteredOnCheckpoints = ref(false);
 const showDescriptionsForIds = ref(new Set());
@@ -478,8 +621,8 @@ const initMap = () => {
   }
   if (props.route && props.route.length > 0) {
     allPoints.push(...props.route
-      .filter(point => isValidCoord(point.lat, point.lng))
-      .map(point => ({ lat: point.lat, lng: point.lng })));
+      .filter(point => isValidCoord(getPointLat(point), getPointLng(point)))
+      .map(point => ({ lat: getPointLat(point), lng: getPointLng(point) })));
   }
 
   if (props.center) {
@@ -547,6 +690,8 @@ const initMap = () => {
   updateUserLocationMarker();
   initDrawingMode();
   initEditingMode();
+  initRouteDrawingMode();
+  initRouteEditingMode();
 
   // Check visibility after map is fully initialized (use whenReady to ensure tiles are loaded)
   map.whenReady(() => {
@@ -554,27 +699,16 @@ const initMap = () => {
   });
 };
 
-const updateRoute = () => {
-  if (routePolyline) {
-    routePolyline.remove();
-    routePolyline = null;
-  }
+// Helper functions to get lat/lng from route points, handling both camelCase and PascalCase
+const getPointLat = (point) => point.lat ?? point.Lat;
+const getPointLng = (point) => point.lng ?? point.Lng;
 
-  if (!map || props.route.length === 0) return;
-
-  const routeCoordinates = props.route.map((point) => [point.lat, point.lng]);
-
-  // Determine route color (default: Leaflet blue)
-  const color = props.routeColor || '#3388ff';
-
-  // Determine route weight (default: 4)
-  const weight = props.routeWeight || 4;
-
-  // Determine dash pattern based on style
+// Helper function to get dash array and line cap for a route style
+const getRouteStyleSettings = (style) => {
   let dashArray = null;
   let lineCap = 'butt';
 
-  switch (props.routeStyle) {
+  switch (style) {
     case 'dash':
       dashArray = '10, 10';
       break;
@@ -614,13 +748,107 @@ const updateRoute = () => {
     // 'line' and default: no dash array (solid line)
   }
 
-  routePolyline = L.polyline(routeCoordinates, {
-    color,
-    weight,
-    opacity: 0.7,
-    dashArray,
-    lineCap,
-  }).addTo(map);
+  return { dashArray, lineCap };
+};
+
+// Track layer polylines (outlines first, then main lines)
+let layerOutlinePolylines = [];
+let layerPolylines = [];
+
+// Darken a hex color by a percentage (0-1)
+const darkenColor = (hex, amount = 0.3) => {
+  // Remove # if present
+  hex = hex.replace('#', '');
+  // Parse RGB
+  let r = parseInt(hex.substring(0, 2), 16);
+  let g = parseInt(hex.substring(2, 4), 16);
+  let b = parseInt(hex.substring(4, 6), 16);
+  // Darken
+  r = Math.max(0, Math.floor(r * (1 - amount)));
+  g = Math.max(0, Math.floor(g * (1 - amount)));
+  b = Math.max(0, Math.floor(b * (1 - amount)));
+  // Return hex
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+};
+
+const updateRoute = () => {
+  // Remove existing main route polylines
+  if (routeOutlinePolyline) {
+    routeOutlinePolyline.remove();
+    routeOutlinePolyline = null;
+  }
+  if (routePolyline) {
+    routePolyline.remove();
+    routePolyline = null;
+  }
+
+  // Remove existing layer polylines (outlines and main)
+  layerOutlinePolylines.forEach(polyline => polyline.remove());
+  layerOutlinePolylines = [];
+  layerPolylines.forEach(polyline => polyline.remove());
+  layerPolylines = [];
+
+  if (!map) return;
+
+  // Render main route (legacy support)
+  if (props.route.length > 0) {
+    const routeCoordinates = props.route.map((point) => [getPointLat(point), getPointLng(point)]);
+    const color = props.routeColor || '#3388ff';
+    const weight = props.routeWeight || 4;
+    const { dashArray, lineCap } = getRouteStyleSettings(props.routeStyle);
+
+    // Draw outline first (darker, thicker, butt lineCap for clean edges)
+    const outlineColor = darkenColor(color, 0.4);
+    routeOutlinePolyline = L.polyline(routeCoordinates, {
+      color: outlineColor,
+      weight: weight + 2,
+      opacity: 0.7,
+      dashArray,
+      lineCap: 'butt',
+    }).addTo(map);
+
+    // Draw main route on top
+    routePolyline = L.polyline(routeCoordinates, {
+      color,
+      weight,
+      opacity: 0.7,
+      dashArray,
+      lineCap,
+    }).addTo(map);
+  }
+
+  // Render layer routes
+  if (props.layers && props.layers.length > 0) {
+    props.layers.forEach(layer => {
+      if (!layer.route || layer.route.length === 0) return;
+
+      const routeCoordinates = layer.route.map((point) => [getPointLat(point), getPointLng(point)]);
+      const color = layer.routeColor || '#3388ff';
+      const weight = layer.routeWeight || 4;
+      const { dashArray, lineCap } = getRouteStyleSettings(layer.routeStyle);
+
+      // Draw outline first (darker, thicker, butt lineCap for clean edges)
+      const outlineColor = darkenColor(color, 0.4);
+      const outlinePolyline = L.polyline(routeCoordinates, {
+        color: outlineColor,
+        weight: weight + 2,
+        opacity: 0.7,
+        dashArray,
+        lineCap: 'butt',
+      }).addTo(map);
+      layerOutlinePolylines.push(outlinePolyline);
+
+      // Draw main route on top
+      const polyline = L.polyline(routeCoordinates, {
+        color,
+        weight,
+        opacity: 0.7,
+        dashArray,
+        lineCap,
+      }).addTo(map);
+      layerPolylines.push(polyline);
+    });
+  }
 };
 
 const updateAreaPolygons = () => {
@@ -724,6 +952,134 @@ const updatePolygonPreview = () => {
       dashArray: polygonPoints.value.length < 3 ? '10, 10' : null,
     }).addTo(map);
   }
+};
+
+// Update the route preview on the map (for draw-route mode)
+// Now supports dragging points to move them and right-click/tap to delete
+const updateRoutePreview = () => {
+  if (!map) return;
+
+  // Remove existing preview layers
+  if (routePreviewLayer) {
+    routePreviewLayer.remove();
+    routePreviewLayer = null;
+  }
+  if (routeMarkersLayer) {
+    routeMarkersLayer.remove();
+    routeMarkersLayer = null;
+  }
+
+  if (routePoints.value.length === 0) return;
+
+  // Create a layer group for point markers
+  routeMarkersLayer = L.layerGroup().addTo(map);
+
+  // Draw lines between points first (route is always open-ended, never closed)
+  if (routePoints.value.length >= 2) {
+    const coords = routePoints.value.map(p => [p.lat, p.lng]);
+    routePreviewLayer = L.polyline(coords, {
+      color: '#3388ff',
+      weight: 4,
+      opacity: 0.8,
+    }).addTo(map);
+  }
+
+  // Helper to delete a point
+  const deleteRoutePoint = (indexToDelete) => {
+    // Save current state for undo
+    routeHistory.value.push([...routePoints.value]);
+    routeFuture.value = [];
+    // Remove the point
+    routePoints.value.splice(indexToDelete, 1);
+    updateRoutePreview();
+    emit('route-drawing', routePoints.value);
+  };
+
+  // Add draggable markers for each point
+  routePoints.value.forEach((point, index) => {
+    const isFirst = index === 0;
+    const isLast = index === routePoints.value.length - 1;
+    const canDelete = routePoints.value.length > 1; // Can delete if more than 1 point
+
+    const markerIcon = L.divIcon({
+      className: 'route-point-marker',
+      html: `<div style="
+        width: ${isFirst ? '16px' : '12px'};
+        height: ${isFirst ? '16px' : '12px'};
+        background-color: ${isFirst ? '#3388ff' : isLast ? '#ff9800' : 'white'};
+        border: 3px solid #3388ff;
+        border-radius: 50%;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        cursor: move;
+      "></div>`,
+      iconSize: [isFirst ? 16 : 12, isFirst ? 16 : 12],
+      iconAnchor: [isFirst ? 8 : 6, isFirst ? 8 : 6],
+    });
+
+    const marker = L.marker([point.lat, point.lng], {
+      icon: markerIcon,
+      draggable: true,
+    }).addTo(routeMarkersLayer);
+
+    // Handle drag start - save state for undo
+    marker.on('dragstart', () => {
+      routeHistory.value.push([...routePoints.value]);
+      routeFuture.value = [];
+    });
+
+    // Handle drag - update point position and polyline
+    marker.on('drag', (e) => {
+      const latlng = e.target.getLatLng();
+      routePoints.value[index] = { lat: latlng.lat, lng: latlng.lng };
+      // Update polyline while dragging
+      if (routePreviewLayer && routePoints.value.length >= 2) {
+        const newCoords = routePoints.value.map(p => [p.lat, p.lng]);
+        routePreviewLayer.setLatLngs(newCoords);
+      }
+    });
+
+    // Handle drag end - emit update
+    marker.on('dragend', () => {
+      emit('route-drawing', routePoints.value);
+    });
+
+    // Right-click to delete point (desktop)
+    marker.on('contextmenu', (e) => {
+      L.DomEvent.preventDefault(e);
+      if (canDelete) {
+        deleteRoutePoint(index);
+      }
+    });
+
+    // Bind popup for delete option (works on mobile too)
+    if (canDelete) {
+      const popupContent = document.createElement('div');
+      const deleteBtn = document.createElement('button');
+      deleteBtn.textContent = 'Delete point';
+      deleteBtn.style.cssText = `
+        background: #dc3545;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.9rem;
+      `;
+
+      const handleDelete = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        marker.closePopup();
+        deleteRoutePoint(index);
+      };
+
+      deleteBtn.addEventListener('click', handleDelete);
+      deleteBtn.addEventListener('touchend', handleDelete);
+      popupContent.appendChild(deleteBtn);
+
+      marker.bindPopup(popupContent, { closeButton: false, className: 'vertex-popup' });
+    }
+  });
 };
 
 // Update the editable polygon on the map with draggable vertices
@@ -848,6 +1204,530 @@ const updateEditingPolygon = () => {
       marker.bindPopup(popupContent, { closeButton: false, className: 'vertex-popup' });
     }
   });
+};
+
+// Update the editable route on the map with draggable vertices, midpoints, and extend markers
+const updateEditingRoute = () => {
+  if (!map) return;
+
+  // Remove existing editing layers
+  if (editingRouteLayer) {
+    editingRouteLayer.remove();
+    editingRouteLayer = null;
+  }
+  if (editingRouteMarkersLayer) {
+    editingRouteMarkersLayer.remove();
+    editingRouteMarkersLayer = null;
+  }
+
+  if (editingRoutePoints.value.length === 0) return;
+
+  // Get route color from props (use default if not set)
+  const routeColor = props.routeColor || '#3388ff';
+
+  // Create the route polyline (open-ended, not closed)
+  const coords = editingRoutePoints.value.map(p => [p.lat, p.lng]);
+  editingRouteLayer = L.polyline(coords, {
+    color: routeColor,
+    weight: props.routeWeight || 4,
+    opacity: 0.8,
+    pane: 'overlayPane',
+  }).addTo(map);
+
+  // Bring editing route to front
+  editingRouteLayer.bringToFront();
+
+  // Create a layer group for markers
+  editingRouteMarkersLayer = L.layerGroup({ pane: 'markerPane' }).addTo(map);
+
+  // Track midpoint markers for updating during drag
+  const midpointMarkers = [];
+  // Track extend markers for updating during drag
+  let extendStartMarker = null;
+  let extendEndMarker = null;
+
+  // Helper to delete a vertex
+  const deleteVertex = (indexToDelete) => {
+    // Minimum 2 points required for a route
+    if (editingRoutePoints.value.length <= 2) return;
+
+    saveRouteEditState(); // Save state for undo
+    editingRoutePoints.value.splice(indexToDelete, 1);
+    justEmittedRouteUpdate = true;
+    emit('route-update', [...editingRoutePoints.value]);
+    updateEditingRoute(); // Rebuild markers
+  };
+
+  // Helper to insert a point at a given index (used by midpoint/extend markers)
+  // Note: saveRouteEditState should be called BEFORE this in dragstart
+  const insertPoint = (index, point) => {
+    editingRoutePoints.value.splice(index, 0, point);
+    justEmittedRouteUpdate = true;
+    emit('route-update', [...editingRoutePoints.value]);
+    updateEditingRoute(); // Rebuild markers
+  };
+
+  // Helper to calculate extend marker offset
+  const calcExtendOffset = (fromPoint, toPoint, defaultOffsetLat, defaultOffsetLng) => {
+    let offsetLat = defaultOffsetLat;
+    let offsetLng = defaultOffsetLng;
+    if (toPoint) {
+      const dx = fromPoint.lng - toPoint.lng;
+      const dy = fromPoint.lat - toPoint.lat;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 0) {
+        const scale = 0.0003 / dist;
+        offsetLat = dy * scale;
+        offsetLng = dx * scale;
+      }
+    }
+    return { offsetLat, offsetLng };
+  };
+
+  // Helper to update all midpoint and extend marker positions
+  const updateMidpointPositions = () => {
+    // Update midpoint markers
+    for (let i = 0; i < midpointMarkers.length; i++) {
+      const p1 = editingRoutePoints.value[i];
+      const p2 = editingRoutePoints.value[i + 1];
+      if (p1 && p2) {
+        const midLat = (p1.lat + p2.lat) / 2;
+        const midLng = (p1.lng + p2.lng) / 2;
+        midpointMarkers[i].setLatLng([midLat, midLng]);
+      }
+    }
+
+    // Update extend start marker
+    if (extendStartMarker && editingRoutePoints.value.length > 0) {
+      const firstPoint = editingRoutePoints.value[0];
+      const secondPoint = editingRoutePoints.value.length > 1 ? editingRoutePoints.value[1] : null;
+      const { offsetLat, offsetLng } = calcExtendOffset(firstPoint, secondPoint, 0.0002, -0.0003);
+      extendStartMarker.setLatLng([firstPoint.lat + offsetLat, firstPoint.lng + offsetLng]);
+    }
+
+    // Update extend end marker
+    if (extendEndMarker && editingRoutePoints.value.length > 0) {
+      const lastPoint = editingRoutePoints.value[editingRoutePoints.value.length - 1];
+      const secondLastPoint = editingRoutePoints.value.length > 1 ? editingRoutePoints.value[editingRoutePoints.value.length - 2] : null;
+      const { offsetLat, offsetLng } = calcExtendOffset(lastPoint, secondLastPoint, 0.0002, 0.0003);
+      extendEndMarker.setLatLng([lastPoint.lat + offsetLat, lastPoint.lng + offsetLng]);
+    }
+  };
+
+  // Add extend marker at start (to prepend points) - draggable
+  if (editingRoutePoints.value.length > 0) {
+    const firstPoint = editingRoutePoints.value[0];
+    const extendStartIcon = L.divIcon({
+      className: 'route-extend-marker',
+      html: `<div style="
+        width: 14px;
+        height: 14px;
+        background-color: transparent;
+        border: 2px dashed ${routeColor};
+        border-radius: 50%;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        cursor: grab;
+        opacity: 0.7;
+      "></div>`,
+      iconSize: [14, 14],
+      iconAnchor: [7, 7],
+    });
+
+    const secondPoint = editingRoutePoints.value.length > 1 ? editingRoutePoints.value[1] : null;
+    const { offsetLat, offsetLng } = calcExtendOffset(firstPoint, secondPoint, 0.0002, -0.0003);
+
+    let hasInsertedStartPoint = false;
+
+    extendStartMarker = L.marker(
+      [firstPoint.lat + offsetLat, firstPoint.lng + offsetLng],
+      { icon: extendStartIcon, draggable: true }
+    ).addTo(editingRouteMarkersLayer);
+
+    extendStartMarker.on('dragstart', () => {
+      saveRouteEditState(); // Save state for undo before inserting
+      const latlng = extendStartMarker.getLatLng();
+      // Insert the new point at the start
+      editingRoutePoints.value.unshift({ lat: latlng.lat, lng: latlng.lng });
+      hasInsertedStartPoint = true;
+    });
+
+    extendStartMarker.on('drag', (e) => {
+      if (hasInsertedStartPoint) {
+        const latlng = e.target.getLatLng();
+        editingRoutePoints.value[0] = { lat: latlng.lat, lng: latlng.lng };
+        const newCoords = editingRoutePoints.value.map(p => [p.lat, p.lng]);
+        editingRouteLayer.setLatLngs(newCoords);
+      }
+    });
+
+    extendStartMarker.on('dragend', () => {
+      if (hasInsertedStartPoint) {
+        justEmittedRouteUpdate = true;
+        emit('route-update', [...editingRoutePoints.value]);
+        updateEditingRoute();
+      }
+    });
+
+    extendStartMarker.bindTooltip('Drag to add point at start', { direction: 'top', offset: [0, -10] });
+  }
+
+  // Add extend marker at end (to append points) - draggable
+  if (editingRoutePoints.value.length > 0) {
+    const lastPoint = editingRoutePoints.value[editingRoutePoints.value.length - 1];
+    const extendEndIcon = L.divIcon({
+      className: 'route-extend-marker',
+      html: `<div style="
+        width: 14px;
+        height: 14px;
+        background-color: transparent;
+        border: 2px dashed ${routeColor};
+        border-radius: 50%;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        cursor: grab;
+        opacity: 0.7;
+      "></div>`,
+      iconSize: [14, 14],
+      iconAnchor: [7, 7],
+    });
+
+    const secondLastPoint = editingRoutePoints.value.length > 1 ? editingRoutePoints.value[editingRoutePoints.value.length - 2] : null;
+    const { offsetLat, offsetLng } = calcExtendOffset(lastPoint, secondLastPoint, 0.0002, 0.0003);
+
+    let hasInsertedEndPoint = false;
+
+    extendEndMarker = L.marker(
+      [lastPoint.lat + offsetLat, lastPoint.lng + offsetLng],
+      { icon: extendEndIcon, draggable: true }
+    ).addTo(editingRouteMarkersLayer);
+
+    extendEndMarker.on('dragstart', () => {
+      saveRouteEditState(); // Save state for undo before inserting
+      const latlng = extendEndMarker.getLatLng();
+      // Insert the new point at the end
+      editingRoutePoints.value.push({ lat: latlng.lat, lng: latlng.lng });
+      hasInsertedEndPoint = true;
+    });
+
+    extendEndMarker.on('drag', (e) => {
+      if (hasInsertedEndPoint) {
+        const latlng = e.target.getLatLng();
+        editingRoutePoints.value[editingRoutePoints.value.length - 1] = { lat: latlng.lat, lng: latlng.lng };
+        const newCoords = editingRoutePoints.value.map(p => [p.lat, p.lng]);
+        editingRouteLayer.setLatLngs(newCoords);
+      }
+    });
+
+    extendEndMarker.on('dragend', () => {
+      if (hasInsertedEndPoint) {
+        justEmittedRouteUpdate = true;
+        emit('route-update', [...editingRoutePoints.value]);
+        updateEditingRoute();
+      }
+    });
+
+    extendEndMarker.bindTooltip('Drag to add point at end', { direction: 'top', offset: [0, -10] });
+  }
+
+  // Add midpoint markers between vertices for insertion (draggable)
+  for (let i = 0; i < editingRoutePoints.value.length - 1; i++) {
+    const p1 = editingRoutePoints.value[i];
+    const p2 = editingRoutePoints.value[i + 1];
+    const midLat = (p1.lat + p2.lat) / 2;
+    const midLng = (p1.lng + p2.lng) / 2;
+
+    const midpointIcon = L.divIcon({
+      className: 'route-midpoint-marker',
+      html: `<div style="
+        width: 10px;
+        height: 10px;
+        background-color: ${routeColor};
+        border: 2px solid white;
+        border-radius: 50%;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        cursor: grab;
+        opacity: 0.6;
+      "></div>`,
+      iconSize: [10, 10],
+      iconAnchor: [5, 5],
+    });
+
+    const insertIndex = i + 1;
+    let hasInsertedPoint = false;
+    let insertedIndex = -1;
+
+    const midpointMarker = L.marker([midLat, midLng], {
+      icon: midpointIcon,
+      draggable: true,
+    }).addTo(editingRouteMarkersLayer);
+
+    // On drag start, insert the point into the array
+    midpointMarker.on('dragstart', () => {
+      saveRouteEditState(); // Save state for undo before inserting
+      const latlng = midpointMarker.getLatLng();
+      // Insert the new point at the midpoint position
+      editingRoutePoints.value.splice(insertIndex, 0, { lat: latlng.lat, lng: latlng.lng });
+      hasInsertedPoint = true;
+      insertedIndex = insertIndex;
+    });
+
+    // During drag, update the inserted point position
+    midpointMarker.on('drag', (e) => {
+      if (hasInsertedPoint && insertedIndex >= 0) {
+        const latlng = e.target.getLatLng();
+        editingRoutePoints.value[insertedIndex] = { lat: latlng.lat, lng: latlng.lng };
+        // Update the polyline
+        const newCoords = editingRoutePoints.value.map(p => [p.lat, p.lng]);
+        editingRouteLayer.setLatLngs(newCoords);
+      }
+    });
+
+    // On drag end, emit update and rebuild to get proper vertex marker
+    midpointMarker.on('dragend', () => {
+      if (hasInsertedPoint) {
+        justEmittedRouteUpdate = true;
+        emit('route-update', [...editingRoutePoints.value]);
+        // Rebuild to convert midpoint to proper vertex with delete functionality
+        updateEditingRoute();
+      }
+    });
+
+    midpointMarker.bindTooltip('Drag to insert point', { direction: 'top', offset: [0, -8] });
+    midpointMarkers.push(midpointMarker);
+  }
+
+  // Add draggable markers for each vertex
+  editingRoutePoints.value.forEach((point, index) => {
+    const canDelete = editingRoutePoints.value.length > 2;
+
+    const markerIcon = L.divIcon({
+      className: 'route-edit-marker',
+      html: `<div class="vertex-marker" style="
+        position: relative;
+        width: 16px;
+        height: 16px;
+        background-color: ${routeColor};
+        border: 3px solid white;
+        border-radius: 50%;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+        cursor: move;
+      "></div>`,
+      iconSize: [16, 16],
+      iconAnchor: [8, 8],
+    });
+
+    const marker = L.marker([point.lat, point.lng], {
+      icon: markerIcon,
+      draggable: true,
+    }).addTo(editingRouteMarkersLayer);
+
+    // Handle drag events
+    marker.on('dragstart', () => {
+      saveRouteEditState(); // Save state for undo before moving
+    });
+
+    marker.on('drag', (e) => {
+      const latlng = e.target.getLatLng();
+      editingRoutePoints.value[index] = { lat: latlng.lat, lng: latlng.lng };
+      // Update route shape while dragging
+      const newCoords = editingRoutePoints.value.map(p => [p.lat, p.lng]);
+      editingRouteLayer.setLatLngs(newCoords);
+      // Update midpoint and extend marker positions
+      updateMidpointPositions();
+    });
+
+    marker.on('dragend', () => {
+      // Emit the updated route
+      justEmittedRouteUpdate = true;
+      emit('route-update', [...editingRoutePoints.value]);
+    });
+
+    // Right-click to delete vertex (desktop)
+    marker.on('contextmenu', (e) => {
+      L.DomEvent.preventDefault(e);
+      if (canDelete) {
+        deleteVertex(index);
+      }
+    });
+
+    // Bind popup for delete option (works on mobile too)
+    if (canDelete) {
+      const popupContent = document.createElement('div');
+      const deleteBtn = document.createElement('button');
+      deleteBtn.textContent = 'Delete point';
+      deleteBtn.style.cssText = `
+        background: #dc3545;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.9rem;
+      `;
+
+      // Use both click and touchend for mobile compatibility
+      const handleDelete = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        marker.closePopup();
+        deleteVertex(index);
+      };
+
+      deleteBtn.addEventListener('click', handleDelete);
+      deleteBtn.addEventListener('touchend', handleDelete);
+      popupContent.appendChild(deleteBtn);
+
+      marker.bindPopup(popupContent, { closeButton: false, className: 'vertex-popup' });
+    }
+  });
+};
+
+// Initialize route editing mode with existing route
+const initRouteEditingMode = (fitBounds = true) => {
+  if (!map) return;
+
+  // Clean up editing layers when not in editing mode
+  if (!props.editingRoute || props.editingRoute.length === 0) {
+    if (editingRouteLayer) {
+      editingRouteLayer.remove();
+      editingRouteLayer = null;
+    }
+    if (editingRouteMarkersLayer) {
+      editingRouteMarkersLayer.remove();
+      editingRouteMarkersLayer = null;
+    }
+    editingRoutePoints.value = [];
+    editingRouteHistory.value = [];
+    editingRouteFuture.value = [];
+    return;
+  }
+
+  // Initialize editing points from prop
+  editingRoutePoints.value = props.editingRoute.map(p => ({ lat: p.lat, lng: p.lng }));
+  // Clear undo/redo history for fresh editing session
+  editingRouteHistory.value = [];
+  editingRouteFuture.value = [];
+  updateEditingRoute();
+
+  // Fit bounds to the editing route
+  if (fitBounds && editingRoutePoints.value.length >= 2) {
+    const bounds = L.latLngBounds(editingRoutePoints.value.map(p => [p.lat, p.lng]));
+    map.fitBounds(bounds, { padding: [50, 50] });
+  }
+};
+
+// Initialize route drawing mode
+const initRouteDrawingMode = () => {
+  if (!map) return;
+
+  // Clean up any existing custom route drawing handlers
+  if (map._customRouteDrawingHandlers) {
+    map.off('click', map._customRouteDrawingHandlers.handleClick);
+    map.getContainer().removeEventListener('touchstart', map._customRouteDrawingHandlers.handleTouchStart);
+    map.getContainer().removeEventListener('touchend', map._customRouteDrawingHandlers.handleTouchEnd);
+    map.getContainer().removeEventListener('touchmove', map._customRouteDrawingHandlers.handleTouchMove);
+    delete map._customRouteDrawingHandlers;
+  }
+
+  // Clear route preview when exiting drawing mode
+  if (!props.drawingRouteMode) {
+    clearRouteDrawing();
+    return;
+  }
+
+  // Custom route drawing mode implementation (similar to polygon drawing)
+  let touchStartTime = 0;
+  let touchStartPos = null;
+  let touchMoved = false;
+  let multiTouch = false;
+  const TAP_THRESHOLD_MS = 300;
+  const MOVE_THRESHOLD_PX = 15;
+
+  const addRoutePoint = (latlng) => {
+    // Save current state for undo
+    routeHistory.value.push([...routePoints.value]);
+    // Clear redo stack when adding new points
+    routeFuture.value = [];
+    // Add the new point
+    routePoints.value.push({ lat: latlng.lat, lng: latlng.lng });
+    updateRoutePreview();
+    emit('route-drawing', routePoints.value);
+  };
+
+  // Handle click events (for desktop)
+  const handleClick = (e) => {
+    if (e.originalEvent && e.originalEvent.sourceCapabilities?.firesTouchEvents) {
+      return;
+    }
+    addRoutePoint(e.latlng);
+  };
+
+  // Handle touch events for mobile
+  const handleTouchStart = (e) => {
+    if (e.touches.length > 1) {
+      multiTouch = true;
+      return;
+    }
+    multiTouch = false;
+    touchStartTime = Date.now();
+    touchStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    touchMoved = false;
+  };
+
+  const handleTouchMove = (e) => {
+    if (!touchStartPos || multiTouch) return;
+
+    const dx = e.touches[0].clientX - touchStartPos.x;
+    const dy = e.touches[0].clientY - touchStartPos.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance > MOVE_THRESHOLD_PX) {
+      touchMoved = true;
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    if (multiTouch) {
+      multiTouch = false;
+      touchStartPos = null;
+      return;
+    }
+
+    const touchDuration = Date.now() - touchStartTime;
+
+    if (touchDuration < TAP_THRESHOLD_MS && !touchMoved && touchStartPos) {
+      const touch = e.changedTouches[0];
+      const containerPoint = L.point(
+        touch.clientX - map.getContainer().getBoundingClientRect().left,
+        touch.clientY - map.getContainer().getBoundingClientRect().top
+      );
+      const latlng = map.containerPointToLatLng(containerPoint);
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      addRoutePoint(latlng);
+    }
+
+    touchStartPos = null;
+    touchMoved = false;
+  };
+
+  // Add event listeners
+  map.on('click', handleClick);
+  map.getContainer().addEventListener('touchstart', handleTouchStart, { passive: true });
+  map.getContainer().addEventListener('touchmove', handleTouchMove, { passive: true });
+  map.getContainer().addEventListener('touchend', handleTouchEnd, { passive: false });
+
+  // Store handlers for cleanup
+  map._customRouteDrawingHandlers = {
+    handleClick,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+  };
+
+  // Initialize route preview
+  updateRoutePreview();
 };
 
 // Initialize editing mode with existing polygon
@@ -1030,6 +1910,11 @@ const updateMarkers = () => {
 
   pendingMarkerUpdate = false;
 
+  // Close any open popups before removing markers
+  if (map) {
+    map.closePopup();
+  }
+
   // Safely remove markers - clear event listeners first to prevent animation errors
   markers.value.forEach((marker) => {
     if (marker._map) {
@@ -1131,8 +2016,8 @@ const updateMarkers = () => {
         "></div>
       `;
     }
-    // Show count unless in marshal mode (where we hide counts)
-    const showCount = !props.marshalMode;
+    // Show count unless in marshal mode or staffing overlay is disabled
+    const showCount = !props.marshalMode && props.showStaffingOverlay;
 
     // Generate badge HTML separately so it won't be rotated
     const statusBadge = getStatusBadgeHtml(checkedInCount, requiredMarshals);
@@ -1207,10 +2092,10 @@ const updateMarkers = () => {
               <div style="${rotationStyle}">
                 ${markerHtml}
               </div>
-              ${(showSimplified || props.marshalMode) ? '' : `<div style="position: absolute; top: -4px; right: -4px;">
+              ${(showSimplified || props.marshalMode || !props.showStatusOverlay) ? '' : `<div style="position: absolute; top: -4px; right: -4px;">
                 ${statusBadge}
               </div>`}
-              ${showSimplified ? '' : countBadge}
+              ${(showSimplified || !showCount) ? '' : countBadge}
             </div>
           </div>
           <div style="
@@ -1256,7 +2141,8 @@ const updateMarkers = () => {
 
   // Only fit bounds on initial load if center/zoom are not explicitly provided
   // If center/zoom are provided, respect those instead of auto-fitting
-  if (map && isInitialLoad.value && !props.center && !hasCenteredOnCheckpoints.value) {
+  // Skip auto-centering if skipAutoCentering prop is true (used in route editor)
+  if (map && isInitialLoad.value && !props.center && !hasCenteredOnCheckpoints.value && !props.skipAutoCentering) {
     const allPoints = [];
 
     // Use allLocationsForBounds (unfiltered) if available for better initial bounds
@@ -1277,8 +2163,8 @@ const updateMarkers = () => {
     // Add route points (filter out invalid coordinates)
     if (props.route.length > 0) {
       allPoints.push(...props.route
-        .filter((point) => isValidCoord(point.lat, point.lng))
-        .map((point) => [point.lat, point.lng]));
+        .filter((point) => isValidCoord(getPointLat(point), getPointLng(point)))
+        .map((point) => [getPointLat(point), getPointLng(point)]));
     }
 
     if (allPoints.length > 0) {
@@ -1347,14 +2233,22 @@ watch(
     updateMarkers();
 
     // If we haven't centered yet and we now have checkpoints, center on them
-    if (map && !hasCenteredOnCheckpoints.value && newLocations.length > 0 && !props.center) {
-      const lats = newLocations.map(loc => loc.latitude);
-      const lngs = newLocations.map(loc => loc.longitude);
-      const centerLat = lats.reduce((a, b) => a + b, 0) / lats.length;
-      const centerLng = lngs.reduce((a, b) => a + b, 0) / lngs.length;
-      map.setView([centerLat, centerLng], 10);
-      hasCenteredOnCheckpoints.value = true;
-      isInitialLoad.value = false;
+    // Skip if skipAutoCentering is true (used in route editor)
+    if (map && !hasCenteredOnCheckpoints.value && newLocations.length > 0 && !props.center && !props.skipAutoCentering) {
+      // Filter out locations with invalid coordinates (0,0 or null)
+      const validLocations = newLocations.filter(loc =>
+        loc.latitude != null && loc.longitude != null &&
+        !(loc.latitude === 0 && loc.longitude === 0)
+      );
+      if (validLocations.length > 0) {
+        const lats = validLocations.map(loc => loc.latitude);
+        const lngs = validLocations.map(loc => loc.longitude);
+        const centerLat = lats.reduce((a, b) => a + b, 0) / lats.length;
+        const centerLng = lngs.reduce((a, b) => a + b, 0) / lngs.length;
+        map.setView([centerLat, centerLng], 10);
+        hasCenteredOnCheckpoints.value = true;
+        isInitialLoad.value = false;
+      }
     }
 
     // Check visibility after markers update (with slight delay to ensure map has rendered)
@@ -1373,14 +2267,23 @@ watch(
     updateMarkers();
 
     // If we haven't centered yet and we now have route data, center on it
-    if (map && !hasCenteredOnCheckpoints.value && newRoute && newRoute.length > 0 && !props.center) {
-      const lats = newRoute.map(point => point.lat);
-      const lngs = newRoute.map(point => point.lng);
-      const centerLat = lats.reduce((a, b) => a + b, 0) / lats.length;
-      const centerLng = lngs.reduce((a, b) => a + b, 0) / lngs.length;
-      map.setView([centerLat, centerLng], 10);
-      hasCenteredOnCheckpoints.value = true;
-      isInitialLoad.value = false;
+    // Skip if skipAutoCentering is true (used in route editor)
+    if (map && !hasCenteredOnCheckpoints.value && newRoute && newRoute.length > 0 && !props.center && !props.skipAutoCentering) {
+      // Filter out points with invalid coordinates (0,0 or null)
+      const validPoints = newRoute.filter(point => {
+        const lat = getPointLat(point);
+        const lng = getPointLng(point);
+        return lat != null && lng != null && !(lat === 0 && lng === 0);
+      });
+      if (validPoints.length > 0) {
+        const lats = validPoints.map(point => getPointLat(point));
+        const lngs = validPoints.map(point => getPointLng(point));
+        const centerLat = lats.reduce((a, b) => a + b, 0) / lats.length;
+        const centerLng = lngs.reduce((a, b) => a + b, 0) / lngs.length;
+        map.setView([centerLat, centerLng], 10);
+        hasCenteredOnCheckpoints.value = true;
+        isInitialLoad.value = false;
+      }
     }
   },
   { deep: true }
@@ -1392,6 +2295,15 @@ watch(
   () => {
     updateRoute();
   }
+);
+
+// Update routes when layers change
+watch(
+  () => props.layers,
+  () => {
+    updateRoute();
+  },
+  { deep: true }
 );
 
 watch(
@@ -1441,6 +2353,26 @@ watch(
       return;
     }
     initEditingMode();
+  },
+  { deep: true }
+);
+
+watch(
+  () => props.drawingRouteMode,
+  () => {
+    initRouteDrawingMode();
+  }
+);
+
+watch(
+  () => props.editingRoute,
+  () => {
+    // Skip rebuilding if we just emitted an update (prevents losing drag state)
+    if (justEmittedRouteUpdate) {
+      justEmittedRouteUpdate = false;
+      return;
+    }
+    initRouteEditingMode();
   },
   { deep: true }
 );

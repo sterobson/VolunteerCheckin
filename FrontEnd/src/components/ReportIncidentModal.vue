@@ -149,6 +149,7 @@
               :route-color="routeColor"
               :route-style="routeStyle"
               :route-weight="routeWeight"
+              :layers="layers"
               :center="mapCenter"
               :zoom="14"
               mode="select-point"
@@ -235,6 +236,10 @@ const props = defineProps({
   routeWeight: {
     type: Number,
     default: null,
+  },
+  layers: {
+    type: Array,
+    default: () => [],
   },
 });
 

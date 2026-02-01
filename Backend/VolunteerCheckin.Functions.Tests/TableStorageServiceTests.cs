@@ -92,36 +92,6 @@ public class TableStorageServiceTests
 
     [TestMethod]
     [Ignore("Requires Azure Storage (Azurite) to run")]
-    public void GetAdminUsersTable_ReturnsTableClient()
-    {
-        // Arrange
-        TableStorageService service = new TableStorageService(ConnectionString);
-
-        // Act
-        TableClient table = service.GetAdminUsersTable();
-
-        // Assert
-        table.ShouldNotBeNull();
-        table.Name.ShouldBe("AdminUsers");
-    }
-
-    [TestMethod]
-    [Ignore("Requires Azure Storage (Azurite) to run")]
-    public void GetUserEventMappingsTable_ReturnsTableClient()
-    {
-        // Arrange
-        TableStorageService service = new TableStorageService(ConnectionString);
-
-        // Act
-        TableClient table = service.GetUserEventMappingsTable();
-
-        // Assert
-        table.ShouldNotBeNull();
-        table.Name.ShouldBe("UserEventMappings");
-    }
-
-    [TestMethod]
-    [Ignore("Requires Azure Storage (Azurite) to run")]
     public void GetMarshalsTable_ReturnsTableClient()
     {
         // Arrange
@@ -353,8 +323,6 @@ public class TableStorageServiceTests
         service.GetEventsTable().ShouldNotBeNull();
         service.GetLocationsTable().ShouldNotBeNull();
         service.GetAssignmentsTable().ShouldNotBeNull();
-        service.GetAdminUsersTable().ShouldNotBeNull();
-        service.GetUserEventMappingsTable().ShouldNotBeNull();
         service.GetMarshalsTable().ShouldNotBeNull();
         service.GetAreasTable().ShouldNotBeNull();
         service.GetChecklistItemsTable().ShouldNotBeNull();
@@ -382,8 +350,6 @@ public class TableStorageServiceTests
             ["Events"] = service.GetEventsTable,
             ["Locations"] = service.GetLocationsTable,
             ["Assignments"] = service.GetAssignmentsTable,
-            ["AdminUsers"] = service.GetAdminUsersTable,
-            ["UserEventMappings"] = service.GetUserEventMappingsTable,
             ["Marshals"] = service.GetMarshalsTable,
             ["Areas"] = service.GetAreasTable,
             ["ChecklistItems"] = service.GetChecklistItemsTable,
@@ -443,7 +409,7 @@ public class TableStorageServiceTests
 
     [TestMethod]
     [Ignore("Requires Azure Storage (Azurite) to run")]
-    public void Service_Has17Tables_AllAccessible()
+    public void Service_Has18Tables_AllAccessible()
     {
         // Arrange
         TableStorageService service = new TableStorageService(ConnectionString);
@@ -454,8 +420,6 @@ public class TableStorageServiceTests
             service.GetEventsTable(),
             service.GetLocationsTable(),
             service.GetAssignmentsTable(),
-            service.GetAdminUsersTable(),
-            service.GetUserEventMappingsTable(),
             service.GetMarshalsTable(),
             service.GetAreasTable(),
             service.GetChecklistItemsTable(),
@@ -467,16 +431,19 @@ public class TableStorageServiceTests
             service.GetNotesTable(),
             service.GetEventContactsTable(),
             service.GetPersonEmailIndexTable(),
-            service.GetIncidentsTable()
+            service.GetIncidentsTable(),
+            service.GetEventRoleDefinitionsTable(),
+            service.GetLayersTable(),
+            service.GetSampleEventAdminTable()
         ];
 
         // Assert
-        tables.Count.ShouldBe(17);
+        tables.Count.ShouldBe(18);
         tables.ShouldAllBe(t => t != null);
 
         // Verify all table names are unique
         HashSet<string> uniqueNames = new HashSet<string>(tables.Select(t => t.Name));
-        uniqueNames.Count.ShouldBe(17);
+        uniqueNames.Count.ShouldBe(18);
     }
 
     #endregion

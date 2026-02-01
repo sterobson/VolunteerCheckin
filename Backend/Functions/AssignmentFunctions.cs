@@ -265,7 +265,7 @@ public class AssignmentFunctions
 
             // Check if any checkpoints are missing area assignments
             List<LocationEntity> checkpointsNeedingAreas = [.. locationsList
-                .Where(l => string.IsNullOrEmpty(l.AreaIdsJson) || l.AreaIdsJson == "[]")];
+                .Where(l => l.GetPayload().AreaIds.Count == 0)];
 
             if (checkpointsNeedingAreas.Count > 0)
             {
@@ -304,7 +304,9 @@ public class AssignmentFunctions
                         defaultArea.RowKey
                     );
 
-                    checkpoint.AreaIdsJson = JsonSerializer.Serialize(areaIds);
+                    LocationPayload checkpointPayload = checkpoint.GetPayload();
+                    checkpointPayload.AreaIds = areaIds;
+                    checkpoint.SetPayload(checkpointPayload);
                     updateTasks.Add(_locationRepository.UpdateAsync(checkpoint));
                 }
                 await Task.WhenAll(updateTasks);
@@ -316,7 +318,7 @@ public class AssignmentFunctions
             Dictionary<string, int> areaCheckpointCounts = [];
             foreach (LocationEntity location in locationsList)
             {
-                List<string> locationAreaIds = JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson ?? "[]") ?? [];
+                List<string> locationAreaIds = location.GetPayload().AreaIds;
                 foreach (string areaId in locationAreaIds)
                 {
                     areaCheckpointCounts[areaId] = areaCheckpointCounts.GetValueOrDefault(areaId, 0) + 1;
@@ -338,15 +340,32 @@ public class AssignmentFunctions
 
                 int checkedInCount = locationAssignments.Count(a => a.IsCheckedIn);
 
-                List<string> areaIds = JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson ?? "[]") ?? [];
+                LocationPayload locationPayload = location.GetPayload();
+                List<string> areaIds = locationPayload.AreaIds;
 
                 // Resolve checkpoint style from hierarchy
                 ResolvedCheckpointStyle resolvedStyle = ResolveCheckpointStyle(
-                    location, areaIds, eventEntity, areasList, areaCheckpointCounts);
+                    locationPayload, areaIds, eventEntity, areasList, areaCheckpointCounts);
 
-                // Parse location update scope configurations
-                List<ScopeConfiguration> locationUpdateScopeConfigs =
-                    JsonSerializer.Deserialize<List<ScopeConfiguration>>(location.LocationUpdateScopeJson ?? "[]", FunctionHelpers.JsonOptions) ?? [];
+                // Get location update scope configurations from payload
+                List<ScopeConfiguration> locationUpdateScopeConfigs = locationPayload.Dynamic.UpdateScopes;
+
+                // Get layer IDs from payload (null = all layers for mode "all")
+                List<string>? layerIds = locationPayload.LayerIds;
+
+                // Get layer assignment mode from payload
+                string layerAssignmentMode = locationPayload.LayerAssignmentMode;
+                if (string.IsNullOrEmpty(layerAssignmentMode))
+                {
+                    if (layerIds == null)
+                    {
+                        layerAssignmentMode = "all";
+                    }
+                    else
+                    {
+                        layerAssignmentMode = "specific";
+                    }
+                }
 
                 locationStatuses.Add(new LocationStatusResponse(
                     location.RowKey,
@@ -357,18 +376,18 @@ public class AssignmentFunctions
                     location.RequiredMarshals,
                     checkedInCount,
                     locationAssignments,
-                    location.What3Words,
+                    locationPayload.What3Words,
                     location.StartTime,
                     location.EndTime,
                     areaIds,
-                    location.StyleType ?? "default",
-                    location.StyleColor ?? string.Empty,
-                    location.StyleBackgroundShape ?? string.Empty,
-                    location.StyleBackgroundColor ?? string.Empty,
-                    location.StyleBorderColor ?? string.Empty,
-                    location.StyleIconColor ?? string.Empty,
-                    location.StyleSize ?? string.Empty,
-                    location.StyleMapRotation ?? string.Empty,
+                    locationPayload.Style.Type ?? "default",
+                    locationPayload.Style.Color ?? string.Empty,
+                    locationPayload.Style.BackgroundShape ?? string.Empty,
+                    locationPayload.Style.BackgroundColor ?? string.Empty,
+                    locationPayload.Style.BorderColor ?? string.Empty,
+                    locationPayload.Style.IconColor ?? string.Empty,
+                    locationPayload.Style.Size ?? string.Empty,
+                    locationPayload.Style.MapRotation ?? string.Empty,
                     resolvedStyle.Type,
                     resolvedStyle.Color,
                     resolvedStyle.BackgroundShape,
@@ -377,11 +396,13 @@ public class AssignmentFunctions
                     resolvedStyle.IconColor,
                     resolvedStyle.Size,
                     resolvedStyle.MapRotation,
-                    location.PeopleTerm ?? string.Empty,
-                    location.CheckpointTerm ?? string.Empty,
+                    locationPayload.Terminology.PeopleTerm ?? string.Empty,
+                    locationPayload.Terminology.CheckpointTerm ?? string.Empty,
                     location.IsDynamic,
                     locationUpdateScopeConfigs,
-                    location.LastLocationUpdate
+                    locationPayload.Dynamic.LastUpdate,
+                    layerAssignmentMode,
+                    layerIds
                 ));
             }
 
@@ -426,7 +447,7 @@ public class AssignmentFunctions
     /// </summary>
 #pragma warning disable MA0051
     private static ResolvedCheckpointStyle ResolveCheckpointStyle(
-        LocationEntity location,
+        LocationPayload payload,
         List<string> areaIds,
         EventEntity? eventEntity,
         List<AreaEntity> areas,
@@ -441,6 +462,9 @@ public class AssignmentFunctions
         string iconColor = string.Empty;
         string size = string.Empty;
         string mapRotation = string.Empty;
+
+        // Get event default styles from payload (not flat properties) for v2 support
+        LocationStylingPayload? eventStyle = eventEntity?.GetPayload().Styling.Locations;
 
         // Get matched areas sorted by checkpoint count for consistent resolution
         List<AreaEntity>? sortedMatchedAreas = null;
@@ -460,26 +484,26 @@ public class AssignmentFunctions
         bool IsValidIconType(string? styleType) =>
             !string.IsNullOrEmpty(styleType) && styleType != "default" && styleType != "custom";
 
-        if (IsValidIconType(location.StyleType))
+        if (IsValidIconType(payload.Style.Type))
         {
-            type = location.StyleType;
+            type = payload.Style.Type;
         }
         else if (sortedMatchedAreas != null)
         {
             AreaEntity? styledArea = sortedMatchedAreas.FirstOrDefault(a =>
-                IsValidIconType(a.CheckpointStyleType));
+                IsValidIconType(a.GetPayload().Style.Type));
             if (styledArea != null)
             {
-                type = styledArea.CheckpointStyleType;
+                type = styledArea.GetPayload().Style.Type;
             }
-            else if (eventEntity != null && IsValidIconType(eventEntity.DefaultCheckpointStyleType))
+            else if (eventStyle != null && IsValidIconType(eventStyle.DefaultType))
             {
-                type = eventEntity.DefaultCheckpointStyleType;
+                type = eventStyle.DefaultType;
             }
         }
-        else if (eventEntity != null && IsValidIconType(eventEntity.DefaultCheckpointStyleType))
+        else if (eventStyle != null && IsValidIconType(eventStyle.DefaultType))
         {
-            type = eventEntity.DefaultCheckpointStyleType;
+            type = eventStyle.DefaultType;
         }
 
         // Helper to resolve a string property through hierarchy
@@ -501,39 +525,39 @@ public class AssignmentFunctions
         // Resolve each property through the hierarchy
         // Color - use StyleColor for backward compatibility, then StyleBackgroundColor
         color = ResolveProperty(
-            !string.IsNullOrEmpty(location.StyleBackgroundColor) ? location.StyleBackgroundColor : location.StyleColor,
-            a => !string.IsNullOrEmpty(a.CheckpointStyleBackgroundColor) ? a.CheckpointStyleBackgroundColor : a.CheckpointStyleColor,
-            !string.IsNullOrEmpty(eventEntity?.DefaultCheckpointStyleBackgroundColor) ? eventEntity.DefaultCheckpointStyleBackgroundColor : eventEntity?.DefaultCheckpointStyleColor);
+            !string.IsNullOrEmpty(payload.Style.BackgroundColor) ? payload.Style.BackgroundColor : payload.Style.Color,
+            a => { AreaStylePayload s = a.GetPayload().Style; return !string.IsNullOrEmpty(s.BackgroundColor) ? s.BackgroundColor : s.Color; },
+            !string.IsNullOrEmpty(eventStyle?.DefaultBackgroundColor) ? eventStyle.DefaultBackgroundColor : eventStyle?.DefaultColor);
 
         backgroundShape = ResolveProperty(
-            location.StyleBackgroundShape,
-            a => a.CheckpointStyleBackgroundShape,
-            eventEntity?.DefaultCheckpointStyleBackgroundShape);
+            payload.Style.BackgroundShape,
+            a => a.GetPayload().Style.BackgroundShape,
+            eventStyle?.DefaultBackgroundShape);
 
         backgroundColor = ResolveProperty(
-            location.StyleBackgroundColor,
-            a => a.CheckpointStyleBackgroundColor,
-            eventEntity?.DefaultCheckpointStyleBackgroundColor);
+            payload.Style.BackgroundColor,
+            a => a.GetPayload().Style.BackgroundColor,
+            eventStyle?.DefaultBackgroundColor);
 
         borderColor = ResolveProperty(
-            location.StyleBorderColor,
-            a => a.CheckpointStyleBorderColor,
-            eventEntity?.DefaultCheckpointStyleBorderColor);
+            payload.Style.BorderColor,
+            a => a.GetPayload().Style.BorderColor,
+            eventStyle?.DefaultBorderColor);
 
         iconColor = ResolveProperty(
-            location.StyleIconColor,
-            a => a.CheckpointStyleIconColor,
-            eventEntity?.DefaultCheckpointStyleIconColor);
+            payload.Style.IconColor,
+            a => a.GetPayload().Style.IconColor,
+            eventStyle?.DefaultIconColor);
 
         size = ResolveProperty(
-            location.StyleSize,
-            a => a.CheckpointStyleSize,
-            eventEntity?.DefaultCheckpointStyleSize);
+            payload.Style.Size,
+            a => a.GetPayload().Style.Size,
+            eventStyle?.DefaultSize);
 
         mapRotation = ResolveProperty(
-            location.StyleMapRotation,
-            a => a.CheckpointStyleMapRotation,
-            eventEntity?.DefaultCheckpointStyleMapRotation);
+            payload.Style.MapRotation,
+            a => a.GetPayload().Style.MapRotation,
+            eventStyle?.DefaultMapRotation);
 
         return new ResolvedCheckpointStyle(type, color, backgroundShape, backgroundColor, borderColor, iconColor, size, mapRotation);
     }

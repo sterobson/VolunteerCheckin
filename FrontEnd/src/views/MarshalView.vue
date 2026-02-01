@@ -1,5 +1,8 @@
 <template>
   <div class="marshal-view" :style="pageBackgroundStyle">
+    <!-- Demo Banner for sample events -->
+    <DemoBanner v-if="event?.isSampleEvent" :expires-at="event.expiresAt" />
+
     <!-- Offline Indicator -->
     <OfflineIndicator />
 
@@ -122,6 +125,7 @@
             :route-color="event?.routeColor"
             :route-style="event?.routeStyle"
             :route-weight="event?.routeWeight"
+            :layers="layers"
             :user-location="userLocation"
             :has-dynamic-assignment="hasDynamicAssignment"
             :current-marshal-id="currentMarshalId"
@@ -137,6 +141,7 @@
             :is-area-lead-for-areas="isAreaLeadForAreas"
             :get-notes-for-checkpoint="getNotesForCheckpoint"
             :area-lead-area-ids="areaLeadAreaIds"
+            :time-zone-id="event?.timeZoneId"
             @toggle="toggleSection('assignments')"
             @toggle-checkpoint="toggleCheckpoint"
             @map-click="handleMapClick"
@@ -172,6 +177,7 @@
             :areas="areas"
             :marshals="areaMarshalsForChecklist"
             :get-context-name="getContextName"
+            :time-zone-id="event?.timeZoneId"
             @toggle="toggleSection('checklist')"
             @toggle-item="handleToggleChecklist"
             @toggle-group="toggleChecklistGroup"
@@ -222,6 +228,7 @@
             :route-color="event?.routeColor"
             :route-style="event?.routeStyle"
             :route-weight="event?.routeWeight"
+            :layers="layers"
             @toggle="toggleSection('areaLead')"
             @toggle-filter="toggleAreaFilter"
             @checklist-updated="loadChecklist"
@@ -238,6 +245,7 @@
             :current-marshal-id="currentMarshalId"
             :locations="allLocations"
             :areas="areas"
+            :time-zone-id="event?.timeZoneId"
             @toggle="toggleSection('areaLeadMarshals')"
             @toggle-marshal="toggleAreaLeadMarshalExpansion"
             @check-in="handleAreaLeadMarshalCheckIn"
@@ -257,6 +265,7 @@
             :route-color="event?.routeColor"
             :route-style="event?.routeStyle"
             :route-weight="event?.routeWeight"
+            :layers="courseMapLayers"
             :center="mapCenter"
             :highlight-location-ids="assignmentLocationIds"
             :clickable="selectingLocationOnMap || canUpdateFirstDynamicAssignment"
@@ -273,6 +282,7 @@
           <MarshalEventDetailsSection
             :event-date="event?.eventDate"
             :description="event?.description"
+            :time-zone-id="event?.timeZoneId"
             :is-expanded="expandedSection === 'eventDetails'"
             @toggle="toggleSection('eventDetails')"
           />
@@ -310,6 +320,7 @@
       :route-color="event?.routeColor"
       :route-style="event?.routeStyle"
       :route-weight="event?.routeWeight"
+      :layers="layers"
       @close="showReportIncident = false"
       @submit="handleReportIncident"
     />
@@ -321,6 +332,7 @@
       :route-color="event?.routeColor"
       :route-style="event?.routeStyle"
       :route-weight="event?.routeWeight"
+      :layers="layers"
       :checkpoints="allLocations"
       :can-manage="isAreaLead"
       @close="showIncidentDetail = false"
@@ -397,6 +409,7 @@
       :success="locationUpdateSuccess"
       :available-checkpoints="availableSourceCheckpoints"
       :accent-button-style="accentButtonStyle"
+      :time-zone-id="event?.timeZoneId"
       @close="closeLocationUpdateModal"
       @update-gps="updateLocationWithGps"
       @toggle-auto-update="toggleAutoUpdate(updatingLocationFor)"
@@ -438,7 +451,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, provide, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { eventsApi, assignmentsApi, areasApi, notesApi, contactsApi, marshalsApi, roleDefinitionsApi, getOfflineMode } from '../services/api';
+import { eventsApi, assignmentsApi, areasApi, notesApi, contactsApi, marshalsApi, roleDefinitionsApi, layersApi, getOfflineMode } from '../services/api';
 import { denormalizeEventStatus, denormalizeAreaLeadDashboard } from '../utils/denormalize';
 import { setSkipLoadingOverlayForGets } from '../services/loadingOverlay';
 import ConfirmModal from '../components/ConfirmModal.vue';
@@ -472,9 +485,11 @@ import { useAreaLeadMarshals } from '../composables/useAreaLeadMarshals';
 import { useMarshalAuth } from '../composables/useMarshalAuth';
 import { useWeatherForecast } from '../composables/useWeatherForecast';
 import WeatherIcon from '../components/common/WeatherIcon.vue';
+import DemoBanner from '../components/DemoBanner.vue';
 import { getIcon } from '../utils/icons';
 import { canMarshalUpdateDynamicLocation } from '../utils/scopeUtils';
 import { useOffline } from '../composables/useOffline';
+import { useEventTimeZone } from '../composables/useEventTimeZone';
 import { cacheEventData, getCachedEventData, updateCachedField } from '../services/offlineDb';
 
 const { terms, termsLower } = useTerminology();
@@ -600,8 +615,20 @@ const event = ref(null);
 const allLocations = ref([]);
 const assignments = ref([]);
 const areas = ref([]);
+const layers = ref([]);
 const loading = ref(true);
 const refreshing = ref(false); // Background refresh indicator
+
+// Event timezone formatting - ensures times display in event's timezone, not viewer's local timezone
+const eventTimeZone = computed(() => event.value?.timeZoneId || 'UTC');
+const {
+  formatEventDate,
+  formatEventDateTime,
+  formatTime,
+  formatTimeRange,
+  formatCheckInTime,
+  formatDateTime,
+} = useEventTimeZone(eventTimeZone);
 
 // Branding styles from composable (pass eventId for caching)
 const {
@@ -1075,6 +1102,41 @@ const courseMapLocations = computed(() => {
   });
 });
 
+// Filtered layers for course map (when hiding other checkpoints)
+const courseMapLayers = computed(() => {
+  if (!hideOtherCheckpoints.value) {
+    return layers.value;
+  }
+  // Get layerIds from assigned checkpoints
+  const assignedLocations = allLocations.value.filter(loc =>
+    assignmentLocationIds.value.includes(loc.id)
+  );
+
+  // Collect all layer IDs from assigned checkpoints
+  const relevantLayerIds = new Set();
+  let hasNullLayerIds = false;
+
+  for (const loc of assignedLocations) {
+    const locLayerIds = loc.layerIds || loc.LayerIds;
+    if (locLayerIds == null) {
+      // Checkpoint belongs to all layers
+      hasNullLayerIds = true;
+      break;
+    }
+    if (Array.isArray(locLayerIds)) {
+      locLayerIds.forEach(id => relevantLayerIds.add(id));
+    }
+  }
+
+  // If any checkpoint belongs to all layers, show all layers
+  if (hasNullLayerIds) {
+    return layers.value;
+  }
+
+  // Filter layers to only those associated with assigned checkpoints
+  return layers.value.filter(layer => relevantLayerIds.has(layer.id));
+});
+
 // Check if user has any dynamic checkpoint assignments
 const hasDynamicAssignment = computed(() => {
   return assignmentsWithDetails.value.some(a => a.location?.isDynamic || a.location?.IsDynamic);
@@ -1372,6 +1434,7 @@ const populateFromCache = (cachedData) => {
   myContacts.value = cachedData.contacts || [];
   notes.value = cachedData.notes || [];
   myRoles.value = cachedData.roles || [];
+  layers.value = cachedData.layers || [];
 
   // Load area lead checkpoints for marshal name lookup
   if (cachedData.areaLeadDashboard?.checkpoints) {
@@ -1488,7 +1551,8 @@ const loadEventData = async () => {
     loadContacts(),
     loadNotes(),
     loadMyIncidents(),
-    loadRoles()
+    loadRoles(),
+    loadLayers()
   ];
 
   // Add area lead dashboard load if user is an area lead
@@ -1509,6 +1573,7 @@ const loadEventData = async () => {
       contacts: myContacts.value,
       notes: notes.value,
       roles: myRoles.value,
+      layers: layers.value,
       marshalId: currentMarshalId.value
     };
 
@@ -1655,6 +1720,18 @@ const loadRoles = async () => {
   }
 };
 
+const loadLayers = async () => {
+  const eventIdVal = route.params.eventId;
+  try {
+    const response = await layersApi.getByEvent(eventIdVal);
+    layers.value = response.data || [];
+    console.log('Layers loaded:', layers.value.length);
+  } catch (error) {
+    console.warn('Failed to load layers:', error);
+    layers.value = [];
+  }
+};
+
 const handleConfirmModalConfirm = () => {
   showConfirmModal.value = false;
   if (confirmModalCallback.value) {
@@ -1760,16 +1837,7 @@ const handleClose = () => {
   });
 };
 
-const formatEventDate = (dateString) => {
-  if (!dateString) return '';
-  return new Date(dateString).toLocaleString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
+// formatEventDate is provided by useEventTimeZone composable
 
 onMounted(async () => {
   // In marshal mode, skip the center loading overlay for GET requests

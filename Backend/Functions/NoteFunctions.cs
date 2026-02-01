@@ -481,12 +481,14 @@ public class NoteFunctions
             sessionToken = req.Cookies["session_token"];
         }
 
-        if (string.IsNullOrWhiteSpace(sessionToken))
+        string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
+
+        if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
         {
             return null;
         }
 
-        return await _claimsService.GetClaimsAsync(sessionToken, eventId);
+        return await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
     }
 
     private static bool CanManageNotes(UserClaims claims)
@@ -538,7 +540,7 @@ public class NoteFunctions
         {
             if (checkpointLookup.TryGetValue(locationId, out LocationEntity? checkpoint))
             {
-                List<string> areaIds = JsonSerializer.Deserialize<List<string>>(checkpoint.AreaIdsJson) ?? [];
+                List<string> areaIds = checkpoint.GetPayload().AreaIds;
                 foreach (string areaId in areaIds)
                 {
                     assignedAreaIds.Add(areaId);
@@ -551,7 +553,7 @@ public class NoteFunctions
         IEnumerable<AreaEntity> areas = await _areaRepository.GetByEventAsync(eventId);
         foreach (AreaEntity area in areas)
         {
-            List<AreaContact> contacts = JsonSerializer.Deserialize<List<AreaContact>>(area.ContactsJson) ?? [];
+            List<AreaContact> contacts = area.GetPayload().Contacts;
             if (contacts.Any(c => c.MarshalId == marshalId && c.Role == "Leader"))
             {
                 areaLeadForAreaIds.Add(area.RowKey);

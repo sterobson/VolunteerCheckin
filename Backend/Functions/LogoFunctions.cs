@@ -13,7 +13,8 @@ public class LogoFunctions
 {
     private readonly ILogger<LogoFunctions> _logger;
     private readonly IEventRepository _eventRepository;
-    private readonly IUserEventMappingRepository _userEventMappingRepository;
+    private readonly IPersonRepository _personRepository;
+    private readonly IEventRoleRepository _eventRoleRepository;
     private readonly BlobStorageService _blobStorageService;
 
     private static readonly HashSet<string> _allowedContentTypes = new(StringComparer.OrdinalIgnoreCase)
@@ -31,19 +32,24 @@ public class LogoFunctions
     public LogoFunctions(
         ILogger<LogoFunctions> logger,
         IEventRepository eventRepository,
-        IUserEventMappingRepository userEventMappingRepository,
+        IPersonRepository personRepository,
+        IEventRoleRepository eventRoleRepository,
         BlobStorageService blobStorageService)
     {
         _logger = logger;
         _eventRepository = eventRepository;
-        _userEventMappingRepository = userEventMappingRepository;
+        _personRepository = personRepository;
+        _eventRoleRepository = eventRoleRepository;
         _blobStorageService = blobStorageService;
     }
 
     private async Task<bool> IsUserAuthorizedForEvent(string eventId, string userEmail)
     {
-        UserEventMappingEntity? mapping = await _userEventMappingRepository.GetAsync(eventId, userEmail);
-        return mapping != null;
+        PersonEntity? person = await _personRepository.GetByEmailAsync(userEmail);
+        if (person == null) return false;
+
+        IEnumerable<EventRoleEntity> roles = await _eventRoleRepository.GetByPersonAndEventAsync(person.PersonId, eventId);
+        return roles.Any(r => r.Role == Constants.RoleEventAdmin);
     }
 
     /// <summary>

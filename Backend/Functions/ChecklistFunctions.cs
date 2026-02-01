@@ -6,6 +6,7 @@ using System.Text.Json;
 using VolunteerCheckin.Functions.Helpers;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Repositories;
+using VolunteerCheckin.Functions.Services;
 
 namespace VolunteerCheckin.Functions.Functions;
 
@@ -19,15 +20,18 @@ public class ChecklistFunctions
     private readonly ILogger<ChecklistFunctions> _logger;
     private readonly IChecklistItemRepository _checklistItemRepository;
     private readonly IChecklistCompletionRepository _checklistCompletionRepository;
+    private readonly ClaimsService _claimsService;
 
     public ChecklistFunctions(
         ILogger<ChecklistFunctions> logger,
         IChecklistItemRepository checklistItemRepository,
-        IChecklistCompletionRepository checklistCompletionRepository)
+        IChecklistCompletionRepository checklistCompletionRepository,
+        ClaimsService claimsService)
     {
         _logger = logger;
         _checklistItemRepository = checklistItemRepository;
         _checklistCompletionRepository = checklistCompletionRepository;
+        _claimsService = claimsService;
     }
 
     /// <summary>
@@ -60,11 +64,15 @@ public class ChecklistFunctions
                 return new BadRequestObjectResult(new { message = Constants.ErrorInvalidRequest });
             }
 
-            string adminEmail = req.Headers[Constants.AdminEmailHeader].ToString();
-            if (string.IsNullOrWhiteSpace(adminEmail))
+            // Authenticate the request
+            UserClaims? claims = await GetClaimsAsync(req, eventId);
+            if (claims == null)
             {
-                return new BadRequestObjectResult(new { message = Constants.ErrorEmailRequired });
+                return new UnauthorizedObjectResult(new { message = "Authentication required" });
             }
+
+            // Get admin email from authenticated claims
+            string adminEmail = claims.PersonEmail ?? claims.PersonName ?? "Unknown";
 
             // Validate scope configurations
             if (request.ScopeConfigurations == null || request.ScopeConfigurations.Count == 0)
@@ -233,11 +241,15 @@ public class ChecklistFunctions
                 return new BadRequestObjectResult(new { message = Constants.ErrorInvalidRequest });
             }
 
-            string adminEmail = req.Headers[Constants.AdminEmailHeader].ToString();
-            if (string.IsNullOrWhiteSpace(adminEmail))
+            // Authenticate the request
+            UserClaims? claims = await GetClaimsAsync(req, eventId);
+            if (claims == null)
             {
-                return new BadRequestObjectResult(new { message = Constants.ErrorEmailRequired });
+                return new UnauthorizedObjectResult(new { message = "Authentication required" });
             }
+
+            // Get admin email from authenticated claims
+            string adminEmail = claims.PersonEmail ?? claims.PersonName ?? "Unknown";
 
             ChecklistItemEntity? item = await _checklistItemRepository.GetAsync(eventId, itemId);
 
@@ -402,5 +414,26 @@ public class ChecklistFunctions
                 // Continue anyway - the in-memory list is already updated
             }
         }
+    }
+
+    /// <summary>
+    /// Gets user claims from the request, supporting both session tokens and sample codes.
+    /// </summary>
+    private async Task<UserClaims?> GetClaimsAsync(HttpRequest req, string eventId)
+    {
+        string? sessionToken = req.Headers.Authorization.FirstOrDefault()?.Replace("Bearer ", "", StringComparison.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(sessionToken))
+        {
+            sessionToken = req.Cookies["session_token"];
+        }
+
+        string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
+
+        if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
+        {
+            return null;
+        }
+
+        return await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
     }
 }

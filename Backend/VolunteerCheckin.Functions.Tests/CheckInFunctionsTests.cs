@@ -49,7 +49,8 @@ namespace VolunteerCheckin.Functions.Tests
                 Mock.Of<IPersonRepository>(),
                 Mock.Of<IEventRoleRepository>(),
                 Mock.Of<IMarshalRepository>(),
-                Mock.Of<IUserEventMappingRepository>()
+                Mock.Of<ISampleEventService>(),
+                Mock.Of<IEventDeletionRepository>()
             );
 
             // Setup default GPS service behavior - close enough (within 100m)

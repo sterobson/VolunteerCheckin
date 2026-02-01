@@ -1,4 +1,3 @@
-using System.Text.Json;
 using VolunteerCheckin.Functions.Models;
 
 namespace VolunteerCheckin.Functions.Helpers;
@@ -157,7 +156,7 @@ public static class ScopeEvaluator
                         {
                             if (checkpointLookup.TryGetValue(locationId, out LocationEntity? checkpoint))
                             {
-                                List<string> checkpointAreas = JsonSerializer.Deserialize<List<string>>(checkpoint.AreaIdsJson) ?? [];
+                                List<string> checkpointAreas = checkpoint.GetPayload().AreaIds;
                                 string? matchedArea = config.Ids.FirstOrDefault(areaId =>
                                     checkpointAreas.Contains(areaId));
 
@@ -215,7 +214,7 @@ public static class ScopeEvaluator
             return checkpointLookup.Values
                 .Where(checkpoint =>
                 {
-                    List<string> checkpointAreas = JsonSerializer.Deserialize<List<string>>(checkpoint.AreaIdsJson) ?? [];
+                    List<string> checkpointAreas = checkpoint.GetPayload().AreaIds;
                     return checkpointAreas.Any(areaId => marshalContext.AreaLeadForAreaIds.Contains(areaId));
                 })
                 .Select(checkpoint => checkpoint.RowKey)
@@ -227,7 +226,7 @@ public static class ScopeEvaluator
         {
             if (checkpointLookup.TryGetValue(checkpointId, out LocationEntity? checkpoint))
             {
-                List<string> checkpointAreas = JsonSerializer.Deserialize<List<string>>(checkpoint.AreaIdsJson) ?? [];
+                List<string> checkpointAreas = checkpoint.GetPayload().AreaIds;
                 if (checkpointAreas.Any(areaId => marshalContext.AreaLeadForAreaIds.Contains(areaId)))
                 {
                     return checkpointId;
@@ -408,7 +407,7 @@ public static class ScopeEvaluator
 
                     if (checkpointLookup.TryGetValue(checkpointId, out LocationEntity? checkpoint))
                     {
-                        List<string> checkpointAreas = JsonSerializer.Deserialize<List<string>>(checkpoint.AreaIdsJson) ?? [];
+                        List<string> checkpointAreas = checkpoint.GetPayload().AreaIds;
                         if (checkpointAreas.Any(areaId => marshalContext.AreaLeadForAreaIds.Contains(areaId)))
                         {
                             results.Add(new ScopeMatchResult(
@@ -434,7 +433,7 @@ public static class ScopeEvaluator
             {
                 if (checkpointLookup.TryGetValue(locationId, out LocationEntity? checkpoint))
                 {
-                    List<string> checkpointAreas = JsonSerializer.Deserialize<List<string>>(checkpoint.AreaIdsJson) ?? [];
+                    List<string> checkpointAreas = checkpoint.GetPayload().AreaIds;
                     if (checkpointAreas.Any(areaId => matchingAreas.Contains(areaId)))
                     {
                         results.Add(new ScopeMatchResult(

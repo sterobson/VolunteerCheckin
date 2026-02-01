@@ -49,7 +49,8 @@ namespace VolunteerCheckin.Functions.Tests
                 new Mock<IPersonRepository>().Object,
                 new Mock<IEventRoleRepository>().Object,
                 new Mock<IMarshalRepository>().Object,
-                new Mock<IUserEventMappingRepository>().Object
+                Mock.Of<ISampleEventService>(),
+                Mock.Of<IEventDeletionRepository>()
             );
 
             // Default: return empty list for contacts (most tests don't need contacts)

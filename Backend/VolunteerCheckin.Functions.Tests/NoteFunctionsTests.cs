@@ -58,7 +58,8 @@ public class NoteFunctionsTests
             Mock.Of<IPersonRepository>(),
             Mock.Of<IEventRoleRepository>(),
             Mock.Of<IMarshalRepository>(),
-            Mock.Of<IUserEventMappingRepository>()
+            Mock.Of<ISampleEventService>(),
+            Mock.Of<IEventDeletionRepository>()
         );
 
         _functions = new NoteFunctions(
@@ -118,6 +119,9 @@ public class NoteFunctionsTests
     {
         _mockClaimsService
             .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), It.IsAny<string?>()))
+            .ReturnsAsync(claims);
+        _mockClaimsService
+            .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string>()))
             .ReturnsAsync(claims);
     }
 

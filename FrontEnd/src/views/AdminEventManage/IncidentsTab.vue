@@ -13,7 +13,7 @@
           :active="activeFilter === 'all'"
           @click="setFilter('all')"
         >
-          {{ incidents.length }} total
+          Total: {{ incidents.length }}
         </StatusPill>
         <StatusPill
           v-if="openCount > 0 && openCount < incidents.length"
@@ -21,7 +21,7 @@
           :active="activeFilter === 'open'"
           @click="setFilter('open')"
         >
-          {{ openCount }} open
+          Open: {{ openCount }}
         </StatusPill>
         <StatusPill
           v-if="inProgressCount > 0 && inProgressCount < incidents.length"
@@ -29,7 +29,7 @@
           :active="activeFilter === 'in-progress'"
           @click="setFilter('in-progress')"
         >
-          {{ inProgressCount }} in progress
+          In progress: {{ inProgressCount }}
         </StatusPill>
         <StatusPill
           v-if="resolvedCount > 0 && resolvedCount < incidents.length"
@@ -37,7 +37,7 @@
           :active="activeFilter === 'resolved'"
           @click="setFilter('resolved')"
         >
-          {{ resolvedCount }} resolved
+          Resolved: {{ resolvedCount }}
         </StatusPill>
         <StatusPill
           v-if="closedCount > 0 && closedCount < incidents.length"
@@ -45,7 +45,7 @@
           :active="activeFilter === 'closed'"
           @click="setFilter('closed')"
         >
-          {{ closedCount }} closed
+          Closed: {{ closedCount }}
         </StatusPill>
       </div>
     </div>

@@ -1,8 +1,7 @@
 <template>
-  <div class="contact-item" :class="{ 'primary-contact': isPrimary }">
+  <div class="contact-item">
     <div class="contact-info">
       <div class="contact-name-row">
-        <span v-if="isPrimary" class="primary-badge">&#9733;</span>
         <span class="contact-name">{{ name }}</span>
         <span v-if="allRoles.length > 0" class="contact-role-badge" :class="{ 'emergency-role': isEmergencyRole }">{{ formattedRole }}</span>
       </div>
@@ -61,10 +60,6 @@ const props = defineProps({
     type: String,
     default: '',
   },
-  isPrimary: {
-    type: Boolean,
-    default: false,
-  },
 });
 
 // Get all roles (handles both array and legacy single role)
@@ -114,11 +109,6 @@ const formattedRole = computed(() => {
   gap: 1rem;
 }
 
-.contact-item.primary-contact {
-  border-left: 3px solid var(--warning);
-  background: var(--warning-bg-lighter);
-}
-
 .contact-info {
   flex: 1;
   min-width: 0;
@@ -129,11 +119,6 @@ const formattedRole = computed(() => {
   align-items: center;
   gap: 0.35rem;
   flex-wrap: wrap;
-}
-
-.primary-badge {
-  color: var(--warning);
-  font-size: 0.9rem;
 }
 
 .contact-name {

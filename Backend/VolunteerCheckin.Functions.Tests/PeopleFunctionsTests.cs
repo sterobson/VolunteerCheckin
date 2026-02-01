@@ -47,7 +47,8 @@ public class PeopleFunctionsTests
             Mock.Of<IPersonRepository>(),
             Mock.Of<IEventRoleRepository>(),
             Mock.Of<IMarshalRepository>(),
-            Mock.Of<IUserEventMappingRepository>()
+            Mock.Of<ISampleEventService>(),
+            Mock.Of<IEventDeletionRepository>()
         );
 
         _functions = new PeopleFunctions(

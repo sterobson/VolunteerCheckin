@@ -12,7 +12,7 @@
           :active="activeFilter === 'all'"
           @click="setFilter('all')"
         >
-          {{ contacts.length }} total
+          Total: {{ contacts.length }}
         </StatusPill>
         <StatusPill
           v-if="withScopeCount > 0 && withScopeCount < contacts.length"
@@ -20,7 +20,7 @@
           :active="activeFilter === 'with-scope'"
           @click="setFilter('with-scope')"
         >
-          {{ withScopeCount }} assigned
+          Assigned: {{ withScopeCount }}
         </StatusPill>
         <StatusPill
           v-if="noScopeCount > 0 && noScopeCount < contacts.length"
@@ -28,7 +28,7 @@
           :active="activeFilter === 'no-scope'"
           @click="setFilter('no-scope')"
         >
-          {{ noScopeCount }} unassigned
+          Unassigned: {{ noScopeCount }}
         </StatusPill>
       </div>
     </div>
@@ -63,14 +63,13 @@
         <template #item="{ element: contact }">
           <div
             class="contact-card"
-            :class="{ pinned: contact.isPinned, primary: contact.isPrimary }"
+            :class="{ pinned: contact.isPinned }"
           >
             <DragHandle v-if="!searchQuery && activeFilter === 'all'" />
             <div class="contact-content" @click="$emit('select-contact', contact)">
               <div class="contact-header">
                 <div class="contact-name-row">
                   <span v-if="contact.isPinned" class="pin-icon" title="Pinned">📌</span>
-                  <span v-if="contact.isPrimary" class="primary-badge" title="Primary contact">★</span>
                   <strong>{{ contact.name }}</strong>
                   <span v-if="contact.showInEmergencyInfo" class="emergency-indicator" title="Shown in emergency info">🚨</span>
                 </div>
@@ -408,15 +407,6 @@ const handleReorder = ({ changes }) => {
   background: var(--bg-secondary);
 }
 
-.contact-card.primary {
-  border-left: 4px solid var(--warning-color);
-  background: var(--warning-bg);
-}
-
-.contact-card.pinned.primary {
-  border-left: 4px solid var(--accent-primary);
-}
-
 .contact-content {
   flex: 1;
   cursor: pointer;
@@ -439,11 +429,6 @@ const handleReorder = ({ changes }) => {
 
 .pin-icon {
   font-size: 0.9rem;
-}
-
-.primary-badge {
-  color: var(--warning-color);
-  font-size: 1rem;
 }
 
 .emergency-indicator {

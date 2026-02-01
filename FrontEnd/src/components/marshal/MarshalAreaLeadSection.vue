@@ -34,6 +34,7 @@
         :route-color="routeColor"
         :route-style="routeStyle"
         :route-weight="routeWeight"
+        :layers="layers"
         @checklist-updated="$emit('checklist-updated')"
       />
     </div>
@@ -92,6 +93,10 @@ defineProps({
   routeWeight: {
     type: Number,
     default: null,
+  },
+  layers: {
+    type: Array,
+    default: () => [],
   },
 });
 

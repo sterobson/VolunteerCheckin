@@ -23,7 +23,6 @@
           :phone="contact.phone"
           :email="contact.email"
           :notes="contact.notes"
-          :is-primary="contact.isPrimary"
         />
       </div>
     </div>

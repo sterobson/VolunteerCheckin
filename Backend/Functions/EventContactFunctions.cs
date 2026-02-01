@@ -136,7 +136,6 @@ public class EventContactFunctions
                 ScopeConfigurationsJson = JsonSerializer.Serialize(scopeConfigs),
                 DisplayOrder = request.DisplayOrder,
                 IsPinned = request.IsPinned,
-                IsPrimary = request.IsPrimary,
                 ShowInEmergencyInfo = request.ShowInEmergencyInfo,
                 CreatedByPersonId = claims.PersonId,
                 CreatedAt = DateTime.UtcNow,
@@ -320,7 +319,6 @@ public class EventContactFunctions
             contact.ScopeConfigurationsJson = JsonSerializer.Serialize(request.ScopeConfigurations ?? []);
             contact.DisplayOrder = request.DisplayOrder;
             contact.IsPinned = request.IsPinned;
-            contact.IsPrimary = request.IsPrimary;
             contact.ShowInEmergencyInfo = request.ShowInEmergencyInfo;
             contact.UpdatedAt = DateTime.UtcNow;
 
@@ -451,7 +449,6 @@ public class EventContactFunctions
                         Notes: contact.Notes,
                         DisplayOrder: contact.DisplayOrder,
                         IsPinned: contact.IsPinned,
-                        IsPrimary: contact.IsPrimary,
                         ShowInEmergencyInfo: contact.ShowInEmergencyInfo,
                         MatchedScope: result.WinningConfig?.Scope ?? string.Empty
                     ));
@@ -517,7 +514,6 @@ public class EventContactFunctions
                             Notes: c.Notes,
                             DisplayOrder: c.DisplayOrder,
                             IsPinned: c.IsPinned,
-                            IsPrimary: c.IsPrimary,
                             ShowInEmergencyInfo: c.ShowInEmergencyInfo,
                             MatchedScope: "Admin"
                         )
@@ -582,12 +578,14 @@ public class EventContactFunctions
             sessionToken = req.Cookies["session_token"];
         }
 
-        if (string.IsNullOrWhiteSpace(sessionToken))
+        string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
+
+        if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
         {
             return null;
         }
 
-        return await _claimsService.GetClaimsAsync(sessionToken, eventId);
+        return await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
     }
 
     /// <summary>
@@ -615,7 +613,7 @@ public class EventContactFunctions
         {
             if (checkpointLookup.TryGetValue(locationId, out LocationEntity? checkpoint))
             {
-                List<string> areaIds = JsonSerializer.Deserialize<List<string>>(checkpoint.AreaIdsJson) ?? [];
+                List<string> areaIds = checkpoint.GetPayload().AreaIds;
                 foreach (string areaId in areaIds)
                 {
                     assignedAreaIds.Add(areaId);
@@ -628,7 +626,7 @@ public class EventContactFunctions
         IEnumerable<AreaEntity> areas = await _areaRepository.GetByEventAsync(eventId);
         foreach (AreaEntity area in areas)
         {
-            List<AreaContact> contacts = JsonSerializer.Deserialize<List<AreaContact>>(area.ContactsJson) ?? [];
+            List<AreaContact> contacts = area.GetPayload().Contacts;
             if (contacts.Any(c => c.MarshalId == marshalId && c.Role == "Leader"))
             {
                 areaLeadForAreaIds.Add(area.RowKey);
@@ -663,7 +661,6 @@ public class EventContactFunctions
             ScopeConfigurations: configs,
             DisplayOrder: contact.DisplayOrder,
             IsPinned: contact.IsPinned,
-            IsPrimary: contact.IsPrimary,
             ShowInEmergencyInfo: contact.ShowInEmergencyInfo,
             CreatedAt: contact.CreatedAt,
             UpdatedAt: contact.UpdatedAt
@@ -997,7 +994,6 @@ public class EventContactFunctions
         // Sort: pinned first, then primary, then alphabetically by name
         List<EventContactEntity> sortedContacts = [.. contacts
             .OrderByDescending(c => c.IsPinned)
-            .ThenByDescending(c => c.IsPrimary)
             .ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase)];
 
         // Assign sequential display orders

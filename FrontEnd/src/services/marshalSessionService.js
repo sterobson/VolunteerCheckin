@@ -284,6 +284,35 @@ export function saveMagicCode(eventId, marshalId, code) {
   localStorage.setItem(`marshalCode_${eventId}_${marshalId}`, code);
 }
 
+/**
+ * Remove all sessions for a specific event
+ * This includes all marshal sessions and magic codes for the event
+ * @param {string} eventId
+ */
+export function removeAllSessionsForEvent(eventId) {
+  const sessions = getSessions();
+  const keysToRemove = [];
+
+  // Find all sessions for this event and remove them
+  for (const key of Object.keys(sessions)) {
+    if (key.startsWith(`${eventId}:`)) {
+      const { marshalId } = parseSessionKey(key);
+      delete sessions[key];
+      // Also remove the magic code for this marshal
+      keysToRemove.push(`marshalCode_${eventId}_${marshalId}`);
+    }
+  }
+
+  // Save updated sessions
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+
+  // Remove magic codes
+  keysToRemove.forEach(key => localStorage.removeItem(key));
+
+  // Also remove the sample event entry if it exists
+  localStorage.removeItem(`sampleEvent_${eventId}`);
+}
+
 export const marshalSessionService = {
   getSessions,
   getSession,
@@ -292,6 +321,7 @@ export const marshalSessionService = {
   saveSession,
   removeSession,
   removeSessionByMarshal,
+  removeAllSessionsForEvent,
   touchSession,
   cleanupOldSessions,
   migrateLegacyStorage,

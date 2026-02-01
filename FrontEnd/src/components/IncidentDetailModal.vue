@@ -110,6 +110,7 @@
               :route-color="routeColor"
               :route-style="routeStyle"
               :route-weight="routeWeight"
+              :layers="layers"
               :center="incidentMapCenter"
               :zoom="15"
               :user-location="incidentMarker"
@@ -257,6 +258,10 @@ const props = defineProps({
   routeWeight: {
     type: Number,
     default: null,
+  },
+  layers: {
+    type: Array,
+    default: () => [],
   },
   checkpoints: {
     type: Array,

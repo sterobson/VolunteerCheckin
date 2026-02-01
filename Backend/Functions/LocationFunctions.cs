@@ -23,6 +23,7 @@ public class LocationFunctions
     private readonly INoteRepository _noteRepository;
     private readonly IAreaRepository _areaRepository;
     private readonly IEventRoleRepository _eventRoleRepository;
+    private readonly ILayerRepository _layerRepository;
     private readonly ClaimsService _claimsService;
 
     public LocationFunctions(
@@ -34,6 +35,7 @@ public class LocationFunctions
         INoteRepository noteRepository,
         IAreaRepository areaRepository,
         IEventRoleRepository eventRoleRepository,
+        ILayerRepository layerRepository,
         ClaimsService claimsService)
     {
         _logger = logger;
@@ -44,6 +46,7 @@ public class LocationFunctions
         _noteRepository = noteRepository;
         _areaRepository = areaRepository;
         _eventRoleRepository = eventRoleRepository;
+        _layerRepository = layerRepository;
         _claimsService = claimsService;
     }
 
@@ -66,7 +69,7 @@ public class LocationFunctions
             // Validate What3Words format
             if (!Validators.IsValidWhat3Words(request.What3Words))
             {
-                return new BadRequestObjectResult(new { message = "Invalid What3Words format. Must be in format word.word.word or word/word/word where each word is lowercase letters (1-20 characters)" });
+                return new BadRequestObjectResult(new { message = "Invalid What3Words format. Must be in format word.word.word (lowercase letters only)" });
             }
 
             // Validate required marshals count
@@ -102,6 +105,25 @@ public class LocationFunctions
                 }
             }
 
+            // Handle layer assignment mode
+            string layerAssignmentMode = request.LayerAssignmentMode ?? "auto";
+            List<string>? layerIds = null;
+
+            if (layerAssignmentMode == "auto")
+            {
+                // Calculate layers from routes within 25m
+                IEnumerable<LayerEntity> layers = await _layerRepository.GetByEventAsync(request.EventId);
+                layerIds = GeometryService.FindLayersWithinDistance(
+                    request.Latitude, request.Longitude, layers);
+            }
+            else if (layerAssignmentMode == "specific" && request.LayerIds?.Count > 0)
+            {
+                // Use manually selected layers
+                layerIds = request.LayerIds;
+            }
+            // mode == "all" leaves layerIds = null
+
+            // Create location entity with core properties
             LocationEntity locationEntity = new()
             {
                 PartitionKey = request.EventId,
@@ -112,31 +134,48 @@ public class LocationFunctions
                 Latitude = request.Latitude,
                 Longitude = request.Longitude,
                 RequiredMarshals = request.RequiredMarshals,
-                What3Words = request.What3Words ?? string.Empty,
                 StartTime = request.StartTime,
                 EndTime = request.EndTime,
-                AreaIdsJson = JsonSerializer.Serialize(areaIds),
-                // Checkpoint style
-                StyleType = request.StyleType ?? "default",
-                StyleColor = request.StyleColor ?? string.Empty,
-                StyleBackgroundShape = request.StyleBackgroundShape ?? string.Empty,
-                StyleBackgroundColor = request.StyleBackgroundColor ?? string.Empty,
-                StyleBorderColor = request.StyleBorderColor ?? string.Empty,
-                StyleIconColor = request.StyleIconColor ?? string.Empty,
-                StyleSize = request.StyleSize ?? string.Empty,
-                StyleMapRotation = request.StyleMapRotation ?? string.Empty,
-                // Terminology
-                PeopleTerm = request.PeopleTerm ?? string.Empty,
-                CheckpointTerm = request.CheckpointTerm ?? string.Empty,
-                // Dynamic checkpoint settings
-                IsDynamic = request.IsDynamic,
-                LocationUpdateScopeJson = JsonSerializer.Serialize(locationUpdateScopes)
+                IsDynamic = request.IsDynamic
             };
+
+            // Set payload with all non-core properties
+            LocationPayload payload = new()
+            {
+                What3Words = request.What3Words ?? string.Empty,
+                AreaIds = areaIds,
+                LayerIds = layerIds,
+                LayerAssignmentMode = layerAssignmentMode,
+                Style = new LocationStylePayload
+                {
+                    Type = request.StyleType ?? "default",
+                    Color = request.StyleColor ?? string.Empty,
+                    BackgroundShape = request.StyleBackgroundShape ?? string.Empty,
+                    BackgroundColor = request.StyleBackgroundColor ?? string.Empty,
+                    BorderColor = request.StyleBorderColor ?? string.Empty,
+                    IconColor = request.StyleIconColor ?? string.Empty,
+                    Size = request.StyleSize ?? string.Empty,
+                    MapRotation = request.StyleMapRotation ?? string.Empty
+                },
+                Terminology = new LocationTerminologyPayload
+                {
+                    PeopleTerm = request.PeopleTerm ?? string.Empty,
+                    CheckpointTerm = request.CheckpointTerm ?? string.Empty
+                },
+                Dynamic = new DynamicLocationPayload
+                {
+                    UpdateScopes = locationUpdateScopes
+                }
+            };
+            locationEntity.SetPayload(payload);
 
             await _locationRepository.AddAsync(locationEntity);
 
+            // Get admin email from authenticated claims for audit trail
+            UserClaims? claims = await GetClaimsAsync(req, request.EventId);
+            string adminEmail = claims?.PersonEmail ?? claims?.PersonName ?? "Unknown";
+
             // Create pending checklist items and notes scoped to this checkpoint
-            string adminEmail = req.Headers[Constants.AdminEmailHeader].ToString();
             await CreatePendingChecklistItems(request.EventId, locationId, request.PendingNewChecklistItems, adminEmail);
             await CreatePendingNotes(request.EventId, locationId, request.PendingNewNotes, adminEmail);
 
@@ -192,7 +231,7 @@ public class LocationFunctions
 
             // Check if any checkpoints are missing area assignments
             List<LocationEntity> checkpointsNeedingAreas = [.. locationsList
-                .Where(l => string.IsNullOrEmpty(l.AreaIdsJson) || l.AreaIdsJson == "[]")];
+                .Where(l => l.GetPayload().AreaIds.Count == 0)];
 
             if (checkpointsNeedingAreas.Count > 0)
             {
@@ -212,7 +251,9 @@ public class LocationFunctions
                         defaultArea.RowKey
                     );
 
-                    checkpoint.AreaIdsJson = JsonSerializer.Serialize(areaIds);
+                    LocationPayload checkpointPayload = checkpoint.GetPayload();
+                    checkpointPayload.AreaIds = areaIds;
+                    checkpoint.SetPayload(checkpointPayload);
                     await _locationRepository.UpdateAsync(checkpoint);
                 }
 
@@ -252,7 +293,7 @@ public class LocationFunctions
             // Validate What3Words format
             if (!Validators.IsValidWhat3Words(request.What3Words))
             {
-                return new BadRequestObjectResult(new { message = "Invalid What3Words format. Must be in format word.word.word or word/word/word where each word is lowercase letters (1-20 characters)" });
+                return new BadRequestObjectResult(new { message = "Invalid What3Words format. Must be in format word.word.word (lowercase letters only)" });
             }
 
             // Validate required marshals count
@@ -268,32 +309,37 @@ public class LocationFunctions
                 return new NotFoundObjectResult(new { message = "Location not found" });
             }
 
+            // Get payload for updates
+            LocationPayload payload = locationEntity.GetPayload();
+
             // Update core properties
             locationEntity.Name = request.Name;
             locationEntity.Description = request.Description;
             locationEntity.Latitude = request.Latitude;
             locationEntity.Longitude = request.Longitude;
             locationEntity.RequiredMarshals = request.RequiredMarshals;
-            locationEntity.What3Words = request.What3Words ?? string.Empty;
             locationEntity.StartTime = request.StartTime;
             locationEntity.EndTime = request.EndTime;
+            locationEntity.IsDynamic = request.IsDynamic;
 
-            // Update style and terminology (only non-null values)
-            locationEntity.ApplyStyleUpdates(
-                styleType: request.StyleType,
-                styleColor: request.StyleColor,
-                styleBackgroundShape: request.StyleBackgroundShape,
-                styleBackgroundColor: request.StyleBackgroundColor,
-                styleBorderColor: request.StyleBorderColor,
-                styleIconColor: request.StyleIconColor,
-                styleSize: request.StyleSize,
-                styleMapRotation: request.StyleMapRotation,
-                peopleTerm: request.PeopleTerm,
-                checkpointTerm: request.CheckpointTerm
-            );
+            // Update payload properties
+            payload.What3Words = request.What3Words ?? string.Empty;
+
+            // Update style (only non-null values)
+            if (request.StyleType != null) payload.Style.Type = request.StyleType;
+            if (request.StyleColor != null) payload.Style.Color = request.StyleColor;
+            if (request.StyleBackgroundShape != null) payload.Style.BackgroundShape = request.StyleBackgroundShape;
+            if (request.StyleBackgroundColor != null) payload.Style.BackgroundColor = request.StyleBackgroundColor;
+            if (request.StyleBorderColor != null) payload.Style.BorderColor = request.StyleBorderColor;
+            if (request.StyleIconColor != null) payload.Style.IconColor = request.StyleIconColor;
+            if (request.StyleSize != null) payload.Style.Size = request.StyleSize;
+            if (request.StyleMapRotation != null) payload.Style.MapRotation = request.StyleMapRotation;
+
+            // Update terminology (only non-null values)
+            if (request.PeopleTerm != null) payload.Terminology.PeopleTerm = request.PeopleTerm;
+            if (request.CheckpointTerm != null) payload.Terminology.CheckpointTerm = request.CheckpointTerm;
 
             // Update dynamic checkpoint settings
-            locationEntity.IsDynamic = request.IsDynamic;
             if (request.LocationUpdateScopeConfigurations != null)
             {
                 // Replace THIS_CHECKPOINT placeholder with actual location ID in scope configurations
@@ -308,7 +354,7 @@ public class LocationFunctions
                         }
                     }
                 }
-                locationEntity.LocationUpdateScopeJson = JsonSerializer.Serialize(locationUpdateScopes);
+                payload.Dynamic.UpdateScopes = locationUpdateScopes;
             }
 
             // Recalculate area assignments based on new location
@@ -320,7 +366,39 @@ public class LocationFunctions
                 areas,
                 defaultArea.RowKey
             );
-            locationEntity.AreaIdsJson = JsonSerializer.Serialize(areaIds);
+            payload.AreaIds = areaIds;
+
+            // Handle layer assignment mode
+            bool coordinatesChanged = locationEntity.Latitude != request.Latitude || locationEntity.Longitude != request.Longitude;
+            string newMode = request.LayerAssignmentMode ?? payload.LayerAssignmentMode ?? "auto";
+
+            if (request.LayerAssignmentMode != null)
+            {
+                payload.LayerAssignmentMode = newMode;
+            }
+
+            if (newMode == "auto")
+            {
+                // Recalculate layers if mode is auto (on create, mode change, or coordinate change)
+                if (request.LayerAssignmentMode == "auto" || coordinatesChanged)
+                {
+                    IEnumerable<LayerEntity> layers = await _layerRepository.GetByEventAsync(eventId);
+                    List<string> nearbyLayerIds = GeometryService.FindLayersWithinDistance(
+                        request.Latitude, request.Longitude, layers);
+                    payload.LayerIds = nearbyLayerIds;
+                }
+            }
+            else if (newMode == "specific" && request.LayerIds != null)
+            {
+                payload.LayerIds = request.LayerIds.Count > 0 ? request.LayerIds : [];
+            }
+            else if (newMode == "all")
+            {
+                payload.LayerIds = null;
+            }
+
+            // Save the updated payload
+            locationEntity.SetPayload(payload);
 
             await _locationRepository.UpdateAsync(locationEntity);
 
@@ -511,7 +589,9 @@ public class LocationFunctions
         // Update What3Words if CSV has value
         if (!string.IsNullOrWhiteSpace(row.What3Words))
         {
-            locationEntity.What3Words = row.What3Words;
+            LocationPayload payload = locationEntity.GetPayload();
+            payload.What3Words = row.What3Words;
+            locationEntity.SetPayload(payload);
         }
 
         if (!string.IsNullOrWhiteSpace(row.Description))
@@ -545,9 +625,15 @@ public class LocationFunctions
             Description = row.Description,
             Latitude = row.Latitude,
             Longitude = row.Longitude,
-            RequiredMarshals = row.MarshalNames.Count > 0 ? row.MarshalNames.Count : 1,
+            RequiredMarshals = row.MarshalNames.Count > 0 ? row.MarshalNames.Count : 1
+        };
+
+        // Set payload with What3Words
+        LocationPayload payload = new()
+        {
             What3Words = row.What3Words
         };
+        locationEntity.SetPayload(payload);
 
         await _locationRepository.AddAsync(locationEntity);
 
@@ -733,8 +819,11 @@ public class LocationFunctions
             // Update the checkpoint location
             checkpoint.Latitude = newLatitude;
             checkpoint.Longitude = newLongitude;
-            checkpoint.LastLocationUpdate = DateTime.UtcNow;
-            checkpoint.LastUpdatedByPersonId = claims.PersonId;
+
+            // Get payload and update dynamic location info
+            LocationPayload checkpointPayload = checkpoint.GetPayload();
+            checkpointPayload.Dynamic.LastUpdate = DateTime.UtcNow;
+            checkpointPayload.Dynamic.LastUpdatedByPersonId = claims.PersonId;
 
             // Recalculate area assignments based on new location
             AreaEntity defaultArea = await EnsureDefaultAreaExists(eventId);
@@ -745,8 +834,9 @@ public class LocationFunctions
                 areas,
                 defaultArea.RowKey
             );
-            checkpoint.AreaIdsJson = JsonSerializer.Serialize(areaIds);
+            checkpointPayload.AreaIds = areaIds;
 
+            checkpoint.SetPayload(checkpointPayload);
             await _locationRepository.UpdateAsync(checkpoint);
 
             _logger.LogInformation("Dynamic checkpoint {LocationId} location updated by {PersonId} to ({Latitude}, {Longitude})", locationId, claims.PersonId, newLatitude, newLongitude);
@@ -756,7 +846,7 @@ public class LocationFunctions
                 locationId,
                 newLatitude,
                 newLongitude,
-                checkpoint.LastLocationUpdate.Value,
+                checkpointPayload.Dynamic.LastUpdate!.Value,
                 "Location updated successfully"
             ));
         }
@@ -782,14 +872,16 @@ public class LocationFunctions
 
             List<DynamicCheckpointResponse> dynamicCheckpoints = [.. allLocations
                 .Where(l => l.IsDynamic)
-                .Select(l => new DynamicCheckpointResponse(
-                    l.RowKey,
-                    l.Name,
-                    l.Latitude,
-                    l.Longitude,
-                    l.LastLocationUpdate,
-                    l.LastUpdatedByPersonId
-                ))];
+                .Select(l => {
+                    LocationPayload p = l.GetPayload();
+                    return new DynamicCheckpointResponse(
+                        l.RowKey,
+                        l.Name,
+                        l.Latitude,
+                        l.Longitude,
+                        p.Dynamic.LastUpdate,
+                        p.Dynamic.LastUpdatedByPersonId);
+                })];
 
             return new OkObjectResult(dynamicCheckpoints);
         }
@@ -812,8 +904,9 @@ public class LocationFunctions
             return true;
         }
 
-        // Parse the scope configurations
-        List<ScopeConfiguration> scopeConfigs = JsonSerializer.Deserialize<List<ScopeConfiguration>>(checkpoint.LocationUpdateScopeJson, FunctionHelpers.JsonOptions) ?? [];
+        // Get scope configurations from payload
+        LocationPayload checkpointPayload = checkpoint.GetPayload();
+        List<ScopeConfiguration> scopeConfigs = checkpointPayload.Dynamic.UpdateScopes;
 
         // If no scopes configured, no one can update (except admins, handled above)
         if (scopeConfigs.Count == 0)
@@ -845,7 +938,7 @@ public class LocationFunctions
         HashSet<string> assignedAreaIds = [];
         foreach (LocationEntity loc in assignedLocations)
         {
-            List<string> locAreaIds = JsonSerializer.Deserialize<List<string>>(loc.AreaIdsJson ?? "[]") ?? [];
+            List<string> locAreaIds = loc.GetPayload().AreaIds;
             foreach (string areaId in locAreaIds)
             {
                 assignedAreaIds.Add(areaId);
@@ -1002,5 +1095,26 @@ public class LocationFunctions
             await _noteRepository.AddAsync(noteEntity);
             _logger.LogInformation("Note {NoteId} created for location {LocationId}", noteId, locationId);
         }
+    }
+
+    /// <summary>
+    /// Gets user claims from the request, supporting both session tokens and sample codes.
+    /// </summary>
+    private async Task<UserClaims?> GetClaimsAsync(HttpRequest req, string eventId)
+    {
+        string? sessionToken = req.Headers.Authorization.FirstOrDefault()?.Replace("Bearer ", "", StringComparison.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(sessionToken))
+        {
+            sessionToken = req.Cookies["session_token"];
+        }
+
+        string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
+
+        if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
+        {
+            return null;
+        }
+
+        return await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
     }
 }

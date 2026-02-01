@@ -1,5 +1,6 @@
 <template>
   <div class="admin-event-manage" :style="{ colorScheme }">
+    <DemoBanner v-if="event?.isSampleEvent" :expires-at="event.expiresAt" />
     <header class="header">
       <div class="header-left">
         <button @click="goBack" class="btn-back" title="Back to sessions">
@@ -35,6 +36,7 @@
           ref="courseAreasTab"
           :checkpoints="locationStatuses"
           :areas="areas"
+          :layers="layerManagement.layers.value"
           :route="event?.route || []"
           :route-color="event?.routeColor || ''"
           :route-style="event?.routeStyle || ''"
@@ -56,12 +58,15 @@
           @add-area-from-map="handleAddAreaFromMap"
           @fullscreen="handleCourseFullscreen"
           @update:route-settings="handleRouteSettingsChange"
+          @add-layer="handleAddLayer"
+          @select-layer="handleSelectLayer"
         />
 
         <CheckpointsList
           v-if="activeTab === 'checkpoints'"
           :locations="locationStatuses"
           :areas="areas"
+          :layers="layerManagement.layers.value"
           @add-checkpoint-manually="handleAddCheckpointManually"
           @import-checkpoints="showImportLocations = true"
           @select-location="selectLocation"
@@ -187,6 +192,7 @@
       :assignments="selectedLocation?.assignments || []"
       :event-date="event?.eventDate || ''"
       :areas="areas"
+      :layers="layerManagement.layers.value"
       :event-id="route.params.eventId"
       :all-locations="locationStatuses"
       :notes="notes"
@@ -229,8 +235,10 @@
     <MarshalCreatedModal
       :show="showMarshalCreated"
       :event-id="route.params.eventId"
+      :event-name="event?.name || ''"
       :marshal-id="newlyCreatedMarshalId"
       :marshal-name="newlyCreatedMarshalName"
+      :marshal-email="newlyCreatedMarshalEmail"
       @close="showMarshalCreated = false"
     />
 
@@ -376,6 +384,44 @@
       @reorder-contacts="handleReorderContacts"
     />
 
+    <EditLayerModal
+      ref="editLayerModalRef"
+      :show="layerManagement.showEditLayer.value"
+      :layer="layerManagement.selectedLayer.value"
+      :is-dirty="layerFormDirty"
+      @close="handleCloseLayerModal"
+      @save="handleSaveLayer"
+      @delete="handleDeleteLayer"
+      @update:isDirty="layerFormDirty = $event"
+      @upload-gpx="handleLayerGpxUpload"
+      @edit-route="handleEditLayerRoute"
+    />
+
+    <RouteEditorModal
+      :show="showRouteEditor"
+      :route="routeEditorRoute"
+      :route-color="routeEditorColor"
+      :route-weight="routeEditorWeight"
+      :locations="routeEditorLocations"
+      :highlight-location-ids="routeEditorHighlightIds"
+      :areas="areas"
+      :layers="routeEditorLayers"
+      :focus-on-route="routeEditorFocusOnRoute"
+      :center="routeEditorCenter"
+      :zoom="routeEditorZoom"
+      @save="handleRouteEditorSave"
+      @cancel="handleRouteEditorCancel"
+    />
+
+    <BatchLayerSelectionModal
+      :show="showBatchLayerSelection"
+      :z-index="2100"
+      :layers="layerManagement.layers.value"
+      :checkpoint-count="tempCheckpoints.length"
+      @confirm="handleBatchLayerConfirm"
+      @cancel="handleBatchLayerCancel"
+    />
+
     <EditChecklistItemModal
       :show="showEditChecklistItem"
       :checklist-item="selectedChecklistItem"
@@ -509,6 +555,7 @@
       :drawing-mode="fullscreenMode === 'draw-area' && isDrawingAreaBoundary"
       :locations="displayCheckpoints"
       :areas="displayAreas"
+      :layers="layerManagement.layers.value"
       :route="event?.route || []"
       :route-color="event?.routeColor || ''"
       :route-style="event?.routeStyle || ''"
@@ -552,7 +599,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useEventsStore } from '../stores/events';
-import { authApi, checkInApi, eventAdminsApi, eventsApi, locationsApi, marshalsApi, areasApi, checklistApi, notesApi, contactsApi, incidentsApi, roleDefinitionsApi } from '../services/api';
+import { authApi, checkInApi, eventAdminsApi, eventsApi, locationsApi, marshalsApi, areasApi, checklistApi, notesApi, contactsApi, incidentsApi, roleDefinitionsApi, layersApi, sampleEventsApi, setAuthContext } from '../services/api';
 import { setSkipLoadingOverlayForGets } from '../services/loadingOverlay';
 
 // Composables
@@ -567,11 +614,12 @@ import { useAdminContactManagement } from '../composables/useAdminContactManagem
 import { useEventAdmins } from '../composables/useEventAdmins';
 import { useImportExport } from '../composables/useImportExport';
 import { useAdminTheme } from '../composables/useAdminTheme';
+import { useAdminLayerManagement } from '../composables/useAdminLayerManagement';
 
 // Utilities
 import { formatDate as formatEventDate, formatDateForInput } from '../utils/dateFormatters';
 import { isValidWhat3Words } from '../utils/validators';
-import { calculateDistance } from '../utils/coordinateUtils';
+import { calculateDistance, findLayersNearPoint, roundCoordinate, roundRoutePoints, roundPolygonPoints } from '../utils/coordinateUtils';
 import { getCheckpointsInPolygon } from '../utils/geometryUtils';
 import { cleanOrphanedScopeConfigurations } from '../utils/scopeUtils';
 import { denormalizeIncidentsList } from '../utils/denormalize';
@@ -613,10 +661,14 @@ import EditRoleDefinitionModal from '../components/event-manage/modals/EditRoleD
 import InfoModal from '../components/InfoModal.vue';
 import ConfirmModal from '../components/ConfirmModal.vue';
 import BaseModal from '../components/BaseModal.vue';
+import EditLayerModal from '../components/event-manage/modals/EditLayerModal.vue';
+import RouteEditorModal from '../components/event-manage/modals/RouteEditorModal.vue';
+import BatchLayerSelectionModal from '../components/event-manage/modals/BatchLayerSelectionModal.vue';
 import FullscreenMapOverlay from '../components/FullscreenMapOverlay.vue';
 import AddLocationModal from '../components/event-manage/modals/AddLocationModal.vue';
 import ThemeToggle from '../components/ThemeToggle.vue';
 import AppLogo from '../components/AppLogo.vue';
+import DemoBanner from '../components/DemoBanner.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -652,6 +704,43 @@ const eventAdminsComposable = useEventAdmins(eventId);
 
 // Theme composable
 const { colorScheme } = useAdminTheme();
+
+// Layer management composable
+const layerManagement = useAdminLayerManagement(eventId);
+
+// Layers to show in route editor (excludes the layer being edited, shows others in gray)
+const routeEditorLayers = computed(() => {
+  const selectedLayerId = layerManagement.selectedLayer.value?.id;
+  if (!selectedLayerId) return layerManagement.layers.value;
+  // Show other layers in gray
+  return layerManagement.layers.value
+    .filter(layer => layer.id !== selectedLayerId)
+    .map(layer => ({
+      ...layer,
+      routeColor: '#999999', // Gray out non-editing layers
+    }));
+});
+
+// Locations to show in route editor (all locations - non-associated ones will be grayed out)
+const routeEditorLocations = computed(() => {
+  return locationStatuses.value;
+});
+
+// IDs of checkpoints associated with the layer being edited (for highlighting)
+const routeEditorHighlightIds = computed(() => {
+  const selectedLayerId = layerManagement.selectedLayer.value?.id;
+  if (!selectedLayerId) return [];
+  // Get IDs of checkpoints that are on this layer (or all layers if layerIds is null)
+  return locationStatuses.value
+    .filter(location => {
+      const layerIds = location.layerIds || location.LayerIds;
+      // null/undefined means all layers, so include it
+      if (!layerIds) return true;
+      // Otherwise, check if this layer is in the list
+      return layerIds.includes(selectedLayerId);
+    })
+    .map(location => location.id);
+});
 
 // Computed tabs with dynamic labels from terminology
 // Order: Details, Course, Zones, Locations, Volunteers, Notes, Incidents, Tasks, Contacts
@@ -695,6 +784,7 @@ const showShareLink = ref(false);
 const showMarshalCreated = ref(false);
 const newlyCreatedMarshalId = ref(null);
 const newlyCreatedMarshalName = ref('');
+const newlyCreatedMarshalEmail = ref('');
 
 // Event admins - use composable state
 const eventAdmins = eventAdminsComposable.eventAdmins;
@@ -744,6 +834,16 @@ const editMarshalForm = ref({
   notes: '',
 });
 const formDirty = ref(false);
+const layerFormDirty = ref(false);
+const editLayerModalRef = ref(null);
+const showRouteEditor = ref(false);
+const routeEditorRoute = ref([]);
+const routeEditorColor = ref('#3388ff');
+const routeEditorWeight = ref(4);
+const routeEditorCenter = ref(null);
+const routeEditorZoom = ref(null);
+const routeEditorFocusOnRoute = ref(false);
+const showBatchLayerSelection = ref(false);
 const pendingAssignments = ref([]);
 const pendingDeleteAssignments = ref([]);
 const pendingMarshalAssignments = ref([]);
@@ -1201,7 +1301,7 @@ const loadEventData = async () => {
       setTerminology(event.value);
     }
 
-    // Phase 2: Load all other data in parallel (10 independent calls)
+    // Phase 2: Load all other data in parallel (11 independent calls)
     const results = await Promise.allSettled([
       eventsStore.fetchLocations(route.params.eventId),
       eventsStore.fetchEventStatus(route.params.eventId),
@@ -1213,6 +1313,7 @@ const loadEventData = async () => {
       loadIncidents(),
       loadContacts(),
       loadRoleDefinitions(),
+      layerManagement.loadLayers(),
     ]);
 
     // Update state from store after parallel fetches
@@ -1222,7 +1323,7 @@ const loadEventData = async () => {
     // Log any failures for debugging
     results.forEach((result, index) => {
       if (result.status === 'rejected') {
-        const names = ['locations', 'eventStatus', 'admins', 'marshals', 'areas', 'checklists', 'notes', 'contacts', 'roles'];
+        const names = ['locations', 'eventStatus', 'admins', 'marshals', 'areas', 'checklists', 'notes', 'contacts', 'roles', 'layers'];
         console.error(`Failed to load ${names[index]}:`, result.reason);
       }
     });
@@ -1366,12 +1467,18 @@ const handleSelectArea = (area) => {
 
 const handleSaveArea = async (formData) => {
   try {
+    // Round polygon coordinates to 6 decimal places before saving
+    const dataToSave = { ...formData };
+    if (dataToSave.polygon) {
+      dataToSave.polygon = roundPolygonPoints(dataToSave.polygon);
+    }
+
     let areaId;
 
     if (selectedArea.value && selectedArea.value.id) {
       // Update existing area (checkpoints will be automatically recalculated on backend)
       areaId = selectedArea.value.id;
-      await areasApi.update(route.params.eventId, areaId, formData);
+      await areasApi.update(route.params.eventId, areaId, dataToSave);
 
       // Process checklist changes
       if (formData.checklistChanges && formData.checklistChanges.length > 0) {
@@ -1402,7 +1509,7 @@ const handleSaveArea = async (formData) => {
       // Create new area (checkpoints will be automatically assigned on backend)
       const response = await areasApi.create({
         eventId: route.params.eventId,
-        ...formData,
+        ...dataToSave,
       });
       areaId = response.data.id;
     }
@@ -1575,6 +1682,169 @@ const closeEditAreaModal = () => {
   formDirty.value = false;
   isDrawingAreaBoundary.value = false;
   pendingAreaFormData.value = null;
+};
+
+// Layer handlers
+const handleAddLayer = () => {
+  layerManagement.selectedLayer.value = null;
+  layerFormDirty.value = false;
+  layerManagement.showEditLayer.value = true;
+};
+
+const handleSelectLayer = (layer) => {
+  layerManagement.selectedLayer.value = layer;
+  layerFormDirty.value = false;
+  layerManagement.showEditLayer.value = true;
+};
+
+const handleSaveLayer = async (formData) => {
+  try {
+    // Round route coordinates to 6 decimal places before saving
+    const dataToSave = { ...formData };
+    if (dataToSave.route) {
+      dataToSave.route = roundRoutePoints(dataToSave.route);
+    }
+
+    if (layerManagement.selectedLayer.value?.id) {
+      // Update existing layer
+      await layersApi.update(
+        route.params.eventId,
+        layerManagement.selectedLayer.value.id,
+        dataToSave
+      );
+    } else {
+      // Create new layer
+      await layersApi.create(route.params.eventId, dataToSave);
+    }
+    // Reload layers and checkpoints - checkpoints may have auto-assigned layerIds based on route proximity
+    await Promise.all([
+      layerManagement.loadLayers(),
+      reloadLocationsAndStatus(),
+    ]);
+    handleCloseLayerModal();
+  } catch (error) {
+    console.error('Failed to save layer:', error);
+    alert(error.response?.data?.message || 'Failed to save layer. Please try again.');
+  }
+};
+
+const handleDeleteLayer = async (layerId) => {
+  showConfirm('Delete layer', 'Are you sure you want to delete this layer?', async () => {
+    try {
+      await layersApi.delete(route.params.eventId, layerId);
+      // Reload layers and checkpoints - checkpoints may have layerIds updated when layer is deleted
+      await Promise.all([
+        layerManagement.loadLayers(),
+        reloadLocationsAndStatus(),
+      ]);
+      handleCloseLayerModal();
+    } catch (error) {
+      console.error('Failed to delete layer:', error);
+      alert(error.response?.data?.message || 'Failed to delete layer. Please try again.');
+    }
+  }, { isDanger: true, confirmText: 'Delete' });
+};
+
+const handleCloseLayerModal = () => {
+  layerManagement.showEditLayer.value = false;
+  layerManagement.selectedLayer.value = null;
+  layerFormDirty.value = false;
+};
+
+const handleReorderLayers = async (reorderedLayers) => {
+  try {
+    const items = reorderedLayers.map((layer, index) => ({
+      id: layer.id,
+      displayOrder: index,
+    }));
+    await layersApi.reorder(route.params.eventId, { items });
+    await layerManagement.loadLayers();
+  } catch (error) {
+    console.error('Failed to reorder layers:', error);
+  }
+};
+
+const handleLayerGpxUpload = async (file) => {
+  try {
+    const layerId = layerManagement.selectedLayer.value?.id;
+    if (!layerId) {
+      // For new layers, we need to create first then upload
+      // For now, parse GPX client-side and set route
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const gpxContent = e.target.result;
+        const parser = new DOMParser();
+        const gpxDoc = parser.parseFromString(gpxContent, 'text/xml');
+
+        const points = [];
+        const trackPoints = gpxDoc.querySelectorAll('trkpt');
+        trackPoints.forEach((pt) => {
+          points.push({
+            lat: parseFloat(pt.getAttribute('lat')),
+            lng: parseFloat(pt.getAttribute('lon')),
+          });
+        });
+
+        if (points.length > 0 && editLayerModalRef.value) {
+          editLayerModalRef.value.setRoute(points);
+        } else if (points.length === 0 && editLayerModalRef.value) {
+          editLayerModalRef.value.setUploadError('No track points found in GPX file');
+        }
+      };
+      reader.readAsText(file);
+    } else {
+      // Upload to existing layer
+      await layersApi.uploadGpx(route.params.eventId, layerId, file);
+      await layerManagement.loadLayers();
+
+      // Update the selected layer with new data
+      const updatedLayer = layerManagement.layers.value.find((l) => l.id === layerId);
+      if (updatedLayer) {
+        layerManagement.selectedLayer.value = updatedLayer;
+        if (editLayerModalRef.value) {
+          editLayerModalRef.value.setRoute(updatedLayer.route);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to upload GPX:', error);
+    if (editLayerModalRef.value) {
+      editLayerModalRef.value.setUploadError('Failed to upload GPX file');
+    }
+  }
+};
+
+const handleEditLayerRoute = ({ route, routeColor, routeWeight }) => {
+  routeEditorRoute.value = route || [];
+  routeEditorColor.value = routeColor || '#3388ff';
+  routeEditorWeight.value = routeWeight || 4;
+
+  // Capture current map state to preserve view when drawing a new route
+  if (courseAreasTab.value) {
+    routeEditorCenter.value = courseAreasTab.value.getMapCenter();
+    routeEditorZoom.value = courseAreasTab.value.getMapZoom();
+  } else {
+    routeEditorCenter.value = null;
+    routeEditorZoom.value = null;
+  }
+
+  // Only focus on route bounds if editing an existing route
+  routeEditorFocusOnRoute.value = route && route.length > 0;
+
+  showRouteEditor.value = true;
+};
+
+const handleRouteEditorSave = (points) => {
+  // Update the route in the layer modal
+  if (editLayerModalRef.value) {
+    editLayerModalRef.value.setRoute(points);
+  }
+  showRouteEditor.value = false;
+  layerFormDirty.value = true;
+};
+
+const handleRouteEditorCancel = () => {
+  showRouteEditor.value = false;
 };
 
 const handleCreateContactFromMarshal = ({ marshal, area }) => {
@@ -2293,8 +2563,8 @@ const handleMapClick = async (coords) => {
         eventId: route.params.eventId,
         name: `Checkpoint ${multiCheckpointCounter.value}`,
         description: '',
-        latitude: coords.lat,
-        longitude: coords.lng,
+        latitude: roundCoordinate(coords.lat),
+        longitude: roundCoordinate(coords.lng),
         requiredMarshals: 1,
         what3Words: '',
       });
@@ -2518,27 +2788,51 @@ const handleFullscreenDone = () => {
 
     pendingAreaFormData.value = null;
     exitFullscreen();
+    showEditArea.value = true;
 
   } else if (fullscreenMode.value === 'add-multiple') {
-    // Save all temporary checkpoints
-    saveTempCheckpoints();
+    // Show layer selection modal if there are multiple layers
+    if (layerManagement.layers.value.length > 1) {
+      showBatchLayerSelection.value = true;
+    } else {
+      // Only one layer or no layers - save with default (all layers)
+      saveTempCheckpoints({ mode: 'all' });
+    }
   }
 };
 
-const saveTempCheckpoints = async () => {
+const saveTempCheckpoints = async (layerSelection = { mode: 'all' }) => {
   const checkpointsToSave = fullscreenMap.getTempCheckpoints();
 
   try {
     // Save all checkpoints
     for (const checkpoint of checkpointsToSave) {
+      // Map old selection mode to new layerAssignmentMode
+      let layerAssignmentMode = 'auto'; // default
+      let layerIds = null;
+
+      if (layerSelection.mode === 'auto-detect') {
+        // Auto mode - backend will calculate layer IDs
+        layerAssignmentMode = 'auto';
+        layerIds = null;
+      } else if (layerSelection.mode === 'specific' && layerSelection.selectedLayerIds) {
+        layerAssignmentMode = 'specific';
+        layerIds = layerSelection.selectedLayerIds;
+      } else if (layerSelection.mode === 'all') {
+        layerAssignmentMode = 'all';
+        layerIds = null;
+      }
+
       await eventsStore.createLocation({
         eventId: route.params.eventId,
         name: checkpoint.name,
         description: checkpoint.description,
-        latitude: checkpoint.latitude,
-        longitude: checkpoint.longitude,
+        latitude: roundCoordinate(checkpoint.latitude),
+        longitude: roundCoordinate(checkpoint.longitude),
         requiredMarshals: checkpoint.requiredMarshals,
         what3Words: checkpoint.what3Words,
+        layerAssignmentMode,
+        layerIds,
       });
     }
 
@@ -2552,6 +2846,16 @@ const saveTempCheckpoints = async () => {
     console.error('Failed to create checkpoints:', error);
     alert('Failed to create checkpoints. Please try again.');
   }
+};
+
+const handleBatchLayerConfirm = (layerSelection) => {
+  showBatchLayerSelection.value = false;
+  saveTempCheckpoints(layerSelection);
+};
+
+const handleBatchLayerCancel = () => {
+  showBatchLayerSelection.value = false;
+  // Don't exit fullscreen - user can continue adding or try again
 };
 
 const handleFullscreenCancel = () => {
@@ -2604,7 +2908,7 @@ const selectLocation = (location) => {
 
 const handleSaveLocation = async (formData) => {
   if (!isValidWhat3Words(formData.what3Words)) {
-    alert('Invalid What3Words format. Please use word.word.word or word/word/word (lowercase letters only, 1-20 characters each)');
+    alert('Invalid What3Words format. Please use word.word.word (lowercase letters only)');
     return;
   }
 
@@ -2612,6 +2916,8 @@ const handleSaveLocation = async (formData) => {
     await eventsStore.createLocation({
       eventId: route.params.eventId,
       ...formData,
+      latitude: roundCoordinate(formData.latitude),
+      longitude: roundCoordinate(formData.longitude),
     });
 
     await loadEventData();
@@ -2726,8 +3032,8 @@ const handleUpdateLocation = async (formData) => {
         eventId: route.params.eventId,
         name: formData.name,
         description: formData.description,
-        latitude: formData.latitude,
-        longitude: formData.longitude,
+        latitude: roundCoordinate(formData.latitude),
+        longitude: roundCoordinate(formData.longitude),
         requiredMarshals: formData.requiredMarshals,
         what3Words: formData.what3Words || null,
         startTime: formData.startTime,
@@ -2744,6 +3050,8 @@ const handleUpdateLocation = async (formData) => {
         checkpointTerm: formData.checkpointTerm,
         isDynamic: formData.isDynamic || false,
         locationUpdateScopeConfigurations: formData.locationUpdateScopeConfigurations || [],
+        layerAssignmentMode: formData.layerAssignmentMode || 'auto',
+        layerIds: formData.layerIds,
         pendingNewChecklistItems: formData.pendingNewChecklistItems || [],
         pendingNewNotes: formData.pendingNewNotes || [],
       });
@@ -2768,8 +3076,8 @@ const handleUpdateLocation = async (formData) => {
           eventId: route.params.eventId,
           name: formData.name,
           description: formData.description,
-          latitude: formData.latitude,
-          longitude: formData.longitude,
+          latitude: roundCoordinate(formData.latitude),
+          longitude: roundCoordinate(formData.longitude),
           requiredMarshals: formData.requiredMarshals,
           what3Words: formData.what3Words || null,
           startTime: formData.startTime,
@@ -2786,6 +3094,8 @@ const handleUpdateLocation = async (formData) => {
           checkpointTerm: formData.checkpointTerm,
           isDynamic: formData.isDynamic || false,
           locationUpdateScopeConfigurations: formData.locationUpdateScopeConfigurations || [],
+          layerAssignmentMode: formData.layerAssignmentMode || 'auto',
+          layerIds: formData.layerIds,
           // areaId removed - areas are auto-assigned by backend based on polygon boundaries
         }
       );
@@ -3299,6 +3609,7 @@ const handleSaveMarshal = async (formData) => {
     if (isNewMarshal) {
       newlyCreatedMarshalId.value = marshalId;
       newlyCreatedMarshalName.value = formData.name;
+      newlyCreatedMarshalEmail.value = formData.email || '';
       showMarshalCreated.value = true;
     }
   } catch (error) {
@@ -3602,14 +3913,36 @@ onMounted(async () => {
   // In admin mode, never show the loading overlay for GET requests
   setSkipLoadingOverlayForGets(true);
 
+  // Check for sample event access
+  const sampleCode = route.query.sample;
+  if (sampleCode) {
+    try {
+      // Validate the sample code
+      const response = await sampleEventsApi.validate(sampleCode);
+      if (response.data.eventId !== route.params.eventId) {
+        console.error('Sample code does not match event ID');
+        router.push('/');
+        return;
+      }
+      // Set sample auth context for API calls
+      setAuthContext('sample', route.params.eventId, sampleCode);
+    } catch (error) {
+      console.error('Invalid or expired sample code:', error);
+      router.push('/');
+      return;
+    }
+  }
+
   await loadEventData();
 
-  // Fetch user claims to check if user has marshal access
-  try {
-    const claimsResponse = await authApi.getMe(route.params.eventId);
-    userClaims.value = claimsResponse.data;
-  } catch (error) {
-    console.warn('Failed to fetch user claims:', error);
+  // Fetch user claims to check if user has marshal access (skip for sample events)
+  if (!sampleCode) {
+    try {
+      const claimsResponse = await authApi.getMe(route.params.eventId);
+      userClaims.value = claimsResponse.data;
+    } catch (error) {
+      console.warn('Failed to fetch user claims:', error);
+    }
   }
 
   // Start polling if already on course tab

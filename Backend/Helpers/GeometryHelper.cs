@@ -60,8 +60,8 @@ public static class GeometryHelper
                 continue;
             }
 
-            // Parse the polygon
-            List<RoutePoint> polygon = System.Text.Json.JsonSerializer.Deserialize<List<RoutePoint>>(area.PolygonJson) ?? [];
+            // Get the polygon from payload
+            List<RoutePoint> polygon = area.GetPayload().Polygon;
 
             if (polygon.Count > 0 && IsPointInPolygon(checkpointPoint, polygon))
             {

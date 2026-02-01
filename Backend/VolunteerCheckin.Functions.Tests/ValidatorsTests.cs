@@ -131,7 +131,6 @@ namespace VolunteerCheckin.Functions.Tests
         public void IsValidWhat3Words_ValidFormats_ReturnsTrue()
         {
             Validators.IsValidWhat3Words("filled.count.soap").ShouldBeTrue();
-            Validators.IsValidWhat3Words("filled/count/soap").ShouldBeTrue();
             Validators.IsValidWhat3Words("a.b.c").ShouldBeTrue();
         }
 
@@ -155,10 +154,12 @@ namespace VolunteerCheckin.Functions.Tests
         }
 
         [TestMethod]
-        public void IsValidWhat3Words_MixedSeparators_ReturnsFalse()
+        public void IsValidWhat3Words_SlashFormat_ReturnsFalse()
         {
+            // Only dot format is accepted
+            Validators.IsValidWhat3Words("filled/count/soap").ShouldBeFalse();
+            Validators.IsValidWhat3Words("a/b/c").ShouldBeFalse();
             Validators.IsValidWhat3Words("mixed.separators/here").ShouldBeFalse();
-            Validators.IsValidWhat3Words("dot.slash/word").ShouldBeFalse();
         }
 
         [TestMethod]

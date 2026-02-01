@@ -105,11 +105,11 @@ const localIconColor = ref(props.styleIconColor || '');
 const localSize = ref(props.styleSize || 'default');
 const localMapRotation = ref(props.styleMapRotation || '');
 
-// Determine the content icon - if styleType is a content icon, use it; otherwise 'none'
+// Determine the content icon - if styleType is a content icon or number icon, use it; otherwise 'none'
 const isContentIcon = (type) => {
   if (!type || type === 'default') return false;
   const config = getIconTypeConfig(type);
-  return config.category === 'content';
+  return config.category === 'content' || config.category === 'number';
 };
 
 // Only use styleType as content icon if it's actually a content icon (not 'default' or 'custom')

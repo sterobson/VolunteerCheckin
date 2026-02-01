@@ -12,6 +12,7 @@ using VolunteerCheckin.Functions;
 using VolunteerCheckin.Functions.Functions;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Repositories;
+using VolunteerCheckin.Functions.Services;
 
 namespace VolunteerCheckin.Functions.Tests;
 
@@ -25,8 +26,8 @@ public class ChecklistCompletionFunctionsTests
     private Mock<IAssignmentRepository> _mockAssignmentRepository = null!;
     private Mock<IAreaRepository> _mockAreaRepository = null!;
     private Mock<ILocationRepository> _mockLocationRepository = null!;
-    private Mock<IAdminUserRepository> _mockAdminUserRepository = null!;
     private Mock<IEventRoleRepository> _mockEventRoleRepository = null!;
+    private Mock<ClaimsService> _mockClaimsService = null!;
     private ChecklistCompletionFunctions _functions = null!;
 
     private const string EventId = "event123";
@@ -46,8 +47,10 @@ public class ChecklistCompletionFunctionsTests
         _mockAssignmentRepository = new Mock<IAssignmentRepository>();
         _mockAreaRepository = new Mock<IAreaRepository>();
         _mockLocationRepository = new Mock<ILocationRepository>();
-        _mockAdminUserRepository = new Mock<IAdminUserRepository>();
         _mockEventRoleRepository = new Mock<IEventRoleRepository>();
+        _mockClaimsService = new Mock<ClaimsService>(null!, null!, null!, null!, null!, null!);
+
+        SetupClaimsService();
 
         _functions = new ChecklistCompletionFunctions(
             _mockLogger.Object,
@@ -55,11 +58,29 @@ public class ChecklistCompletionFunctionsTests
             _mockChecklistCompletionRepository.Object,
             _mockMarshalRepository.Object,
             _mockLocationRepository.Object,
-            _mockAdminUserRepository.Object,
             _mockAssignmentRepository.Object,
             _mockAreaRepository.Object,
-            _mockEventRoleRepository.Object
+            _mockEventRoleRepository.Object,
+            _mockClaimsService.Object
         );
+    }
+
+    private void SetupClaimsService()
+    {
+        UserClaims adminClaims = new(
+            PersonId: "person123",
+            PersonName: "Admin User",
+            PersonEmail: AdminEmail,
+            IsSystemAdmin: false,
+            EventId: EventId,
+            AuthMethod: "SecureEmailLink",
+            MarshalId: null,
+            EventRoles: []
+        );
+
+        _mockClaimsService
+            .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string>()))
+            .ReturnsAsync(adminClaims);
     }
 
     private void SetupMarshalContext()

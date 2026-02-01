@@ -10,8 +10,8 @@ public static partial class Validators
     [GeneratedRegex(@"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$", RegexOptions.IgnoreCase | RegexOptions.NonBacktracking)]
     private static partial Regex EmailRegex();
 
-    // What3Words validation regex
-    [GeneratedRegex(@"^[a-z]{1,20}[./][a-z]{1,20}[./][a-z]{1,20}$", RegexOptions.NonBacktracking)]
+    // What3Words validation regex (word.word.word format only)
+    [GeneratedRegex(@"^[a-z]{1,20}\.[a-z]{1,20}\.[a-z]{1,20}$", RegexOptions.NonBacktracking)]
     private static partial Regex What3WordsRegex();
 
     /// <summary>
@@ -55,7 +55,7 @@ public static partial class Validators
 
     /// <summary>
     /// Validates What3Words format.
-    /// Format: word.word.word or word/word/word where each word is lowercase letters (1-20 characters).
+    /// Format: word.word.word where each word is lowercase letters (1-20 characters).
     /// </summary>
     public static bool IsValidWhat3Words(string? what3Words)
     {
@@ -64,15 +64,7 @@ public static partial class Validators
             return true; // Optional field
         }
 
-        if (!What3WordsRegex().IsMatch(what3Words))
-        {
-            return false;
-        }
-
-        // Ensure consistent separator (all dots or all slashes)
-        bool hasDots = what3Words.Contains('.', StringComparison.Ordinal);
-        bool hasSlashes = what3Words.Contains('/', StringComparison.Ordinal);
-        return hasDots != hasSlashes; // XOR - can't have both
+        return What3WordsRegex().IsMatch(what3Words);
     }
 
     /// <summary>

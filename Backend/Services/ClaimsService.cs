@@ -15,24 +15,90 @@ public class ClaimsService
     private readonly IPersonRepository _personRepository;
     private readonly IEventRoleRepository _roleRepository;
     private readonly IMarshalRepository _marshalRepository;
-    private readonly IUserEventMappingRepository _userEventMappingRepository;
-
-    // Cache for legacy migration checks to avoid repeated database queries
-    // Key: "{personId}:{eventId}", Value: true if migration was attempted
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> _migrationCheckCache = new(StringComparer.Ordinal);
+    private readonly ISampleEventService _sampleEventService;
+    private readonly IEventDeletionRepository _eventDeletionRepository;
 
     public ClaimsService(
         IAuthSessionRepository sessionRepository,
         IPersonRepository personRepository,
         IEventRoleRepository roleRepository,
         IMarshalRepository marshalRepository,
-        IUserEventMappingRepository userEventMappingRepository)
+        ISampleEventService sampleEventService,
+        IEventDeletionRepository eventDeletionRepository)
     {
         _sessionRepository = sessionRepository;
         _personRepository = personRepository;
         _roleRepository = roleRepository;
         _marshalRepository = marshalRepository;
-        _userEventMappingRepository = userEventMappingRepository;
+        _sampleEventService = sampleEventService;
+        _eventDeletionRepository = eventDeletionRepository;
+    }
+
+    /// <summary>
+    /// Resolve user claims from a sample event code.
+    /// Grants admin access to the sample event if the code is valid.
+    /// </summary>
+    /// <param name="sampleCode">The sample event admin code</param>
+    /// <param name="eventId">The event being accessed</param>
+    /// <returns>UserClaims if valid, null if invalid/expired or event doesn't match</returns>
+    public virtual async Task<UserClaims?> GetSampleEventClaimsAsync(string sampleCode, string eventId)
+    {
+        // Check if event is pending deletion
+        if (await _eventDeletionRepository.IsDeletionPendingAsync(eventId))
+        {
+            return null;
+        }
+
+        // Validate the sample code and get the event ID it's for
+        string? validEventId = await _sampleEventService.GetEventIdByAdminCodeAsync(sampleCode);
+
+        if (validEventId == null || validEventId != eventId)
+        {
+            return null;
+        }
+
+        // Return claims granting admin access to this sample event
+        return new UserClaims(
+            PersonId: $"sample-{sampleCode}",
+            PersonName: "Sample Event User",
+            PersonEmail: null,
+            IsSystemAdmin: false,
+            EventId: eventId,
+            AuthMethod: Constants.AuthMethodSampleCode,
+            MarshalId: null,
+            EventRoles: [new EventRoleInfo(Constants.RoleEventAdmin, [])]
+        );
+    }
+
+    /// <summary>
+    /// Resolve user claims from either a sample code or session token.
+    /// Tries sample code first, then falls back to session token.
+    /// </summary>
+    public virtual async Task<UserClaims?> GetClaimsWithSampleSupportAsync(string? sessionToken, string? sampleCode, string eventId)
+    {
+        // Check if event is pending deletion - deny all access
+        if (await _eventDeletionRepository.IsDeletionPendingAsync(eventId))
+        {
+            return null;
+        }
+
+        // Try sample code first
+        if (!string.IsNullOrEmpty(sampleCode))
+        {
+            UserClaims? sampleClaims = await GetSampleEventClaimsAsync(sampleCode, eventId);
+            if (sampleClaims != null)
+            {
+                return sampleClaims;
+            }
+        }
+
+        // Fall back to session token
+        if (!string.IsNullOrEmpty(sessionToken))
+        {
+            return await GetClaimsAsync(sessionToken, eventId);
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -128,7 +194,7 @@ public class ClaimsService
     }
 
     /// <summary>
-    /// Get event roles for a person, including legacy migration if needed.
+    /// Get event roles for a person.
     /// </summary>
     private async Task<List<EventRoleInfo>> GetEventRolesAsync(PersonEntity person, string? eventId)
     {
@@ -137,67 +203,14 @@ public class ClaimsService
             return [];
         }
 
-        // Get roles from new EventRoles table
+        // Get roles from EventRoles table
         IEnumerable<EventRoleEntity> roles = await _roleRepository.GetByPersonAndEventAsync(person.PersonId, eventId);
         List<EventRoleInfo> eventRoles = roles.Select(r => new EventRoleInfo(
             r.Role,
             System.Text.Json.JsonSerializer.Deserialize<List<string>>(r.AreaIdsJson) ?? []
         )).ToList();
 
-        // Attempt legacy migration if no admin role found
-        await MigrateLegacyAdminRoleIfNeededAsync(person, eventId, eventRoles);
-
         return eventRoles;
-    }
-
-    /// <summary>
-    /// Migrate legacy UserEventMapping admin role to new EventRoles table if needed.
-    /// </summary>
-    private async Task MigrateLegacyAdminRoleIfNeededAsync(PersonEntity person, string eventId, List<EventRoleInfo> eventRoles)
-    {
-        // Skip if already has admin role
-        if (eventRoles.Any(r => r.Role == Constants.RoleEventAdmin))
-        {
-            return;
-        }
-
-        // Use cache to avoid repeated database queries
-        string migrationCacheKey = $"{person.PersonId}:{eventId}";
-        if (_migrationCheckCache.ContainsKey(migrationCacheKey))
-        {
-            return;
-        }
-
-        // Mark as checked first to prevent concurrent migration attempts
-        _migrationCheckCache.TryAdd(migrationCacheKey, true);
-
-        try
-        {
-            UserEventMappingEntity? legacyMapping = await _userEventMappingRepository.GetAsync(eventId, person.Email);
-            if (legacyMapping?.Role == "Admin")
-            {
-                // Migrate to new EventRoles table
-                string roleId = Guid.NewGuid().ToString();
-                EventRoleEntity newRole = new EventRoleEntity
-                {
-                    PartitionKey = person.PersonId,
-                    RowKey = EventRoleEntity.CreateRowKey(eventId, roleId),
-                    PersonId = person.PersonId,
-                    EventId = eventId,
-                    Role = Constants.RoleEventAdmin,
-                    AreaIdsJson = "[]",
-                    GrantedAt = DateTime.UtcNow,
-                    GrantedByPersonId = "system-migration"
-                };
-                await _roleRepository.AddAsync(newRole);
-
-                eventRoles.Add(new EventRoleInfo(Constants.RoleEventAdmin, []));
-            }
-        }
-        catch
-        {
-            // Ignore errors from legacy table - it may not exist
-        }
     }
 
     /// <summary>

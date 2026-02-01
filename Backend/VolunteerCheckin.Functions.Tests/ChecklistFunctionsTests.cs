@@ -12,6 +12,7 @@ using VolunteerCheckin.Functions;
 using VolunteerCheckin.Functions.Functions;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Repositories;
+using VolunteerCheckin.Functions.Services;
 
 namespace VolunteerCheckin.Functions.Tests;
 
@@ -26,6 +27,7 @@ public class ChecklistFunctionsTests
     private Mock<ILogger<ChecklistFunctions>> _mockLogger = null!;
     private Mock<IChecklistItemRepository> _mockChecklistItemRepository = null!;
     private Mock<IChecklistCompletionRepository> _mockChecklistCompletionRepository = null!;
+    private Mock<ClaimsService> _mockClaimsService = null!;
     private ChecklistFunctions _functions = null!;
 
     private const string EventId = "event123";
@@ -40,12 +42,34 @@ public class ChecklistFunctionsTests
         _mockLogger = new Mock<ILogger<ChecklistFunctions>>();
         _mockChecklistItemRepository = new Mock<IChecklistItemRepository>();
         _mockChecklistCompletionRepository = new Mock<IChecklistCompletionRepository>();
+        _mockClaimsService = new Mock<ClaimsService>(null!, null!, null!, null!, null!, null!);
+
+        SetupClaimsService();
 
         _functions = new ChecklistFunctions(
             _mockLogger.Object,
             _mockChecklistItemRepository.Object,
-            _mockChecklistCompletionRepository.Object
+            _mockChecklistCompletionRepository.Object,
+            _mockClaimsService.Object
         );
+    }
+
+    private void SetupClaimsService()
+    {
+        UserClaims adminClaims = new(
+            PersonId: "person123",
+            PersonName: "Admin User",
+            PersonEmail: AdminEmail,
+            IsSystemAdmin: false,
+            EventId: EventId,
+            AuthMethod: "SecureEmailLink",
+            MarshalId: null,
+            EventRoles: []
+        );
+
+        _mockClaimsService
+            .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string>()))
+            .ReturnsAsync(adminClaims);
     }
 
     #region CreateChecklistItem Tests

@@ -313,9 +313,18 @@
             <span>Select icon</span>
             <button type="button" class="popup-close" @click="closePopups">&times;</button>
           </div>
+          <div class="icon-search-container">
+            <input
+              ref="iconSearchInput"
+              v-model="iconSearchQuery"
+              type="text"
+              class="icon-search-input"
+              placeholder="Search icons..."
+            />
+          </div>
           <div class="popup-grid">
             <button
-              v-for="iconOption in availableContentIcons"
+              v-for="iconOption in filteredContentIcons"
               :key="iconOption.value"
               type="button"
               class="popup-grid-item"
@@ -525,6 +534,9 @@ const localMapRotation = ref(props.mapRotation ?? '');
 // Popup state
 const activePopup = ref(null);
 
+// Icon search state
+const iconSearchQuery = ref('');
+
 // Custom hex input state
 const showCustomBgColorInput = ref(false);
 const showCustomBorderColorInput = ref(false);
@@ -535,6 +547,7 @@ const customIconColorHex = ref('');
 const bgHexInput = ref(null);
 const borderHexInput = ref(null);
 const iconHexInput = ref(null);
+const iconSearchInput = ref(null);
 
 // Helper to get the effective/resolved value for each property
 const getEffectiveShape = (shapeValue) => {
@@ -567,7 +580,7 @@ const getEffectiveIconType = (iconValue) => {
     const inheritedType = props.inheritedType;
     if (inheritedType && inheritedType !== 'default') {
       const config = getIconTypeConfig(inheritedType);
-      if (config.category === 'content') return inheritedType;
+      if (config.category === 'content' || config.category === 'number') return inheritedType;
     }
     return 'none';
   }
@@ -612,24 +625,58 @@ const availableShapes = computed(() => {
   ];
 });
 
-// Available icons: None, Default (if inherited), then all content icons
+// Available icons: None, Default (if inherited), then all content icons and number icons
 const availableContentIcons = computed(() => {
-  const contentIcons = CHECKPOINT_ICON_TYPES.filter(t => t.category === 'content');
+  const contentIcons = CHECKPOINT_ICON_TYPES.filter(t => t.category === 'content' || t.category === 'number');
   const options = [
-    { value: 'none', label: 'None', category: 'content', showLabel: true },
+    { value: 'none', label: 'None', category: 'content', showLabel: false },
   ];
 
-  // Add Default option if there's an inherited content icon
+  // Add Default option if there's an inherited content or number icon
   const inheritedType = props.inheritedType;
   if (inheritedType && inheritedType !== 'default') {
     const config = getIconTypeConfig(inheritedType);
-    if (config.category === 'content') {
+    if (config.category === 'content' || config.category === 'number') {
       options.push({ value: 'default', label: `Default (${config.label || inheritedType})`, category: 'content', showLabel: true });
     }
   }
 
   options.push(...contentIcons.map(i => ({ ...i, showLabel: false })));
   return options;
+});
+
+// Filtered icons based on search query
+const filteredContentIcons = computed(() => {
+  const query = iconSearchQuery.value.trim().toLowerCase();
+  if (!query) {
+    return availableContentIcons.value;
+  }
+
+  // Split by comma for OR logic
+  const orGroups = query.split(',').map(g => g.trim()).filter(g => g);
+
+  return availableContentIcons.value.filter(icon => {
+    // Always show 'none' option
+    if (icon.value === 'none') return true;
+
+    // Check if icon matches any of the comma-separated groups (OR logic)
+    return orGroups.some(group => {
+      // Split group by space for AND logic
+      const andTerms = group.split(/\s+/).filter(t => t);
+
+      // Icon must match ALL terms in the group
+      return andTerms.every(term => {
+        const searchableText = [
+          icon.value,
+          icon.label,
+          icon.category,
+          icon.searchTerms || '',
+        ].join(' ').toLowerCase();
+
+        return searchableText.includes(term);
+      });
+    });
+  });
 });
 
 // Available sizes: Default, then all sizes (simplified labels without %)
@@ -816,7 +863,7 @@ const getIconLabel = (value) => {
     const inheritedType = props.inheritedType;
     if (inheritedType && inheritedType !== 'default') {
       const config = getIconTypeConfig(inheritedType);
-      if (config.category === 'content') {
+      if (config.category === 'content' || config.category === 'number') {
         return `Default (${config.label || inheritedType})`;
       }
     }
@@ -1147,6 +1194,10 @@ const previewSvg = computed(() => {
 // Popup control
 const togglePopup = (popup) => {
   activePopup.value = activePopup.value === popup ? null : popup;
+  // Auto-focus search input when icon popup opens
+  if (popup === 'icon' && activePopup.value === 'icon') {
+    nextTick(() => iconSearchInput.value?.focus());
+  }
 };
 
 const closePopups = () => {
@@ -1154,6 +1205,7 @@ const closePopups = () => {
   showCustomBgColorInput.value = false;
   showCustomBorderColorInput.value = false;
   showCustomIconColorInput.value = false;
+  iconSearchQuery.value = '';
 };
 
 // Selection handlers
@@ -1670,10 +1722,46 @@ const apply = () => {
   left: 50%;
   transform: translate(-50%, -50%);
   width: 90%;
-  max-width: 400px;
+  max-width: 600px;
   max-height: 80vh;
   bottom: auto;
   right: auto;
+}
+
+.icon-popup .popup-grid {
+  grid-template-columns: repeat(6, 1fr);
+}
+
+@media (max-width: 500px) {
+  .icon-popup .popup-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* Icon Search */
+.icon-search-container {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.icon-search-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--input-bg, var(--card-bg));
+  color: var(--text-primary);
+  font-size: 0.85rem;
+}
+
+.icon-search-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.icon-search-input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.7;
 }
 
 /* Size Grid */

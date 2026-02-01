@@ -25,12 +25,14 @@ public class LogoFunctionsTests
 {
     private Mock<ILogger<LogoFunctions>> _mockLogger = null!;
     private Mock<IEventRepository> _mockEventRepository = null!;
-    private Mock<IUserEventMappingRepository> _mockUserEventMappingRepository = null!;
+    private Mock<IPersonRepository> _mockPersonRepository = null!;
+    private Mock<IEventRoleRepository> _mockEventRoleRepository = null!;
     private Mock<BlobStorageService> _mockBlobStorageService = null!;
     private LogoFunctions _functions = null!;
 
     private const string EventId = "event123";
     private const string AdminEmail = "admin@test.com";
+    private const string AdminPersonId = "person-123";
     private const string LogoVersion = "1234567890";
 
     [TestInitialize]
@@ -38,7 +40,8 @@ public class LogoFunctionsTests
     {
         _mockLogger = new Mock<ILogger<LogoFunctions>>();
         _mockEventRepository = new Mock<IEventRepository>();
-        _mockUserEventMappingRepository = new Mock<IUserEventMappingRepository>();
+        _mockPersonRepository = new Mock<IPersonRepository>();
+        _mockEventRoleRepository = new Mock<IEventRoleRepository>();
 
         // Create mock for BlobStorageService - we need a valid connection string for the constructor
         // but we'll override the virtual methods
@@ -47,30 +50,37 @@ public class LogoFunctionsTests
         _functions = new LogoFunctions(
             _mockLogger.Object,
             _mockEventRepository.Object,
-            _mockUserEventMappingRepository.Object,
+            _mockPersonRepository.Object,
+            _mockEventRoleRepository.Object,
             _mockBlobStorageService.Object
         );
     }
 
     private void SetupAuthorizedUser()
     {
-        _mockUserEventMappingRepository
-            .Setup(r => r.GetAsync(EventId, AdminEmail))
-            .ReturnsAsync(new UserEventMappingEntity
+        _mockPersonRepository
+            .Setup(r => r.GetByEmailAsync(AdminEmail))
+            .ReturnsAsync(new PersonEntity { PersonId = AdminPersonId, Email = AdminEmail });
+
+        _mockEventRoleRepository
+            .Setup(r => r.GetByPersonAndEventAsync(AdminPersonId, EventId))
+            .ReturnsAsync(new List<EventRoleEntity>
             {
-                PartitionKey = EventId,
-                RowKey = AdminEmail,
-                EventId = EventId,
-                UserEmail = AdminEmail,
-                Role = "Admin"
+                new EventRoleEntity
+                {
+                    PersonId = AdminPersonId,
+                    EventId = EventId,
+                    Role = Constants.RoleEventAdmin,
+                    AreaIdsJson = "[]"
+                }
             });
     }
 
     private void SetupUnauthorizedUser()
     {
-        _mockUserEventMappingRepository
-            .Setup(r => r.GetAsync(EventId, AdminEmail))
-            .ReturnsAsync((UserEventMappingEntity?)null);
+        _mockPersonRepository
+            .Setup(r => r.GetByEmailAsync(AdminEmail))
+            .ReturnsAsync((PersonEntity?)null);
     }
 
     private EventEntity CreateEventEntity()

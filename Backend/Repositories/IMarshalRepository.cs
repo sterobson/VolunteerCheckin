@@ -11,4 +11,5 @@ public interface IMarshalRepository
     Task UpdateAsync(MarshalEntity marshal);
     Task UpdateUnconditionalAsync(MarshalEntity marshal);
     Task DeleteAsync(string eventId, string marshalId);
+    Task DeleteAllByEventAsync(string eventId);
 }

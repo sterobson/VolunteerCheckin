@@ -1,13 +1,13 @@
 <template>
   <div class="areas-selection">
-    <div class="areas-selection-header" v-if="areas.length > 1">
-      <button
-        @click="toggleAll"
-        class="toggle-all-btn"
-      >
-        {{ allSelected ? 'Deselect all' : 'Select all' }}
-      </button>
-    </div>
+    <label class="show-all-checkbox" v-if="areas.length > 1">
+      <input
+        type="checkbox"
+        :checked="allSelected"
+        @change="handleShowAllChange($event.target.checked)"
+      />
+      <span>Show all</span>
+    </label>
     <div class="areas-list">
       <label class="area-checkbox" v-for="area in sortedAreas" :key="area.id">
         <input
@@ -65,11 +65,11 @@ const handleToggle = (areaId) => {
   emit('update:selectedAreaIds', newSelection);
 };
 
-const toggleAll = () => {
-  if (allSelected.value) {
-    emit('update:selectedAreaIds', []);
-  } else {
+const handleShowAllChange = (checked) => {
+  if (checked) {
     emit('update:selectedAreaIds', props.areas.map(a => a.id));
+  } else {
+    emit('update:selectedAreaIds', []);
   }
 };
 </script>
@@ -78,30 +78,31 @@ const toggleAll = () => {
 .areas-selection {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
-.areas-selection-header {
+.show-all-checkbox {
   display: flex;
-  justify-content: flex-start;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text-primary);
   padding-bottom: 0.5rem;
   border-bottom: 1px solid var(--border-light);
+  margin-bottom: 0.25rem;
 }
 
-.toggle-all-btn {
-  padding: 0.4rem 0.75rem;
-  background: var(--bg-hover);
-  border: 1px solid var(--border-medium);
-  border-radius: 4px;
+.show-all-checkbox:hover {
+  color: var(--accent-primary);
+}
+
+.show-all-checkbox input[type="checkbox"] {
   cursor: pointer;
-  font-size: 0.8rem;
-  color: var(--text-dark);
-  transition: background-color 0.2s;
-  font-weight: 500;
-}
-
-.toggle-all-btn:hover {
-  background: var(--border-light);
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
 }
 
 .areas-list {

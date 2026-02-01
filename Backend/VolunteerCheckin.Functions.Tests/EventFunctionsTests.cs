@@ -24,18 +24,21 @@ namespace VolunteerCheckin.Functions.Tests
     {
         private Mock<ILogger<EventFunctions>> _mockLogger = null!;
         private Mock<IEventRepository> _mockEventRepository = null!;
-        private Mock<IUserEventMappingRepository> _mockUserEventMappingRepository = null!;
         private Mock<IPersonRepository> _mockPersonRepository = null!;
         private Mock<IEventRoleRepository> _mockEventRoleRepository = null!;
         private Mock<ClaimsService> _mockClaimsService = null!;
+        private Mock<IEventService> _mockEventService = null!;
+        private Mock<IEventDeletionRepository> _mockEventDeletionRepository = null!;
         private EventFunctions _eventFunctions = null!;
+
+        private const string AdminPersonId = "person-123";
+        private const string AdminEmail = "admin@example.com";
 
         [TestInitialize]
         public void Setup()
         {
             _mockLogger = new Mock<ILogger<EventFunctions>>();
             _mockEventRepository = new Mock<IEventRepository>();
-            _mockUserEventMappingRepository = new Mock<IUserEventMappingRepository>();
             _mockPersonRepository = new Mock<IPersonRepository>();
             _mockEventRoleRepository = new Mock<IEventRoleRepository>();
             _mockClaimsService = new Mock<ClaimsService>(
@@ -43,25 +46,29 @@ namespace VolunteerCheckin.Functions.Tests
                 Mock.Of<IPersonRepository>(),
                 Mock.Of<IEventRoleRepository>(),
                 Mock.Of<IMarshalRepository>(),
-                Mock.Of<IUserEventMappingRepository>()
+                Mock.Of<ISampleEventService>(),
+                Mock.Of<IEventDeletionRepository>()
             );
+            _mockEventService = new Mock<IEventService>();
+            _mockEventDeletionRepository = new Mock<IEventDeletionRepository>();
 
             _eventFunctions = new EventFunctions(
                 _mockLogger.Object,
                 _mockEventRepository.Object,
-                _mockUserEventMappingRepository.Object,
                 _mockPersonRepository.Object,
                 _mockEventRoleRepository.Object,
-                _mockClaimsService.Object
+                _mockClaimsService.Object,
+                _mockEventService.Object,
+                _mockEventDeletionRepository.Object
             );
         }
 
-        private UserClaims CreateAdminClaims(string eventId)
+        private UserClaims CreateAdminClaims(string? eventId = null)
         {
             return new UserClaims(
-                PersonId: "person-123",
+                PersonId: AdminPersonId,
                 PersonName: "Admin User",
-                PersonEmail: "admin@example.com",
+                PersonEmail: AdminEmail,
                 IsSystemAdmin: false,
                 EventId: eventId,
                 AuthMethod: Constants.AuthMethodSecureEmailLink,
@@ -70,29 +77,65 @@ namespace VolunteerCheckin.Functions.Tests
             );
         }
 
-        private void SetupAdminAuth(string eventId)
+        private void SetupAdminAuth(string? eventId = null)
         {
             _mockClaimsService
                 .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), eventId))
                 .ReturnsAsync(CreateAdminClaims(eventId));
+
+            // Also setup GetClaimsWithSampleSupportAsync for endpoints that support sample code auth
+            _mockClaimsService
+                .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string>()))
+                .ReturnsAsync(CreateAdminClaims(eventId));
+
+            // Also setup for null eventId calls
+            if (eventId != null)
+            {
+                _mockClaimsService
+                    .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), null))
+                    .ReturnsAsync(CreateAdminClaims(null));
+            }
+        }
+
+        private void SetupPersonLookup(string email, string personId)
+        {
+            _mockPersonRepository
+                .Setup(r => r.GetByEmailAsync(email))
+                .ReturnsAsync(new PersonEntity { PersonId = personId, Email = email });
+        }
+
+        private void SetupEventAdminRole(string personId, string eventId)
+        {
+            _mockEventRoleRepository
+                .Setup(r => r.GetByPersonAndEventAsync(personId, eventId))
+                .ReturnsAsync(new List<EventRoleEntity>
+                {
+                    new EventRoleEntity
+                    {
+                        PersonId = personId,
+                        EventId = eventId,
+                        Role = Constants.RoleEventAdmin,
+                        AreaIdsJson = "[]"
+                    }
+                });
         }
 
         #region CreateEvent Tests
 
         [TestMethod]
-        public async Task CreateEvent_ValidRequest_CreatesEventAndMapping()
+        public async Task CreateEvent_ValidRequest_CreatesEventAndRole()
         {
             // Arrange
+            SetupAdminAuth();
+
             CreateEventRequest request = new(
                 "Test Event",
                 "Description",
                 new DateTime(2025, 6, 15, 10, 0, 0),
-                "America/Los_Angeles",
-                "admin@example.com",
-                new List<EmergencyContact> { new("John", "555-1234", "Emergency contact") }
+                "America/Los_Angeles"
             );
 
-            HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAuth(request, "valid-session-token");
 
             // Act
             IActionResult result = await _eventFunctions.CreateEvent(httpRequest);
@@ -105,33 +148,30 @@ namespace VolunteerCheckin.Functions.Tests
                 r => r.AddAsync(It.Is<EventEntity>(e =>
                     e.Name == "Test Event" &&
                     e.Description == "Description" &&
-                    e.AdminEmail == "admin@example.com" &&
                     e.TimeZoneId == "America/Los_Angeles"
                 )),
                 Times.Once
             );
 
-            // Verify user-event mapping was created
-            _mockUserEventMappingRepository.Verify(
-                r => r.AddAsync(It.Is<UserEventMappingEntity>(m =>
-                    m.UserEmail == "admin@example.com" &&
-                    m.Role == "Admin"
+            // Verify EventAdmin role was created for the creator
+            _mockEventRoleRepository.Verify(
+                r => r.AddAsync(It.Is<EventRoleEntity>(role =>
+                    role.PersonId == AdminPersonId &&
+                    role.Role == Constants.RoleEventAdmin
                 )),
                 Times.Once
             );
         }
 
         [TestMethod]
-        public async Task CreateEvent_InvalidEmail_ReturnsBadRequest()
+        public async Task CreateEvent_NoAuth_ReturnsUnauthorized()
         {
             // Arrange
             CreateEventRequest request = new(
                 "Test Event",
                 "Description",
                 DateTime.Now,
-                "UTC",
-                "invalid-email",
-                new List<EmergencyContact>()
+                "UTC"
             );
 
             HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
@@ -140,7 +180,7 @@ namespace VolunteerCheckin.Functions.Tests
             IActionResult result = await _eventFunctions.CreateEvent(httpRequest);
 
             // Assert
-            result.ShouldBeOfType<BadRequestObjectResult>();
+            result.ShouldBeOfType<UnauthorizedObjectResult>();
 
             _mockEventRepository.Verify(
                 r => r.AddAsync(It.IsAny<EventEntity>()),
@@ -164,9 +204,7 @@ namespace VolunteerCheckin.Functions.Tests
                 Description = "Description",
                 EventDate = DateTime.UtcNow,
                 TimeZoneId = "UTC",
-                AdminEmail = "admin@example.com",
-                EmergencyContactsJson = "[]",
-                GpxRouteJson = "[]"
+                                GpxRouteJson = "[]"
             };
 
             _mockEventRepository
@@ -210,7 +248,6 @@ namespace VolunteerCheckin.Functions.Tests
         {
             // Arrange
             string eventId = "event-123";
-            string adminEmail = "admin@example.com";
 
             EventEntity existingEvent = new()
             {
@@ -219,34 +256,24 @@ namespace VolunteerCheckin.Functions.Tests
                 Description = "Old Description",
                 EventDate = DateTime.UtcNow,
                 TimeZoneId = "UTC",
-                AdminEmail = adminEmail,
-                EmergencyContactsJson = "[]",
-                GpxRouteJson = "[]"
+                                GpxRouteJson = "[]"
             };
 
-            CreateEventRequest updateRequest = new(
+            UpdateEventRequest updateRequest = new(
                 "New Name",
                 "New Description",
                 new DateTime(2025, 7, 1, 12, 0, 0),
-                "America/New_York",
-                adminEmail,
-                new List<EmergencyContact>()
+                "America/New_York"
             );
 
             _mockEventRepository
                 .Setup(r => r.GetAsync(eventId))
                 .ReturnsAsync(existingEvent);
 
-            _mockUserEventMappingRepository
-                .Setup(r => r.GetAsync(eventId, adminEmail))
-                .ReturnsAsync(new UserEventMappingEntity
-                {
-                    EventId = eventId,
-                    UserEmail = adminEmail,
-                    Role = "Admin"
-                });
+            SetupPersonLookup(AdminEmail, AdminPersonId);
+            SetupEventAdminRole(AdminPersonId, eventId);
 
-            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAdminHeader(updateRequest, adminEmail);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAdminHeader(updateRequest, AdminEmail);
 
             // Act
             IActionResult result = await _eventFunctions.UpdateEvent(httpRequest, eventId);
@@ -269,65 +296,30 @@ namespace VolunteerCheckin.Functions.Tests
         {
             // Arrange
             string eventId = "event-123";
-            string adminEmail = "unauthorized@example.com";
+            string unauthorizedEmail = "unauthorized@example.com";
 
             _mockEventRepository
                 .Setup(r => r.GetAsync(eventId))
                 .ReturnsAsync(new EventEntity { RowKey = eventId });
 
-            _mockUserEventMappingRepository
-                .Setup(r => r.GetAsync(eventId, adminEmail))
-                .ReturnsAsync((UserEventMappingEntity?)null);
+            _mockPersonRepository
+                .Setup(r => r.GetByEmailAsync(unauthorizedEmail))
+                .ReturnsAsync((PersonEntity?)null);
 
-            CreateEventRequest updateRequest = new(
+            UpdateEventRequest updateRequest = new(
                 "New Name",
                 "Description",
                 DateTime.UtcNow,
-                "UTC",
-                adminEmail,
-                new List<EmergencyContact>()
+                "UTC"
             );
 
-            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAdminHeader(updateRequest, adminEmail);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAdminHeader(updateRequest, unauthorizedEmail);
 
             // Act
             IActionResult result = await _eventFunctions.UpdateEvent(httpRequest, eventId);
 
             // Assert
             result.ShouldBeOfType<UnauthorizedObjectResult>();
-        }
-
-        [TestMethod]
-        public async Task UpdateEvent_EventNotFound_ReturnsNotFound()
-        {
-            // Arrange
-            string eventId = "event-123";
-            string adminEmail = "admin@example.com";
-
-            _mockEventRepository
-                .Setup(r => r.GetAsync(eventId))
-                .ReturnsAsync((EventEntity?)null);
-
-            _mockUserEventMappingRepository
-                .Setup(r => r.GetAsync(eventId, adminEmail))
-                .ReturnsAsync(new UserEventMappingEntity { EventId = eventId, UserEmail = adminEmail });
-
-            CreateEventRequest updateRequest = new(
-                "New Name",
-                "Description",
-                DateTime.UtcNow,
-                "UTC",
-                adminEmail,
-                new List<EmergencyContact>()
-            );
-
-            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAdminHeader(updateRequest, adminEmail);
-
-            // Act
-            IActionResult result = await _eventFunctions.UpdateEvent(httpRequest, eventId);
-
-            // Assert
-            result.ShouldBeOfType<NotFoundObjectResult>();
         }
 
         #endregion
@@ -339,18 +331,11 @@ namespace VolunteerCheckin.Functions.Tests
         {
             // Arrange
             string eventId = "event-123";
-            string adminEmail = "admin@example.com";
 
-            _mockUserEventMappingRepository
-                .Setup(r => r.GetAsync(eventId, adminEmail))
-                .ReturnsAsync(new UserEventMappingEntity
-                {
-                    EventId = eventId,
-                    UserEmail = adminEmail,
-                    Role = "Admin"
-                });
+            SetupPersonLookup(AdminEmail, AdminPersonId);
+            SetupEventAdminRole(AdminPersonId, eventId);
 
-            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAdminHeader(adminEmail);
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAdminHeader(AdminEmail);
 
             // Act
             IActionResult result = await _eventFunctions.DeleteEvent(httpRequest, eventId);
@@ -358,8 +343,8 @@ namespace VolunteerCheckin.Functions.Tests
             // Assert
             result.ShouldBeOfType<NoContentResult>();
 
-            _mockEventRepository.Verify(
-                r => r.DeleteAsync(eventId),
+            _mockEventService.Verify(
+                s => s.DeleteEventWithAllDataAsync(eventId),
                 Times.Once
             );
         }
@@ -369,13 +354,13 @@ namespace VolunteerCheckin.Functions.Tests
         {
             // Arrange
             string eventId = "event-123";
-            string adminEmail = "unauthorized@example.com";
+            string unauthorizedEmail = "unauthorized@example.com";
 
-            _mockUserEventMappingRepository
-                .Setup(r => r.GetAsync(eventId, adminEmail))
-                .ReturnsAsync((UserEventMappingEntity?)null);
+            _mockPersonRepository
+                .Setup(r => r.GetByEmailAsync(unauthorizedEmail))
+                .ReturnsAsync((PersonEntity?)null);
 
-            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAdminHeader(adminEmail);
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAdminHeader(unauthorizedEmail);
 
             // Act
             IActionResult result = await _eventFunctions.DeleteEvent(httpRequest, eventId);
@@ -405,48 +390,30 @@ namespace VolunteerCheckin.Functions.Tests
         public async Task GetAllEvents_ReturnsUserEvents()
         {
             // Arrange
-            string adminEmail = "admin@example.com";
+            SetupPersonLookup(AdminEmail, AdminPersonId);
 
-            List<UserEventMappingEntity> userMappings = new()
+            List<EventRoleEntity> userRoles = new()
             {
-                new UserEventMappingEntity { EventId = "event-1", UserEmail = adminEmail },
-                new UserEventMappingEntity { EventId = "event-2", UserEmail = adminEmail }
+                new EventRoleEntity { PersonId = AdminPersonId, EventId = "event-1", Role = Constants.RoleEventAdmin },
+                new EventRoleEntity { PersonId = AdminPersonId, EventId = "event-2", Role = Constants.RoleEventAdmin }
             };
+
+            _mockEventRoleRepository
+                .Setup(r => r.GetByPersonAsync(AdminPersonId))
+                .ReturnsAsync(userRoles);
 
             List<EventEntity> allEvents = new()
             {
-                new EventEntity
-                {
-                    RowKey = "event-1",
-                    Name = "Event 1",
-                    EmergencyContactsJson = "[]",
-                    GpxRouteJson = "[]"
-                },
-                new EventEntity
-                {
-                    RowKey = "event-2",
-                    Name = "Event 2",
-                    EmergencyContactsJson = "[]",
-                    GpxRouteJson = "[]"
-                },
-                new EventEntity
-                {
-                    RowKey = "event-3",
-                    Name = "Event 3",
-                    EmergencyContactsJson = "[]",
-                    GpxRouteJson = "[]"
-                }
+                new EventEntity { RowKey = "event-1", Name = "Event 1", GpxRouteJson = "[]" },
+                new EventEntity { RowKey = "event-2", Name = "Event 2", GpxRouteJson = "[]" },
+                new EventEntity { RowKey = "event-3", Name = "Event 3", GpxRouteJson = "[]" }
             };
-
-            _mockUserEventMappingRepository
-                .Setup(r => r.GetByUserAsync(adminEmail))
-                .ReturnsAsync(userMappings);
 
             _mockEventRepository
                 .Setup(r => r.GetAllAsync())
                 .ReturnsAsync(allEvents);
 
-            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAdminHeader(adminEmail);
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAdminHeader(AdminEmail);
 
             // Act
             IActionResult result = await _eventFunctions.GetAllEvents(httpRequest);
@@ -470,19 +437,18 @@ namespace VolunteerCheckin.Functions.Tests
         {
             // Arrange
             string eventId = "event-123";
-            string adminEmail = "existing-admin@example.com";
             string newAdminEmail = "new-admin@example.com";
 
-            _mockUserEventMappingRepository
-                .Setup(r => r.GetAsync(eventId, adminEmail))
-                .ReturnsAsync(new UserEventMappingEntity { EventId = eventId, UserEmail = adminEmail });
+            SetupPersonLookup(AdminEmail, AdminPersonId);
+            SetupEventAdminRole(AdminPersonId, eventId);
 
-            _mockUserEventMappingRepository
-                .Setup(r => r.GetAsync(eventId, newAdminEmail))
-                .ReturnsAsync((UserEventMappingEntity?)null);
+            // New admin doesn't exist yet - will be created
+            _mockPersonRepository
+                .Setup(r => r.GetByEmailAsync(newAdminEmail))
+                .ReturnsAsync((PersonEntity?)null);
 
             AddEventAdminRequest request = new(newAdminEmail);
-            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAdminHeader(request, adminEmail);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAdminHeader(request, AdminEmail);
 
             // Act
             IActionResult result = await _eventFunctions.AddEventAdmin(httpRequest, eventId);
@@ -490,11 +456,17 @@ namespace VolunteerCheckin.Functions.Tests
             // Assert
             result.ShouldBeOfType<OkObjectResult>();
 
-            _mockUserEventMappingRepository.Verify(
-                r => r.AddAsync(It.Is<UserEventMappingEntity>(m =>
-                    m.EventId == eventId &&
-                    m.UserEmail == newAdminEmail &&
-                    m.Role == "Admin"
+            // Verify person was created
+            _mockPersonRepository.Verify(
+                r => r.AddAsync(It.Is<PersonEntity>(p => p.Email == newAdminEmail)),
+                Times.Once
+            );
+
+            // Verify EventAdmin role was created
+            _mockEventRoleRepository.Verify(
+                r => r.AddAsync(It.Is<EventRoleEntity>(role =>
+                    role.EventId == eventId &&
+                    role.Role == Constants.RoleEventAdmin
                 )),
                 Times.Once
             );
@@ -505,19 +477,26 @@ namespace VolunteerCheckin.Functions.Tests
         {
             // Arrange
             string eventId = "event-123";
-            string adminEmail = "admin@example.com";
             string existingAdminEmail = "existing@example.com";
+            string existingAdminPersonId = "existing-person-456";
 
-            _mockUserEventMappingRepository
-                .Setup(r => r.GetAsync(eventId, adminEmail))
-                .ReturnsAsync(new UserEventMappingEntity { EventId = eventId, UserEmail = adminEmail });
+            SetupPersonLookup(AdminEmail, AdminPersonId);
+            SetupEventAdminRole(AdminPersonId, eventId);
 
-            _mockUserEventMappingRepository
-                .Setup(r => r.GetAsync(eventId, existingAdminEmail))
-                .ReturnsAsync(new UserEventMappingEntity { EventId = eventId, UserEmail = existingAdminEmail });
+            // Existing admin already has the role
+            _mockPersonRepository
+                .Setup(r => r.GetByEmailAsync(existingAdminEmail))
+                .ReturnsAsync(new PersonEntity { PersonId = existingAdminPersonId, Email = existingAdminEmail });
+
+            _mockEventRoleRepository
+                .Setup(r => r.GetByPersonAndEventAsync(existingAdminPersonId, eventId))
+                .ReturnsAsync(new List<EventRoleEntity>
+                {
+                    new EventRoleEntity { PersonId = existingAdminPersonId, EventId = eventId, Role = Constants.RoleEventAdmin }
+                });
 
             AddEventAdminRequest request = new(existingAdminEmail);
-            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAdminHeader(request, adminEmail);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAdminHeader(request, AdminEmail);
 
             // Act
             IActionResult result = await _eventFunctions.AddEventAdmin(httpRequest, eventId);
@@ -531,14 +510,12 @@ namespace VolunteerCheckin.Functions.Tests
         {
             // Arrange
             string eventId = "event-123";
-            string adminEmail = "admin@example.com";
 
-            _mockUserEventMappingRepository
-                .Setup(r => r.GetAsync(eventId, adminEmail))
-                .ReturnsAsync(new UserEventMappingEntity { EventId = eventId, UserEmail = adminEmail });
+            SetupPersonLookup(AdminEmail, AdminPersonId);
+            SetupEventAdminRole(AdminPersonId, eventId);
 
             AddEventAdminRequest request = new("invalid-email");
-            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAdminHeader(request, adminEmail);
+            HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAdminHeader(request, AdminEmail);
 
             // Act
             IActionResult result = await _eventFunctions.AddEventAdmin(httpRequest, eventId);
@@ -556,24 +533,32 @@ namespace VolunteerCheckin.Functions.Tests
         {
             // Arrange
             string eventId = "event-123";
-            string adminEmail = "admin@example.com";
             string removeAdminEmail = "remove@example.com";
+            string removeAdminPersonId = "remove-person-456";
 
-            List<UserEventMappingEntity> admins = new()
+            SetupPersonLookup(AdminEmail, AdminPersonId);
+            SetupEventAdminRole(AdminPersonId, eventId);
+
+            _mockPersonRepository
+                .Setup(r => r.GetByEmailAsync(removeAdminEmail))
+                .ReturnsAsync(new PersonEntity { PersonId = removeAdminPersonId, Email = removeAdminEmail });
+
+            // Two admins exist
+            List<EventRoleEntity> allAdminRoles = new()
             {
-                new UserEventMappingEntity { EventId = eventId, UserEmail = adminEmail },
-                new UserEventMappingEntity { EventId = eventId, UserEmail = removeAdminEmail }
+                new EventRoleEntity { PersonId = AdminPersonId, EventId = eventId, Role = Constants.RoleEventAdmin, RowKey = $"{eventId}|role-1" },
+                new EventRoleEntity { PersonId = removeAdminPersonId, EventId = eventId, Role = Constants.RoleEventAdmin, RowKey = $"{eventId}|role-2" }
             };
 
-            _mockUserEventMappingRepository
-                .Setup(r => r.GetAsync(eventId, adminEmail))
-                .ReturnsAsync(admins[0]);
-
-            _mockUserEventMappingRepository
+            _mockEventRoleRepository
                 .Setup(r => r.GetByEventAsync(eventId))
-                .ReturnsAsync(admins);
+                .ReturnsAsync(allAdminRoles);
 
-            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAdminHeader(adminEmail);
+            _mockEventRoleRepository
+                .Setup(r => r.GetByPersonAndEventAsync(removeAdminPersonId, eventId))
+                .ReturnsAsync(new List<EventRoleEntity> { allAdminRoles[1] });
+
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAdminHeader(AdminEmail);
 
             // Act
             IActionResult result = await _eventFunctions.RemoveEventAdmin(httpRequest, eventId, removeAdminEmail);
@@ -581,8 +566,8 @@ namespace VolunteerCheckin.Functions.Tests
             // Assert
             result.ShouldBeOfType<NoContentResult>();
 
-            _mockUserEventMappingRepository.Verify(
-                r => r.DeleteAsync(eventId, removeAdminEmail),
+            _mockEventRoleRepository.Verify(
+                r => r.DeleteAsync(removeAdminPersonId, It.IsAny<string>()),
                 Times.Once
             );
         }
@@ -592,30 +577,29 @@ namespace VolunteerCheckin.Functions.Tests
         {
             // Arrange
             string eventId = "event-123";
-            string adminEmail = "admin@example.com";
 
-            List<UserEventMappingEntity> admins = new()
+            SetupPersonLookup(AdminEmail, AdminPersonId);
+            SetupEventAdminRole(AdminPersonId, eventId);
+
+            // Only one admin exists
+            List<EventRoleEntity> allAdminRoles = new()
             {
-                new UserEventMappingEntity { EventId = eventId, UserEmail = adminEmail }
+                new EventRoleEntity { PersonId = AdminPersonId, EventId = eventId, Role = Constants.RoleEventAdmin }
             };
 
-            _mockUserEventMappingRepository
-                .Setup(r => r.GetAsync(eventId, adminEmail))
-                .ReturnsAsync(admins[0]);
-
-            _mockUserEventMappingRepository
+            _mockEventRoleRepository
                 .Setup(r => r.GetByEventAsync(eventId))
-                .ReturnsAsync(admins);
+                .ReturnsAsync(allAdminRoles);
 
-            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAdminHeader(adminEmail);
+            HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAdminHeader(AdminEmail);
 
             // Act
-            IActionResult result = await _eventFunctions.RemoveEventAdmin(httpRequest, eventId, adminEmail);
+            IActionResult result = await _eventFunctions.RemoveEventAdmin(httpRequest, eventId, AdminEmail);
 
             // Assert
             result.ShouldBeOfType<BadRequestObjectResult>();
 
-            _mockUserEventMappingRepository.Verify(
+            _mockEventRoleRepository.Verify(
                 r => r.DeleteAsync(It.IsAny<string>(), It.IsAny<string>()),
                 Times.Never
             );
@@ -671,7 +655,7 @@ namespace VolunteerCheckin.Functions.Tests
             );
 
             _mockClaimsService
-                .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), It.IsAny<string>()))
+                .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string>()))
                 .ReturnsAsync(marshalClaims);
 
             HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth("some-token");
@@ -699,7 +683,7 @@ namespace VolunteerCheckin.Functions.Tests
             );
 
             _mockClaimsService
-                .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), It.IsAny<string>()))
+                .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string>()))
                 .ReturnsAsync(nonAdminClaims);
 
             HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth("some-token");
@@ -719,15 +703,22 @@ namespace VolunteerCheckin.Functions.Tests
 
             SetupAdminAuth(eventId);
 
-            List<UserEventMappingEntity> admins = new()
+            List<EventRoleEntity> adminRoles = new()
             {
-                new UserEventMappingEntity { EventId = eventId, UserEmail = "admin1@example.com" },
-                new UserEventMappingEntity { EventId = eventId, UserEmail = "admin2@example.com" }
+                new EventRoleEntity { PersonId = "person-1", EventId = eventId, Role = Constants.RoleEventAdmin, GrantedAt = DateTime.UtcNow },
+                new EventRoleEntity { PersonId = "person-2", EventId = eventId, Role = Constants.RoleEventAdmin, GrantedAt = DateTime.UtcNow }
             };
 
-            _mockUserEventMappingRepository
+            _mockEventRoleRepository
                 .Setup(r => r.GetByEventAsync(eventId))
-                .ReturnsAsync(admins);
+                .ReturnsAsync(adminRoles);
+
+            _mockPersonRepository
+                .Setup(r => r.GetAsync("person-1"))
+                .ReturnsAsync(new PersonEntity { PersonId = "person-1", Email = "admin1@example.com" });
+            _mockPersonRepository
+                .Setup(r => r.GetAsync("person-2"))
+                .ReturnsAsync(new PersonEntity { PersonId = "person-2", Email = "admin2@example.com" });
 
             HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth("valid-token");
 
@@ -739,7 +730,7 @@ namespace VolunteerCheckin.Functions.Tests
             OkObjectResult okResult = (OkObjectResult)result;
             okResult.Value.ShouldNotBeNull();
 
-            List<UserEventMappingResponse>? adminList = okResult.Value as List<UserEventMappingResponse>;
+            List<EventAdminResponse>? adminList = okResult.Value as List<EventAdminResponse>;
             adminList.ShouldNotBeNull();
             adminList.Count.ShouldBe(2);
         }

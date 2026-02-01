@@ -49,7 +49,8 @@ public class EventContactFunctionsTests
             new Mock<IPersonRepository>().Object,
             new Mock<IEventRoleRepository>().Object,
             new Mock<IMarshalRepository>().Object,
-            new Mock<IUserEventMappingRepository>().Object);
+            Mock.Of<ISampleEventService>(),
+            Mock.Of<IEventDeletionRepository>());
 
         _functions = new EventContactFunctions(
             _mockLogger.Object,
@@ -552,21 +553,25 @@ public class EventContactFunctionsTests
 
     private void SetupEventAdminClaims()
     {
+        UserClaims claims = new UserClaims(
+            PersonId: "person-1",
+            PersonName: "Admin User",
+            PersonEmail: "admin@test.com",
+            IsSystemAdmin: false,
+            EventId: EventId,
+            AuthMethod: Constants.AuthMethodSecureEmailLink,
+            MarshalId: null,
+            EventRoles: new List<EventRoleInfo>
+            {
+                new EventRoleInfo(Constants.RoleEventAdmin, new List<string>())
+            }
+        );
         _mockClaimsService
             .Setup(c => c.GetClaimsAsync(SessionToken, EventId))
-            .ReturnsAsync(new UserClaims(
-                PersonId: "person-1",
-                PersonName: "Admin User",
-                PersonEmail: "admin@test.com",
-                IsSystemAdmin: false,
-                EventId: EventId,
-                AuthMethod: Constants.AuthMethodSecureEmailLink,
-                MarshalId: null,
-                EventRoles: new List<EventRoleInfo>
-                {
-                    new EventRoleInfo(Constants.RoleEventAdmin, new List<string>())
-                }
-            ));
+            .ReturnsAsync(claims);
+        _mockClaimsService
+            .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string?>(), It.IsAny<string?>(), EventId))
+            .ReturnsAsync(claims);
     }
 
     #endregion

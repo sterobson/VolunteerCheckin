@@ -22,7 +22,8 @@ public class ClaimsServiceTests
     private Mock<IPersonRepository> _mockPersonRepository = null!;
     private Mock<IEventRoleRepository> _mockRoleRepository = null!;
     private Mock<IMarshalRepository> _mockMarshalRepository = null!;
-    private Mock<IUserEventMappingRepository> _mockUserEventMappingRepository = null!;
+    private ISampleEventService _mockSampleEventService = null!;
+    private Mock<IEventDeletionRepository> _mockEventDeletionRepository = null!;
     private ClaimsService _claimsService = null!;
 
     private const string SessionToken = "test-session-token-12345";
@@ -39,14 +40,21 @@ public class ClaimsServiceTests
         _mockPersonRepository = new Mock<IPersonRepository>();
         _mockRoleRepository = new Mock<IEventRoleRepository>();
         _mockMarshalRepository = new Mock<IMarshalRepository>();
-        _mockUserEventMappingRepository = new Mock<IUserEventMappingRepository>();
+        _mockSampleEventService = CreateMockSampleEventService();
+        _mockEventDeletionRepository = new Mock<IEventDeletionRepository>();
+
+        // By default, no events are pending deletion
+        _mockEventDeletionRepository
+            .Setup(r => r.IsDeletionPendingAsync(It.IsAny<string>()))
+            .ReturnsAsync(false);
 
         _claimsService = new ClaimsService(
             _mockSessionRepository.Object,
             _mockPersonRepository.Object,
             _mockRoleRepository.Object,
             _mockMarshalRepository.Object,
-            _mockUserEventMappingRepository.Object
+            _mockSampleEventService,
+            _mockEventDeletionRepository.Object
         );
     }
 
@@ -608,109 +616,6 @@ public class ClaimsServiceTests
 
     #endregion
 
-    #region Legacy Migration Tests
-    // Note: These tests verify behavior related to legacy data migration
-    // The ClaimsService internally handles migration when legacy data is found
-
-    [TestMethod]
-    [Ignore("Legacy migration is handled internally; this test requires deeper mocking")]
-    public async Task GetClaimsAsync_LegacyAdminMapping_MigratesToEventRoles()
-    {
-        // Arrange
-        AuthSessionEntity session = CreateValidSession();
-        PersonEntity person = CreatePerson();
-
-        // No roles in EventRoles table
-        _mockRoleRepository
-            .Setup(r => r.GetByPersonAndEventAsync(PersonId, EventId))
-            .ReturnsAsync([]);
-
-        // But has legacy admin mapping
-        UserEventMappingEntity legacyMapping = new UserEventMappingEntity
-        {
-            PartitionKey = EventId,
-            RowKey = Email,
-            UserEmail = Email,
-            Role = "Admin"
-        };
-
-        _mockUserEventMappingRepository
-            .Setup(r => r.GetAsync(EventId, Email))
-            .ReturnsAsync(legacyMapping);
-
-        _mockSessionRepository
-            .Setup(r => r.GetBySessionTokenHashAsync(It.IsAny<string>()))
-            .ReturnsAsync(session);
-        _mockSessionRepository
-            .Setup(r => r.UpdateUnconditionalAsync(It.IsAny<AuthSessionEntity>()))
-            .Returns(Task.CompletedTask);
-        _mockPersonRepository
-            .Setup(r => r.GetAsync(PersonId))
-            .ReturnsAsync(person);
-        _mockMarshalRepository
-            .Setup(r => r.GetByEventAsync(EventId))
-            .ReturnsAsync([]);
-
-        EventRoleEntity? capturedRole = null;
-        _mockRoleRepository
-            .Setup(r => r.AddAsync(It.IsAny<EventRoleEntity>()))
-            .Callback<EventRoleEntity>(role => capturedRole = role)
-            .ReturnsAsync((EventRoleEntity r) => r);
-
-        // Act
-        UserClaims? claims = await _claimsService.GetClaimsAsync(SessionToken, EventId);
-
-        // Assert
-        claims.ShouldNotBeNull();
-        claims.HasRole(Constants.RoleEventAdmin).ShouldBeTrue();
-        capturedRole.ShouldNotBeNull();
-        capturedRole.Role.ShouldBe(Constants.RoleEventAdmin);
-        capturedRole.GrantedByPersonId.ShouldBe("system-migration");
-    }
-
-    [TestMethod]
-    public async Task GetClaimsAsync_AlreadyHasAdminRole_NoMigration()
-    {
-        // Arrange
-        AuthSessionEntity session = CreateValidSession();
-        PersonEntity person = CreatePerson();
-
-        EventRoleEntity existingRole = new EventRoleEntity
-        {
-            PartitionKey = PersonId,
-            RowKey = $"{EventId}|role-1",
-            PersonId = PersonId,
-            EventId = EventId,
-            Role = Constants.RoleEventAdmin,
-            AreaIdsJson = "[]"
-        };
-
-        _mockSessionRepository
-            .Setup(r => r.GetBySessionTokenHashAsync(It.IsAny<string>()))
-            .ReturnsAsync(session);
-        _mockSessionRepository
-            .Setup(r => r.UpdateUnconditionalAsync(It.IsAny<AuthSessionEntity>()))
-            .Returns(Task.CompletedTask);
-        _mockPersonRepository
-            .Setup(r => r.GetAsync(PersonId))
-            .ReturnsAsync(person);
-        _mockRoleRepository
-            .Setup(r => r.GetByPersonAndEventAsync(PersonId, EventId))
-            .ReturnsAsync([existingRole]);
-        _mockMarshalRepository
-            .Setup(r => r.GetByEventAsync(EventId))
-            .ReturnsAsync([]);
-
-        // Act
-        await _claimsService.GetClaimsAsync(SessionToken, EventId);
-
-        // Assert - Should NOT check legacy mapping since admin role already exists
-        _mockUserEventMappingRepository.Verify(
-            r => r.GetAsync(It.IsAny<string>(), It.IsAny<string>()),
-            Times.Never);
-    }
-
-    #endregion
 
     #region Edge Cases
 
@@ -789,4 +694,9 @@ public class ClaimsServiceTests
     }
 
     #endregion
+
+    private static ISampleEventService CreateMockSampleEventService()
+    {
+        return Mock.Of<ISampleEventService>();
+    }
 }

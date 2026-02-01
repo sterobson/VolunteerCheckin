@@ -21,16 +21,19 @@ public class TableStoragePersonRepository : IPersonRepository
         // Add the person
         await _table.AddEntityAsync(person);
 
-        // Add email index for O(1) lookup
-        PersonEmailIndexEntity emailIndex = PersonEmailIndexEntity.Create(person.Email, person.PersonId);
-        try
+        // Add email index for O(1) lookup (only if email is provided)
+        if (!string.IsNullOrWhiteSpace(person.Email))
         {
-            await _emailIndexTable.AddEntityAsync(emailIndex);
-        }
-        catch (RequestFailedException)
-        {
-            // Index may already exist (race condition) - update it
-            await _emailIndexTable.UpsertEntityAsync(emailIndex);
+            PersonEmailIndexEntity emailIndex = PersonEmailIndexEntity.Create(person.Email, person.PersonId);
+            try
+            {
+                await _emailIndexTable.AddEntityAsync(emailIndex);
+            }
+            catch (RequestFailedException)
+            {
+                // Index may already exist (race condition) - update it
+                await _emailIndexTable.UpsertEntityAsync(emailIndex);
+            }
         }
 
         return person;
@@ -55,6 +58,12 @@ public class TableStoragePersonRepository : IPersonRepository
     /// </summary>
     public async Task<PersonEntity?> GetByEmailAsync(string email)
     {
+        // Can't look up by empty email
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return null;
+        }
+
         string normalizedEmail = PersonEmailIndexEntity.NormalizeEmail(email);
 
         // Try O(1) index lookup first
@@ -77,7 +86,7 @@ public class TableStoragePersonRepository : IPersonRepository
         // Fallback: scan table (for backward compatibility with existing data)
         await foreach (PersonEntity person in _table.QueryAsync<PersonEntity>(p => p.PartitionKey == "PERSON"))
         {
-            if (person.Email.Equals(email, StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(person.Email) && person.Email.Equals(email, StringComparison.OrdinalIgnoreCase))
             {
                 // Create the missing index for future lookups
                 try
@@ -115,22 +124,33 @@ public class TableStoragePersonRepository : IPersonRepository
         await _table.UpdateEntityAsync(person, person.ETag);
 
         // Update email index if email changed
-        if (oldEmail?.Equals(person.Email, StringComparison.OrdinalIgnoreCase) == false)
+        bool oldEmailExists = !string.IsNullOrWhiteSpace(oldEmail);
+        bool newEmailExists = !string.IsNullOrWhiteSpace(person.Email);
+        bool emailChanged = oldEmailExists != newEmailExists ||
+            (oldEmailExists && !oldEmail!.Equals(person.Email, StringComparison.OrdinalIgnoreCase));
+
+        if (emailChanged)
         {
-            // Delete old index
-            try
+            // Delete old index if it existed
+            if (oldEmailExists)
             {
-                string oldNormalizedEmail = PersonEmailIndexEntity.NormalizeEmail(oldEmail);
-                await _emailIndexTable.DeleteEntityAsync("EMAIL_INDEX", oldNormalizedEmail);
-            }
-            catch (RequestFailedException)
-            {
-                // Old index may not exist
+                try
+                {
+                    string oldNormalizedEmail = PersonEmailIndexEntity.NormalizeEmail(oldEmail!);
+                    await _emailIndexTable.DeleteEntityAsync("EMAIL_INDEX", oldNormalizedEmail);
+                }
+                catch (RequestFailedException)
+                {
+                    // Old index may not exist
+                }
             }
 
-            // Add new index
-            PersonEmailIndexEntity newIndex = PersonEmailIndexEntity.Create(person.Email, person.PersonId);
-            await _emailIndexTable.UpsertEntityAsync(newIndex);
+            // Add new index if new email exists
+            if (newEmailExists)
+            {
+                PersonEmailIndexEntity newIndex = PersonEmailIndexEntity.Create(person.Email, person.PersonId);
+                await _emailIndexTable.UpsertEntityAsync(newIndex);
+            }
         }
     }
 
@@ -142,8 +162,8 @@ public class TableStoragePersonRepository : IPersonRepository
         // Delete the person
         await _table.DeleteEntityAsync("PERSON", personId);
 
-        // Delete email index
-        if (person != null)
+        // Delete email index (only if person had an email)
+        if (person != null && !string.IsNullOrWhiteSpace(person.Email))
         {
             try
             {

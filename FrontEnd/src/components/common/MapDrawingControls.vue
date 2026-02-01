@@ -1,12 +1,12 @@
 <template>
   <div class="drawing-controls" v-if="visible">
-    <div class="point-count">{{ pointCount }} point{{ pointCount !== 1 ? 's' : '' }}</div>
+    <div v-if="!hidePointCount" class="point-count">{{ pointCount }} point{{ pointCount !== 1 ? 's' : '' }}</div>
     <div class="undo-redo-buttons">
       <button
         @click="$emit('undo')"
         class="btn-drawing undo-btn"
         :disabled="!canUndo"
-        title="Undo last point (Ctrl+Z)"
+        title="Undo (Ctrl+Z)"
       >
         ↩ Undo
       </button>
@@ -14,7 +14,7 @@
         @click="$emit('redo')"
         class="btn-drawing redo-btn"
         :disabled="!canRedo"
-        title="Redo point (Ctrl+Y)"
+        title="Redo (Ctrl+Y)"
       >
         Redo ↪
       </button>
@@ -42,11 +42,25 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  hidePointCount: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const emit = defineEmits(['undo', 'redo']);
 
-const visible = computed(() => props.show && props.pointCount > 0);
+// In edit mode (hidePointCount), show controls when there's undo/redo available
+// In draw mode, show when there are points to work with
+const visible = computed(() => {
+  if (!props.show) return false;
+  if (props.hidePointCount) {
+    // Edit mode - show when there's undo or redo available
+    return props.canUndo || props.canRedo;
+  }
+  // Draw mode - show when there are points
+  return props.pointCount > 0;
+});
 
 // Keyboard shortcuts
 const handleKeydown = (e) => {

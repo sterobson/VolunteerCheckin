@@ -114,8 +114,8 @@ public class ChecklistQueryFunctionsTests
         // Assert
         result.ShouldBeOfType<OkObjectResult>();
         OkObjectResult okResult = (OkObjectResult)result;
-        List<ChecklistItemWithStatus> items = (List<ChecklistItemWithStatus>)okResult.Value!;
-        items.Count.ShouldBeGreaterThan(0);
+        NormalizedChecklistResponse response = (NormalizedChecklistResponse)okResult.Value!;
+        response.Items.Count.ShouldBeGreaterThan(0);
     }
 
     [TestMethod]
@@ -150,8 +150,8 @@ public class ChecklistQueryFunctionsTests
         // Assert
         result.ShouldBeOfType<OkObjectResult>();
         OkObjectResult okResult = (OkObjectResult)result;
-        List<ChecklistItemWithStatus> items = (List<ChecklistItemWithStatus>)okResult.Value!;
-        items.Count.ShouldBe(0);
+        NormalizedChecklistResponse response = (NormalizedChecklistResponse)okResult.Value!;
+        response.Items.Count.ShouldBe(0);
     }
 
     #endregion

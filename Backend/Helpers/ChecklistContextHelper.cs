@@ -54,7 +54,7 @@ public class ChecklistContextHelper
         IEnumerable<LocationEntity> locations = await _locationRepository.GetByEventAsync(eventId);
         List<string> assignedAreaIds = locations
             .Where(l => assignedLocationIds.Contains(l.RowKey))
-            .SelectMany(l => JsonSerializer.Deserialize<List<string>>(l.AreaIdsJson) ?? [])
+            .SelectMany(l => l.GetPayload().AreaIds)
             .Distinct()
             .ToList();
 
@@ -137,7 +137,7 @@ public class ChecklistContextHelper
             .SelectMany(locId =>
             {
                 LocationEntity loc = preloaded.LocationsById[locId];
-                return JsonSerializer.Deserialize<List<string>>(loc.AreaIdsJson) ?? [];
+                return loc.GetPayload().AreaIds;
             })
             .Distinct()
             .ToList();

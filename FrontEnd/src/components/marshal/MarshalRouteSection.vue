@@ -27,6 +27,7 @@
           :route-color="routeColor"
           :route-style="routeStyle"
           :route-weight="routeWeight"
+          :layers="layers"
           :center="center"
           :zoom="15"
           :user-location="userLocation"
@@ -113,6 +114,10 @@ defineProps({
   routeWeight: {
     type: Number,
     default: null,
+  },
+  layers: {
+    type: Array,
+    default: () => [],
   },
   center: {
     type: Object,

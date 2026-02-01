@@ -27,6 +27,7 @@
           :route-color="routeColor"
           :route-style="routeStyle"
           :route-weight="routeWeight"
+          :layers="layers"
           :user-location="userLocation"
           :toolbar-actions="getToolbarActions(assign.id)"
           :has-dynamic-assignment="hasDynamicAssignment"
@@ -42,6 +43,7 @@
           :auto-update-enabled="autoUpdateEnabled"
           :area-lead-area-ids="areaLeadAreaIds"
           :all-assignment-location-ids="allAssignmentLocationIds"
+          :time-zone-id="timeZoneId"
           @toggle="$emit('toggle-checkpoint', assign.id)"
           @map-click="(e) => $emit('map-click', e)"
           @location-click="(e) => $emit('location-click', e)"
@@ -99,6 +101,10 @@ const props = defineProps({
   routeWeight: {
     type: Number,
     default: null,
+  },
+  layers: {
+    type: Array,
+    default: () => [],
   },
   userLocation: {
     type: Object,
@@ -159,6 +165,10 @@ const props = defineProps({
   getNotesForCheckpoint: {
     type: Function,
     default: () => [],
+  },
+  timeZoneId: {
+    type: String,
+    default: 'UTC',
   },
 });
 

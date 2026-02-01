@@ -12,8 +12,6 @@ public class TableStorageService
     private const string EventsTable = "Events";
     private const string LocationsTable = "Locations";
     private const string AssignmentsTable = "Assignments";
-    private const string AdminUsersTable = "AdminUsers";
-    private const string UserEventMappingsTable = "UserEventMappings";
     private const string MarshalsTable = "Marshals";
     private const string AreasTable = "Areas";
     private const string ChecklistItemsTable = "ChecklistItems";
@@ -27,6 +25,9 @@ public class TableStorageService
     private const string PersonEmailIndexTable = "PersonEmailIndex";
     private const string IncidentsTable = "Incidents";
     private const string EventRoleDefinitionsTable = "EventRoleDefinitions";
+    private const string LayersTable = "Layers";
+    private const string SampleEventAdminTable = "SampleEventAdmin";
+    private const string EventDeletionsTable = "EventDeletions";
 
     public TableStorageService(string connectionString)
     {
@@ -54,8 +55,6 @@ public class TableStorageService
     public TableClient GetEventsTable() => GetOrCreateTable(EventsTable);
     public TableClient GetLocationsTable() => GetOrCreateTable(LocationsTable);
     public TableClient GetAssignmentsTable() => GetOrCreateTable(AssignmentsTable);
-    public TableClient GetAdminUsersTable() => GetOrCreateTable(AdminUsersTable);
-    public TableClient GetUserEventMappingsTable() => GetOrCreateTable(UserEventMappingsTable);
     public TableClient GetMarshalsTable() => GetOrCreateTable(MarshalsTable);
     public TableClient GetAreasTable() => GetOrCreateTable(AreasTable);
     public TableClient GetChecklistItemsTable() => GetOrCreateTable(ChecklistItemsTable);
@@ -69,4 +68,7 @@ public class TableStorageService
     public TableClient GetPersonEmailIndexTable() => GetOrCreateTable(PersonEmailIndexTable);
     public TableClient GetIncidentsTable() => GetOrCreateTable(IncidentsTable);
     public TableClient GetEventRoleDefinitionsTable() => GetOrCreateTable(EventRoleDefinitionsTable);
+    public TableClient GetLayersTable() => GetOrCreateTable(LayersTable);
+    public TableClient GetSampleEventAdminTable() => GetOrCreateTable(SampleEventAdminTable);
+    public TableClient GetEventDeletionsTable() => GetOrCreateTable(EventDeletionsTable);
 }

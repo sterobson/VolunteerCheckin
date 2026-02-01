@@ -45,7 +45,8 @@ namespace VolunteerCheckin.Functions.Tests
                 Mock.Of<IPersonRepository>(),
                 Mock.Of<IEventRoleRepository>(),
                 Mock.Of<IMarshalRepository>(),
-                Mock.Of<IUserEventMappingRepository>()
+                CreateMockSampleEventService(),
+                Mock.Of<IEventDeletionRepository>()
             );
 
             // Create mock AuthService with required constructor params
@@ -753,7 +754,6 @@ namespace VolunteerCheckin.Functions.Tests
             Mock<IMarshalRepository> mockMarshalRepo = new();
             Mock<IAuthSessionRepository> mockSessionRepo = new();
             Mock<IEventRoleRepository> mockRoleRepo = new();
-            Mock<IUserEventMappingRepository> mockMappingRepo = new();
             EmailService emailService = new("localhost", 25, "", "", "test@test.com", "Test");
             Mock<ILogger<AuthService>> mockLogger = new();
 
@@ -780,7 +780,8 @@ namespace VolunteerCheckin.Functions.Tests
                 mockPersonRepo.Object,
                 mockRoleRepo.Object,
                 mockMarshalRepo.Object,
-                mockMappingRepo.Object
+                CreateMockSampleEventService(),
+                Mock.Of<IEventDeletionRepository>()
             );
 
             AuthService authService = new(
@@ -858,7 +859,6 @@ namespace VolunteerCheckin.Functions.Tests
             Mock<IPersonRepository> mockPersonRepo = new();
             Mock<IEventRoleRepository> mockRoleRepo = new();
             Mock<IMarshalRepository> mockMarshalRepo = new();
-            Mock<IUserEventMappingRepository> mockMappingRepo = new();
 
             mockSessionRepo.Setup(r => r.GetBySessionTokenHashAsync(sessionTokenHash))
                 .ReturnsAsync(session);
@@ -884,7 +884,8 @@ namespace VolunteerCheckin.Functions.Tests
                 mockPersonRepo.Object,
                 mockRoleRepo.Object,
                 mockMarshalRepo.Object,
-                mockMappingRepo.Object
+                CreateMockSampleEventService(),
+                Mock.Of<IEventDeletionRepository>()
             );
 
             // Act
@@ -941,7 +942,6 @@ namespace VolunteerCheckin.Functions.Tests
             Mock<IPersonRepository> mockPersonRepo = new();
             Mock<IEventRoleRepository> mockRoleRepo = new();
             Mock<IMarshalRepository> mockMarshalRepo = new();
-            Mock<IUserEventMappingRepository> mockMappingRepo = new();
 
             mockSessionRepo.Setup(r => r.GetBySessionTokenHashAsync(sessionTokenHash))
                 .ReturnsAsync(session);
@@ -959,7 +959,8 @@ namespace VolunteerCheckin.Functions.Tests
                 mockPersonRepo.Object,
                 mockRoleRepo.Object,
                 mockMarshalRepo.Object,
-                mockMappingRepo.Object
+                CreateMockSampleEventService(),
+                Mock.Of<IEventDeletionRepository>()
             );
 
             // Act
@@ -972,6 +973,11 @@ namespace VolunteerCheckin.Functions.Tests
                 "Marshal GetAsync should not be called for admin sessions");
             mockMarshalRepo.Verify(r => r.UpdateAsync(It.IsAny<MarshalEntity>()), Times.Never,
                 "Marshal UpdateAsync should not be called for admin sessions");
+        }
+
+        private static ISampleEventService CreateMockSampleEventService()
+        {
+            return Mock.Of<ISampleEventService>();
         }
     }
 }

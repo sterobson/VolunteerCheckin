@@ -31,4 +31,9 @@ public interface IIncidentRepository
     /// Update an existing incident
     /// </summary>
     Task UpdateAsync(IncidentEntity incident);
+
+    /// <summary>
+    /// Delete all incidents for an event
+    /// </summary>
+    Task DeleteAllByEventAsync(string eventId);
 }

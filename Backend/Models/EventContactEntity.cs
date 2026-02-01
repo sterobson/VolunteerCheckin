@@ -86,11 +86,6 @@ public class EventContactEntity : ITableEntity
     public bool IsPinned { get; set; }
 
     /// <summary>
-    /// Whether this contact is the primary contact for their role
-    /// </summary>
-    public bool IsPrimary { get; set; }
-
-    /// <summary>
     /// Whether this contact should appear in the emergency info section.
     /// Defaults to true for EmergencyContact role.
     /// </summary>

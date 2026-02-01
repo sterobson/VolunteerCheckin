@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Azure;
 using Azure.Data.Tables;
 
@@ -5,20 +6,33 @@ namespace VolunteerCheckin.Functions.Models;
 
 public class EventEntity : ITableEntity
 {
+    public const int CurrentSchemaVersion = 2;
+
     public string PartitionKey { get; set; } = Constants.EventPartitionKey;
     public string RowKey { get; set; } = Guid.NewGuid().ToString();
     public DateTimeOffset? Timestamp { get; set; }
     public ETag ETag { get; set; }
 
+    // Schema version: 0 or 1 = legacy flat columns, 2 = PayloadJson
+    public int SchemaVersion { get; set; } = 0;
+
+    // V2 payload - contains terminology and styling
+    public string PayloadJson { get; set; } = string.Empty;
+
+    // Cached payload instance (not stored in table)
+    private EventPayload? _cachedPayload;
+
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public DateTime EventDate { get; set; }
     public string TimeZoneId { get; set; } = "UTC";
-    public string AdminEmail { get; set; } = string.Empty;
-    public string EmergencyContactsJson { get; set; } = "[]";
-    public string GpxRouteJson { get; set; } = "[]";
+    public string GpxRouteJson { get; set; } = "[]"; // Legacy - now on layers
     public bool IsActive { get; set; } = true;
     public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
+
+    // Sample event properties (queryable - not in payload)
+    public bool IsSampleEvent { get; set; } = false;
+    public DateTime? ExpiresAt { get; set; } = null;
 
     // Terminology settings - allows customizing the wording used in the UI
     // Default values match the original application terminology
@@ -61,6 +75,7 @@ public class EventEntity : ITableEntity
 
     /// <summary>
     /// Apply updates from an UpdateEventRequest, only updating properties that are provided (non-null).
+    /// Updates are applied to the v2 payload.
     /// </summary>
     public void ApplyUpdates(
         string name,
@@ -91,23 +106,52 @@ public class EventEntity : ITableEntity
         string? routeStyle = null,
         int? routeWeight = null)
     {
-        // Required fields
+        // Required fields (stored directly on entity)
         Name = name;
         Description = description;
         EventDate = eventDateUtc;
         TimeZoneId = timeZoneId;
 
-        // Optional updates by category
-        ApplyTerminologyUpdates(peopleTerm, checkpointTerm, areaTerm, checklistTerm, courseTerm);
-        ApplyDefaultStyleUpdates(defaultCheckpointStyleType, defaultCheckpointStyleColor,
-            defaultCheckpointStyleBackgroundShape, defaultCheckpointStyleBackgroundColor,
-            defaultCheckpointStyleBorderColor, defaultCheckpointStyleIconColor,
-            defaultCheckpointStyleSize, defaultCheckpointStyleMapRotation);
-        ApplyBrandingUpdates(brandingHeaderGradientStart, brandingHeaderGradientEnd,
-            brandingLogoUrl, brandingLogoPosition, brandingAccentColor,
-            brandingPageGradientStart, brandingPageGradientEnd);
-        ApplyRouteUpdates(routeColor, routeStyle, routeWeight);
+        // Get current payload (works for both v1 and v2)
+        EventPayload payload = GetPayload();
+
+        // Apply terminology updates
+        if (peopleTerm != null) payload.Terminology.Person = peopleTerm;
+        if (checkpointTerm != null) payload.Terminology.Location = checkpointTerm;
+        if (areaTerm != null) payload.Terminology.Area = areaTerm;
+        if (checklistTerm != null) payload.Terminology.Task = checklistTerm;
+        if (courseTerm != null) payload.Terminology.Course = courseTerm;
+
+        // Apply default style updates
+        if (defaultCheckpointStyleType != null) payload.Styling.Locations.DefaultType = defaultCheckpointStyleType;
+        if (defaultCheckpointStyleColor != null) payload.Styling.Locations.DefaultColor = defaultCheckpointStyleColor;
+        if (defaultCheckpointStyleBackgroundShape != null) payload.Styling.Locations.DefaultBackgroundShape = defaultCheckpointStyleBackgroundShape;
+        if (defaultCheckpointStyleBackgroundColor != null) payload.Styling.Locations.DefaultBackgroundColor = defaultCheckpointStyleBackgroundColor;
+        if (defaultCheckpointStyleBorderColor != null) payload.Styling.Locations.DefaultBorderColor = defaultCheckpointStyleBorderColor;
+        if (defaultCheckpointStyleIconColor != null) payload.Styling.Locations.DefaultIconColor = defaultCheckpointStyleIconColor;
+        if (defaultCheckpointStyleSize != null) payload.Styling.Locations.DefaultSize = defaultCheckpointStyleSize;
+        if (defaultCheckpointStyleMapRotation != null) payload.Styling.Locations.DefaultMapRotation = defaultCheckpointStyleMapRotation;
+
+        // Apply branding updates
+        if (brandingHeaderGradientStart != null) payload.Styling.Branding.HeaderGradientStart = brandingHeaderGradientStart;
+        if (brandingHeaderGradientEnd != null) payload.Styling.Branding.HeaderGradientEnd = brandingHeaderGradientEnd;
+        if (brandingLogoUrl != null) payload.Styling.Branding.LogoUrl = brandingLogoUrl;
+        if (brandingLogoPosition != null) payload.Styling.Branding.LogoPosition = brandingLogoPosition;
+        if (brandingAccentColor != null) payload.Styling.Branding.AccentColour = brandingAccentColor;
+        if (brandingPageGradientStart != null) payload.Styling.Branding.PageGradientStart = brandingPageGradientStart;
+        if (brandingPageGradientEnd != null) payload.Styling.Branding.PageGradientEnd = brandingPageGradientEnd;
+
+        // Route settings are now on layers, but keep for backward compat
+        if (routeColor != null) RouteColor = routeColor;
+        if (routeStyle != null) RouteStyle = routeStyle;
+        if (routeWeight != null) RouteWeight = routeWeight;
+
+        // Save the updated payload (this also sets SchemaVersion = 2)
+        SetPayload(payload);
     }
+
+    // Legacy methods kept for any code that might still use them directly
+    // These now delegate to the payload
 
     /// <summary>
     /// Apply terminology updates (only non-null values).
@@ -119,11 +163,13 @@ public class EventEntity : ITableEntity
         string? checklistTerm = null,
         string? courseTerm = null)
     {
-        if (peopleTerm != null) PeopleTerm = peopleTerm;
-        if (checkpointTerm != null) CheckpointTerm = checkpointTerm;
-        if (areaTerm != null) AreaTerm = areaTerm;
-        if (checklistTerm != null) ChecklistTerm = checklistTerm;
-        if (courseTerm != null) CourseTerm = courseTerm;
+        EventPayload payload = GetPayload();
+        if (peopleTerm != null) payload.Terminology.Person = peopleTerm;
+        if (checkpointTerm != null) payload.Terminology.Location = checkpointTerm;
+        if (areaTerm != null) payload.Terminology.Area = areaTerm;
+        if (checklistTerm != null) payload.Terminology.Task = checklistTerm;
+        if (courseTerm != null) payload.Terminology.Course = courseTerm;
+        SetPayload(payload);
     }
 
     /// <summary>
@@ -139,14 +185,16 @@ public class EventEntity : ITableEntity
         string? size = null,
         string? mapRotation = null)
     {
-        if (styleType != null) DefaultCheckpointStyleType = styleType;
-        if (styleColor != null) DefaultCheckpointStyleColor = styleColor;
-        if (backgroundShape != null) DefaultCheckpointStyleBackgroundShape = backgroundShape;
-        if (backgroundColor != null) DefaultCheckpointStyleBackgroundColor = backgroundColor;
-        if (borderColor != null) DefaultCheckpointStyleBorderColor = borderColor;
-        if (iconColor != null) DefaultCheckpointStyleIconColor = iconColor;
-        if (size != null) DefaultCheckpointStyleSize = size;
-        if (mapRotation != null) DefaultCheckpointStyleMapRotation = mapRotation;
+        EventPayload payload = GetPayload();
+        if (styleType != null) payload.Styling.Locations.DefaultType = styleType;
+        if (styleColor != null) payload.Styling.Locations.DefaultColor = styleColor;
+        if (backgroundShape != null) payload.Styling.Locations.DefaultBackgroundShape = backgroundShape;
+        if (backgroundColor != null) payload.Styling.Locations.DefaultBackgroundColor = backgroundColor;
+        if (borderColor != null) payload.Styling.Locations.DefaultBorderColor = borderColor;
+        if (iconColor != null) payload.Styling.Locations.DefaultIconColor = iconColor;
+        if (size != null) payload.Styling.Locations.DefaultSize = size;
+        if (mapRotation != null) payload.Styling.Locations.DefaultMapRotation = mapRotation;
+        SetPayload(payload);
     }
 
     /// <summary>
@@ -161,17 +209,20 @@ public class EventEntity : ITableEntity
         string? pageGradientStart = null,
         string? pageGradientEnd = null)
     {
-        if (headerGradientStart != null) BrandingHeaderGradientStart = headerGradientStart;
-        if (headerGradientEnd != null) BrandingHeaderGradientEnd = headerGradientEnd;
-        if (logoUrl != null) BrandingLogoUrl = logoUrl;
-        if (logoPosition != null) BrandingLogoPosition = logoPosition;
-        if (accentColor != null) BrandingAccentColor = accentColor;
-        if (pageGradientStart != null) BrandingPageGradientStart = pageGradientStart;
-        if (pageGradientEnd != null) BrandingPageGradientEnd = pageGradientEnd;
+        EventPayload payload = GetPayload();
+        if (headerGradientStart != null) payload.Styling.Branding.HeaderGradientStart = headerGradientStart;
+        if (headerGradientEnd != null) payload.Styling.Branding.HeaderGradientEnd = headerGradientEnd;
+        if (logoUrl != null) payload.Styling.Branding.LogoUrl = logoUrl;
+        if (logoPosition != null) payload.Styling.Branding.LogoPosition = logoPosition;
+        if (accentColor != null) payload.Styling.Branding.AccentColour = accentColor;
+        if (pageGradientStart != null) payload.Styling.Branding.PageGradientStart = pageGradientStart;
+        if (pageGradientEnd != null) payload.Styling.Branding.PageGradientEnd = pageGradientEnd;
+        SetPayload(payload);
     }
 
     /// <summary>
     /// Apply route display updates (only non-null values).
+    /// Note: Route settings are now stored on layers, but kept here for backward compatibility.
     /// </summary>
     public void ApplyRouteUpdates(
         string? routeColor = null,
@@ -181,5 +232,100 @@ public class EventEntity : ITableEntity
         if (routeColor != null) RouteColor = routeColor;
         if (routeStyle != null) RouteStyle = routeStyle;
         if (routeWeight != null) RouteWeight = routeWeight;
+    }
+
+    /// <summary>
+    /// Get the payload, deserializing from JSON if needed.
+    /// For v1 entities, returns a payload built from flat properties.
+    /// </summary>
+    public EventPayload GetPayload()
+    {
+        if (_cachedPayload != null)
+        {
+            return _cachedPayload;
+        }
+
+        if (SchemaVersion >= 2 && !string.IsNullOrEmpty(PayloadJson))
+        {
+            _cachedPayload = JsonSerializer.Deserialize<EventPayload>(PayloadJson) ?? new EventPayload();
+        }
+        else
+        {
+            // Build payload from v1 flat properties
+            _cachedPayload = BuildPayloadFromV1Properties();
+        }
+
+        return _cachedPayload;
+    }
+
+    /// <summary>
+    /// Set the payload and serialize to JSON.
+    /// </summary>
+    public void SetPayload(EventPayload payload)
+    {
+        _cachedPayload = payload;
+        PayloadJson = JsonSerializer.Serialize(payload);
+        SchemaVersion = CurrentSchemaVersion;
+    }
+
+    /// <summary>
+    /// Build a payload from v1 flat properties (for migration).
+    /// </summary>
+    private EventPayload BuildPayloadFromV1Properties()
+    {
+        return new EventPayload
+        {
+            Terminology = new TerminologyPayload
+            {
+                Person = PeopleTerm,
+                Location = CheckpointTerm,
+                Area = AreaTerm,
+                Task = ChecklistTerm,
+                Course = CourseTerm
+            },
+            Styling = new StylingPayload
+            {
+                Locations = new LocationStylingPayload
+                {
+                    DefaultType = DefaultCheckpointStyleType,
+                    DefaultColor = DefaultCheckpointStyleColor,
+                    DefaultBackgroundShape = DefaultCheckpointStyleBackgroundShape,
+                    DefaultBackgroundColor = DefaultCheckpointStyleBackgroundColor,
+                    DefaultBorderColor = DefaultCheckpointStyleBorderColor,
+                    DefaultIconColor = DefaultCheckpointStyleIconColor,
+                    DefaultSize = DefaultCheckpointStyleSize,
+                    DefaultMapRotation = DefaultCheckpointStyleMapRotation
+                },
+                Branding = new BrandingPayload
+                {
+                    AccentColour = BrandingAccentColor,
+                    HeaderGradientStart = BrandingHeaderGradientStart,
+                    HeaderGradientEnd = BrandingHeaderGradientEnd,
+                    PageGradientStart = BrandingPageGradientStart,
+                    PageGradientEnd = BrandingPageGradientEnd,
+                    LogoUrl = BrandingLogoUrl,
+                    LogoPosition = BrandingLogoPosition
+                }
+            }
+        };
+    }
+
+    /// <summary>
+    /// Upgrade the entity through each schema version to reach the current version.
+    /// </summary>
+    public void UpgradeSchema()
+    {
+        // Upgrade v0/v1 -> v2: Move flat properties to PayloadJson
+        if (SchemaVersion < 2)
+        {
+            EventPayload payload = BuildPayloadFromV1Properties();
+            SetPayload(payload);
+        }
+
+        // Note: GpxRouteJson is cleared by the layer migration in LayerFunctions
+        // when the route is migrated to a layer entity.
+
+        // Note: Legacy flat fields (terminology, styling, branding) are not explicitly cleared
+        // because the repository saves as EventEntityV2 which doesn't include those properties.
     }
 }

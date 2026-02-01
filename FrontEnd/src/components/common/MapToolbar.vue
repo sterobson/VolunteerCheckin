@@ -1,5 +1,5 @@
 <template>
-  <div class="map-toolbar" :class="[`position-${position}`]">
+  <div ref="toolbarRef" class="map-toolbar" :class="[`position-${position}`]">
     <!-- Fullscreen button -->
     <button
       v-if="showFullscreen"
@@ -39,44 +39,107 @@
           </button>
         </div>
 
-        <div class="filter-section">
-          <h4>Display</h4>
-          <label class="filter-checkbox">
-            <input type="checkbox" :checked="filters.showRoute" @change="updateFilter('showRoute', $event.target.checked)" />
-            <span>{{ terms.course }} line</span>
-          </label>
-          <label v-if="areas.length > 0" class="filter-checkbox">
-            <input type="checkbox" :checked="filters.showAreaOverlays !== false" @change="updateFilter('showAreaOverlays', $event.target.checked)" />
-            <span>{{ terms.area }} overlays</span>
-          </label>
+        <!-- Display section (when no layers) -->
+        <div class="filter-section" v-if="layers.length === 0">
+          <button class="accordion-header" @click="toggleAccordion('display')">
+            <span>Display</span>
+            <svg class="accordion-icon" :class="{ expanded: expandedAccordion === 'display' }" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          <div class="accordion-content" v-if="expandedAccordion === 'display'">
+            <label class="filter-checkbox">
+              <input type="checkbox" :checked="filters.showRoute" @change="updateFilter('showRoute', $event.target.checked)" />
+              <span>{{ terms.course }} line</span>
+            </label>
+            <label v-if="areas.length > 0" class="filter-checkbox">
+              <input type="checkbox" :checked="filters.showAreaOverlays !== false" @change="updateFilter('showAreaOverlays', $event.target.checked)" />
+              <span>{{ terms.area }} overlays</span>
+            </label>
+          </div>
         </div>
 
-        <div class="filter-section">
-          <h4>{{ terms.checkpoints }}</h4>
-          <label class="filter-checkbox">
-            <input type="checkbox" :checked="filters.showUncheckedIn" @change="updateFilter('showUncheckedIn', $event.target.checked)" />
-            <span class="status-indicator unchecked"></span>
-            <span>Unchecked-in</span>
-          </label>
-          <label class="filter-checkbox">
-            <input type="checkbox" :checked="filters.showPartiallyCheckedIn" @change="updateFilter('showPartiallyCheckedIn', $event.target.checked)" />
-            <span class="status-indicator partial"></span>
-            <span>Partially checked-in</span>
-          </label>
-          <label class="filter-checkbox">
-            <input type="checkbox" :checked="filters.showFullyCheckedIn" @change="updateFilter('showFullyCheckedIn', $event.target.checked)" />
-            <span class="status-indicator full"></span>
-            <span>Fully checked-in</span>
-          </label>
+        <!-- Layers section -->
+        <div class="filter-section" v-if="layers.length > 0">
+          <button class="accordion-header" @click="toggleAccordion('layers')">
+            <span>Layers</span>
+            <svg class="accordion-icon" :class="{ expanded: expandedAccordion === 'layers' }" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          <div class="accordion-content" v-if="expandedAccordion === 'layers'">
+            <LayersSelection
+              :layers="layers"
+              :selected-layer-ids="filters.selectedLayerIds || []"
+              @update:selected-layer-ids="updateFilter('selectedLayerIds', $event)"
+            />
+          </div>
         </div>
 
+        <!-- Checkpoints section -->
+        <div class="filter-section">
+          <button class="accordion-header" @click="toggleAccordion('checkpoints')">
+            <span>{{ terms.checkpoints }}</span>
+            <svg class="accordion-icon" :class="{ expanded: expandedAccordion === 'checkpoints' }" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          <div class="accordion-content" v-if="expandedAccordion === 'checkpoints'">
+            <label class="show-all-checkbox">
+              <input
+                type="checkbox"
+                :checked="allCheckpointStatusesSelected"
+                @change="handleShowAllCheckpointStatuses($event.target.checked)"
+              />
+              <span>Show all</span>
+            </label>
+            <label class="filter-checkbox">
+              <input type="checkbox" :checked="filters.showUncheckedIn" @change="updateFilter('showUncheckedIn', $event.target.checked)" />
+              <span class="status-indicator unchecked"></span>
+              <span>Unchecked-in</span>
+            </label>
+            <label class="filter-checkbox">
+              <input type="checkbox" :checked="filters.showPartiallyCheckedIn" @change="updateFilter('showPartiallyCheckedIn', $event.target.checked)" />
+              <span class="status-indicator partial"></span>
+              <span>Partially checked-in</span>
+            </label>
+            <label class="filter-checkbox">
+              <input type="checkbox" :checked="filters.showFullyCheckedIn" @change="updateFilter('showFullyCheckedIn', $event.target.checked)" />
+              <span class="status-indicator full"></span>
+              <span>Fully checked-in</span>
+            </label>
+            <div class="overlay-options">
+              <label class="filter-checkbox">
+                <input type="checkbox" :checked="filters.showStaffingOverlay !== false" @change="updateFilter('showStaffingOverlay', $event.target.checked)" />
+                <span>Show staffing levels</span>
+              </label>
+              <label class="filter-checkbox">
+                <input type="checkbox" :checked="filters.showStatusOverlay !== false" @change="updateFilter('showStatusOverlay', $event.target.checked)" />
+                <span>Show check-in status</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Areas section -->
         <div class="filter-section" v-if="areas.length > 0">
-          <h4>{{ terms.areas }}</h4>
-          <AreasSelection
-            :areas="areas"
-            :selected-area-ids="filters.selectedAreaIds"
-            @update:selected-area-ids="updateFilter('selectedAreaIds', $event)"
-          />
+          <button class="accordion-header" @click="toggleAccordion('areas')">
+            <span>{{ terms.areas }}</span>
+            <svg class="accordion-icon" :class="{ expanded: expandedAccordion === 'areas' }" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          <div class="accordion-content" v-if="expandedAccordion === 'areas'">
+            <label class="filter-checkbox area-overlays-option">
+              <input type="checkbox" :checked="filters.showAreaOverlays !== false" @change="updateFilter('showAreaOverlays', $event.target.checked)" />
+              <span>Show {{ termsLower.area }} overlays on map</span>
+            </label>
+            <AreasSelection
+              :areas="areas"
+              :selected-area-ids="filters.selectedAreaIds"
+              @update:selected-area-ids="updateFilter('selectedAreaIds', $event)"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -113,7 +176,8 @@
           @click="handleMenuItemClick(action.id, item.id)"
           class="dropdown-item"
         >
-          {{ item.label }}
+          <span v-if="item.icon" class="dropdown-item-icon" v-html="renderIcon(item.icon)"></span>
+          <span class="dropdown-item-label">{{ item.label }}</span>
         </button>
       </div>
     </div>
@@ -121,11 +185,16 @@
 </template>
 
 <script setup>
-import { ref, computed, defineProps, defineEmits, watch } from 'vue';
+import { ref, computed, defineProps, defineEmits, onMounted, onUnmounted } from 'vue';
 import AreasSelection from '../event-manage/AreasSelection.vue';
+import LayersSelection from '../event-manage/LayersSelection.vue';
 import { useTerminology } from '../../composables/useTerminology';
+import { MENU_ICONS, renderMenuIcon } from '../../constants/menuIcons';
 
 const { terms, termsLower } = useTerminology();
+
+// Ref to the toolbar element for click-outside detection
+const toolbarRef = ref(null);
 
 const props = defineProps({
   showFullscreen: {
@@ -146,9 +215,14 @@ const props = defineProps({
       showFullyCheckedIn: true,
       showAreas: true,
       selectedAreaIds: [],
+      selectedLayerIds: [],
     }),
   },
   areas: {
+    type: Array,
+    default: () => [],
+  },
+  layers: {
     type: Array,
     default: () => [],
   },
@@ -171,18 +245,43 @@ const emit = defineEmits([
 
 const filtersExpanded = ref(false);
 const expandedActionId = ref(null);
+const expandedAccordion = ref(null);
 
 const actionsExpanded = computed(() => expandedActionId.value !== null);
+
+const allCheckpointStatusesSelected = computed(() => {
+  return props.filters.showUncheckedIn &&
+         props.filters.showPartiallyCheckedIn &&
+         props.filters.showFullyCheckedIn;
+});
 
 const toggleFilters = () => {
   filtersExpanded.value = !filtersExpanded.value;
   if (filtersExpanded.value) {
     expandedActionId.value = null;
+    // All sections collapsed by default
+    expandedAccordion.value = null;
+  } else {
+    expandedAccordion.value = null;
   }
+};
+
+const toggleAccordion = (section) => {
+  // Only one section open at a time
+  expandedAccordion.value = expandedAccordion.value === section ? null : section;
 };
 
 const updateFilter = (key, value) => {
   emit('filter-change', { ...props.filters, [key]: value });
+};
+
+const handleShowAllCheckpointStatuses = (checked) => {
+  emit('filter-change', {
+    ...props.filters,
+    showUncheckedIn: checked,
+    showPartiallyCheckedIn: checked,
+    showFullyCheckedIn: checked,
+  });
 };
 
 const handleActionClick = (action) => {
@@ -205,11 +304,42 @@ const handleMenuItemClick = (actionId, itemId) => {
   emit('action-click', { actionId, itemId });
 };
 
+// Render menu icon from icon key or icon object
+const renderIcon = (icon) => {
+  if (typeof icon === 'string') {
+    return renderMenuIcon(MENU_ICONS[icon], 18);
+  }
+  return renderMenuIcon(icon, 18);
+};
+
 // Close dropdowns when clicking outside
 const closeDropdowns = () => {
   filtersExpanded.value = false;
   expandedActionId.value = null;
 };
+
+// Handle click outside to close dropdowns
+const handleClickOutside = (event) => {
+  // Only process if a dropdown is open
+  if (!filtersExpanded.value && !expandedActionId.value) return;
+
+  // Check if click is inside the toolbar or any dropdown
+  if (toolbarRef.value && !toolbarRef.value.contains(event.target)) {
+    // Also check for mobile backdrop clicks and dropdown content that might be teleported
+    const isDropdownContent = event.target.closest('.dropdown-content');
+    if (!isDropdownContent) {
+      closeDropdowns();
+    }
+  }
+};
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside, true);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside, true);
+});
 
 defineExpose({ closeDropdowns });
 </script>
@@ -335,7 +465,6 @@ defineExpose({ closeDropdowns });
 }
 
 .filter-section {
-  padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -343,13 +472,65 @@ defineExpose({ closeDropdowns });
   border-bottom: none;
 }
 
-.filter-section h4 {
-  margin: 0 0 0.5rem 0;
+.accordion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: none;
+  border: none;
+  cursor: pointer;
   font-size: 0.75rem;
   color: var(--text-secondary);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.accordion-header:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.accordion-icon {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.accordion-icon.expanded {
+  transform: rotate(180deg);
+}
+
+.accordion-content {
+  padding: 0 1rem 0.75rem 1rem;
+}
+
+.show-all-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text-primary);
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-light);
+  margin-bottom: 0.25rem;
+}
+
+.show-all-checkbox:hover {
+  color: var(--accent-primary);
+}
+
+.show-all-checkbox input[type="checkbox"] {
+  cursor: pointer;
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
 }
 
 .filter-checkbox {
@@ -395,13 +576,27 @@ defineExpose({ closeDropdowns });
   border: 2px solid var(--accent-success, #22c55e);
 }
 
+.area-overlays-option {
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.overlay-options {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-light);
+}
+
 /* Action dropdown */
 .action-dropdown {
   padding: 0.5rem 0;
 }
 
 .dropdown-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   width: 100%;
   padding: 0.75rem 1rem;
   background: none;
@@ -415,6 +610,29 @@ defineExpose({ closeDropdowns });
 
 .dropdown-item:hover {
   background: var(--bg-tertiary);
+}
+
+.dropdown-item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.dropdown-item-icon :deep(svg) {
+  width: 18px;
+  height: 18px;
+}
+
+.dropdown-item:hover .dropdown-item-icon {
+  color: var(--text-dark);
+}
+
+.dropdown-item-label {
+  flex: 1;
 }
 
 .dropdown-item:first-child {
@@ -467,8 +685,12 @@ defineExpose({ closeDropdowns });
     z-index: 1;
   }
 
-  .filter-section {
+  .accordion-header {
     padding: 1rem;
+  }
+
+  .accordion-content {
+    padding: 0 1rem 1rem 1rem;
   }
 
   .filter-checkbox {

@@ -14,6 +14,7 @@ public static class Constants
 
     // Headers
     public const string AdminEmailHeader = "X-Admin-Email";
+    public const string SampleCodeHeader = "X-Sample-Code";
 
     // Default Area
     public const string DefaultAreaName = "Unassigned";
@@ -77,11 +78,13 @@ public static class Constants
     // Authentication Methods
     public const string AuthMethodMarshalMagicCode = "MarshalMagicCode";
     public const string AuthMethodSecureEmailLink = "SecureEmailLink";
+    public const string AuthMethodSampleCode = "SampleCode";
 
     // Authentication Settings
     public const int MagicLinkExpiryMinutes = 15;
     public const int AdminSessionExpiryHours = 168; // 7 days, with sliding expiration on activity
     public const int MagicCodeLength = 6;
+    public const int SampleEventLifetimeHours = 4;
 
     // Rate Limiting
     public const int MaxMagicLinkRequestsPerEmailPerHour = 10;

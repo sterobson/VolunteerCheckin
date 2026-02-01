@@ -46,7 +46,7 @@ public class TableStorageEventContactRepository : IEventContactRepository
             contacts.Add(contact);
         }
         return contacts
-            .OrderByDescending(c => c.IsPrimary)
+            .OrderByDescending(c => c.IsPinned)
             .ThenBy(c => c.DisplayOrder)
             .ThenBy(c => c.Role, StringComparer.Ordinal)
             .ThenBy(c => c.Name, StringComparer.Ordinal);
@@ -60,7 +60,7 @@ public class TableStorageEventContactRepository : IEventContactRepository
             contacts.Add(contact);
         }
         return contacts
-            .OrderByDescending(c => c.IsPrimary)
+            .OrderByDescending(c => c.IsPinned)
             .ThenBy(c => c.DisplayOrder)
             .ThenBy(c => c.Name, StringComparer.Ordinal);
     }
@@ -117,6 +117,14 @@ public class TableStorageEventContactRepository : IEventContactRepository
             {
                 // Skip contacts that don't exist
             }
+        }
+    }
+
+    public async Task DeleteAllByEventAsync(string eventId)
+    {
+        await foreach (EventContactEntity contact in _table.QueryAsync<EventContactEntity>(c => c.PartitionKey == eventId))
+        {
+            await _table.DeleteEntityAsync(eventId, contact.RowKey);
         }
     }
 }

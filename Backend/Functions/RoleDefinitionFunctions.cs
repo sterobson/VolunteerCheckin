@@ -560,12 +560,14 @@ public class RoleDefinitionFunctions
             sessionToken = req.Cookies["session_token"];
         }
 
-        if (string.IsNullOrWhiteSpace(sessionToken))
+        string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
+
+        if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
         {
             return null;
         }
 
-        return await _claimsService.GetClaimsAsync(sessionToken, eventId);
+        return await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
     }
 
     /// <summary>

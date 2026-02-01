@@ -20,7 +20,7 @@
       </div>
     </div>
 
-    <div v-if="areaIds.length > 0" class="checkpoint-card-areas">
+    <div v-if="areaIds.length > 0 && !hideAreaPills" class="checkpoint-card-areas">
       <span
         v-for="areaId in areaIds"
         :key="areaId"
@@ -69,6 +69,10 @@ const props = defineProps({
   clickable: {
     type: Boolean,
     default: true,
+  },
+  hideAreaPills: {
+    type: Boolean,
+    default: false,
   },
 });
 

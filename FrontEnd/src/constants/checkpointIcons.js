@@ -34,60 +34,81 @@ export const ICON_SIZES = [
 // category: 'shape' for shapes-only (available at event level), 'content' for content icons
 export const CHECKPOINT_ICON_TYPES = [
   // Default - uses status-based colored circles (green/orange/red)
-  { value: 'default', label: 'Default', isShapeOnly: false, category: 'default' },
+  { value: 'default', label: 'Default', isShapeOnly: false, category: 'default', searchTerms: 'status' },
   // Shape-only icons - the shape IS the icon
-  { value: 'dot', label: 'Dot', isShapeOnly: true, category: 'shape', defaultColor: '#667eea' },
-  { value: 'circle', label: 'Circle', isShapeOnly: true, category: 'shape', defaultColor: '#667eea' },
-  { value: 'square', label: 'Square', isShapeOnly: true, category: 'shape', defaultColor: '#667eea' },
-  { value: 'triangle', label: 'Triangle', isShapeOnly: true, category: 'shape', defaultColor: '#667eea' },
-  { value: 'diamond', label: 'Diamond', isShapeOnly: true, category: 'shape', defaultColor: '#667eea' },
-  { value: 'star', label: 'Star', isShapeOnly: true, category: 'shape', defaultColor: '#667eea' },
-  { value: 'hexagon', label: 'Hexagon', isShapeOnly: true, category: 'shape', defaultColor: '#667eea' },
-  { value: 'pentagon', label: 'Pentagon', isShapeOnly: true, category: 'shape', defaultColor: '#667eea' },
+  { value: 'dot', label: 'Dot', isShapeOnly: true, category: 'shape', defaultColor: '#667eea', searchTerms: 'point marker small' },
+  { value: 'circle', label: 'Circle', isShapeOnly: true, category: 'shape', defaultColor: '#667eea', searchTerms: 'round shape' },
+  { value: 'square', label: 'Square', isShapeOnly: true, category: 'shape', defaultColor: '#667eea', searchTerms: 'box rectangle shape' },
+  { value: 'triangle', label: 'Triangle', isShapeOnly: true, category: 'shape', defaultColor: '#667eea', searchTerms: 'shape warning' },
+  { value: 'diamond', label: 'Diamond', isShapeOnly: true, category: 'shape', defaultColor: '#667eea', searchTerms: 'shape rhombus' },
+  { value: 'star', label: 'Star', isShapeOnly: true, category: 'shape', defaultColor: '#667eea', searchTerms: 'shape favorite special' },
+  { value: 'hexagon', label: 'Hexagon', isShapeOnly: true, category: 'shape', defaultColor: '#667eea', searchTerms: 'shape six' },
+  { value: 'pentagon', label: 'Pentagon', isShapeOnly: true, category: 'shape', defaultColor: '#667eea', searchTerms: 'shape five' },
   // Content icons - have a symbol on top of background
-  { value: 'car', label: 'Car', isShapeOnly: false, category: 'content', defaultColor: '#EF4444' },
-  { value: 'bike', label: 'Bike', isShapeOnly: false, category: 'content', defaultColor: '#EF4444' },
-  { value: 'water', label: 'Water', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6' },
-  { value: 'food', label: 'Food', isShapeOnly: false, category: 'content', defaultColor: '#F59E0B' },
-  { value: 'medical', label: 'Medical', isShapeOnly: false, category: 'content', defaultColor: '#EF4444' },
-  { value: 'photo', label: 'Photo', isShapeOnly: false, category: 'content', defaultColor: '#8B5CF6' },
-  { value: 'music', label: 'Music', isShapeOnly: false, category: 'content', defaultColor: '#EC4899' },
-  { value: 'start', label: 'Start', isShapeOnly: false, category: 'content', defaultColor: '#10B981' },
-  { value: 'finish', label: 'Finish', isShapeOnly: false, category: 'content', defaultColor: '#1F2937' },
-  { value: 'toilet', label: 'Toilet', isShapeOnly: false, category: 'content', defaultColor: '#6366F1' },
-  { value: 'shower', label: 'Shower', isShapeOnly: false, category: 'content', defaultColor: '#06B6D4' },
-  { value: 'bus', label: 'Bus', isShapeOnly: false, category: 'content', defaultColor: '#F97316' },
-  { value: 'info', label: 'Information', isShapeOnly: false, category: 'content', defaultColor: '#0EA5E9' },
-  { value: 'merch', label: 'Merchandise', isShapeOnly: false, category: 'content', defaultColor: '#A855F7' },
-  { value: 'cone', label: 'Road closure', isShapeOnly: false, category: 'content', defaultColor: '#FF6B00' },
-  { value: 'traffic', label: 'Traffic management', isShapeOnly: false, category: 'content', defaultColor: '#374151' },
-  { value: 'track', label: 'Track', isShapeOnly: false, category: 'content', defaultColor: '#78716C' },
-  { value: 'tunnel', label: 'Tunnel', isShapeOnly: false, category: 'content', defaultColor: '#57534E' },
-  { value: 'bridge', label: 'Bridge', isShapeOnly: false, category: 'content', defaultColor: '#0284C7' },
-  { value: 'plane', label: 'Plane', isShapeOnly: false, category: 'content', defaultColor: '#0EA5E9' },
-  { value: 'hill', label: 'Hill', isShapeOnly: false, category: 'content', defaultColor: '#65A30D' },
-  { value: 'baggage', label: 'Baggage', isShapeOnly: false, category: 'content', defaultColor: '#A855F7' },
-  { value: 'crown', label: 'Crown', isShapeOnly: false, category: 'content', defaultColor: '#F59E0B' },
-  { value: 'crossing', label: 'Crossing point', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6' },
-  { value: 'trees', label: 'Trees', isShapeOnly: false, category: 'content', defaultColor: '#22C55E' },
+  { value: 'car', label: 'Car', isShapeOnly: false, category: 'content', defaultColor: '#EF4444', searchTerms: 'vehicle auto automobile transport parking' },
+  { value: 'bike', label: 'Bike', isShapeOnly: false, category: 'content', defaultColor: '#EF4444', searchTerms: 'bicycle cycle cycling transport' },
+  { value: 'water', label: 'Water', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6', searchTerms: 'drink hydration refreshment drop aid' },
+  { value: 'cup', label: 'Cup', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6', searchTerms: 'drink plastic disposable water refreshment aid station' },
+  { value: 'bottle', label: 'Bottle', isShapeOnly: false, category: 'content', defaultColor: '#0EA5E9', searchTerms: 'drink water hydration refreshment aid station plastic' },
+  { value: 'food', label: 'Food', isShapeOnly: false, category: 'content', defaultColor: '#F59E0B', searchTerms: 'eat meal refreshment aid nutrition snack fork knife' },
+  { value: 'fruit', label: 'Fruit', isShapeOnly: false, category: 'content', defaultColor: '#EAB308', searchTerms: 'food eat snack banana apple healthy nutrition aid' },
+  { value: 'medical', label: 'Medical', isShapeOnly: false, category: 'content', defaultColor: '#EF4444', searchTerms: 'health first aid emergency hospital cross doctor nurse' },
+  { value: 'photo', label: 'Photo', isShapeOnly: false, category: 'content', defaultColor: '#8B5CF6', searchTerms: 'camera picture image photography' },
+  { value: 'music', label: 'Music', isShapeOnly: false, category: 'content', defaultColor: '#EC4899', searchTerms: 'entertainment sound audio band dj' },
+  { value: 'start', label: 'Start', isShapeOnly: false, category: 'content', defaultColor: '#10B981', searchTerms: 'begin play go race commence' },
+  { value: 'finish', label: 'Finish', isShapeOnly: false, category: 'content', defaultColor: '#1F2937', searchTerms: 'end complete flag chequered checkered race' },
+  { value: 'toilet', label: 'Toilet', isShapeOnly: false, category: 'content', defaultColor: '#6366F1', searchTerms: 'bathroom restroom wc loo facilities washroom' },
+  { value: 'shower', label: 'Shower', isShapeOnly: false, category: 'content', defaultColor: '#06B6D4', searchTerms: 'wash clean bathroom facilities' },
+  { value: 'bus', label: 'Bus', isShapeOnly: false, category: 'content', defaultColor: '#F97316', searchTerms: 'transport shuttle coach vehicle' },
+  { value: 'info', label: 'Information', isShapeOnly: false, category: 'content', defaultColor: '#0EA5E9', searchTerms: 'help desk enquiry query assistance' },
+  { value: 'merch', label: 'Merchandise', isShapeOnly: false, category: 'content', defaultColor: '#A855F7', searchTerms: 'shop store tshirt shirt clothing buy sell retail' },
+  { value: 'cone', label: 'Road closure', isShapeOnly: false, category: 'content', defaultColor: '#FF6B00', searchTerms: 'traffic warning barrier closed' },
+  { value: 'traffic', label: 'Traffic management', isShapeOnly: false, category: 'content', defaultColor: '#374151', searchTerms: 'lights signal control road' },
+  { value: 'track', label: 'Track', isShapeOnly: false, category: 'content', defaultColor: '#78716C', searchTerms: 'railway train rail crossing' },
+  { value: 'tunnel', label: 'Tunnel', isShapeOnly: false, category: 'content', defaultColor: '#57534E', searchTerms: 'underpass underground passage' },
+  { value: 'bridge', label: 'Bridge', isShapeOnly: false, category: 'content', defaultColor: '#0284C7', searchTerms: 'overpass crossing structure river' },
+  { value: 'plane', label: 'Plane', isShapeOnly: false, category: 'content', defaultColor: '#0EA5E9', searchTerms: 'airplane aircraft flight airport travel transport' },
+  { value: 'hill', label: 'Hill', isShapeOnly: false, category: 'content', defaultColor: '#65A30D', searchTerms: 'mountain climb elevation incline terrain' },
+  { value: 'baggage', label: 'Baggage', isShapeOnly: false, category: 'content', defaultColor: '#A855F7', searchTerms: 'luggage suitcase bag storage travel' },
+  { value: 'crown', label: 'Crown', isShapeOnly: false, category: 'content', defaultColor: '#F59E0B', searchTerms: 'king queen royal vip winner prize award' },
+  { value: 'crossing', label: 'Crossing point', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6', searchTerms: 'pedestrian zebra crosswalk road' },
+  { value: 'trees', label: 'Trees', isShapeOnly: false, category: 'content', defaultColor: '#22C55E', searchTerms: 'forest nature wood park green environment' },
   // Directional arrows
-  { value: 'arrow-uturn-left', label: 'Left u-turn', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6' },
-  { value: 'arrow-left', label: 'Left turn', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6' },
-  { value: 'arrow-slight-left', label: 'Slight left', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6' },
-  { value: 'arrow-straight', label: 'Straight ahead', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6' },
-  { value: 'arrow-slight-right', label: 'Slight right', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6' },
-  { value: 'arrow-right', label: 'Right turn', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6' },
-  { value: 'arrow-uturn-right', label: 'Right u-turn', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6' },
-  { value: 'arrow-fork-left', label: 'Left fork', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6' },
-  { value: 'arrow-fork-right', label: 'Right fork', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6' },
-  { value: 'arrow-keep-left', label: 'Keep left', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6' },
-  { value: 'arrow-keep-right', label: 'Keep right', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6' },
+  { value: 'arrow-uturn-left', label: 'Left u-turn', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6', searchTerms: 'direction arrow turn around reverse' },
+  { value: 'arrow-left', label: 'Left turn', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6', searchTerms: 'direction arrow' },
+  { value: 'arrow-slight-left', label: 'Slight left', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6', searchTerms: 'direction arrow bear veer' },
+  { value: 'arrow-straight', label: 'Straight ahead', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6', searchTerms: 'direction arrow forward continue' },
+  { value: 'arrow-slight-right', label: 'Slight right', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6', searchTerms: 'direction arrow bear veer' },
+  { value: 'arrow-right', label: 'Right turn', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6', searchTerms: 'direction arrow' },
+  { value: 'arrow-uturn-right', label: 'Right u-turn', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6', searchTerms: 'direction arrow turn around reverse' },
+  { value: 'arrow-fork-left', label: 'Left fork', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6', searchTerms: 'direction arrow split junction' },
+  { value: 'arrow-fork-right', label: 'Right fork', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6', searchTerms: 'direction arrow split junction' },
+  { value: 'arrow-keep-left', label: 'Keep left', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6', searchTerms: 'direction arrow stay merge' },
+  { value: 'arrow-keep-right', label: 'Keep right', isShapeOnly: false, category: 'content', defaultColor: '#3B82F6', searchTerms: 'direction arrow stay merge' },
+  // Animal icons
+  { value: 'cat', label: 'Cat', isShapeOnly: false, category: 'content', defaultColor: '#F97316', searchTerms: 'animal pet feline kitten kitty meow' },
+  { value: 'dog', label: 'Dog', isShapeOnly: false, category: 'content', defaultColor: '#A16207', searchTerms: 'animal pet canine puppy hound woof bark' },
+  { value: 'deer', label: 'Deer', isShapeOnly: false, category: 'content', defaultColor: '#84652D', searchTerms: 'animal wildlife stag buck antlers nature forest' },
+  { value: 'cow', label: 'Cow', isShapeOnly: false, category: 'content', defaultColor: '#1F2937', searchTerms: 'animal farm cattle livestock moo bovine' },
+  { value: 'bear', label: 'Bear', isShapeOnly: false, category: 'content', defaultColor: '#78350F', searchTerms: 'animal wildlife forest nature danger warning' },
+  { value: 'frog', label: 'Frog', isShapeOnly: false, category: 'content', defaultColor: '#16A34A', searchTerms: 'animal amphibian toad pond wildlife nature' },
+  { value: 'duck', label: 'Duck', isShapeOnly: false, category: 'content', defaultColor: '#EAB308', searchTerms: 'animal bird waterfowl pond lake water quack wildlife' },
+  { value: 'fish', label: 'Fish', isShapeOnly: false, category: 'content', defaultColor: '#0EA5E9', searchTerms: 'animal sea ocean water marine aquatic wildlife swimming' },
+  // Number icons (1-42)
+  ...Array.from({ length: 42 }, (_, i) => ({
+    value: `number-${i + 1}`,
+    label: `${i + 1}`,
+    isShapeOnly: false,
+    category: 'number',
+    defaultColor: '#667eea',
+    searchTerms: 'digit numeral count',
+  })),
 ];
 
-// Get icon types for a specific level (event only gets shapes, area/checkpoint get all)
+// Get icon types for a specific level (event only gets shapes and numbers, area/checkpoint get all)
 export function getIconTypesForLevel(level) {
   if (level === 'event') {
-    return CHECKPOINT_ICON_TYPES.filter(t => t.category === 'default' || t.category === 'shape');
+    return CHECKPOINT_ICON_TYPES.filter(t => t.category === 'default' || t.category === 'shape' || t.category === 'number');
   }
   return CHECKPOINT_ICON_TYPES;
 }
@@ -269,12 +290,53 @@ export const fixedIconSvgs = {
     </svg>`;
   },
 
+  cup: (size = 32) => {
+    const color = '#3B82F6';
+    return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="14" fill="${color}" stroke="#fff" stroke-width="2"/>
+      <!-- Cup body (tapered) -->
+      <path d="M10 8 L12 24 L20 24 L22 8 Z" fill="#fff"/>
+      <!-- Rim -->
+      <ellipse cx="16" cy="8" rx="6" ry="1.5" fill="#fff" stroke="#fff" stroke-width="1"/>
+      <!-- Liquid line -->
+      <path d="M11 12 L21 12" stroke="${color}" stroke-width="1" opacity="0.3"/>
+    </svg>`;
+  },
+
+  bottle: (size = 32) => {
+    const color = '#0EA5E9';
+    return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="14" fill="${color}" stroke="#fff" stroke-width="2"/>
+      <!-- Bottle body -->
+      <path d="M11 13 L11 25 Q11 27 13 27 L19 27 Q21 27 21 25 L21 13 Q21 11 19 11 L18 11 L18 8 Q18 7 17 7 L15 7 Q14 7 14 8 L14 11 L13 11 Q11 11 11 13 Z" fill="#fff"/>
+      <!-- Cap -->
+      <rect x="14" y="5" width="4" height="2.5" rx="1" fill="#fff"/>
+      <!-- Water level -->
+      <path d="M12 15 L12 25 Q12 26 13 26 L19 26 Q20 26 20 25 L20 15 Z" fill="${color}" opacity="0.25"/>
+    </svg>`;
+  },
+
   food: (size = 32) => {
     const color = '#F59E0B';
     return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
       <circle cx="16" cy="16" r="14" fill="${color}" stroke="#fff" stroke-width="2"/>
       <path d="M11 9v6c0 1.1.9 2 2 2h1v7h2v-7h1c1.1 0 2-.9 2-2V9h-2v5h-1V9h-2v5h-1V9h-2z" fill="#fff"/>
       <path d="M21 9v14h2V9h-2z" fill="#fff"/>
+    </svg>`;
+  },
+
+  fruit: (size = 32) => {
+    const color = '#EAB308';
+    return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="14" fill="${color}" stroke="#fff" stroke-width="2"/>
+      <!-- Apple body -->
+      <path d="M16 10 Q10 10 9 16 Q8 22 12 25 Q14 27 16 27 Q18 27 20 25 Q24 22 23 16 Q22 10 16 10 Z" fill="#fff"/>
+      <!-- Apple indent -->
+      <path d="M14 10 Q16 12 18 10" fill="none" stroke="#fff" stroke-width="1.5"/>
+      <!-- Stem -->
+      <path d="M16 10 L16 7 Q16 6 17 6" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+      <!-- Leaf -->
+      <path d="M17 7 Q20 6 21 8 Q20 8 17 7" fill="#fff"/>
     </svg>`;
   },
 
@@ -312,7 +374,8 @@ export const fixedIconSvgs = {
     const color = '#10B981';
     return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
       <circle cx="16" cy="16" r="14" fill="${color}" stroke="#fff" stroke-width="2"/>
-      <path d="M11 8v16l2-2V10l7 6-7 6v-4l-2 2v4l12-10-12-10v4z" fill="#fff"/>
+      <!-- Play triangle -->
+      <path d="M12 9 L24 16 L12 23 Z" fill="#fff"/>
     </svg>`;
   },
 
@@ -566,7 +629,188 @@ export const fixedIconSvgs = {
       </g>
     </svg>`;
   },
+
+  // Animal icons
+  cat: (size = 32) => {
+    const color = '#F97316';
+    return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="14" fill="${color}" stroke="#fff" stroke-width="2"/>
+      <!-- Ears (pointed triangles) -->
+      <path d="M7 15 L10 6 L14 13 Z" fill="#fff"/>
+      <path d="M25 15 L22 6 L18 13 Z" fill="#fff"/>
+      <!-- Inner ears -->
+      <path d="M9 13 L10.5 8 L12.5 12 Z" fill="#FFB4AB"/>
+      <path d="M23 13 L21.5 8 L19.5 12 Z" fill="#FFB4AB"/>
+      <!-- Face -->
+      <ellipse cx="16" cy="18" rx="8" ry="7" fill="#fff"/>
+      <!-- Eyes -->
+      <ellipse cx="12" cy="16" rx="1.8" ry="2.5" fill="${color}"/>
+      <ellipse cx="20" cy="16" rx="1.8" ry="2.5" fill="${color}"/>
+      <!-- Nose -->
+      <path d="M16 19.5 L14.5 21.5 L17.5 21.5 Z" fill="#FDA4AF"/>
+      <!-- Mouth -->
+      <path d="M16 21.5 L16 23 M14 23 Q16 25 18 23" fill="none" stroke="${color}" stroke-width="0.8" stroke-linecap="round"/>
+    </svg>`;
+  },
+
+  dog: (size = 32) => {
+    const color = '#A16207';
+    return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="14" fill="${color}" stroke="#fff" stroke-width="2"/>
+      <!-- Floppy ears -->
+      <ellipse cx="7" cy="15" rx="4" ry="6" fill="#fff"/>
+      <ellipse cx="25" cy="15" rx="4" ry="6" fill="#fff"/>
+      <!-- Face -->
+      <ellipse cx="16" cy="17" rx="8" ry="7" fill="#fff"/>
+      <!-- Eyes -->
+      <circle cx="12" cy="15" r="2" fill="${color}"/>
+      <circle cx="20" cy="15" r="2" fill="${color}"/>
+      <circle cx="12.6" cy="14.4" r="0.8" fill="#fff"/>
+      <circle cx="20.6" cy="14.4" r="0.8" fill="#fff"/>
+      <!-- Snout -->
+      <ellipse cx="16" cy="21" rx="4" ry="3" fill="#E5D3C8"/>
+      <!-- Nose -->
+      <ellipse cx="16" cy="19" rx="2.5" ry="1.8" fill="#1F2937"/>
+      <!-- Tongue -->
+      <ellipse cx="16" cy="24" rx="1.5" ry="2" fill="#F87171"/>
+    </svg>`;
+  },
+
+  deer: (size = 32) => {
+    const color = '#84652D';
+    return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="14" fill="${color}" stroke="#fff" stroke-width="2"/>
+      <!-- Antlers -->
+      <path d="M9 12 L7 6 M7 6 L5 4 M7 6 L9 5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M23 12 L25 6 M25 6 L27 4 M25 6 L23 5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <!-- Head -->
+      <ellipse cx="16" cy="18" rx="7" ry="8" fill="#fff"/>
+      <!-- Ears -->
+      <ellipse cx="7" cy="14" rx="2" ry="3.5" fill="#fff" transform="rotate(-30 7 14)"/>
+      <ellipse cx="25" cy="14" rx="2" ry="3.5" fill="#fff" transform="rotate(30 25 14)"/>
+      <!-- Eyes -->
+      <circle cx="12" cy="16" r="1.5" fill="${color}"/>
+      <circle cx="20" cy="16" r="1.5" fill="${color}"/>
+      <!-- Nose -->
+      <ellipse cx="16" cy="22" rx="2.5" ry="2" fill="${color}"/>
+    </svg>`;
+  },
+
+  cow: (size = 32) => {
+    const color = '#1F2937';
+    return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="14" fill="${color}" stroke="#fff" stroke-width="2"/>
+      <!-- Horns -->
+      <path d="M8 8 Q6 10 7 13" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <path d="M24 8 Q26 10 25 13" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <!-- Ears -->
+      <ellipse cx="8" cy="14" rx="2" ry="2.5" fill="#fff"/>
+      <ellipse cx="24" cy="14" rx="2" ry="2.5" fill="#fff"/>
+      <!-- Face -->
+      <ellipse cx="16" cy="17" rx="7" ry="6" fill="#fff"/>
+      <!-- Spots -->
+      <circle cx="12" cy="14" r="2" fill="${color}"/>
+      <circle cx="20" cy="15" r="1.5" fill="${color}"/>
+      <!-- Eyes -->
+      <circle cx="13" cy="16" r="1" fill="${color}"/>
+      <circle cx="19" cy="16" r="1" fill="${color}"/>
+      <!-- Snout -->
+      <ellipse cx="16" cy="20" rx="3.5" ry="2.5" fill="#FCD5CE"/>
+      <!-- Nostrils -->
+      <circle cx="14.5" cy="20" r="0.8" fill="${color}"/>
+      <circle cx="17.5" cy="20" r="0.8" fill="${color}"/>
+    </svg>`;
+  },
+
+  bear: (size = 32) => {
+    const color = '#78350F';
+    return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="14" fill="${color}" stroke="#fff" stroke-width="2"/>
+      <!-- Ears -->
+      <circle cx="8" cy="10" r="3.5" fill="#fff"/>
+      <circle cx="8" cy="10" r="2" fill="${color}"/>
+      <circle cx="24" cy="10" r="3.5" fill="#fff"/>
+      <circle cx="24" cy="10" r="2" fill="${color}"/>
+      <!-- Face -->
+      <ellipse cx="16" cy="17" rx="8" ry="7" fill="#fff"/>
+      <!-- Eyes -->
+      <circle cx="12" cy="15" r="1.5" fill="${color}"/>
+      <circle cx="20" cy="15" r="1.5" fill="${color}"/>
+      <!-- Snout -->
+      <ellipse cx="16" cy="19" rx="3" ry="2.5" fill="#D4A574"/>
+      <!-- Nose -->
+      <ellipse cx="16" cy="18" rx="1.5" ry="1" fill="${color}"/>
+    </svg>`;
+  },
+
+  frog: (size = 32) => {
+    const color = '#16A34A';
+    return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="14" fill="${color}" stroke="#fff" stroke-width="2"/>
+      <!-- Eyes (bulging) -->
+      <circle cx="10" cy="10" r="4" fill="#fff"/>
+      <circle cx="22" cy="10" r="4" fill="#fff"/>
+      <circle cx="10" cy="10" r="2" fill="${color}"/>
+      <circle cx="22" cy="10" r="2" fill="${color}"/>
+      <!-- Face -->
+      <ellipse cx="16" cy="18" rx="8" ry="5" fill="#fff"/>
+      <!-- Mouth -->
+      <path d="M10 19 Q16 23 22 19" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>
+      <!-- Nostrils -->
+      <circle cx="14" cy="16" r="0.8" fill="${color}"/>
+      <circle cx="18" cy="16" r="0.8" fill="${color}"/>
+    </svg>`;
+  },
+
+  duck: (size = 32) => {
+    const color = '#EAB308';
+    return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="14" fill="${color}" stroke="#fff" stroke-width="2"/>
+      <!-- Body -->
+      <ellipse cx="14" cy="20" rx="8" ry="5" fill="#fff"/>
+      <!-- Head -->
+      <circle cx="22" cy="12" r="5" fill="#fff"/>
+      <!-- Neck -->
+      <path d="M18 17 Q22 16 21 14" fill="#fff" stroke="#fff" stroke-width="3"/>
+      <!-- Eye -->
+      <circle cx="23" cy="11" r="1.2" fill="${color}"/>
+      <!-- Beak -->
+      <path d="M26 13 L29 12 L29 15 L26 14 Z" fill="#F97316"/>
+    </svg>`;
+  },
+
+  fish: (size = 32) => {
+    const color = '#0EA5E9';
+    return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="14" fill="${color}" stroke="#fff" stroke-width="2"/>
+      <!-- Body -->
+      <ellipse cx="15" cy="16" rx="8" ry="5" fill="#fff"/>
+      <!-- Tail -->
+      <path d="M23 16 L28 12 L28 20 Z" fill="#fff"/>
+      <!-- Eye -->
+      <circle cx="10" cy="15" r="1.5" fill="${color}"/>
+      <!-- Fin -->
+      <path d="M15 11 L17 8 L19 11" fill="#fff" stroke="#fff" stroke-width="1"/>
+      <!-- Gill -->
+      <path d="M12 14 Q13 16 12 18" fill="none" stroke="${color}" stroke-width="1" stroke-linecap="round"/>
+    </svg>`;
+  },
 };
+
+// Generate fixed icon SVGs for number icons (1-42)
+for (let i = 1; i <= 42; i++) {
+  fixedIconSvgs[`number-${i}`] = (size = 32) => {
+    const color = '#667eea';
+    const numStr = String(i);
+    let fontSize = 18;
+    if (numStr.length === 2) fontSize = 15;
+
+    return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="14" fill="${color}" stroke="#fff" stroke-width="2"/>
+      <text x="16" y="16" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="bold" fill="#fff" text-anchor="middle" dominant-baseline="central">${i}</text>
+    </svg>`;
+  };
+}
 
 /**
  * Background shape generators for composable icons
@@ -649,9 +893,41 @@ export const iconContentGenerators = {
     return `<path d="M16 8 C16 8 10 14 10 18 C10 21.3 12.7 24 16 24 C19.3 24 22 21.3 22 18 C22 14 16 8 16 8Z" fill="${iconColor}"/>`;
   },
 
+  cup: (iconColor = '#fff', bgColor = '#667eea') => {
+    return `
+      <!-- Cup body (tapered) -->
+      <path d="M10 8 L12 24 L20 24 L22 8 Z" fill="${iconColor}"/>
+      <!-- Rim -->
+      <ellipse cx="16" cy="8" rx="6" ry="1.5" fill="${iconColor}"/>
+      <!-- Liquid line -->
+      <path d="M11 12 L21 12" stroke="${bgColor}" stroke-width="1" opacity="0.3"/>`;
+  },
+
+  bottle: (iconColor = '#fff', bgColor = '#667eea') => {
+    return `
+      <!-- Bottle body -->
+      <path d="M11 13 L11 25 Q11 27 13 27 L19 27 Q21 27 21 25 L21 13 Q21 11 19 11 L18 11 L18 8 Q18 7 17 7 L15 7 Q14 7 14 8 L14 11 L13 11 Q11 11 11 13 Z" fill="${iconColor}"/>
+      <!-- Cap -->
+      <rect x="14" y="5" width="4" height="2.5" rx="1" fill="${iconColor}"/>
+      <!-- Water level -->
+      <path d="M12 15 L12 25 Q12 26 13 26 L19 26 Q20 26 20 25 L20 15 Z" fill="${bgColor}" opacity="0.25"/>`;
+  },
+
   food: (iconColor = '#fff') => {
     return `<path d="M11 9v6c0 1.1.9 2 2 2h1v7h2v-7h1c1.1 0 2-.9 2-2V9h-2v5h-1V9h-2v5h-1V9h-2z" fill="${iconColor}"/>
       <path d="M21 9v14h2V9h-2z" fill="${iconColor}"/>`;
+  },
+
+  fruit: (iconColor = '#fff') => {
+    return `
+      <!-- Apple body -->
+      <path d="M16 10 Q10 10 9 16 Q8 22 12 25 Q14 27 16 27 Q18 27 20 25 Q24 22 23 16 Q22 10 16 10 Z" fill="${iconColor}"/>
+      <!-- Apple indent -->
+      <path d="M14 10 Q16 12 18 10" fill="none" stroke="${iconColor}" stroke-width="1.5"/>
+      <!-- Stem -->
+      <path d="M16 10 L16 7 Q16 6 17 6" fill="none" stroke="${iconColor}" stroke-width="1.5" stroke-linecap="round"/>
+      <!-- Leaf -->
+      <path d="M17 7 Q20 6 21 8 Q20 8 17 7" fill="${iconColor}"/>`;
   },
 
   medical: (iconColor = '#fff') => {
@@ -672,7 +948,7 @@ export const iconContentGenerators = {
   },
 
   start: (iconColor = '#fff') => {
-    return `<path d="M11 8v16l2-2V10l7 6-7 6v-4l-2 2v4l12-10-12-10v4z" fill="${iconColor}"/>`;
+    return `<path d="M12 9 L24 16 L12 23 Z" fill="${iconColor}"/>`;
   },
 
   finish: (iconColor = '#fff') => {
@@ -850,20 +1126,18 @@ export const iconContentGenerators = {
       <line x1="20" y1="13" x2="20" y2="18" stroke="${iconColor}" stroke-width="1.5"/>`;
   },
 
-  // Plane (airplane - side view, facing right)
+  // Plane (airplane - top-down view pointing up)
   'plane': (iconColor = '#fff') => {
     return `
       <g fill="${iconColor}">
-        <!-- Fuselage body -->
-        <path d="M27 16 L24 14 L8 14 Q4 16 8 18 L24 18 L27 16 Z"/>
-        <!-- Nose cone -->
-        <path d="M8 14 Q4 16 8 18 L8 14 Z"/>
-        <!-- Tail fin -->
-        <path d="M26 14 L26 9 L22 14 Z"/>
-        <!-- Main wing -->
-        <path d="M20 16 L16 10 L14 10 L16 16 L14 22 L16 22 L20 16 Z"/>
-        <!-- Cockpit window -->
-        <ellipse cx="10" cy="16" rx="1.5" ry="1" fill="none" stroke="${iconColor}" stroke-width="0.5" opacity="0.6"/>
+        <!-- Fuselage -->
+        <path d="M16 4 L18 10 L18 22 L20 26 L16 24 L12 26 L14 22 L14 10 Z"/>
+        <!-- Wings -->
+        <path d="M14 14 L6 18 L6 20 L14 17 Z"/>
+        <path d="M18 14 L26 18 L26 20 L18 17 Z"/>
+        <!-- Tail wings -->
+        <path d="M14 22 L10 25 L10 26 L14 24 Z"/>
+        <path d="M18 22 L22 25 L22 26 L18 24 Z"/>
       </g>`;
   },
 
@@ -910,7 +1184,161 @@ export const iconContentGenerators = {
       <path d="M10 22 L10 18 L7 18 L11 12 L8 12 L11 7 L14 12 L11 12 L15 18 L12 18 L12 22 Z" fill="${iconColor}"/>
       <path d="M20 22 L20 18 L17 18 L21 12 L18 12 L21 7 L24 12 L21 12 L25 18 L22 18 L22 22 Z" fill="${iconColor}"/>`;
   },
+
+  // Animal icons
+  'cat': (iconColor = '#fff', bgColor = '#667eea') => {
+    return `
+      <!-- Ears (pointed triangles) -->
+      <path d="M7 15 L10 6 L14 13 Z" fill="${iconColor}"/>
+      <path d="M25 15 L22 6 L18 13 Z" fill="${iconColor}"/>
+      <!-- Inner ears -->
+      <path d="M9 13 L10.5 8 L12.5 12 Z" fill="#FFB4AB"/>
+      <path d="M23 13 L21.5 8 L19.5 12 Z" fill="#FFB4AB"/>
+      <!-- Face -->
+      <ellipse cx="16" cy="18" rx="8" ry="7" fill="${iconColor}"/>
+      <!-- Eyes -->
+      <ellipse cx="12" cy="16" rx="1.8" ry="2.5" fill="${bgColor}"/>
+      <ellipse cx="20" cy="16" rx="1.8" ry="2.5" fill="${bgColor}"/>
+      <!-- Nose -->
+      <path d="M16 19.5 L14.5 21.5 L17.5 21.5 Z" fill="#FDA4AF"/>
+      <!-- Mouth -->
+      <path d="M16 21.5 L16 23 M14 23 Q16 25 18 23" fill="none" stroke="${bgColor}" stroke-width="0.8" stroke-linecap="round"/>`;
+  },
+
+  'dog': (iconColor = '#fff', bgColor = '#667eea') => {
+    return `
+      <!-- Floppy ears -->
+      <ellipse cx="7" cy="15" rx="4" ry="6" fill="${iconColor}"/>
+      <ellipse cx="25" cy="15" rx="4" ry="6" fill="${iconColor}"/>
+      <!-- Face -->
+      <ellipse cx="16" cy="17" rx="8" ry="7" fill="${iconColor}"/>
+      <!-- Eyes -->
+      <circle cx="12" cy="15" r="2" fill="${bgColor}"/>
+      <circle cx="20" cy="15" r="2" fill="${bgColor}"/>
+      <circle cx="12.6" cy="14.4" r="0.8" fill="${iconColor}"/>
+      <circle cx="20.6" cy="14.4" r="0.8" fill="${iconColor}"/>
+      <!-- Snout -->
+      <ellipse cx="16" cy="21" rx="4" ry="3" fill="#E5D3C8"/>
+      <!-- Nose -->
+      <ellipse cx="16" cy="19" rx="2.5" ry="1.8" fill="#1F2937"/>
+      <!-- Tongue -->
+      <ellipse cx="16" cy="24" rx="1.5" ry="2" fill="#F87171"/>`;
+  },
+
+  'deer': (iconColor = '#fff', bgColor = '#667eea') => {
+    return `
+      <!-- Antlers -->
+      <path d="M9 12 L7 6 M7 6 L5 4 M7 6 L9 5" fill="none" stroke="${iconColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M23 12 L25 6 M25 6 L27 4 M25 6 L23 5" fill="none" stroke="${iconColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <!-- Head -->
+      <ellipse cx="16" cy="18" rx="7" ry="8" fill="${iconColor}"/>
+      <!-- Ears -->
+      <ellipse cx="7" cy="14" rx="2" ry="3.5" fill="${iconColor}" transform="rotate(-30 7 14)"/>
+      <ellipse cx="25" cy="14" rx="2" ry="3.5" fill="${iconColor}" transform="rotate(30 25 14)"/>
+      <!-- Eyes -->
+      <circle cx="12" cy="16" r="1.5" fill="${bgColor}"/>
+      <circle cx="20" cy="16" r="1.5" fill="${bgColor}"/>
+      <!-- Nose -->
+      <ellipse cx="16" cy="22" rx="2.5" ry="2" fill="${bgColor}"/>`;
+  },
+
+  'cow': (iconColor = '#fff', bgColor = '#667eea') => {
+    return `
+      <!-- Horns -->
+      <path d="M8 8 Q6 10 7 13" fill="none" stroke="${iconColor}" stroke-width="2" stroke-linecap="round"/>
+      <path d="M24 8 Q26 10 25 13" fill="none" stroke="${iconColor}" stroke-width="2" stroke-linecap="round"/>
+      <!-- Ears -->
+      <ellipse cx="8" cy="14" rx="2" ry="2.5" fill="${iconColor}"/>
+      <ellipse cx="24" cy="14" rx="2" ry="2.5" fill="${iconColor}"/>
+      <!-- Face -->
+      <ellipse cx="16" cy="17" rx="7" ry="6" fill="${iconColor}"/>
+      <!-- Spots -->
+      <circle cx="12" cy="14" r="2" fill="${bgColor}"/>
+      <circle cx="20" cy="15" r="1.5" fill="${bgColor}"/>
+      <!-- Eyes -->
+      <circle cx="13" cy="16" r="1" fill="${bgColor}"/>
+      <circle cx="19" cy="16" r="1" fill="${bgColor}"/>
+      <!-- Snout -->
+      <ellipse cx="16" cy="20" rx="3.5" ry="2.5" fill="#FCD5CE"/>
+      <!-- Nostrils -->
+      <circle cx="14.5" cy="20" r="0.8" fill="${bgColor}"/>
+      <circle cx="17.5" cy="20" r="0.8" fill="${bgColor}"/>`;
+  },
+
+  'bear': (iconColor = '#fff', bgColor = '#667eea') => {
+    return `
+      <!-- Ears -->
+      <circle cx="8" cy="10" r="3.5" fill="${iconColor}"/>
+      <circle cx="8" cy="10" r="2" fill="${bgColor}"/>
+      <circle cx="24" cy="10" r="3.5" fill="${iconColor}"/>
+      <circle cx="24" cy="10" r="2" fill="${bgColor}"/>
+      <!-- Face -->
+      <ellipse cx="16" cy="17" rx="8" ry="7" fill="${iconColor}"/>
+      <!-- Eyes -->
+      <circle cx="12" cy="15" r="1.5" fill="${bgColor}"/>
+      <circle cx="20" cy="15" r="1.5" fill="${bgColor}"/>
+      <!-- Snout -->
+      <ellipse cx="16" cy="19" rx="3" ry="2.5" fill="#D4A574"/>
+      <!-- Nose -->
+      <ellipse cx="16" cy="18" rx="1.5" ry="1" fill="${bgColor}"/>`;
+  },
+
+  'frog': (iconColor = '#fff', bgColor = '#667eea') => {
+    return `
+      <!-- Eyes (bulging) -->
+      <circle cx="10" cy="10" r="4" fill="${iconColor}"/>
+      <circle cx="22" cy="10" r="4" fill="${iconColor}"/>
+      <circle cx="10" cy="10" r="2" fill="${bgColor}"/>
+      <circle cx="22" cy="10" r="2" fill="${bgColor}"/>
+      <!-- Face -->
+      <ellipse cx="16" cy="18" rx="8" ry="5" fill="${iconColor}"/>
+      <!-- Mouth -->
+      <path d="M10 19 Q16 23 22 19" fill="none" stroke="${bgColor}" stroke-width="1.5" stroke-linecap="round"/>
+      <!-- Nostrils -->
+      <circle cx="14" cy="16" r="0.8" fill="${bgColor}"/>
+      <circle cx="18" cy="16" r="0.8" fill="${bgColor}"/>`;
+  },
+
+  'duck': (iconColor = '#fff', bgColor = '#667eea') => {
+    return `
+      <!-- Body -->
+      <ellipse cx="14" cy="20" rx="8" ry="5" fill="${iconColor}"/>
+      <!-- Head -->
+      <circle cx="22" cy="12" r="5" fill="${iconColor}"/>
+      <!-- Neck -->
+      <path d="M18 17 Q22 16 21 14" fill="${iconColor}" stroke="${iconColor}" stroke-width="3"/>
+      <!-- Eye -->
+      <circle cx="23" cy="11" r="1.2" fill="${bgColor}"/>
+      <!-- Beak -->
+      <path d="M26 13 L29 12 L29 15 L26 14 Z" fill="#F97316"/>`;
+  },
+
+  'fish': (iconColor = '#fff', bgColor = '#667eea') => {
+    return `
+      <!-- Body -->
+      <ellipse cx="15" cy="16" rx="8" ry="5" fill="${iconColor}"/>
+      <!-- Tail -->
+      <path d="M23 16 L28 12 L28 20 Z" fill="${iconColor}"/>
+      <!-- Eye -->
+      <circle cx="10" cy="15" r="1.5" fill="${bgColor}"/>
+      <!-- Fin -->
+      <path d="M15 11 L17 8 L19 11" fill="${iconColor}" stroke="${iconColor}" stroke-width="1"/>
+      <!-- Gill -->
+      <path d="M12 14 Q13 16 12 18" fill="none" stroke="${bgColor}" stroke-width="1" stroke-linecap="round"/>`;
+  },
 };
+
+// Generate number icon content generators (1-42)
+for (let i = 1; i <= 42; i++) {
+  iconContentGenerators[`number-${i}`] = (iconColor = '#fff') => {
+    // Adjust font size based on number of digits
+    const numStr = String(i);
+    let fontSize = 18;
+    if (numStr.length === 2) fontSize = 15;
+
+    return `<text x="16" y="16" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="bold" fill="${iconColor}" text-anchor="middle" dominant-baseline="central">${i}</text>`;
+  };
+}
 
 /**
  * Generate a complete checkpoint SVG with full customization

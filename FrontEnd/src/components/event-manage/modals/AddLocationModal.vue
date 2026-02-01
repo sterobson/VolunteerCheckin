@@ -36,11 +36,11 @@
           v-model="formData.what3Words"
           type="text"
           class="form-input"
-          placeholder="e.g. filled.count.soap or filled/count/soap"
+          placeholder="e.g. filled.count.soap"
           @input="handleInput"
         />
         <small v-if="formData.what3Words && !isValidWhat3Words(formData.what3Words)" class="form-error">
-          Invalid format. Must be word.word.word or word/word/word (lowercase letters only, 1-20 characters each)
+          Invalid format. Must be word.word.word (lowercase letters only)
         </small>
       </div>
 

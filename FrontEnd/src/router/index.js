@@ -100,17 +100,23 @@ router.beforeEach((to, from, next) => {
   initializeMarshalSessions();
 
   const adminEmail = localStorage.getItem('adminEmail');
+  const hasSampleCode = !!to.query.sample;
 
-  // Admin route protection
-  if (to.meta.requiresAuth && !adminEmail) {
+  // Admin route protection (sample events bypass with ?sample= query param)
+  if (to.meta.requiresAuth && !adminEmail && !hasSampleCode) {
     next({ name: 'AdminLogin' });
     return;
   }
 
   // Set auth context based on destination route
   if (to.meta.requiresAuth) {
-    // Admin routes
-    setAuthContext('admin');
+    if (hasSampleCode) {
+      // Sample event admin access
+      setAuthContext('sample', to.params.eventId, to.query.sample);
+    } else {
+      // Regular admin access
+      setAuthContext('admin');
+    }
   } else if (to.name !== 'MarshalView' && to.name !== 'MyEvents') {
     // Non-auth routes (Home, login pages, etc.) - clear context
     setAuthContext(null);

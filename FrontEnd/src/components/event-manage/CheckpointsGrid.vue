@@ -10,6 +10,7 @@
       :checkpoint="checkpoint"
       :areas="areas"
       :clickable="true"
+      :hide-area-pills="hideAreaPills"
       @click="$emit('select', $event)"
     />
   </CardsGrid>
@@ -36,6 +37,10 @@ defineProps({
   emptyHint: {
     type: String,
     default: '',
+  },
+  hideAreaPills: {
+    type: Boolean,
+    default: false,
   },
 });
 

@@ -1,7 +1,34 @@
 <template>
   <div class="course-areas-tab">
-    <!-- Route settings -->
-    <div v-if="route.length > 0" class="route-settings-bar">
+    <!-- Layers pills -->
+    <div class="layers-pills">
+      <button
+        v-for="layer in sortedLayers"
+        :key="layer.id"
+        type="button"
+        class="layer-pill"
+        :style="{ backgroundColor: layer.routeColor || '#3388ff' }"
+        @click="$emit('select-layer', layer)"
+        :title="`Edit ${layer.name}`"
+      >
+        <span class="layer-pill-name">{{ layer.name }}</span>
+      </button>
+      <button
+        type="button"
+        class="layer-pill layer-pill-add"
+        @click="$emit('add-layer')"
+        :title="`Add ${termsLower.course} or layer`"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+        <span>Add {{ termsLower.course }} or layer</span>
+      </button>
+    </div>
+
+    <!-- Legacy route settings (for backward compatibility while migrating) -->
+    <div v-if="route.length > 0 && layers.length === 0" class="route-settings-bar">
       <span class="route-settings-label">Route style:</span>
       <BrandingColorPicker
         :model-value="localRouteColor"
@@ -100,10 +127,11 @@
       <CommonMap
         ref="commonMapRef"
         :locations="checkpoints"
-        :route="route"
-        :route-color="localRouteColor"
-        :route-style="localRouteStyle"
-        :route-weight="localRouteWeight"
+        :route="displayRoute"
+        :route-color="displayRouteColor"
+        :route-style="displayRouteStyle"
+        :route-weight="displayRouteWeight"
+        :layers="displayLayers"
         :areas="areas"
         :all-locations-for-bounds="checkpoints"
         :selected-area-id="selectedAreaId"
@@ -144,6 +172,10 @@ const props = defineProps({
     default: () => [],
   },
   areas: {
+    type: Array,
+    default: () => [],
+  },
+  layers: {
     type: Array,
     default: () => [],
   },
@@ -188,6 +220,8 @@ const emit = defineEmits([
   'add-many-checkpoints-from-map',
   'add-area-from-map',
   'update:routeSettings',
+  'add-layer',
+  'select-layer',
 ]);
 
 const mapSection = ref(null);
@@ -254,6 +288,49 @@ const lineWeights = [
 
 // Computed effective local color (use default if not set)
 const effectiveLocalColor = computed(() => localRouteColor.value || DEFAULT_ROUTE_COLOR);
+
+// When layers exist, use layers' routes; otherwise fall back to legacy route
+const displayLayers = computed(() => {
+  if (props.layers && props.layers.length > 0) {
+    return props.layers;
+  }
+  return [];
+});
+
+// Layers sorted by display order for the pills
+const sortedLayers = computed(() => {
+  return [...props.layers].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+});
+
+// Legacy route display (only when no layers exist)
+const displayRoute = computed(() => {
+  if (props.layers && props.layers.length > 0) {
+    // When layers exist, don't show legacy route
+    return [];
+  }
+  return props.route;
+});
+
+const displayRouteColor = computed(() => {
+  if (props.layers && props.layers.length > 0) {
+    return '';
+  }
+  return localRouteColor.value;
+});
+
+const displayRouteStyle = computed(() => {
+  if (props.layers && props.layers.length > 0) {
+    return '';
+  }
+  return localRouteStyle.value;
+});
+
+const displayRouteWeight = computed(() => {
+  if (props.layers && props.layers.length > 0) {
+    return null;
+  }
+  return localRouteWeight.value;
+});
 
 // Calculate relative luminance of a color
 const getLuminance = (hexColor) => {
@@ -368,6 +445,9 @@ const filters = ref({
   showFullyCheckedIn: true,
   showAreas: true,
   selectedAreaIds: [],
+  selectedLayerIds: [],
+  showStaffingOverlay: false,
+  showStatusOverlay: false,
 });
 
 // Toolbar actions for the Add menu
@@ -377,11 +457,11 @@ const toolbarActions = computed(() => [
     icon: 'plus',
     label: 'Add',
     items: [
-      { id: 'checkpoint', label: terms.value.checkpoint },
-      { id: 'many-checkpoints', label: `Many ${termsLower.value.checkpoints}` },
-      { id: 'area', label: terms.value.area },
-      { id: 'import', label: `Import ${termsLower.value.checkpoints}...` },
-      { id: 'upload', label: `Upload ${termsLower.value.course}...` },
+      { id: 'checkpoint', label: terms.value.checkpoint, icon: 'checkpoint' },
+      { id: 'many-checkpoints', label: `Many ${termsLower.value.checkpoints}`, icon: 'many-checkpoints' },
+      { id: 'import', label: `Import ${termsLower.value.checkpoints}`, icon: 'import' },
+      { id: 'area', label: terms.value.area, icon: 'zone' },
+      { id: 'layer', label: `${terms.value.course} or layer`, icon: 'course' },
     ],
   },
 ]);
@@ -395,13 +475,13 @@ const handleActionClick = ({ actionId, itemId }) => {
     } else if (itemId === 'many-checkpoints') {
       emit('add-many-checkpoints-from-map');
       scrollMapIntoView();
+    } else if (itemId === 'import') {
+      emit('import-checkpoints');
     } else if (itemId === 'area') {
       emit('add-area-from-map');
       scrollMapIntoView();
-    } else if (itemId === 'import') {
-      emit('import-checkpoints');
-    } else if (itemId === 'upload') {
-      emit('upload-route');
+    } else if (itemId === 'layer') {
+      emit('add-layer');
     }
   }
 };
@@ -452,6 +532,24 @@ watch(() => props.areas, (newAreas) => {
     // Remove any areas that no longer exist
     filters.value.selectedAreaIds = filters.value.selectedAreaIds.filter(id =>
       newAreas.some(area => area.id === id)
+    );
+  }
+}, { immediate: true });
+
+// Initialize selected layers with all layer IDs when layers change
+watch(() => props.layers, (newLayers) => {
+  if (newLayers.length > 0) {
+    // Add any new layers to the selected list (default to all checked)
+    const currentSelectedIds = new Set(filters.value.selectedLayerIds);
+    newLayers.forEach(layer => {
+      if (!currentSelectedIds.has(layer.id)) {
+        filters.value.selectedLayerIds.push(layer.id);
+      }
+    });
+
+    // Remove any layers that no longer exist
+    filters.value.selectedLayerIds = filters.value.selectedLayerIds.filter(id =>
+      newLayers.some(layer => layer.id === id)
     );
   }
 }, { immediate: true });
@@ -593,7 +691,9 @@ watch(() => props.drawingMode, (newDrawingMode) => {
 
 .map-section {
   position: relative;
-  height: 500px;
+  /* Fill remaining viewport height minus header (~80px), tabs (~60px), padding (~4rem), and layer pills (~50px) */
+  height: calc(100vh - 260px);
+  min-height: 600px;
   border-radius: 8px;
   overflow: visible;
   box-shadow: var(--shadow-sm);
@@ -603,11 +703,86 @@ watch(() => props.drawingMode, (newDrawingMode) => {
 
 @media (max-width: 768px) {
   .map-section {
-    height: 350px;
+    height: calc(100vh - 300px);
+    min-height: 400px;
   }
 
   .route-settings-bar {
     gap: 0.75rem;
   }
+}
+
+/* Layers pills styles */
+.layers-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+}
+
+.layer-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border: none;
+  border-radius: 9999px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.layer-pill:hover {
+  opacity: 0.85;
+}
+
+.layer-pill:active {
+  transform: scale(0.97);
+}
+
+.layer-pill-name {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layer-pill-add {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  text-shadow: none;
+  border: 1px dashed var(--border-color);
+}
+
+.layer-pill-add:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  opacity: 1;
+}
+
+.btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+}
+
+.btn-small {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.btn-primary {
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+}
+
+.btn-primary:hover {
+  background: var(--btn-primary-hover);
 }
 </style>

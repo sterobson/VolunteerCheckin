@@ -29,8 +29,9 @@
 <script setup>
 import { defineProps, defineEmits } from 'vue';
 import { getIcon } from '../../utils/icons';
+import { useEventTimeZone } from '../../composables/useEventTimeZone';
 
-defineProps({
+const props = defineProps({
   eventDate: {
     type: String,
     default: null,
@@ -43,22 +44,16 @@ defineProps({
     type: Boolean,
     default: false,
   },
+  timeZoneId: {
+    type: String,
+    default: 'UTC',
+  },
 });
 
 defineEmits(['toggle']);
 
-const formatEventDateTime = (dateString) => {
-  if (!dateString) return '';
-  const date = new Date(dateString);
-  return date.toLocaleString(undefined, {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-};
+// Use event timezone for formatting
+const { formatEventDateTime } = useEventTimeZone(props.timeZoneId);
 </script>
 
 <style scoped>

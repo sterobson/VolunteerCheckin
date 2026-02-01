@@ -36,6 +36,7 @@
             v-model="form.description"
             class="form-input"
             rows="3"
+            :disabled="form.isDefault"
             @input="handleInput"
           ></textarea>
         </div>
@@ -214,8 +215,8 @@
 
     <!-- Appearance Tab -->
     <div v-if="activeTab === 'appearance'" class="tab-content appearance-tab">
-      <!-- Area polygon colour accordion -->
-      <div class="accordion-item">
+      <!-- Area polygon colour accordion (hidden for default area) -->
+      <div v-if="!form.isDefault" class="accordion-item">
         <button
           type="button"
           class="accordion-header"
@@ -244,8 +245,8 @@
         </div>
       </div>
 
-      <!-- Checkpoint marker style accordion -->
-      <div class="accordion-item">
+      <!-- Checkpoint marker style accordion (hidden for default area) -->
+      <div v-if="!form.isDefault" class="accordion-item">
         <button
           type="button"
           class="accordion-header"
@@ -767,7 +768,7 @@ const iconStylePreviewSvg = computed(() => {
 
 // Computed property for whether this is an existing area
 const isExistingArea = computed(() => {
-  return props.area && props.area.id;
+  return !!(props.area && props.area.id);
 });
 
 // Convert polygon points to locations for auto-fit bounds
@@ -796,17 +797,22 @@ const areaCheckpointIds = computed(() => {
   return areaCheckpoints.value.map(cp => cp.id);
 });
 
-// All tabs - incidents shown conditionally
+// All tabs - some shown conditionally
 const availableTabs = computed(() => {
   const tabs = [
     { value: 'details', label: 'Details', icon: 'details' },
-    { value: 'boundary', label: 'Boundary', icon: 'area' },
+  ];
+  // Hide boundary tab for default area
+  if (!form.value.isDefault) {
+    tabs.push({ value: 'boundary', label: 'Boundary', icon: 'area' });
+  }
+  tabs.push(
     { value: 'contacts', label: 'Contacts', icon: 'marshal' },
     { value: 'checkpoints', label: getAreaCheckpointTerm(), icon: 'checkpoint' },
     { value: 'checklists', label: terms.value.checklists, icon: 'checklist' },
     { value: 'notes', label: 'Notes', icon: 'notes' },
     { value: 'appearance', label: 'Appearance', icon: 'appearance' },
-  ];
+  );
   // Only show incidents tab if there are incidents
   if (props.incidents && props.incidents.length > 0) {
     tabs.push({ value: 'incidents', label: 'Incidents', icon: 'incidents' });

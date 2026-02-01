@@ -69,4 +69,12 @@ public class TableStorageMarshalRepository : IMarshalRepository
     {
         await _table.DeleteEntityAsync(eventId, marshalId);
     }
+
+    public async Task DeleteAllByEventAsync(string eventId)
+    {
+        await foreach (MarshalEntity marshal in _table.QueryAsync<MarshalEntity>(m => m.PartitionKey == eventId))
+        {
+            await _table.DeleteEntityAsync(eventId, marshal.RowKey);
+        }
+    }
 }

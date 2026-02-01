@@ -63,7 +63,7 @@ const props = defineProps({
   mode: {
     type: String,
     default: 'view',
-    validator: (value) => ['view', 'select-point', 'draw-polygon', 'edit-polygon'].includes(value),
+    validator: (value) => ['view', 'select-point', 'draw-polygon', 'edit-polygon', 'draw-route', 'edit-route'].includes(value),
   },
   title: {
     type: String,

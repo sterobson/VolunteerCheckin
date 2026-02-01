@@ -192,22 +192,103 @@
           </div>
         </div>
       </div>
+
+      <!-- Danger Zone Section -->
+      <div class="accordion-section danger-section">
+        <button
+          class="accordion-header danger-header"
+          :class="{ active: expandedSection === 'danger' }"
+          @click="toggleSection('danger')"
+        >
+          <span class="accordion-title">Danger zone</span>
+          <span class="accordion-icon">{{ expandedSection === 'danger' ? '-' : '+' }}</span>
+        </button>
+        <div v-if="expandedSection === 'danger'" class="accordion-content">
+          <div class="danger-zone-content">
+            <div class="danger-item">
+              <div class="danger-info">
+                <h4>Delete this event</h4>
+                <p>
+                  Once you delete an event, there is no going back. All data associated with this event
+                  will be permanently deleted, including all {{ termsLower.checkpoints }}, {{ termsLower.areas }},
+                  {{ termsLower.people }}, assignments, and {{ termsLower.checklists }}.
+                </p>
+              </div>
+              <button
+                class="btn btn-danger"
+                @click="showDeleteConfirmation"
+                :disabled="isDeleting"
+              >
+                {{ isDeleting ? 'Deleting...' : 'Delete event' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
+
+    <!-- Delete Confirmation Modal -->
+    <Teleport to="body">
+      <div v-if="showDeleteModal" class="modal-overlay" @click.self="cancelDelete">
+        <div class="modal delete-modal">
+          <h2>Delete event?</h2>
+          <p class="delete-warning">
+            You are about to permanently delete <strong>{{ localForm.name }}</strong>.
+            This action cannot be undone.
+          </p>
+          <p class="delete-details">
+            All event data will be deleted, including:
+          </p>
+          <ul class="delete-list">
+            <li>{{ termsSentence.course }} and route data</li>
+            <li>All {{ termsLower.checkpoints }} and {{ termsLower.areas }}</li>
+            <li>All {{ termsLower.people }} and their assignments</li>
+            <li>All {{ termsLower.checklists }} and completions</li>
+            <li>All incidents and notes</li>
+            <li>All contacts and administrator access</li>
+          </ul>
+          <p class="delete-confirm-text">
+            To confirm, type the event name: <strong>{{ localForm.name }}</strong>
+          </p>
+          <input
+            v-model="deleteConfirmText"
+            type="text"
+            class="form-input delete-confirm-input"
+            :placeholder="localForm.name"
+            @keydown.enter="confirmDelete"
+          />
+          <div class="modal-actions">
+            <button class="btn btn-secondary" @click="cancelDelete">Cancel</button>
+            <button
+              class="btn btn-danger"
+              @click="confirmDelete"
+              :disabled="deleteConfirmText !== localForm.name || isDeleting"
+            >
+              {{ isDeleting ? 'Deleting...' : 'Delete event permanently' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
 import { ref, watch, computed, onMounted, defineProps, defineEmits } from 'vue';
+import { useRouter } from 'vue-router';
 import { terminologyOptions, getCheckpointOptionLabel, useTerminology } from '../../composables/useTerminology';
 import { useAuthStore } from '../../stores/auth';
 import { formatDate as formatEventDate } from '../../utils/dateFormatters';
+import { eventsApi } from '../../services/api';
+import { removeAllSessionsForEvent } from '../../services/marshalSessionService';
 import AdminsList from '../../components/event-manage/lists/AdminsList.vue';
 import CheckpointStylePicker from '../../components/CheckpointStylePicker.vue';
 import MarshalModeMockup from '../../components/MarshalModeMockup.vue';
 import { getDefaultBranding } from '../../constants/brandingPresets';
 
-const { terms, termsLower } = useTerminology();
+const { terms, termsLower, termsSentence } = useTerminology();
 const authStore = useAuthStore();
+const router = useRouter();
 const adminEmail = computed(() => authStore.adminEmail || '');
 
 const props = defineProps({
@@ -302,6 +383,47 @@ const brandingData = computed(() => ({
 
 // Track if there are staged logo changes
 const hasLogoChanges = ref(false);
+
+// Delete event state
+const showDeleteModal = ref(false);
+const deleteConfirmText = ref('');
+const isDeleting = ref(false);
+
+const showDeleteConfirmation = () => {
+  deleteConfirmText.value = '';
+  showDeleteModal.value = true;
+};
+
+const cancelDelete = () => {
+  showDeleteModal.value = false;
+  deleteConfirmText.value = '';
+};
+
+const confirmDelete = async () => {
+  if (deleteConfirmText.value !== localForm.value.name || isDeleting.value) {
+    return;
+  }
+
+  isDeleting.value = true;
+
+  try {
+    // Request deletion from the backend
+    await eventsApi.requestDeletion(props.eventId);
+
+    // Clear all local sessions for this event (marshal sessions, sample event data)
+    removeAllSessionsForEvent(props.eventId);
+
+    // Log out the admin
+    await authStore.logout();
+
+    // Navigate to my events page
+    router.push('/myevents');
+  } catch (error) {
+    console.error('Failed to request event deletion:', error);
+    alert(error.response?.data?.message || 'Failed to delete event. Please try again.');
+    isDeleting.value = false;
+  }
+};
 
 const handleLogoStagedChange = (hasStagedChanges) => {
   hasLogoChanges.value = hasStagedChanges;
@@ -513,6 +635,145 @@ const handleSubmit = async () => {
   background: var(--bg-hover);
 }
 
+.btn-danger {
+  background: #dc2626;
+  color: white;
+  font-weight: 500;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.btn-danger:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* Danger Zone Styles */
+.danger-section {
+  border: 1px solid #fca5a5;
+}
+
+.danger-header {
+  color: #dc2626;
+}
+
+.danger-header:hover {
+  background: #fef2f2;
+}
+
+.danger-header.active {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.danger-header .accordion-icon {
+  color: #dc2626;
+}
+
+.danger-zone-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.danger-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+}
+
+.danger-info h4 {
+  margin: 0 0 0.5rem 0;
+  color: #991b1b;
+  font-size: 1rem;
+}
+
+.danger-info p {
+  margin: 0;
+  color: #7f1d1d;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* Delete Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: var(--card-bg);
+  border-radius: 8px;
+  padding: 1.5rem;
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.delete-modal h2 {
+  margin: 0 0 1rem 0;
+  color: #dc2626;
+  font-size: 1.25rem;
+}
+
+.delete-warning {
+  margin: 0 0 1rem 0;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.delete-details {
+  margin: 0 0 0.5rem 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.delete-list {
+  margin: 0 0 1rem 0;
+  padding-left: 1.5rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.delete-list li {
+  margin-bottom: 0.25rem;
+}
+
+.delete-confirm-text {
+  margin: 1rem 0 0.5rem 0;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.delete-confirm-input {
+  margin-bottom: 1rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+}
+
 @media (max-width: 600px) {
   .terminology-grid {
     grid-template-columns: 1fr;
@@ -524,6 +785,15 @@ const handleSubmit = async () => {
 
   .accordion-content {
     padding: 1rem;
+  }
+
+  .danger-item {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .danger-item .btn-danger {
+    align-self: flex-start;
   }
 }
 </style>

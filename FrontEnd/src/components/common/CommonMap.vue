@@ -9,12 +9,15 @@
         :route-color="routeColor"
         :route-style="routeStyle"
         :route-weight="routeWeight"
+        :layers="filteredLayers"
         :areas="filteredAreas"
         :center="center"
         :zoom="zoom"
         :clickable="clickable || mode === 'select-point'"
         :drawing-mode="mode === 'draw-polygon'"
         :editing-polygon="mode === 'edit-polygon' ? editingPolygon : null"
+        :drawing-route-mode="mode === 'draw-route'"
+        :editing-route="mode === 'edit-route' ? editingRoute : null"
         :user-location="userLocation"
         :highlight-location-id="highlightLocationId"
         :highlight-location-ids="highlightLocationIds"
@@ -23,12 +26,18 @@
         :simplify-non-highlighted="simplifyNonHighlighted"
         :selected-area-id="selectedAreaId"
         :hide-recenter-button="hideRecenterButton"
+        :skip-auto-centering="skipAutoCentering"
+        :show-staffing-overlay="internalFilters.showStaffingOverlay !== false"
+        :show-status-overlay="internalFilters.showStatusOverlay !== false"
         @location-click="$emit('location-click', $event)"
         @map-click="handleMapClick"
         @area-click="$emit('area-click', $event)"
         @polygon-complete="handlePolygonComplete"
         @polygon-drawing="handlePolygonDrawing"
         @polygon-update="handlePolygonUpdate"
+        @route-complete="handleRouteComplete"
+        @route-drawing="handleRouteDrawing"
+        @route-update="handleRouteUpdate"
         @visibility-change="$emit('visibility-change', $event)"
       />
 
@@ -39,6 +48,7 @@
         :show-filters="showFilters"
         :filters="internalFilters"
         :areas="areas"
+        :layers="layers"
         :actions="toolbarActions"
         :position="toolbarPosition"
         @fullscreen-click="handleFullscreenClick"
@@ -46,12 +56,13 @@
         @action-click="$emit('action-click', $event)"
       />
 
-      <!-- Drawing controls (shown when in draw-polygon mode) -->
+      <!-- Drawing/editing controls (shown when in draw-polygon, draw-route, or edit-route mode) -->
       <MapDrawingControls
-        :show="mode === 'draw-polygon'"
-        :point-count="polygonPointCount"
-        :can-undo="canUndoPoints"
-        :can-redo="canRedoPoints"
+        :show="mode === 'draw-polygon' || mode === 'draw-route' || mode === 'edit-route'"
+        :point-count="mode === 'edit-route' ? editingRoutePointCount : (mode === 'draw-route' ? routePointCount : polygonPointCount)"
+        :can-undo="mode === 'edit-route' ? canUndoRouteEditPoints : (mode === 'draw-route' ? canUndoRoutePoints : canUndoPoints)"
+        :can-redo="mode === 'edit-route' ? canRedoRouteEditPoints : (mode === 'draw-route' ? canRedoRoutePoints : canRedoPoints)"
+        :hide-point-count="mode === 'edit-route'"
         @undo="handleUndo"
         @redo="handleRedo"
       />
@@ -88,12 +99,16 @@
           :route="filteredRoute"
           :route-color="routeColor"
           :route-style="routeStyle"
+          :route-weight="routeWeight"
+          :layers="filteredLayers"
           :areas="filteredAreas"
           :center="center"
           :zoom="zoom"
           :clickable="clickable || mode === 'select-point'"
           :drawing-mode="mode === 'draw-polygon'"
           :editing-polygon="mode === 'edit-polygon' ? editingPolygon : null"
+          :drawing-route-mode="mode === 'draw-route'"
+          :editing-route="mode === 'edit-route' ? editingRoute : null"
           :user-location="userLocation"
           :highlight-location-id="highlightLocationId"
           :highlight-location-ids="highlightLocationIds"
@@ -102,12 +117,18 @@
           :simplify-non-highlighted="simplifyNonHighlighted"
           :selected-area-id="selectedAreaId"
           :hide-recenter-button="hideRecenterButton"
+          :skip-auto-centering="skipAutoCentering"
+          :show-staffing-overlay="internalFilters.showStaffingOverlay !== false"
+          :show-status-overlay="internalFilters.showStatusOverlay !== false"
           @location-click="$emit('location-click', $event)"
           @map-click="handleMapClick"
           @area-click="$emit('area-click', $event)"
           @polygon-complete="handlePolygonComplete"
           @polygon-drawing="handlePolygonDrawing"
           @polygon-update="handlePolygonUpdate"
+          @route-complete="handleRouteComplete"
+          @route-drawing="handleRouteDrawing"
+          @route-update="handleRouteUpdate"
           @visibility-change="$emit('visibility-change', $event)"
         />
 
@@ -118,18 +139,20 @@
           :show-filters="showFilters"
           :filters="internalFilters"
           :areas="areas"
+          :layers="layers"
           :actions="toolbarActions"
           :position="toolbarPosition"
           @filter-change="handleFilterChange"
           @action-click="$emit('action-click', $event)"
         />
 
-        <!-- Drawing controls in fullscreen -->
+        <!-- Drawing/editing controls in fullscreen -->
         <MapDrawingControls
-          :show="mode === 'draw-polygon'"
-          :point-count="polygonPointCount"
-          :can-undo="canUndoPoints"
-          :can-redo="canRedoPoints"
+          :show="mode === 'draw-polygon' || mode === 'draw-route' || mode === 'edit-route'"
+          :point-count="mode === 'edit-route' ? editingRoutePointCount : (mode === 'draw-route' ? routePointCount : polygonPointCount)"
+          :can-undo="mode === 'edit-route' ? canUndoRouteEditPoints : (mode === 'draw-route' ? canUndoRoutePoints : canUndoPoints)"
+          :can-redo="mode === 'edit-route' ? canRedoRouteEditPoints : (mode === 'draw-route' ? canRedoRoutePoints : canRedoPoints)"
+          :hide-point-count="mode === 'edit-route'"
           @undo="handleUndo"
           @redo="handleRedo"
         />
@@ -166,6 +189,10 @@ const props = defineProps({
   routeWeight: {
     type: Number,
     default: null,
+  },
+  layers: {
+    type: Array,
+    default: () => [],
   },
   areas: {
     type: Array,
@@ -216,9 +243,13 @@ const props = defineProps({
   mode: {
     type: String,
     default: 'view',
-    validator: (v) => ['view', 'select-point', 'draw-polygon', 'edit-polygon'].includes(v),
+    validator: (v) => ['view', 'select-point', 'draw-polygon', 'edit-polygon', 'draw-route', 'edit-route'].includes(v),
   },
   editingPolygon: {
+    type: Array,
+    default: null,
+  },
+  editingRoute: {
     type: Array,
     default: null,
   },
@@ -256,6 +287,7 @@ const props = defineProps({
       showFullyCheckedIn: true,
       showAreas: true,
       selectedAreaIds: [],
+      selectedLayerIds: [],
     }),
   },
 
@@ -280,6 +312,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  skipAutoCentering: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const emit = defineEmits([
@@ -294,6 +330,9 @@ const emit = defineEmits([
   'polygon-complete',
   'polygon-drawing',
   'polygon-update',
+  'route-complete',
+  'route-drawing',
+  'route-update',
 
   // Toolbar
   'fullscreen-change',
@@ -316,13 +355,26 @@ const isFullscreen = ref(false);
 const polygonPointCount = ref(0);
 const canUndoPoints = ref(false);
 const canRedoPoints = ref(false);
+const routePointCount = ref(0);
+const canUndoRoutePoints = ref(false);
+const canRedoRoutePoints = ref(false);
+// Route editing state
+const editingRoutePointCount = ref(0);
+const canUndoRouteEditPoints = ref(false);
+const canRedoRouteEditPoints = ref(false);
 
 // Internal filters (synced with props.filters)
 const internalFilters = ref({ ...props.filters });
 
 // Watch for external filter changes
 watch(() => props.filters, (newFilters) => {
-  internalFilters.value = { ...newFilters };
+  // Merge filters, preserving selectedLayerIds if already populated and new value is empty
+  const merged = { ...newFilters };
+  if (internalFilters.value.selectedLayerIds?.length > 0 &&
+      (!newFilters.selectedLayerIds || newFilters.selectedLayerIds.length === 0)) {
+    merged.selectedLayerIds = internalFilters.value.selectedLayerIds;
+  }
+  internalFilters.value = merged;
 }, { deep: true });
 
 // Initialize selectedAreaIds with all areas when areas become available
@@ -331,6 +383,19 @@ watch(() => props.areas, (newAreas) => {
       (!internalFilters.value.selectedAreaIds || internalFilters.value.selectedAreaIds.length === 0)) {
     // Only auto-select all if we haven't explicitly set any selection yet
     internalFilters.value.selectedAreaIds = newAreas.map(a => a.id);
+  }
+}, { immediate: true });
+
+// Initialize selectedLayerIds with all layers when layers become available
+// Only do this if parent hasn't provided selectedLayerIds in filters prop
+watch(() => props.layers, (newLayers) => {
+  if (props.showFilters && newLayers.length > 0 &&
+      (!internalFilters.value.selectedLayerIds || internalFilters.value.selectedLayerIds.length === 0)) {
+    // Only auto-select all if we haven't explicitly set any selection yet
+    const newIds = newLayers.map(l => l.id);
+    internalFilters.value.selectedLayerIds = newIds;
+    // Emit back to parent so state stays in sync
+    emit('filter-change', { ...internalFilters.value });
   }
 }, { immediate: true });
 
@@ -368,13 +433,62 @@ const filteredLocations = computed(() => {
       }
     }
 
+    // Filter by selected layers (only when layers exist to filter)
+    if (props.layers.length > 0) {
+      const selectedLayerIds = internalFilters.value.selectedLayerIds || [];
+
+      // If no layers are selected, hide all checkpoints
+      if (selectedLayerIds.length === 0) {
+        return false;
+      }
+
+      // Get the checkpoint's layer IDs (null means all layers)
+      const locationLayerIds = location.layerIds || location.LayerIds;
+
+      // If locationLayerIds is null/undefined, checkpoint belongs to all layers
+      // Show it if at least one layer is selected (which we already checked above)
+      if (locationLayerIds == null) {
+        return true;
+      }
+
+      // If locationLayerIds is an array, check if any match selected layers
+      if (Array.isArray(locationLayerIds) && locationLayerIds.length > 0) {
+        const hasMatchingLayer = locationLayerIds.some(layerId =>
+          selectedLayerIds.includes(layerId)
+        );
+        if (!hasMatchingLayer) {
+          return false;
+        }
+      }
+    }
+
     return true;
   });
 });
 
 const filteredRoute = computed(() => {
   if (!props.showFilters) return props.route;
+
+  // If we have layers, the legacy route should not be shown (it's migrated to layers)
+  if (props.layers.length > 0) {
+    return [];
+  }
+
+  // Legacy: no layers, use showRoute toggle
   return internalFilters.value.showRoute ? props.route : [];
+});
+
+const filteredLayers = computed(() => {
+  if (!props.showFilters) return props.layers;
+
+  // If we have layers, filter by selectedLayerIds
+  if (props.layers.length > 0) {
+    const selectedIds = internalFilters.value.selectedLayerIds || [];
+    return props.layers.filter(layer => selectedIds.includes(layer.id));
+  }
+
+  // Legacy: no layers, use showRoute toggle
+  return internalFilters.value.showRoute ? props.layers : [];
 });
 
 const filteredAreas = computed(() => {
@@ -408,6 +522,12 @@ const canCompleteFullscreenAction = computed(() => {
   if (props.mode === 'draw-polygon') {
     return polygonPointCount.value >= 3;
   }
+  if (props.mode === 'draw-route') {
+    return routePointCount.value >= 2;
+  }
+  if (props.mode === 'edit-route') {
+    return true; // Always can complete when editing
+  }
   return true;
 });
 
@@ -438,6 +558,15 @@ const handleFullscreenCancel = () => {
     canUndoPoints.value = false;
     canRedoPoints.value = false;
   }
+  if (props.mode === 'draw-route') {
+    const mapRef = getActiveMapRef();
+    if (mapRef) {
+      mapRef.clearRouteDrawing();
+    }
+    routePointCount.value = 0;
+    canUndoRoutePoints.value = false;
+    canRedoRoutePoints.value = false;
+  }
   isFullscreen.value = false;
   emit('fullscreen-cancel');
   emit('fullscreen-change', false);
@@ -448,6 +577,12 @@ const handleFullscreenDone = () => {
     const mapRef = getActiveMapRef();
     if (mapRef) {
       mapRef.completePolygon();
+    }
+  }
+  if (props.mode === 'draw-route' && routePointCount.value >= 2) {
+    const mapRef = getActiveMapRef();
+    if (mapRef) {
+      mapRef.completeRoute();
     }
   }
   isFullscreen.value = false;
@@ -489,6 +624,28 @@ const handlePolygonUpdate = (points) => {
   emit('polygon-update', points);
 };
 
+// Handle route drawing
+const handleRouteDrawing = (points) => {
+  routePointCount.value = points?.length || 0;
+  updateRouteUndoRedoState();
+  emit('route-drawing', points);
+};
+
+const handleRouteComplete = (points) => {
+  emit('route-complete', points);
+  // Reset drawing state
+  routePointCount.value = 0;
+  canUndoRoutePoints.value = false;
+  canRedoRoutePoints.value = false;
+};
+
+// Handle route editing (vertex drag, insert, delete)
+const handleRouteUpdate = (points) => {
+  emit('route-update', points);
+  // Update undo/redo state after route edit
+  updateEditRouteUndoRedoState();
+};
+
 // Update undo/redo button states
 const updateUndoRedoState = () => {
   const mapRef = getActiveMapRef();
@@ -498,20 +655,63 @@ const updateUndoRedoState = () => {
   }
 };
 
-// Handle undo/redo
+// Update route undo/redo button states (for draw mode)
+const updateRouteUndoRedoState = () => {
+  const mapRef = getActiveMapRef();
+  if (mapRef) {
+    canUndoRoutePoints.value = mapRef.canUndoRoute ? mapRef.canUndoRoute() : false;
+    canRedoRoutePoints.value = mapRef.canRedoRoute ? mapRef.canRedoRoute() : false;
+  }
+};
+
+// Update route editing undo/redo button states
+const updateEditRouteUndoRedoState = () => {
+  const mapRef = getActiveMapRef();
+  if (mapRef) {
+    canUndoRouteEditPoints.value = mapRef.canUndoRouteEdit ? mapRef.canUndoRouteEdit() : false;
+    canRedoRouteEditPoints.value = mapRef.canRedoRouteEdit ? mapRef.canRedoRouteEdit() : false;
+    editingRoutePointCount.value = mapRef.getEditingRoutePointCount ? mapRef.getEditingRoutePointCount() : 0;
+  }
+};
+
+// Handle undo/redo for polygons and routes
 const handleUndo = () => {
   const mapRef = getActiveMapRef();
-  if (mapRef && mapRef.undoPolygonPoint) {
-    mapRef.undoPolygonPoint();
-    updateUndoRedoState();
+  if (props.mode === 'edit-route') {
+    if (mapRef && mapRef.undoRouteEdit) {
+      mapRef.undoRouteEdit();
+      updateEditRouteUndoRedoState();
+    }
+  } else if (props.mode === 'draw-route') {
+    if (mapRef && mapRef.undoRoutePoint) {
+      mapRef.undoRoutePoint();
+      updateRouteUndoRedoState();
+    }
+  } else {
+    if (mapRef && mapRef.undoPolygonPoint) {
+      mapRef.undoPolygonPoint();
+      updateUndoRedoState();
+    }
   }
 };
 
 const handleRedo = () => {
   const mapRef = getActiveMapRef();
-  if (mapRef && mapRef.redoPolygonPoint) {
-    mapRef.redoPolygonPoint();
-    updateUndoRedoState();
+  if (props.mode === 'edit-route') {
+    if (mapRef && mapRef.redoRouteEdit) {
+      mapRef.redoRouteEdit();
+      updateEditRouteUndoRedoState();
+    }
+  } else if (props.mode === 'draw-route') {
+    if (mapRef && mapRef.redoRoutePoint) {
+      mapRef.redoRoutePoint();
+      updateRouteUndoRedoState();
+    }
+  } else {
+    if (mapRef && mapRef.redoPolygonPoint) {
+      mapRef.redoPolygonPoint();
+      updateUndoRedoState();
+    }
   }
 };
 
@@ -544,6 +744,30 @@ defineExpose({
     canUndoPoints.value = false;
     canRedoPoints.value = false;
   },
+
+  // Route drawing methods
+  undoRoutePoint: handleUndo,
+  redoRoutePoint: handleRedo,
+  canUndoRoute: () => canUndoRoutePoints.value,
+  canRedoRoute: () => canRedoRoutePoints.value,
+  getRoutePointCount: () => routePointCount.value,
+  completeRoute: () => getActiveMapRef()?.completeRoute?.(),
+  clearRouteDrawing: () => {
+    getActiveMapRef()?.clearRouteDrawing?.();
+    routePointCount.value = 0;
+    canUndoRoutePoints.value = false;
+    canRedoRoutePoints.value = false;
+  },
+  // Route editing methods
+  undoRouteEdit: () => {
+    handleUndo();
+  },
+  redoRouteEdit: () => {
+    handleRedo();
+  },
+  canUndoRouteEdit: () => canUndoRouteEditPoints.value,
+  canRedoRouteEdit: () => canRedoRouteEditPoints.value,
+  fitToEditingRouteBounds: (padding) => getActiveMapRef()?.fitToEditingRouteBounds?.(padding),
 
   // Recentering methods
   recenterOnUserLocation: () => getActiveMapRef()?.recenterOnUserLocation?.(),

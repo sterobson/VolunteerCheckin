@@ -4,8 +4,7 @@
     :class="{
       'is-pending': isPending,
       'is-marked-for-removal': isMarkedForRemoval,
-      'is-primary': contact.isPrimary && !isMarkedForRemoval,
-      'is-pinned': contact.isPinned && !isMarkedForRemoval && !contact.isPrimary,
+      'is-pinned': contact.isPinned && !isMarkedForRemoval,
       'is-clickable': clickable && !isMarkedForRemoval
     }"
     @click="handleClick"
@@ -14,7 +13,6 @@
       <div class="contact-card-title" :class="{ clickable: clickable && !isMarkedForRemoval }">
         <div class="contact-name-row">
           <span v-if="contact.isPinned && !isMarkedForRemoval" class="pin-icon" title="Pinned">📌</span>
-          <span v-if="contact.isPrimary && !isMarkedForRemoval" class="primary-badge" title="Primary contact">★</span>
           <span class="contact-name">{{ contact.name }}</span>
         </div>
         <span v-if="displayRoles.length > 0" class="contact-role">{{ displayRoles.map(formatRoleName).join(', ') }}</span>
@@ -239,11 +237,6 @@ const truncateContent = (content) => {
   color: var(--text-muted);
 }
 
-.contact-card.is-primary {
-  border-left: 4px solid var(--accent-warning);
-  background: var(--status-warning-bg);
-}
-
 .contact-card.is-pinned {
   border-left: 4px solid var(--accent-primary);
   background: var(--bg-secondary);
@@ -275,11 +268,6 @@ const truncateContent = (content) => {
 }
 
 .pin-icon {
-  font-size: 0.9rem;
-}
-
-.primary-badge {
-  color: var(--accent-warning);
   font-size: 0.9rem;
 }
 

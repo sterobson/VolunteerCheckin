@@ -67,14 +67,15 @@ public class MarshalFunctions
                 return new BadRequestObjectResult(new { message = "Invalid request" });
             }
 
-            // Require authentication
+            // Require authentication (session token or sample code)
             string? sessionToken = FunctionHelpers.GetSessionToken(req);
-            if (string.IsNullOrWhiteSpace(sessionToken))
+            string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
+            if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
             }
 
-            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, request.EventId);
+            UserClaims? claims = await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, request.EventId);
             if (claims == null)
             {
                 return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
@@ -120,7 +121,8 @@ public class MarshalFunctions
             // Create pending checklist items scoped to this marshal
             if (request.PendingNewChecklistItems != null && request.PendingNewChecklistItems.Count > 0)
             {
-                string adminEmail = req.Headers[Constants.AdminEmailHeader].ToString();
+                // Use authenticated claims for audit trail
+                string adminEmail = claims.PersonEmail ?? claims.PersonName ?? "Unknown";
                 int displayOrder = 0;
 
                 foreach (PendingChecklistItem pendingItem in request.PendingNewChecklistItems)
@@ -227,16 +229,19 @@ public class MarshalFunctions
         {
             _logger.LogInformation("GetMarshalsByEvent called for event {EventId}", eventId);
 
-            // Require authentication
+            // Require authentication (session token or sample code)
             string? sessionToken = FunctionHelpers.GetSessionToken(req);
-            _logger.LogInformation("Session token present: {SessionTokenPresent}", !string.IsNullOrWhiteSpace(sessionToken));
-            if (string.IsNullOrWhiteSpace(sessionToken))
+            string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
+            _logger.LogInformation("Session token present: {SessionTokenPresent}, Sample code present: {SampleCodePresent}",
+                !string.IsNullOrWhiteSpace(sessionToken), !string.IsNullOrWhiteSpace(sampleCode));
+
+            if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
             {
-                _logger.LogWarning("No session token provided");
+                _logger.LogWarning("No session token or sample code provided");
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
             }
 
-            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            UserClaims? claims = await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
             _logger.LogInformation("Claims resolved: {ClaimsResolved}, IsEventAdmin: {IsEventAdmin}, IsSystemAdmin: {IsSystemAdmin}", claims != null, claims?.IsEventAdmin, claims?.IsSystemAdmin);
             if (claims == null)
             {
@@ -310,14 +315,15 @@ public class MarshalFunctions
     {
         try
         {
-            // Require authentication
+            // Require authentication (session token or sample code)
             string? sessionToken = FunctionHelpers.GetSessionToken(req);
-            if (string.IsNullOrWhiteSpace(sessionToken))
+            string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
+            if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
             }
 
-            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            UserClaims? claims = await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
             if (claims == null)
             {
                 return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
@@ -389,14 +395,15 @@ public class MarshalFunctions
     {
         try
         {
-            // Require authentication
+            // Require authentication (session token or sample code)
             string? sessionToken = FunctionHelpers.GetSessionToken(req);
-            if (string.IsNullOrWhiteSpace(sessionToken))
+            string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
+            if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
             }
 
-            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            UserClaims? claims = await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
             if (claims == null)
             {
                 return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
@@ -523,14 +530,15 @@ public class MarshalFunctions
     {
         try
         {
-            // Require authentication
+            // Require authentication (session token or sample code)
             string? sessionToken = FunctionHelpers.GetSessionToken(req);
-            if (string.IsNullOrWhiteSpace(sessionToken))
+            string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
+            if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
             }
 
-            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            UserClaims? claims = await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
             if (claims == null)
             {
                 return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
@@ -573,14 +581,15 @@ public class MarshalFunctions
     {
         try
         {
-            // Require authentication
+            // Require authentication (session token or sample code)
             string? sessionToken = FunctionHelpers.GetSessionToken(req);
-            if (string.IsNullOrWhiteSpace(sessionToken))
+            string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
+            if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
             }
 
-            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            UserClaims? claims = await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
             if (claims == null)
             {
                 return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
@@ -650,14 +659,15 @@ public class MarshalFunctions
     {
         try
         {
-            // Require authentication
+            // Require authentication (session token or sample code)
             string? sessionToken = FunctionHelpers.GetSessionToken(req);
-            if (string.IsNullOrWhiteSpace(sessionToken))
+            string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
+            if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
             }
 
-            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            UserClaims? claims = await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
             if (claims == null)
             {
                 return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
@@ -810,14 +820,15 @@ public class MarshalFunctions
     {
         try
         {
-            // Require authentication
+            // Require authentication (session token or sample code)
             string? sessionToken = FunctionHelpers.GetSessionToken(req);
-            if (string.IsNullOrWhiteSpace(sessionToken))
+            string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
+            if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
             }
 
-            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            UserClaims? claims = await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
             if (claims == null)
             {
                 return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
@@ -1028,15 +1039,12 @@ public class MarshalFunctions
         foreach (string locId in locationIds)
         {
             LocationEntity? loc = await _locationRepository.GetAsync(eventId, locId);
-            if (loc != null && !string.IsNullOrEmpty(loc.AreaIdsJson))
+            if (loc != null)
             {
-                List<string>? areaIds = JsonSerializer.Deserialize<List<string>>(loc.AreaIdsJson);
-                if (areaIds != null)
+                List<string> areaIds = loc.GetPayload().AreaIds;
+                foreach (string areaId in areaIds)
                 {
-                    foreach (string areaId in areaIds)
-                    {
-                        marshalAreaIds.Add(areaId);
-                    }
+                    marshalAreaIds.Add(areaId);
                 }
             }
         }

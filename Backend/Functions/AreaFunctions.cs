@@ -196,7 +196,7 @@ public class AreaFunctions
 
             foreach (LocationEntity location in allLocations)
             {
-                List<string> areaIds = JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson) ?? [];
+                List<string> areaIds = location.GetPayload().AreaIds;
                 foreach (string areaId in areaIds)
                 {
                     checkpointCountsByArea[areaId] = checkpointCountsByArea.GetValueOrDefault(areaId, 0) + 1;
@@ -260,21 +260,27 @@ public class AreaFunctions
             areaEntity.Name = request.Name;
             areaEntity.Description = request.Description;
             areaEntity.Color = request.Color;
-            areaEntity.ContactsJson = JsonSerializer.Serialize(contacts);
-            areaEntity.PolygonJson = JsonSerializer.Serialize(request.Polygon ?? []);
             areaEntity.DisplayOrder = request.DisplayOrder;
+
+            // Update payload properties
+            AreaPayload payload = areaEntity.GetPayload();
+            payload.Contacts = contacts;
+            payload.Polygon = request.Polygon ?? [];
+
             // Update checkpoint style if provided
-            if (request.CheckpointStyleType != null) areaEntity.CheckpointStyleType = request.CheckpointStyleType;
-            if (request.CheckpointStyleColor != null) areaEntity.CheckpointStyleColor = request.CheckpointStyleColor;
-            if (request.CheckpointStyleBackgroundShape != null) areaEntity.CheckpointStyleBackgroundShape = request.CheckpointStyleBackgroundShape;
-            if (request.CheckpointStyleBackgroundColor != null) areaEntity.CheckpointStyleBackgroundColor = request.CheckpointStyleBackgroundColor;
-            if (request.CheckpointStyleBorderColor != null) areaEntity.CheckpointStyleBorderColor = request.CheckpointStyleBorderColor;
-            if (request.CheckpointStyleIconColor != null) areaEntity.CheckpointStyleIconColor = request.CheckpointStyleIconColor;
-            if (request.CheckpointStyleSize != null) areaEntity.CheckpointStyleSize = request.CheckpointStyleSize;
-            if (request.CheckpointStyleMapRotation != null) areaEntity.CheckpointStyleMapRotation = request.CheckpointStyleMapRotation;
+            if (request.CheckpointStyleType != null) payload.Style.Type = request.CheckpointStyleType;
+            if (request.CheckpointStyleColor != null) payload.Style.Color = request.CheckpointStyleColor;
+            if (request.CheckpointStyleBackgroundShape != null) payload.Style.BackgroundShape = request.CheckpointStyleBackgroundShape;
+            if (request.CheckpointStyleBackgroundColor != null) payload.Style.BackgroundColor = request.CheckpointStyleBackgroundColor;
+            if (request.CheckpointStyleBorderColor != null) payload.Style.BorderColor = request.CheckpointStyleBorderColor;
+            if (request.CheckpointStyleIconColor != null) payload.Style.IconColor = request.CheckpointStyleIconColor;
+            if (request.CheckpointStyleSize != null) payload.Style.Size = request.CheckpointStyleSize;
+            if (request.CheckpointStyleMapRotation != null) payload.Style.MapRotation = request.CheckpointStyleMapRotation;
             // Update terminology if provided
-            if (request.PeopleTerm != null) areaEntity.PeopleTerm = request.PeopleTerm;
-            if (request.CheckpointTerm != null) areaEntity.CheckpointTerm = request.CheckpointTerm;
+            if (request.PeopleTerm != null) payload.Terminology.PeopleTerm = request.PeopleTerm;
+            if (request.CheckpointTerm != null) payload.Terminology.CheckpointTerm = request.CheckpointTerm;
+
+            areaEntity.SetPayload(payload);
 
             await _areaRepository.UpdateAsync(areaEntity);
 
@@ -360,7 +366,8 @@ public class AreaFunctions
                 List<Task> updateTasks = [];
                 foreach (LocationEntity checkpoint in checkpointsInArea)
                 {
-                    List<string> areaIds = System.Text.Json.JsonSerializer.Deserialize<List<string>>(checkpoint.AreaIdsJson) ?? [];
+                    LocationPayload payload = checkpoint.GetPayload();
+                    List<string> areaIds = payload.AreaIds;
 
                     // Remove the area being deleted
                     areaIds.Remove(areaId);
@@ -372,7 +379,8 @@ public class AreaFunctions
                     }
 
                     // Update the checkpoint with new area assignments
-                    checkpoint.AreaIdsJson = System.Text.Json.JsonSerializer.Serialize(areaIds);
+                    payload.AreaIds = areaIds;
+                    checkpoint.SetPayload(payload);
                     updateTasks.Add(_locationRepository.UpdateAsync(checkpoint));
                 }
 
@@ -481,7 +489,9 @@ public class AreaFunctions
                 defaultArea.RowKey
             );
 
-            checkpoint.AreaIdsJson = JsonSerializer.Serialize(areaIds);
+            LocationPayload checkpointPayload = checkpoint.GetPayload();
+            checkpointPayload.AreaIds = areaIds;
+            checkpoint.SetPayload(checkpointPayload);
             updateTasks.Add(_locationRepository.UpdateAsync(checkpoint));
         }
 
@@ -546,7 +556,7 @@ public class AreaFunctions
 
             // Check if any checkpoints are missing area assignments and auto-calculate
             List<LocationEntity> checkpointsNeedingAreas = [.. locationsList
-                .Where(l => string.IsNullOrEmpty(l.AreaIdsJson) || l.AreaIdsJson == "[]")];
+                .Where(l => l.GetPayload().AreaIds.Count == 0)];
 
             if (checkpointsNeedingAreas.Count > 0)
             {
@@ -581,7 +591,9 @@ public class AreaFunctions
                         areas,
                         defaultArea.RowKey
                     );
-                    checkpoint.AreaIdsJson = JsonSerializer.Serialize(calculatedAreaIds);
+                    LocationPayload cpPayload = checkpoint.GetPayload();
+                    cpPayload.AreaIds = calculatedAreaIds;
+                    checkpoint.SetPayload(cpPayload);
                     updateTasks.Add(_locationRepository.UpdateAsync(checkpoint));
                 }
                 await Task.WhenAll(updateTasks);
@@ -596,9 +608,7 @@ public class AreaFunctions
             List<LocationEntity> checkpointsInAreas = [.. locationsList
                 .Where(loc =>
                 {
-                    if (string.IsNullOrEmpty(loc.AreaIdsJson))
-                        return false;
-                    List<string> locAreaIds = JsonSerializer.Deserialize<List<string>>(loc.AreaIdsJson) ?? [];
+                    List<string> locAreaIds = loc.GetPayload().AreaIds;
                     return locAreaIds.Any(areaId => leadAreaIds.Contains(areaId));
                 })
                 .OrderBy(loc => loc.Name, StringComparer.OrdinalIgnoreCase)];
@@ -700,7 +710,7 @@ public class AreaFunctions
             List<AreaLeadCheckpointInfo> checkpointInfos = [];
             foreach (LocationEntity checkpoint in checkpointsInAreas)
             {
-                List<string> checkpointAreaIds = JsonSerializer.Deserialize<List<string>>(checkpoint.AreaIdsJson) ?? [];
+                List<string> checkpointAreaIds = checkpoint.GetPayload().AreaIds;
                 string? areaName = checkpointAreaIds.Count > 0 && areaLookup.TryGetValue(checkpointAreaIds[0], out AreaEntity? area)
                     ? area.Name
                     : null;

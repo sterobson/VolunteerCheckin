@@ -253,9 +253,9 @@ public class CheckInFunctions
                     .Where(r => r.Role == Constants.RoleEventAreaLead)
                     .SelectMany(r => r.AreaIds)];
 
-                if (areaLeadAreaIds.Count > 0 && !string.IsNullOrEmpty(location.AreaIdsJson))
+                if (areaLeadAreaIds.Count > 0)
                 {
-                    List<string> checkpointAreaIds = System.Text.Json.JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson) ?? [];
+                    List<string> checkpointAreaIds = location.GetPayload().AreaIds;
                     isAuthorized = checkpointAreaIds.Any(areaId => areaLeadAreaIds.Contains(areaId));
                     if (isAuthorized)
                     {
@@ -481,9 +481,9 @@ public class CheckInFunctions
                     .Where(r => r.Role == Constants.RoleEventAreaLead)
                     .SelectMany(r => r.AreaIds)];
 
-                if (areaLeadAreaIds.Count > 0 && !string.IsNullOrEmpty(location.AreaIdsJson))
+                if (areaLeadAreaIds.Count > 0)
                 {
-                    List<string> checkpointAreaIds = System.Text.Json.JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson) ?? [];
+                    List<string> checkpointAreaIds = location.GetPayload().AreaIds;
                     isAuthorized = checkpointAreaIds.Any(areaId => areaLeadAreaIds.Contains(areaId));
                     if (isAuthorized)
                     {

@@ -103,7 +103,8 @@ public class IncidentFunctionsTests
             new Mock<IPersonRepository>().Object,
             new Mock<IEventRoleRepository>().Object,
             new Mock<IMarshalRepository>().Object,
-            new Mock<IUserEventMappingRepository>().Object
+            Mock.Of<ISampleEventService>(),
+            Mock.Of<IEventDeletionRepository>()
         );
 
         _functions = new IncidentFunctions(
@@ -273,6 +274,9 @@ public class IncidentFunctionsTests
         _mockClaimsService
             .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), EventId))
             .ReturnsAsync(claims);
+        _mockClaimsService
+            .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string?>(), It.IsAny<string?>(), EventId))
+            .ReturnsAsync(claims);
     }
 
     private void SetupClaimsForAreaLead(string personId, string personName, List<string> areaIds)
@@ -291,6 +295,9 @@ public class IncidentFunctionsTests
         _mockClaimsService
             .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), EventId))
             .ReturnsAsync(claims);
+        _mockClaimsService
+            .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string?>(), It.IsAny<string?>(), EventId))
+            .ReturnsAsync(claims);
     }
 
     private void SetupClaimsForAdmin(string personId, string personName)
@@ -308,6 +315,9 @@ public class IncidentFunctionsTests
 
         _mockClaimsService
             .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), EventId))
+            .ReturnsAsync(claims);
+        _mockClaimsService
+            .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string?>(), It.IsAny<string?>(), EventId))
             .ReturnsAsync(claims);
     }
 

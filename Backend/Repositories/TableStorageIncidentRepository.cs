@@ -59,4 +59,12 @@ public class TableStorageIncidentRepository : IIncidentRepository
     {
         await _table.UpdateEntityAsync(incident, incident.ETag);
     }
+
+    public async Task DeleteAllByEventAsync(string eventId)
+    {
+        await foreach (IncidentEntity incident in _table.QueryAsync<IncidentEntity>(i => i.PartitionKey == eventId))
+        {
+            await _table.DeleteEntityAsync(incident.PartitionKey, incident.RowKey);
+        }
+    }
 }

@@ -22,26 +22,29 @@ let isOfflineMode = false;
 let pendingActionsCallback = null;
 
 // Auth context tracking - determines which token to use for API calls
-// type: 'admin' | 'marshal' | null
-// eventId: only relevant when type is 'marshal'
+// type: 'admin' | 'marshal' | 'sample' | null
+// eventId: only relevant when type is 'marshal' or 'sample'
+// sampleCode: only relevant when type is 'sample'
 let currentAuthContext = {
   type: null,
-  eventId: null
+  eventId: null,
+  sampleCode: null
 };
 
 /**
  * Set the current authentication context
  * Call this when entering admin or marshal views
- * @param {'admin'|'marshal'|null} type
- * @param {string|null} eventId - Required when type is 'marshal'
+ * @param {'admin'|'marshal'|'sample'|null} type
+ * @param {string|null} eventId - Required when type is 'marshal' or 'sample'
+ * @param {string|null} sampleCode - Required when type is 'sample'
  */
-export function setAuthContext(type, eventId = null) {
-  currentAuthContext = { type, eventId };
+export function setAuthContext(type, eventId = null, sampleCode = null) {
+  currentAuthContext = { type, eventId, sampleCode };
 }
 
 /**
  * Get the current authentication context
- * @returns {{type: string|null, eventId: string|null}}
+ * @returns {{type: string|null, eventId: string|null, sampleCode: string|null}}
  */
 export function getAuthContext() {
   return { ...currentAuthContext };
@@ -115,8 +118,26 @@ function isServerOrNetworkError(error) {
  */
 function detectAuthContextFromUrl() {
   const hash = window.location.hash || '';
+  const search = window.location.search || '';
 
-  // Check if on admin routes
+  // Check for sample query parameter in either hash or search
+  // Hash routing: #/admin/event/123?sample=abc
+  // History routing: /admin/event/123?sample=abc
+  const hashParams = hash.includes('?') ? new URLSearchParams(hash.split('?')[1]) : null;
+  const searchParams = new URLSearchParams(search);
+  const sampleCode = hashParams?.get('sample') || searchParams.get('sample');
+
+  // Check if on admin routes with sample code - this is a sample event
+  if (hash.includes('/admin/') && sampleCode) {
+    const adminEventMatch = hash.match(/#\/admin\/event\/([^/?]+)/);
+    return {
+      type: 'sample',
+      eventId: adminEventMatch ? adminEventMatch[1] : null,
+      sampleCode
+    };
+  }
+
+  // Check if on admin routes (without sample code)
   if (hash.includes('/admin/')) {
     return { type: 'admin', eventId: null };
   }
@@ -152,14 +173,15 @@ api.interceptors.request.use((config) => {
     return config;
   }
 
-  // Always include admin email header if present (for backend role resolution)
-  const adminEmail = localStorage.getItem('adminEmail');
-  if (adminEmail) {
-    config.headers['X-Admin-Email'] = adminEmail;
-  }
-
   // Detect context from URL (more reliable than stored context)
   const context = detectAuthContextFromUrl();
+
+  // Include sample event code if in sample mode (use detected context for reliability)
+  const sampleCode = context.sampleCode || currentAuthContext.sampleCode;
+  const isSampleMode = (context.type === 'sample' || currentAuthContext.type === 'sample') && sampleCode;
+  if (isSampleMode) {
+    config.headers['X-Sample-Code'] = sampleCode;
+  }
 
   // Determine which token to use based on auth context
   let token = null;
@@ -179,6 +201,12 @@ api.interceptors.request.use((config) => {
 
   if (token) {
     config.headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  // Add admin email header for admin context requests
+  const adminEmail = localStorage.getItem('adminEmail');
+  if (adminEmail && (context.type === 'admin' || context.type === 'sample' || !context.type)) {
+    config.headers['X-Admin-Email'] = adminEmail;
   }
 
   // Start tracking this request for loading overlay
@@ -203,9 +231,10 @@ function handleAuthError() {
     // Detect context from URL (more reliable than stored context)
     const context = detectAuthContextFromUrl();
 
-    // Only auto-redirect for admin context
+    // Only auto-redirect for admin context (not marshal or sample)
     // Marshal auth errors are handled by useMarshalAuth which can attempt re-auth
-    if (context.type !== 'marshal') {
+    // Sample event auth errors should stay on the page (the sample code might just be invalid)
+    if (context.type !== 'marshal' && context.type !== 'sample') {
       // Clear admin auth data
       localStorage.removeItem('adminEmail');
       localStorage.removeItem('sessionToken');
@@ -219,6 +248,7 @@ function handleAuthError() {
     }
     // For marshal context, the error will propagate to useMarshalAuth
     // which will handle re-auth or redirect to selector
+    // For sample context, errors will be shown to the user on the page
   }
 }
 
@@ -432,6 +462,7 @@ export const eventsApi = {
   getById: (id) => api.get(`/events/${id}`),
   update: (id, data) => api.put(`/events/${id}`, data),
   delete: (id) => api.delete(`/events/${id}`),
+  requestDeletion: (id) => api.post(`/events/${id}/request-deletion`),
   uploadGpx: (eventId, file) => {
     const formData = new FormData();
     formData.append('gpx', file);
@@ -604,6 +635,37 @@ export const incidentsApi = {
   updateStatus: (eventId, incidentId, data) => api.patch(`/events/${eventId}/incidents/${incidentId}`, data),
   // Add note (admin/area lead)
   addNote: (eventId, incidentId, note) => api.post(`/events/${eventId}/incidents/${incidentId}/notes`, { note }),
+};
+
+// Layers API
+export const layersApi = {
+  create: (eventId, data) => api.post(`/events/${eventId}/layers`, data),
+  getByEvent: (eventId) => api.get(`/events/${eventId}/layers`),
+  getById: (eventId, layerId) => api.get(`/events/${eventId}/layers/${layerId}`),
+  update: (eventId, layerId, data) => api.put(`/events/${eventId}/layers/${layerId}`, data),
+  delete: (eventId, layerId) => api.delete(`/events/${eventId}/layers/${layerId}`),
+  reorder: (eventId, items) => api.post(`/events/${eventId}/layers/reorder`, { items }),
+  uploadGpx: (eventId, layerId, file) => {
+    const formData = new FormData();
+    formData.append('gpx', file);
+    return api.post(`/events/${eventId}/layers/${layerId}/upload-gpx`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+};
+
+// Sample Events API (anonymous, no auth required)
+export const sampleEventsApi = {
+  // Create a new sample event
+  create: (deviceFingerprint, timeZoneId) => api.post('/sample-event', { timeZoneId }, {
+    headers: { 'X-Device-Fingerprint': deviceFingerprint }
+  }),
+  // Validate an admin code
+  validate: (code) => api.get(`/sample-event/validate/${code}`),
+  // Recover an existing sample event by device fingerprint
+  recover: (deviceFingerprint) => api.get('/sample-event/recover', {
+    headers: { 'X-Device-Fingerprint': deviceFingerprint }
+  }),
 };
 
 export default api;

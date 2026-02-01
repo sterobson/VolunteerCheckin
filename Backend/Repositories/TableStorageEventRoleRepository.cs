@@ -81,4 +81,35 @@ public class TableStorageEventRoleRepository : IEventRoleRepository
     {
         await _table.DeleteEntityAsync(personId, rowKey);
     }
+
+    public async Task DeleteAllByEventAsync(string eventId)
+    {
+        // Need to scan all partitions since PartitionKey is PersonId, not EventId
+        List<EventRoleEntity> rolesToDelete = [];
+        await foreach (EventRoleEntity role in _table.QueryAsync<EventRoleEntity>())
+        {
+            if (string.Equals(role.EventId, eventId, StringComparison.Ordinal))
+            {
+                rolesToDelete.Add(role);
+            }
+        }
+
+        foreach (EventRoleEntity role in rolesToDelete)
+        {
+            await _table.DeleteEntityAsync(role.PartitionKey, role.RowKey);
+        }
+    }
+
+    public async Task<bool> HasRolesInOtherEventsAsync(string personId, string excludeEventId)
+    {
+        // Query roles for this person (efficient - uses PartitionKey)
+        await foreach (EventRoleEntity role in _table.QueryAsync<EventRoleEntity>(r => r.PartitionKey == personId))
+        {
+            if (!string.Equals(role.EventId, excludeEventId, StringComparison.Ordinal))
+            {
+                return true; // Found a role in another event
+            }
+        }
+        return false;
+    }
 }

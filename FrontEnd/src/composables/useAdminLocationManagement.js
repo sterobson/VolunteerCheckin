@@ -6,6 +6,7 @@
 import { ref, computed } from 'vue';
 import { locationsApi, checklistApi, notesApi } from '../services/api';
 import { isValidWhat3Words } from '../utils/validators';
+import { roundCoordinate } from '../utils/coordinateUtils';
 
 export function useAdminLocationManagement(eventId, eventsStore) {
   // Modal state
@@ -138,12 +139,15 @@ export function useAdminLocationManagement(eventId, eventsStore) {
    */
   const saveNewLocation = async (formData) => {
     if (!isValidWhat3Words(formData.what3Words)) {
-      throw new Error('Invalid What3Words format. Please use word.word.word or word/word/word');
+      throw new Error('Invalid What3Words format. Please use word.word.word');
     }
 
+    // Round coordinates to 6 decimal places before saving
     await eventsStore.createLocation({
       eventId: eventId.value,
       ...formData,
+      latitude: roundCoordinate(formData.latitude),
+      longitude: roundCoordinate(formData.longitude),
     });
   };
 
@@ -155,6 +159,10 @@ export function useAdminLocationManagement(eventId, eventsStore) {
       throw new Error('Invalid What3Words format');
     }
 
+    // Round coordinates to 6 decimal places before saving
+    const roundedLat = roundCoordinate(formData.latitude);
+    const roundedLng = roundCoordinate(formData.longitude);
+
     const isNewLocation = !selectedLocation.value?.id;
 
     if (isNewLocation) {
@@ -163,8 +171,8 @@ export function useAdminLocationManagement(eventId, eventsStore) {
         eventId: eventId.value,
         name: formData.name,
         description: formData.description,
-        latitude: formData.latitude,
-        longitude: formData.longitude,
+        latitude: roundedLat,
+        longitude: roundedLng,
         requiredMarshals: formData.requiredMarshals,
         what3Words: formData.what3Words || null,
         startTime: formData.startTime,
@@ -205,8 +213,8 @@ export function useAdminLocationManagement(eventId, eventsStore) {
           eventId: eventId.value,
           name: formData.name,
           description: formData.description,
-          latitude: formData.latitude,
-          longitude: formData.longitude,
+          latitude: roundedLat,
+          longitude: roundedLng,
           requiredMarshals: formData.requiredMarshals,
           what3Words: formData.what3Words || null,
           startTime: formData.startTime,

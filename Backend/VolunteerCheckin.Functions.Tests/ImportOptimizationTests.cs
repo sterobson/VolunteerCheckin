@@ -47,7 +47,8 @@ public class ImportOptimizationTests
             new Mock<IPersonRepository>().Object,
             new Mock<IEventRoleRepository>().Object,
             new Mock<IMarshalRepository>().Object,
-            new Mock<IUserEventMappingRepository>().Object);
+            Mock.Of<ISampleEventService>(),
+            Mock.Of<IEventDeletionRepository>());
 
         // Setup existing marshal that should be found via cache
         MarshalEntity existingMarshal = new()
@@ -80,6 +81,7 @@ public class ImportOptimizationTests
             .ReturnsAsync((AssignmentEntity a) => a);
 
         Mock<IEventRoleRepository> mockEventRoleRepo = new();
+        Mock<ILayerRepository> mockLayerRepo = new();
 
         LocationFunctions functions = new(
             mockLogger.Object,
@@ -90,6 +92,7 @@ public class ImportOptimizationTests
             mockNoteRepo.Object,
             mockAreaRepo.Object,
             mockEventRoleRepo.Object,
+            mockLayerRepo.Object,
             mockClaimsService.Object);
 
         // Create CSV with two locations, both referencing the same marshal
@@ -132,7 +135,8 @@ public class ImportOptimizationTests
             new Mock<IPersonRepository>().Object,
             new Mock<IEventRoleRepository>().Object,
             new Mock<IMarshalRepository>().Object,
-            new Mock<IUserEventMappingRepository>().Object);
+            Mock.Of<ISampleEventService>(),
+            Mock.Of<IEventDeletionRepository>());
 
         mockLocationRepo
             .Setup(r => r.GetByEventAsync(EventId))
@@ -156,6 +160,7 @@ public class ImportOptimizationTests
             .ReturnsAsync((AssignmentEntity a) => a);
 
         Mock<IEventRoleRepository> mockEventRoleRepo = new();
+        Mock<ILayerRepository> mockLayerRepo = new();
 
         LocationFunctions functions = new(
             mockLogger.Object,
@@ -166,6 +171,7 @@ public class ImportOptimizationTests
             mockNoteRepo.Object,
             mockAreaRepo.Object,
             mockEventRoleRepo.Object,
+            mockLayerRepo.Object,
             mockClaimsService.Object);
 
         // Create CSV with three locations, two referencing "New Marshal"
@@ -212,7 +218,8 @@ public class ImportOptimizationTests
             new Mock<IPersonRepository>().Object,
             new Mock<IEventRoleRepository>().Object,
             new Mock<IMarshalRepository>().Object,
-            new Mock<IUserEventMappingRepository>().Object);
+            Mock.Of<ISampleEventService>(),
+            Mock.Of<IEventDeletionRepository>());
 
         Mock<ContactPermissionService> mockContactPermission = new(
             MockBehavior.Loose,
@@ -252,7 +259,7 @@ public class ImportOptimizationTests
 
         // Setup auth
         mockClaimsService
-            .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), EventId))
+            .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string>(), It.IsAny<string>(), EventId))
             .ReturnsAsync(new UserClaims(
                 PersonId: "person-1",
                 PersonName: "Admin",
@@ -314,7 +321,8 @@ public class ImportOptimizationTests
             new Mock<IPersonRepository>().Object,
             new Mock<IEventRoleRepository>().Object,
             new Mock<IMarshalRepository>().Object,
-            new Mock<IUserEventMappingRepository>().Object);
+            Mock.Of<ISampleEventService>(),
+            Mock.Of<IEventDeletionRepository>());
 
         Mock<ContactPermissionService> mockContactPermission = new(
             MockBehavior.Loose,
@@ -338,7 +346,7 @@ public class ImportOptimizationTests
 
         // Setup auth
         mockClaimsService
-            .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), EventId))
+            .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string>(), It.IsAny<string>(), EventId))
             .ReturnsAsync(new UserClaims(
                 PersonId: "person-1",
                 PersonName: "Admin",

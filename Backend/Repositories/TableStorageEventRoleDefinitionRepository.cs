@@ -99,4 +99,19 @@ public class TableStorageEventRoleDefinitionRepository : IEventRoleDefinitionRep
             }
         }
     }
+
+    public async Task DeleteAllByEventAsync(string eventId)
+    {
+        // PartitionKey is EventId, so we can efficiently query and delete all
+        List<EventRoleDefinitionEntity> roleDefinitionsToDelete = [];
+        await foreach (EventRoleDefinitionEntity roleDefinition in _table.QueryAsync<EventRoleDefinitionEntity>(r => r.PartitionKey == eventId))
+        {
+            roleDefinitionsToDelete.Add(roleDefinition);
+        }
+
+        foreach (EventRoleDefinitionEntity roleDefinition in roleDefinitionsToDelete)
+        {
+            await _table.DeleteEntityAsync(roleDefinition.PartitionKey, roleDefinition.RowKey);
+        }
+    }
 }

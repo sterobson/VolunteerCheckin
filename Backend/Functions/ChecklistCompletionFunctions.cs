@@ -6,6 +6,7 @@ using System.Text.Json;
 using VolunteerCheckin.Functions.Helpers;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Repositories;
+using VolunteerCheckin.Functions.Services;
 
 namespace VolunteerCheckin.Functions.Functions;
 
@@ -20,9 +21,9 @@ public class ChecklistCompletionFunctions
     private readonly IChecklistCompletionRepository _checklistCompletionRepository;
     private readonly IMarshalRepository _marshalRepository;
     private readonly ILocationRepository _locationRepository;
-    private readonly IAdminUserRepository _adminUserRepository;
     private readonly IAssignmentRepository _assignmentRepository;
     private readonly ChecklistContextHelper _contextHelper;
+    private readonly ClaimsService _claimsService;
 
     public ChecklistCompletionFunctions(
         ILogger<ChecklistCompletionFunctions> logger,
@@ -30,19 +31,19 @@ public class ChecklistCompletionFunctions
         IChecklistCompletionRepository checklistCompletionRepository,
         IMarshalRepository marshalRepository,
         ILocationRepository locationRepository,
-        IAdminUserRepository adminUserRepository,
         IAssignmentRepository assignmentRepository,
         IAreaRepository areaRepository,
-        IEventRoleRepository eventRoleRepository)
+        IEventRoleRepository eventRoleRepository,
+        ClaimsService claimsService)
     {
         _logger = logger;
         _checklistItemRepository = checklistItemRepository;
         _checklistCompletionRepository = checklistCompletionRepository;
         _marshalRepository = marshalRepository;
         _locationRepository = locationRepository;
-        _adminUserRepository = adminUserRepository;
         _assignmentRepository = assignmentRepository;
         _contextHelper = new ChecklistContextHelper(assignmentRepository, locationRepository, areaRepository, eventRoleRepository, marshalRepository);
+        _claimsService = claimsService;
     }
 
 #pragma warning disable MA0051
@@ -155,13 +156,17 @@ public class ChecklistCompletionFunctions
             }
 
             // Determine actor (who is actually performing this action)
-            // Priority: ActorMarshalId (if provided) > Admin email header
+            // Priority: ActorMarshalId (if provided) > Authenticated admin > Marshal themselves
             // This ensures that when a user is both admin and marshal, completing a task
             // as an area lead uses their marshal identity, not their admin identity.
             string actorType;
             string actorId;
             string actorName;
-            string adminEmail = req.Headers[Constants.AdminEmailHeader].ToString();
+
+            // Get claims for admin identification (supports both session tokens and sample codes)
+            UserClaims? claims = await GetClaimsAsync(req, eventId);
+            bool isAdmin = claims?.IsEventAdmin == true || claims?.IsSystemAdmin == true;
+            string? adminEmail = isAdmin ? (claims!.PersonEmail ?? claims.PersonName) : null;
 
             if (!string.IsNullOrWhiteSpace(request.ActorMarshalId))
             {
@@ -182,10 +187,7 @@ public class ChecklistCompletionFunctions
                 // Admin is completing this on behalf of the marshal (no ActorMarshalId provided)
                 actorType = Constants.ActorTypeEventAdmin;
                 actorId = adminEmail;
-
-                // Try to get admin name, default to email if not found or empty
-                AdminUserEntity? admin = await _adminUserRepository.GetByEmailAsync(adminEmail);
-                actorName = !string.IsNullOrWhiteSpace(admin?.Name) ? admin.Name : adminEmail;
+                actorName = adminEmail;
             }
             else
             {
@@ -374,13 +376,17 @@ public class ChecklistCompletionFunctions
             }
 
             // Determine actor (who is actually performing this action)
-            // Priority: ActorMarshalId (if provided) > Admin email header
+            // Priority: ActorMarshalId (if provided) > Authenticated admin > Marshal themselves
             // This ensures that when a user is both admin and marshal, uncompleting a task
             // as an area lead uses their marshal identity, not their admin identity.
             string actorType;
             string actorId;
             string actorName;
-            string adminEmail = req.Headers[Constants.AdminEmailHeader].ToString();
+
+            // Get claims for admin identification (supports both session tokens and sample codes)
+            UserClaims? claims = await GetClaimsAsync(req, eventId);
+            bool isAdmin = claims?.IsEventAdmin == true || claims?.IsSystemAdmin == true;
+            string? adminEmail = isAdmin ? (claims!.PersonEmail ?? claims.PersonName) : null;
 
             if (!string.IsNullOrWhiteSpace(request.ActorMarshalId))
             {
@@ -401,10 +407,7 @@ public class ChecklistCompletionFunctions
                 // Admin is uncompleting this (no ActorMarshalId provided)
                 actorType = Constants.ActorTypeEventAdmin;
                 actorId = adminEmail;
-
-                // Try to get admin name, default to email if not found or empty
-                AdminUserEntity? admin = await _adminUserRepository.GetByEmailAsync(adminEmail);
-                actorName = !string.IsNullOrWhiteSpace(admin?.Name) ? admin.Name : adminEmail;
+                actorName = adminEmail;
             }
             else
             {
@@ -803,7 +806,7 @@ public class ChecklistCompletionFunctions
                 List<string> areaLocationIds = preloadedData.LocationsById.Values
                     .Where(loc =>
                     {
-                        List<string> locAreaIds = JsonSerializer.Deserialize<List<string>>(loc.AreaIdsJson, FunctionHelpers.JsonOptions) ?? [];
+                        List<string> locAreaIds = loc.GetPayload().AreaIds;
                         return locAreaIds.Contains(area.RowKey);
                     })
                     .Select(loc => loc.RowKey)
@@ -913,4 +916,25 @@ public class ChecklistCompletionFunctions
         }
     }
 #pragma warning restore MA0051
+
+    /// <summary>
+    /// Gets user claims from the request, supporting both session tokens and sample codes.
+    /// </summary>
+    private async Task<UserClaims?> GetClaimsAsync(HttpRequest req, string eventId)
+    {
+        string? sessionToken = req.Headers.Authorization.FirstOrDefault()?.Replace("Bearer ", "", StringComparison.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(sessionToken))
+        {
+            sessionToken = req.Cookies["session_token"];
+        }
+
+        string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
+
+        if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
+        {
+            return null;
+        }
+
+        return await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
+    }
 }

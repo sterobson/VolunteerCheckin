@@ -16,31 +16,37 @@ public class EventFunctions
 {
     private readonly ILogger<EventFunctions> _logger;
     private readonly IEventRepository _eventRepository;
-    private readonly IUserEventMappingRepository _userEventMappingRepository;
     private readonly IPersonRepository _personRepository;
     private readonly IEventRoleRepository _eventRoleRepository;
     private readonly ClaimsService _claimsService;
+    private readonly IEventService _eventService;
+    private readonly IEventDeletionRepository _eventDeletionRepository;
 
     public EventFunctions(
         ILogger<EventFunctions> logger,
         IEventRepository eventRepository,
-        IUserEventMappingRepository userEventMappingRepository,
         IPersonRepository personRepository,
         IEventRoleRepository eventRoleRepository,
-        ClaimsService claimsService)
+        ClaimsService claimsService,
+        IEventService eventService,
+        IEventDeletionRepository eventDeletionRepository)
     {
         _logger = logger;
         _eventRepository = eventRepository;
-        _userEventMappingRepository = userEventMappingRepository;
         _personRepository = personRepository;
         _eventRoleRepository = eventRoleRepository;
         _claimsService = claimsService;
+        _eventService = eventService;
+        _eventDeletionRepository = eventDeletionRepository;
     }
 
     private async Task<bool> IsUserAuthorizedForEvent(string eventId, string userEmail)
     {
-        UserEventMappingEntity? mapping = await _userEventMappingRepository.GetAsync(eventId, userEmail);
-        return mapping != null;
+        PersonEntity? person = await _personRepository.GetByEmailAsync(userEmail);
+        if (person == null) return false;
+
+        IEnumerable<EventRoleEntity> roles = await _eventRoleRepository.GetByPersonAndEventAsync(person.PersonId, eventId);
+        return roles.Any(r => r.Role == Constants.RoleEventAdmin);
     }
 
 #pragma warning disable MA0051
@@ -50,17 +56,24 @@ public class EventFunctions
     {
         try
         {
+            // Require authentication - get claims to identify who is creating the event
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+            if (string.IsNullOrWhiteSpace(sessionToken))
+            {
+                return new UnauthorizedObjectResult(new { message = "Authentication required" });
+            }
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
+            }
+
             (CreateEventRequest? request, IActionResult? error) = await FunctionHelpers.TryDeserializeRequestAsync<CreateEventRequest>(req);
             if (error != null) return error;
 
-            // Validate admin email
-            if (!Validators.IsValidEmail(request!.AdminEmail))
-            {
-                return new BadRequestObjectResult(new { message = "Invalid email address format" });
-            }
-
             // Convert the event date to UTC
-            DateTime eventDateUtc = FunctionHelpers.ConvertToUtc(request.EventDate, request.TimeZoneId);
+            DateTime eventDateUtc = FunctionHelpers.ConvertToUtc(request!.EventDate, request.TimeZoneId);
 
             EventEntity eventEntity = new()
             {
@@ -68,34 +81,67 @@ public class EventFunctions
                 Name = request.Name,
                 Description = request.Description,
                 EventDate = eventDateUtc,
-                TimeZoneId = request.TimeZoneId,
-                AdminEmail = request.AdminEmail,
-                EmergencyContactsJson = JsonSerializer.Serialize(request.EmergencyContacts ?? []),
-                // Terminology settings (use defaults if not provided)
-                PeopleTerm = request.PeopleTerm ?? "Marshals",
-                CheckpointTerm = request.CheckpointTerm ?? "Checkpoints",
-                AreaTerm = request.AreaTerm ?? "Areas",
-                ChecklistTerm = request.ChecklistTerm ?? "Checklists",
-                CourseTerm = request.CourseTerm ?? "Course"
+                TimeZoneId = request.TimeZoneId
             };
+
+            // Build and set the v2 payload
+            EventPayload payload = new()
+            {
+                Terminology = new TerminologyPayload
+                {
+                    Person = request.PeopleTerm ?? "Marshals",
+                    Location = request.CheckpointTerm ?? "Checkpoints",
+                    Area = request.AreaTerm ?? "Areas",
+                    Task = request.ChecklistTerm ?? "Checklists",
+                    Course = request.CourseTerm ?? "Course"
+                },
+                Styling = new StylingPayload
+                {
+                    Locations = new LocationStylingPayload
+                    {
+                        DefaultType = request.DefaultCheckpointStyleType ?? "default",
+                        DefaultColor = request.DefaultCheckpointStyleColor ?? string.Empty,
+                        DefaultBackgroundShape = request.DefaultCheckpointStyleBackgroundShape ?? string.Empty,
+                        DefaultBackgroundColor = request.DefaultCheckpointStyleBackgroundColor ?? string.Empty,
+                        DefaultBorderColor = request.DefaultCheckpointStyleBorderColor ?? string.Empty,
+                        DefaultIconColor = request.DefaultCheckpointStyleIconColor ?? string.Empty,
+                        DefaultSize = request.DefaultCheckpointStyleSize ?? string.Empty,
+                        DefaultMapRotation = request.DefaultCheckpointStyleMapRotation ?? string.Empty
+                    },
+                    Branding = new BrandingPayload
+                    {
+                        AccentColour = request.BrandingAccentColor ?? string.Empty,
+                        HeaderGradientStart = request.BrandingHeaderGradientStart ?? string.Empty,
+                        HeaderGradientEnd = request.BrandingHeaderGradientEnd ?? string.Empty,
+                        PageGradientStart = request.BrandingPageGradientStart ?? string.Empty,
+                        PageGradientEnd = request.BrandingPageGradientEnd ?? string.Empty,
+                        LogoUrl = request.BrandingLogoUrl ?? string.Empty,
+                        LogoPosition = request.BrandingLogoPosition ?? string.Empty
+                    }
+                }
+            };
+            eventEntity.SetPayload(payload);
 
             await _eventRepository.AddAsync(eventEntity);
 
-            // Auto-create UserEventMapping for the creator
-            UserEventMappingEntity mappingEntity = new()
+            // Grant EventAdmin role to the creator
+            string roleId = Guid.NewGuid().ToString();
+            EventRoleEntity eventRole = new EventRoleEntity
             {
-                PartitionKey = eventEntity.RowKey,
-                RowKey = request.AdminEmail,
+                PartitionKey = claims.PersonId,
+                RowKey = EventRoleEntity.CreateRowKey(eventEntity.RowKey, roleId),
+                PersonId = claims.PersonId,
                 EventId = eventEntity.RowKey,
-                UserEmail = request.AdminEmail,
-                Role = Constants.AdminRole
+                Role = Constants.RoleEventAdmin,
+                AreaIdsJson = "[]",
+                GrantedByPersonId = claims.PersonId,
+                GrantedAt = DateTime.UtcNow
             };
-
-            await _userEventMappingRepository.AddAsync(mappingEntity);
+            await _eventRoleRepository.AddAsync(eventRole);
 
             EventResponse response = eventEntity.ToResponse();
 
-            _logger.LogInformation("Event created: {EventId}, Admin: {AdminEmail}", eventEntity.RowKey, request.AdminEmail);
+            _logger.LogInformation("Event created: {EventId}, Admin: {PersonId}", eventEntity.RowKey, claims.PersonId);
 
             return new OkObjectResult(response);
         }
@@ -143,9 +189,16 @@ public class EventFunctions
             if (error != null) return error;
             if (string.IsNullOrEmpty(adminEmail)) return new UnauthorizedObjectResult(new { message = "Admin email required" });
 
-            // Get all events where user is an admin
-            IEnumerable<UserEventMappingEntity> userMappings = await _userEventMappingRepository.GetByUserAsync(adminEmail);
-            HashSet<string> userEventIds = userMappings.Select(m => m.EventId).ToHashSet();
+            // Get the person by email
+            PersonEntity? person = await _personRepository.GetByEmailAsync(adminEmail);
+            if (person == null) return new OkObjectResult(new List<EventResponse>());
+
+            // Get all events where user has EventAdmin role
+            IEnumerable<EventRoleEntity> userRoles = await _eventRoleRepository.GetByPersonAsync(person.PersonId);
+            HashSet<string> userEventIds = userRoles
+                .Where(r => r.Role == Constants.RoleEventAdmin)
+                .Select(r => r.EventId)
+                .ToHashSet();
 
             // Fetch all events and filter by user access
             IEnumerable<EventEntity> allEvents = await _eventRepository.GetAllAsync();
@@ -182,9 +235,16 @@ public class EventFunctions
             if (error != null) return error;
             if (string.IsNullOrEmpty(adminEmail)) return new UnauthorizedObjectResult(new { message = "Admin email required" });
 
-            // Get all events where user is an admin
-            IEnumerable<UserEventMappingEntity> userMappings = await _userEventMappingRepository.GetByUserAsync(adminEmail);
-            HashSet<string> userEventIds = userMappings.Select(m => m.EventId).ToHashSet();
+            // Get the person by email
+            PersonEntity? person = await _personRepository.GetByEmailAsync(adminEmail);
+            if (person == null) return new OkObjectResult(new List<EventSummaryResponse>());
+
+            // Get all events where user has EventAdmin role
+            IEnumerable<EventRoleEntity> userRoles = await _eventRoleRepository.GetByPersonAsync(person.PersonId);
+            HashSet<string> userEventIds = userRoles
+                .Where(r => r.Role == Constants.RoleEventAdmin)
+                .Select(r => r.EventId)
+                .ToHashSet();
 
             // Fetch all events and filter by user access, return summary only
             IEnumerable<EventEntity> allEvents = await _eventRepository.GetAllAsync();
@@ -292,15 +352,100 @@ public class EventFunctions
                 return new UnauthorizedObjectResult(new { message = "You are not authorized to delete this event" });
             }
 
-            await _eventRepository.DeleteAsync(eventId);
+            await _eventService.DeleteEventWithAllDataAsync(eventId);
 
-            _logger.LogInformation("Event deleted: {EventId}", eventId);
+            _logger.LogInformation("Event deleted with all related data: {EventId}", eventId);
 
             return new NoContentResult();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deleting event");
+            return new StatusCodeResult(500);
+        }
+    }
+
+    /// <summary>
+    /// Request deletion of an event. This queues the event for deletion by a background process.
+    /// The event will be marked as pending deletion immediately, preventing any further access.
+    /// Supports both regular admin authentication and sample event authentication.
+    /// </summary>
+    [Function("RequestEventDeletion")]
+    public async Task<IActionResult> RequestEventDeletion(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "events/{eventId}/request-deletion")] HttpRequest req,
+        string eventId)
+    {
+        try
+        {
+            // Try to authenticate via session token or sample code
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+            string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
+
+            if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
+            {
+                return new UnauthorizedObjectResult(new { message = "Authentication required" });
+            }
+
+            UserClaims? claims = await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
+            }
+
+            // Check if user has admin access to this event
+            if (!claims.IsSystemAdmin && !claims.IsEventAdmin)
+            {
+                return new UnauthorizedObjectResult(new { message = "You are not authorized to delete this event" });
+            }
+
+            // Check if deletion is already pending
+            if (await _eventDeletionRepository.IsDeletionPendingAsync(eventId))
+            {
+                return new ConflictObjectResult(new { message = "Event deletion is already in progress" });
+            }
+
+            // Get the event details for the deletion record
+            EventEntity? eventEntity = await _eventRepository.GetAsync(eventId);
+            if (eventEntity == null)
+            {
+                return new NotFoundObjectResult(new { message = "Event not found" });
+            }
+
+            // Determine requester info
+            string requesterEmail = claims.PersonEmail ?? claims.PersonId;
+            string requesterName = claims.PersonName ?? requesterEmail;
+
+            // Create the deletion request
+            EventDeletionEntity deletion = new()
+            {
+                EventId = eventId,
+                EventName = eventEntity.Name,
+                RequestedByEmail = requesterEmail,
+                RequestedByName = requesterName,
+                RequestedAt = DateTime.UtcNow,
+                Status = EventDeletionStatus.Pending
+            };
+
+            await _eventDeletionRepository.AddAsync(deletion);
+
+            // Immediately delete the Event and SampleEventAdmin records to prevent further access
+            // The remaining data will be cleaned up by the scheduled background job
+            await _eventService.DeleteEventRecordImmediateAsync(eventId);
+
+            _logger.LogInformation(
+                "Event deletion requested: {EventId} ({EventName}) by {Name} ({Email}). Event record deleted immediately.",
+                eventId, eventEntity.Name, requesterName, requesterEmail);
+
+            return new OkObjectResult(new
+            {
+                message = "Event has been deleted",
+                eventId,
+                eventName = eventEntity.Name
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error requesting event deletion");
             return new StatusCodeResult(500);
         }
     }
@@ -312,20 +457,23 @@ public class EventFunctions
     {
         try
         {
-            // Require authentication and admin permissions
+            // Require authentication and admin permissions (session token or sample code)
             string? sessionToken = FunctionHelpers.GetSessionToken(req);
-            if (string.IsNullOrWhiteSpace(sessionToken))
+            string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
+
+            if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
             }
 
-            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            UserClaims? claims = await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
             if (claims == null)
             {
                 return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
             }
 
             // Must have elevated permissions and be event admin or system admin
+            // Sample code users always have CanUseElevatedPermissions via SampleCode auth method
             if (!claims.CanUseElevatedPermissions)
             {
                 return new ForbidResult();
@@ -336,9 +484,20 @@ public class EventFunctions
                 return new ForbidResult();
             }
 
-            IEnumerable<UserEventMappingEntity> mappings = await _userEventMappingRepository.GetByEventAsync(eventId);
+            // Get all EventAdmin roles for this event
+            IEnumerable<EventRoleEntity> roles = await _eventRoleRepository.GetByEventAsync(eventId);
+            List<EventRoleEntity> adminRoles = [.. roles.Where(r => r.Role == Constants.RoleEventAdmin)];
 
-            List<UserEventMappingResponse> admins = [.. mappings.Select(m => m.ToResponse())];
+            // Build response by looking up person info for each role
+            List<EventAdminResponse> admins = [];
+            foreach (EventRoleEntity role in adminRoles)
+            {
+                PersonEntity? person = await _personRepository.GetAsync(role.PersonId);
+                if (person != null)
+                {
+                    admins.Add(new EventAdminResponse(eventId, person.Email, role.Role, role.GrantedAt));
+                }
+            }
 
             return new OkObjectResult(admins);
         }
@@ -383,14 +542,7 @@ public class EventFunctions
                 return new BadRequestObjectResult(new { message = "Invalid email address format" });
             }
 
-            // Check if mapping already exists (old system)
-            UserEventMappingEntity? existingMapping = await _userEventMappingRepository.GetAsync(eventId, email);
-            if (existingMapping != null)
-            {
-                return new BadRequestObjectResult(new { message = "User is already an admin for this event" });
-            }
-
-            // Get or create PersonEntity (new system)
+            // Get or create PersonEntity
             PersonEntity? person = await _personRepository.GetByEmailAsync(email);
             if (person == null)
             {
@@ -409,44 +561,35 @@ public class EventFunctions
                 await _personRepository.AddAsync(person);
             }
 
-            // Check if they already have EventAdmin role (new system)
+            // Check if they already have EventAdmin role
             IEnumerable<EventRoleEntity> existingRoles = await _eventRoleRepository.GetByPersonAndEventAsync(person.PersonId, eventId);
             bool hasAdminRole = existingRoles.Any(r => r.Role == Constants.RoleEventAdmin);
 
-            if (!hasAdminRole)
+            if (hasAdminRole)
             {
-                // Get the PersonId of the admin granting this role
-                PersonEntity? grantingAdmin = await _personRepository.GetByEmailAsync(adminEmail!);
-                string grantedByPersonId = grantingAdmin?.PersonId ?? string.Empty;
-
-                // Create EventAdmin role (new system)
-                string roleId = Guid.NewGuid().ToString();
-                EventRoleEntity eventRole = new EventRoleEntity
-                {
-                    PartitionKey = person.PersonId,
-                    RowKey = EventRoleEntity.CreateRowKey(eventId, roleId),
-                    PersonId = person.PersonId,
-                    EventId = eventId,
-                    Role = Constants.RoleEventAdmin,
-                    AreaIdsJson = "[]", // Event-wide admin
-                    GrantedByPersonId = grantedByPersonId,
-                    GrantedAt = DateTime.UtcNow
-                };
-                await _eventRoleRepository.AddAsync(eventRole);
+                return new BadRequestObjectResult(new { message = "User is already an admin for this event" });
             }
 
-            // Create UserEventMapping (old system - for backward compatibility)
-            UserEventMappingEntity mappingEntity = new()
-            {
-                PartitionKey = eventId,
-                RowKey = email,
-                EventId = eventId,
-                UserEmail = email,
-                Role = Constants.AdminRole
-            };
-            await _userEventMappingRepository.AddAsync(mappingEntity);
+            // Get the PersonId of the admin granting this role
+            PersonEntity? grantingAdmin = await _personRepository.GetByEmailAsync(adminEmail!);
+            string grantedByPersonId = grantingAdmin?.PersonId ?? string.Empty;
 
-            UserEventMappingResponse response = mappingEntity.ToResponse();
+            // Create EventAdmin role
+            string roleId = Guid.NewGuid().ToString();
+            EventRoleEntity eventRole = new EventRoleEntity
+            {
+                PartitionKey = person.PersonId,
+                RowKey = EventRoleEntity.CreateRowKey(eventId, roleId),
+                PersonId = person.PersonId,
+                EventId = eventId,
+                Role = Constants.RoleEventAdmin,
+                AreaIdsJson = "[]", // Event-wide admin
+                GrantedByPersonId = grantedByPersonId,
+                GrantedAt = DateTime.UtcNow
+            };
+            await _eventRoleRepository.AddAsync(eventRole);
+
+            EventAdminResponse response = new(eventId, email, Constants.RoleEventAdmin, eventRole.GrantedAt);
 
             _logger.LogInformation("Admin added to event {EventId}: {Email} (PersonId: {PersonId})", eventId, email, person.PersonId);
 
@@ -480,8 +623,8 @@ public class EventFunctions
             string email = userEmail.Trim().ToLowerInvariant();
 
             // Count total admins for this event
-            IEnumerable<UserEventMappingEntity> mappings = await _userEventMappingRepository.GetByEventAsync(eventId);
-            int adminCount = mappings.Count();
+            IEnumerable<EventRoleEntity> allRoles = await _eventRoleRepository.GetByEventAsync(eventId);
+            int adminCount = allRoles.Count(r => r.Role == Constants.RoleEventAdmin);
 
             // Ensure at least one admin remains
             if (adminCount <= 1)
@@ -490,20 +633,19 @@ public class EventFunctions
                 return new BadRequestObjectResult(new { message = Constants.ErrorCannotRemoveLastAdmin });
             }
 
-            // Remove from old system
-            await _userEventMappingRepository.DeleteAsync(eventId, email);
-
-            // Remove from new system
+            // Find the person to remove
             PersonEntity? person = await _personRepository.GetByEmailAsync(email);
-            if (person != null)
+            if (person == null)
             {
-                // Get all EventAdmin roles for this person in this event and delete in parallel
-                IEnumerable<EventRoleEntity> roles = await _eventRoleRepository.GetByPersonAndEventAsync(person.PersonId, eventId);
-                List<Task> deleteTasks = [.. roles
-                    .Where(r => r.Role == Constants.RoleEventAdmin)
-                    .Select(role => _eventRoleRepository.DeleteAsync(person.PersonId, role.RowKey))];
-                await Task.WhenAll(deleteTasks);
+                return new NotFoundObjectResult(new { message = "User not found" });
             }
+
+            // Get all EventAdmin roles for this person in this event and delete in parallel
+            IEnumerable<EventRoleEntity> roles = await _eventRoleRepository.GetByPersonAndEventAsync(person.PersonId, eventId);
+            List<Task> deleteTasks = [.. roles
+                .Where(r => r.Role == Constants.RoleEventAdmin)
+                .Select(role => _eventRoleRepository.DeleteAsync(person.PersonId, role.RowKey))];
+            await Task.WhenAll(deleteTasks);
 
             _logger.LogInformation("Admin removed from event {EventId}: {Email}", eventId, email);
 

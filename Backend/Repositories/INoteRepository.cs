@@ -46,4 +46,9 @@ public interface INoteRepository
     /// Update display order for multiple notes
     /// </summary>
     Task UpdateDisplayOrdersAsync(string eventId, Dictionary<string, int> noteDisplayOrders);
+
+    /// <summary>
+    /// Delete all notes for an event (hard delete)
+    /// </summary>
+    Task DeleteAllByEventAsync(string eventId);
 }

@@ -7,7 +7,6 @@ erDiagram
         string Description
         datetime EventDate
         string TimeZoneId
-        string AdminEmail
         string EmergencyContactsJson
         string GpxRouteJson
         bool IsActive
@@ -199,20 +198,12 @@ erDiagram
         bool IsRevoked
     }
 
-    %% Legacy Tables
+    %% Legacy Tables (deprecated, kept for reference)
     AdminUser {
         string PartitionKey PK "ADMIN"
         string RowKey PK "Email"
         string Email
         string Name
-    }
-
-    UserEventMapping {
-        string PartitionKey PK "EventId"
-        string RowKey PK "UserEmail"
-        string EventId FK
-        string UserEmail
-        string Role
     }
 
     %% Relationships
@@ -233,7 +224,6 @@ erDiagram
     Event ||--o{ Note : "has"
     Event ||--o{ EventContact : "has"
     Event ||--o{ EventRole : "has"
-    Event ||--o{ UserEventMapping : "has"
 
     Marshal ||--o{ Assignment : "assigned to"
     Marshal ||--o{ ChecklistCompletion : "completes"

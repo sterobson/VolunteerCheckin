@@ -41,4 +41,9 @@ public interface IEventRoleDefinitionRepository
     /// Update display order for multiple role definitions
     /// </summary>
     Task UpdateDisplayOrdersAsync(string eventId, Dictionary<string, int> roleDisplayOrders);
+
+    /// <summary>
+    /// Hard delete all role definitions for an event
+    /// </summary>
+    Task DeleteAllByEventAsync(string eventId);
 }

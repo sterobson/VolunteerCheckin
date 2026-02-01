@@ -56,7 +56,7 @@
           :active="areaStatusFilter === 'all'"
           @click="areaStatusFilter = 'all'"
         >
-          {{ areaStatusCounts.total }} total
+          Total: {{ areaStatusCounts.total }}
         </StatusPill>
         <StatusPill
           v-if="areaStatusCounts.incomplete > 0"
@@ -64,7 +64,7 @@
           :active="areaStatusFilter === 'incomplete'"
           @click="areaStatusFilter = 'incomplete'"
         >
-          {{ areaStatusCounts.incomplete }} not started
+          Not started: {{ areaStatusCounts.incomplete }}
         </StatusPill>
         <StatusPill
           v-if="areaStatusCounts.partial > 0"
@@ -72,7 +72,7 @@
           :active="areaStatusFilter === 'partial'"
           @click="areaStatusFilter = 'partial'"
         >
-          {{ areaStatusCounts.partial }} partial
+          Partial: {{ areaStatusCounts.partial }}
         </StatusPill>
         <StatusPill
           v-if="areaStatusCounts.complete > 0"
@@ -80,7 +80,7 @@
           :active="areaStatusFilter === 'complete'"
           @click="areaStatusFilter = 'complete'"
         >
-          {{ areaStatusCounts.complete }} complete
+          Complete: {{ areaStatusCounts.complete }}
         </StatusPill>
       </div>
 
@@ -91,7 +91,7 @@
           :active="checkpointStatusFilter === 'all'"
           @click="checkpointStatusFilter = 'all'"
         >
-          {{ checkpointStatusCounts.total }} total
+          Total: {{ checkpointStatusCounts.total }}
         </StatusPill>
         <StatusPill
           v-if="checkpointStatusCounts.incomplete > 0"
@@ -99,7 +99,7 @@
           :active="checkpointStatusFilter === 'incomplete'"
           @click="checkpointStatusFilter = 'incomplete'"
         >
-          {{ checkpointStatusCounts.incomplete }} not started
+          Not started: {{ checkpointStatusCounts.incomplete }}
         </StatusPill>
         <StatusPill
           v-if="checkpointStatusCounts.partial > 0"
@@ -107,7 +107,7 @@
           :active="checkpointStatusFilter === 'partial'"
           @click="checkpointStatusFilter = 'partial'"
         >
-          {{ checkpointStatusCounts.partial }} partial
+          Partial: {{ checkpointStatusCounts.partial }}
         </StatusPill>
         <StatusPill
           v-if="checkpointStatusCounts.complete > 0"
@@ -115,7 +115,7 @@
           :active="checkpointStatusFilter === 'complete'"
           @click="checkpointStatusFilter = 'complete'"
         >
-          {{ checkpointStatusCounts.complete }} complete
+          Complete: {{ checkpointStatusCounts.complete }}
         </StatusPill>
       </div>
 
@@ -126,7 +126,7 @@
           :active="personStatusFilter === 'all'"
           @click="personStatusFilter = 'all'"
         >
-          {{ personStatusCounts.total }} total
+          Total: {{ personStatusCounts.total }}
         </StatusPill>
         <StatusPill
           v-if="personStatusCounts.incomplete > 0"
@@ -134,7 +134,7 @@
           :active="personStatusFilter === 'incomplete'"
           @click="personStatusFilter = 'incomplete'"
         >
-          {{ personStatusCounts.incomplete }} not started
+          Not started: {{ personStatusCounts.incomplete }}
         </StatusPill>
         <StatusPill
           v-if="personStatusCounts.partial > 0"
@@ -142,7 +142,7 @@
           :active="personStatusFilter === 'partial'"
           @click="personStatusFilter = 'partial'"
         >
-          {{ personStatusCounts.partial }} partial
+          Partial: {{ personStatusCounts.partial }}
         </StatusPill>
         <StatusPill
           v-if="personStatusCounts.complete > 0"
@@ -150,7 +150,7 @@
           :active="personStatusFilter === 'complete'"
           @click="personStatusFilter = 'complete'"
         >
-          {{ personStatusCounts.complete }} complete
+          Complete: {{ personStatusCounts.complete }}
         </StatusPill>
       </div>
 
@@ -161,7 +161,7 @@
           :active="taskStatusFilter === 'all'"
           @click="taskStatusFilter = 'all'"
         >
-          {{ taskStatusCounts.total }} total
+          Total: {{ taskStatusCounts.total }}
         </StatusPill>
         <StatusPill
           v-if="taskStatusCounts.incomplete > 0"
@@ -169,7 +169,7 @@
           :active="taskStatusFilter === 'incomplete'"
           @click="taskStatusFilter = 'incomplete'"
         >
-          {{ taskStatusCounts.incomplete }} not started
+          Not started: {{ taskStatusCounts.incomplete }}
         </StatusPill>
         <StatusPill
           v-if="taskStatusCounts.partial > 0"
@@ -177,7 +177,7 @@
           :active="taskStatusFilter === 'partial'"
           @click="taskStatusFilter = 'partial'"
         >
-          {{ taskStatusCounts.partial }} partial
+          Partial: {{ taskStatusCounts.partial }}
         </StatusPill>
         <StatusPill
           v-if="taskStatusCounts.complete > 0"
@@ -185,7 +185,7 @@
           :active="taskStatusFilter === 'complete'"
           @click="taskStatusFilter = 'complete'"
         >
-          {{ taskStatusCounts.complete }} complete
+          Complete: {{ taskStatusCounts.complete }}
         </StatusPill>
       </div>
     </div>

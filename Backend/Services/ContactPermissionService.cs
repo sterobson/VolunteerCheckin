@@ -82,7 +82,7 @@ public class ContactPermissionService
         Dictionary<string, List<string>> locationToAreas = new();
         foreach (LocationEntity location in locations)
         {
-            List<string> areaIds = JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson) ?? new List<string>();
+            List<string> areaIds = location.GetPayload().AreaIds;
             locationToAreas[location.RowKey] = areaIds;
         }
 
@@ -169,7 +169,7 @@ public class ContactPermissionService
             HashSet<string> locationsInLeadAreas = new();
             foreach (LocationEntity location in locations)
             {
-                List<string> locationAreaIds = JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson) ?? new List<string>();
+                List<string> locationAreaIds = location.GetPayload().AreaIds;
                 if (locationAreaIds.Any(areaId => leadAreaIdSet.Contains(areaId)))
                 {
                     locationsInLeadAreas.Add(location.RowKey);

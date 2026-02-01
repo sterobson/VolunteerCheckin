@@ -16,7 +16,7 @@
           :active="activeFilter === 'all'"
           @click="setFilter('all')"
         >
-          {{ marshals.length }} total
+          Total: {{ marshals.length }}
         </StatusPill>
         <StatusPill
           v-if="unassignedCount > 0 && unassignedCount < marshals.length"
@@ -24,7 +24,7 @@
           :active="activeFilter === 'unassigned'"
           @click="setFilter('unassigned')"
         >
-          {{ unassignedCount }} unassigned
+          Unassigned: {{ unassignedCount }}
         </StatusPill>
         <StatusPill
           v-if="checkedInCount > 0 && checkedInCount < marshals.length"
@@ -32,7 +32,7 @@
           :active="activeFilter === 'checked-in'"
           @click="setFilter('checked-in')"
         >
-          {{ checkedInCount }} checked in
+          Checked in: {{ checkedInCount }}
         </StatusPill>
         <StatusPill
           v-if="notCheckedInCount > 0 && notCheckedInCount < marshals.length"
@@ -40,7 +40,7 @@
           :active="activeFilter === 'not-checked-in'"
           @click="setFilter('not-checked-in')"
         >
-          {{ notCheckedInCount }} not checked in
+          Not checked in: {{ notCheckedInCount }}
         </StatusPill>
       </div>
     </div>

@@ -5,6 +5,7 @@
 
 import { ref } from 'vue';
 import { areasApi, checklistApi } from '../services/api';
+import { roundPolygonPoints } from '../utils/coordinateUtils';
 
 export function useAdminAreaManagement(eventId) {
   // Data
@@ -117,9 +118,15 @@ export function useAdminAreaManagement(eventId) {
    * Save area (create or update)
    */
   const saveArea = async (formData) => {
+    // Round polygon coordinates to 6 decimal places before saving
+    const dataToSave = { ...formData };
+    if (dataToSave.polygon) {
+      dataToSave.polygon = roundPolygonPoints(dataToSave.polygon);
+    }
+
     if (selectedArea.value && selectedArea.value.id) {
       // Update existing area
-      await areasApi.update(eventId.value, selectedArea.value.id, formData);
+      await areasApi.update(eventId.value, selectedArea.value.id, dataToSave);
 
       // Process checklist changes
       if (formData.checklistChanges && formData.checklistChanges.length > 0) {
@@ -147,7 +154,7 @@ export function useAdminAreaManagement(eventId) {
       // Create new area
       await areasApi.create({
         eventId: eventId.value,
-        ...formData,
+        ...dataToSave,
       });
     }
   };

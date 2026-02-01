@@ -52,7 +52,8 @@ namespace VolunteerCheckin.Functions.Tests
                 new Mock<IPersonRepository>().Object,
                 new Mock<IEventRoleRepository>().Object,
                 new Mock<IMarshalRepository>().Object,
-                new Mock<IUserEventMappingRepository>().Object
+                Mock.Of<ISampleEventService>(),
+                Mock.Of<IEventDeletionRepository>()
             );
             _mockContactPermissionService = new Mock<ContactPermissionService>(
                 MockBehavior.Loose,
@@ -80,6 +81,11 @@ namespace VolunteerCheckin.Functions.Tests
             // Setup claims service to return admin claims for any event
             _mockClaimsService
                 .Setup(c => c.GetClaimsAsync(TestSessionToken, It.IsAny<string>()))
+                .ReturnsAsync(_adminClaims);
+
+            // Also setup GetClaimsWithSampleSupportAsync for endpoints that support sample code auth
+            _mockClaimsService
+                .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string>()))
                 .ReturnsAsync(_adminClaims);
 
             // Setup contact permissions for admin (can view/modify all)

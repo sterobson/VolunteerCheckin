@@ -10,8 +10,8 @@
  *               cla=checkInLatitude, clo=checkInLongitude, cm=checkInMethodIndex, cb=checkedInByIndex
  *   Location: r=refIndex, n=name, de=description, lat=latitude, lng=longitude,
  *             rm=requiredMarshals, cc=checkedInCount, a=assignments, w=what3Words,
- *             st=startTime, et=endTime, ai=areaRefIndexes, dy=isDynamic,
- *             lus=locationUpdateScopes, llu=lastLocationUpdate
+ *             st=startTime, et=endTime, ai=areaRefIndexes, li=layerRefIndexes,
+ *             dy=isDynamic, lus=locationUpdateScopes, llu=lastLocationUpdate
  *             + style properties (sty, sc, sbs, sbc, sboc, sic, ssz, smr)
  *             + resolved styles (rsty, rsc, rsbs, rsbc, rsboc, rsic, rssz, rsmr)
  *             + terminology (pt, cpt)
@@ -87,6 +87,11 @@ export function denormalizeEventStatus(response) {
       .map(refIdx => resolveRef(refIdx))
       .filter(id => id != null);
 
+    // Expand layer IDs (null = all layers)
+    const layerIds = loc.li
+      ? loc.li.map(refIdx => resolveRef(refIdx)).filter(id => id != null)
+      : null;
+
     // Expand location update scope configurations
     const locationUpdateScopeConfigurations = (loc.lus || []).map(scope => ({
       scope: scope.s != null && scope.s >= 0 ? scopes[scope.s] || '' : '',
@@ -135,6 +140,8 @@ export function denormalizeEventStatus(response) {
       isDynamic,
       locationUpdateScopeConfigurations,
       lastLocationUpdate: loc.llu || null,
+      // Layer assignment (null = all layers)
+      layerIds,
     };
   });
 

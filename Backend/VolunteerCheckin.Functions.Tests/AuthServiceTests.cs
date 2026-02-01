@@ -48,7 +48,8 @@ public class AuthServiceTests
             Mock.Of<IPersonRepository>(),
             Mock.Of<IEventRoleRepository>(),
             Mock.Of<IMarshalRepository>(),
-            Mock.Of<IUserEventMappingRepository>()
+            Mock.Of<ISampleEventService>(),
+            Mock.Of<IEventDeletionRepository>()
         );
 
         // EmailService has a protected parameterless constructor for testing

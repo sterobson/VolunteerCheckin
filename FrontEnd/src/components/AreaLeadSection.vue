@@ -54,6 +54,7 @@
               :route-color="routeColor"
               :route-style="routeStyle"
               :route-weight="routeWeight"
+              :layers="layers"
               :center="{ lat: checkpoint.latitude, lng: checkpoint.longitude }"
               :zoom="16"
               :highlight-location-id="checkpoint.checkpointId"
@@ -312,6 +313,10 @@ const props = defineProps({
   routeWeight: {
     type: Number,
     default: null,
+  },
+  layers: {
+    type: Array,
+    default: () => [],
   },
 });
 

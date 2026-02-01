@@ -7,12 +7,12 @@
           Add {{ termsLower.area }}
         </button>
       </div>
-      <div class="status-pills" v-if="areas.length > 0">
+      <div class="status-pills" v-if="visibleAreasCount > 0">
         <StatusPill
           variant="neutral"
           :active="false"
         >
-          {{ areas.length }} {{ areas.length === 1 ? termsLower.area : termsLower.areas }}
+          {{ visibleAreasCount }} {{ visibleAreasCount === 1 ? termsLower.area : termsLower.areas }}
         </StatusPill>
       </div>
     </div>
@@ -86,15 +86,37 @@ const getCheckpointsForArea = (areaId) => {
   });
 };
 
+// Base visible areas (excludes default area with no checkpoints, but ignores search)
+// Used for the pill count to show the "real" number of areas
+const visibleAreasCount = computed(() => {
+  return props.areas.filter(area => {
+    if (area.isDefault) {
+      const areaCheckpoints = getCheckpointsForArea(area.id);
+      return areaCheckpoints.length > 0;
+    }
+    return true;
+  }).length;
+});
+
 // Search filtering - searches area name + checkpoint names + checkpoint descriptions
+// Also hides default area if it has no checkpoints
 const filteredAreas = computed(() => {
+  // First, filter out default areas with no checkpoints
+  const visibleAreas = props.areas.filter(area => {
+    if (area.isDefault) {
+      const areaCheckpoints = getCheckpointsForArea(area.id);
+      return areaCheckpoints.length > 0;
+    }
+    return true;
+  });
+
   if (!searchQuery.value.trim()) {
-    return props.areas;
+    return visibleAreas;
   }
 
   const searchTerms = searchQuery.value.toLowerCase().trim().split(/\s+/);
 
-  return props.areas.filter(area => {
+  return visibleAreas.filter(area => {
     // Build searchable text from area and its checkpoints
     const areaCheckpoints = getCheckpointsForArea(area.id);
     const checkpointText = areaCheckpoints

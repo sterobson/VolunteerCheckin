@@ -48,6 +48,7 @@
       :areas="areas"
       :locations="allLocations"
       :marshals="allMarshals"
+      :layers="layers"
       :is-editing="isExistingLocation"
       @update:form="updateForm"
       @input="handleInput"
@@ -348,6 +349,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  layers: {
+    type: Array,
+    default: () => [],
+  },
   eventId: {
     type: String,
     required: true,
@@ -456,6 +461,8 @@ const form = ref({
   startTime: '',
   endTime: '',
   areaIds: [],
+  layerAssignmentMode: 'auto', // 'auto' | 'all' | 'specific'
+  layerIds: null, // null for auto/all modes, array for specific
   styleType: 'default',
   styleColor: '',
   styleBackgroundShape: '',
@@ -887,6 +894,8 @@ watch(() => props.location, (newVal) => {
         startTime: startTimeLocal,
         endTime: endTimeLocal,
         areaIds: newVal.areaIds || newVal.AreaIds || [],
+        layerAssignmentMode: newVal.layerAssignmentMode ?? newVal.LayerAssignmentMode ?? 'auto',
+        layerIds: newVal.layerIds ?? newVal.LayerIds ?? null,
         styleType: newVal.styleType || newVal.StyleType || 'default',
         styleColor: newVal.styleColor || newVal.StyleColor || '',
         styleBackgroundShape: newVal.styleBackgroundShape || newVal.StyleBackgroundShape || '',
@@ -961,6 +970,8 @@ const handleSave = () => {
     endTime: form.value.useCustomTimes && form.value.endTime
       ? new Date(form.value.endTime).toISOString()
       : null,
+    // Ensure layerAssignmentMode is included
+    layerAssignmentMode: form.value.layerAssignmentMode || 'auto',
     // Include pending check-in changes from assignments tab
     checkInChanges: assignmentsTabRef.value?.getPendingChanges?.() || [],
     // Include assignments marked for removal

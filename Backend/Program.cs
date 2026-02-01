@@ -85,14 +85,16 @@ builder.Services.AddSingleton<AuthService>();
 builder.Services.AddSingleton<ClaimsService>();
 builder.Services.AddSingleton<ContactPermissionService>();
 builder.Services.AddSingleton<RateLimitService>();
+builder.Services.AddSingleton<EventService>();
+builder.Services.AddSingleton<IEventService>(sp => sp.GetRequiredService<EventService>());
+builder.Services.AddSingleton<SampleEventService>();
+builder.Services.AddSingleton<ISampleEventService>(sp => sp.GetRequiredService<SampleEventService>());
 
 // Register repositories
 builder.Services.AddSingleton<ILocationRepository, TableStorageLocationRepository>();
 builder.Services.AddSingleton<IMarshalRepository, TableStorageMarshalRepository>();
 builder.Services.AddSingleton<IAssignmentRepository, TableStorageAssignmentRepository>();
 builder.Services.AddSingleton<IEventRepository, TableStorageEventRepository>();
-builder.Services.AddSingleton<IAdminUserRepository, TableStorageAdminUserRepository>();
-builder.Services.AddSingleton<IUserEventMappingRepository, TableStorageUserEventMappingRepository>();
 builder.Services.AddSingleton<IAreaRepository, TableStorageAreaRepository>();
 builder.Services.AddSingleton<IChecklistItemRepository, TableStorageChecklistItemRepository>();
 builder.Services.AddSingleton<IChecklistCompletionRepository, TableStorageChecklistCompletionRepository>();
@@ -103,6 +105,8 @@ builder.Services.AddSingleton<IAuthSessionRepository, TableStorageAuthSessionRep
 builder.Services.AddSingleton<INoteRepository, TableStorageNoteRepository>();
 builder.Services.AddSingleton<IEventContactRepository, TableStorageEventContactRepository>();
 builder.Services.AddSingleton<IIncidentRepository, TableStorageIncidentRepository>();
+builder.Services.AddSingleton<IEventDeletionRepository, TableStorageEventDeletionRepository>();
 builder.Services.AddSingleton<IEventRoleDefinitionRepository, TableStorageEventRoleDefinitionRepository>();
+builder.Services.AddSingleton<ILayerRepository, TableStorageLayerRepository>();
 
 await builder.Build().RunAsync();

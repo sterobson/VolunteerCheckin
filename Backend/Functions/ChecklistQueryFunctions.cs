@@ -105,7 +105,7 @@ public class ChecklistQueryFunctions
                 return new NotFoundObjectResult(new { message = Constants.ErrorLocationNotFound });
             }
 
-            List<string> locationAreaIds = JsonSerializer.Deserialize<List<string>>(location.AreaIdsJson) ?? [];
+            List<string> locationAreaIds = location.GetPayload().AreaIds;
 
             // Get all marshals assigned to this checkpoint (from preloaded data)
             List<string> assignedMarshalIds = [.. preloaded.AssignmentsByMarshal
@@ -233,8 +233,8 @@ public class ChecklistQueryFunctions
             List<LocationEntity> areaCheckpoints = [.. preloaded.LocationsById.Values
                 .Where(l =>
                 {
-                    List<string> locationAreaIds = JsonSerializer.Deserialize<List<string>>(l.AreaIdsJson) ?? [];
-                    return locationAreaIds.Contains(areaId);
+                    List<string> locAreaIds = l.GetPayload().AreaIds;
+                    return locAreaIds.Contains(areaId);
                 })];
 
             List<string> checkpointIds = [.. areaCheckpoints.Select(l => l.RowKey)];

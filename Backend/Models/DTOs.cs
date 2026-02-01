@@ -2,19 +2,11 @@ using System.Text.Json.Serialization;
 
 namespace VolunteerCheckin.Functions.Models;
 
-public record EmergencyContact(
-    string Name,
-    string Phone,
-    string Details
-);
-
 public record CreateEventRequest(
     string Name,
     string Description,
     DateTime EventDate,
     string TimeZoneId,
-    string AdminEmail,
-    List<EmergencyContact> EmergencyContacts,
     // Terminology settings (optional, defaults will be used if not provided)
     string? PeopleTerm = null,
     string? CheckpointTerm = null,
@@ -91,9 +83,6 @@ public record EventResponse(
     string Description,
     DateTime EventDate,
     string TimeZoneId,
-    string AdminEmail,
-    List<EmergencyContact> EmergencyContacts,
-    List<RoutePoint> Route,
     bool IsActive,
     DateTime CreatedDate,
     // Terminology settings
@@ -122,7 +111,10 @@ public record EventResponse(
     // Route display settings
     string RouteColor,
     string RouteStyle,
-    int? RouteWeight
+    int? RouteWeight,
+    // Sample event fields
+    bool IsSampleEvent,
+    DateTime? ExpiresAt
 );
 
 public record CreateLocationRequest(
@@ -151,7 +143,11 @@ public record CreateLocationRequest(
     string? CheckpointTerm = null,
     // Dynamic checkpoint settings (for lead car/sweep vehicle tracking)
     bool IsDynamic = false,
-    List<ScopeConfiguration>? LocationUpdateScopeConfigurations = null
+    List<ScopeConfiguration>? LocationUpdateScopeConfigurations = null,
+    // Layer assignment mode: "auto" | "all" | "specific"
+    string? LayerAssignmentMode = null,
+    // Layer IDs (only used when mode = "specific")
+    List<string>? LayerIds = null
 );
 
 public record LocationResponse(
@@ -195,7 +191,13 @@ public record LocationResponse(
     bool IsDynamic,
     List<ScopeConfiguration> LocationUpdateScopeConfigurations,
     DateTime? LastLocationUpdate,
-    string LastUpdatedByPersonId
+    string LastUpdatedByPersonId,
+    // Layer assignment mode: "auto" | "all" | "specific"
+    string LayerAssignmentMode,
+    // Layer IDs (null = all layers for mode "all")
+    List<string>? LayerIds = null,
+    // True if auto mode found nearby routes or if not in auto mode
+    bool HasNearbyRoutes = true
 );
 
 public record AreaContact(
@@ -365,14 +367,18 @@ public record LocationStatusResponse(
     // Dynamic checkpoint settings
     bool IsDynamic,
     List<ScopeConfiguration> LocationUpdateScopeConfigurations,
-    DateTime? LastLocationUpdate
+    DateTime? LastLocationUpdate,
+    // Layer assignment mode: "auto" | "all" | "specific"
+    string LayerAssignmentMode,
+    // Layer assignment (null = all layers for mode "all")
+    List<string>? LayerIds = null
 );
 
-public record UserEventMappingResponse(
+public record EventAdminResponse(
     string EventId,
     string UserEmail,
     string Role,
-    DateTime CreatedDate
+    DateTime GrantedAt
 );
 
 public record AddEventAdminRequest(
@@ -694,9 +700,11 @@ public record UserClaims(
 
     /// <summary>
     /// Check if user can perform elevated actions (admin/lead operations)
-    /// Only allowed if authenticated via SecureEmailLink
+    /// Allowed if authenticated via SecureEmailLink or SampleCode
     /// </summary>
-    public bool CanUseElevatedPermissions => AuthMethod == Constants.AuthMethodSecureEmailLink;
+    public bool CanUseElevatedPermissions =>
+        AuthMethod == Constants.AuthMethodSecureEmailLink ||
+        AuthMethod == Constants.AuthMethodSampleCode;
 
     /// <summary>
     /// Check if user can act as a marshal (complete tasks, check in, etc.)
@@ -880,7 +888,6 @@ public record CreateEventContactRequest(
     List<ScopeConfiguration>? ScopeConfigurations = null,
     int DisplayOrder = 0,
     bool IsPinned = false,
-    bool IsPrimary = false,
     bool ShowInEmergencyInfo = false
 );
 
@@ -897,7 +904,6 @@ public record UpdateEventContactRequest(
     List<ScopeConfiguration>? ScopeConfigurations = null,
     int DisplayOrder = 0,
     bool IsPinned = false,
-    bool IsPrimary = false,
     bool ShowInEmergencyInfo = false
 );
 
@@ -917,7 +923,6 @@ public record EventContactResponse(
     List<ScopeConfiguration> ScopeConfigurations,
     int DisplayOrder,
     bool IsPinned,
-    bool IsPrimary,
     bool ShowInEmergencyInfo,
     DateTime CreatedAt,
     DateTime? UpdatedAt
@@ -935,7 +940,6 @@ public record EventContactForMarshalResponse(
     string? Notes,
     int DisplayOrder,
     bool IsPinned,
-    bool IsPrimary,
     bool ShowInEmergencyInfo,
     string MatchedScope  // Which scope configuration matched for this marshal
 );
@@ -1595,7 +1599,9 @@ public record CompactLocation(
     // Dynamic checkpoint settings
     [property: JsonPropertyName("dy")] bool? IsDynamic,
     [property: JsonPropertyName("lus")] List<CompactLocationUpdateScope>? LocationUpdateScopes,
-    [property: JsonPropertyName("llu")] DateTime? LastLocationUpdate
+    [property: JsonPropertyName("llu")] DateTime? LastLocationUpdate,
+    // Layer assignment (null = all layers)
+    [property: JsonPropertyName("li")] List<int>? LayerRefIndexes = null
 );
 
 /// <summary>
@@ -1610,4 +1616,55 @@ public record NormalizedEventStatusResponse(
     [property: JsonPropertyName("cm")] List<string> CheckInMethods,
     [property: JsonPropertyName("sc")] List<string> Scopes,
     [property: JsonPropertyName("l")] List<CompactLocation> Locations
+);
+
+// ============================================================================
+// Layer DTOs
+// ============================================================================
+
+/// <summary>
+/// Request to create a new layer
+/// </summary>
+public record CreateLayerRequest(
+    string EventId,
+    string Name,
+    List<RoutePoint>? Route = null,
+    string? RouteColor = null,
+    string? RouteStyle = null,
+    int? RouteWeight = null
+);
+
+/// <summary>
+/// Request to update an existing layer
+/// </summary>
+public record UpdateLayerRequest(
+    string? Name = null,
+    int? DisplayOrder = null,
+    List<RoutePoint>? Route = null,
+    string? RouteColor = null,
+    string? RouteStyle = null,
+    int? RouteWeight = null
+);
+
+/// <summary>
+/// Request to reorder layers
+/// </summary>
+public record ReorderLayersRequest(
+    List<ReorderItem> Items
+);
+
+/// <summary>
+/// Layer response for API
+/// </summary>
+public record LayerResponse(
+    string Id,
+    string EventId,
+    string Name,
+    int DisplayOrder,
+    List<RoutePoint> Route,
+    string RouteColor,
+    string RouteStyle,
+    int? RouteWeight,
+    int CheckpointCount,
+    DateTime CreatedDate
 );

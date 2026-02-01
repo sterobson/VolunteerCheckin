@@ -69,6 +69,7 @@ public static class EventStatusHelper
         ["l.dy"] = "isDynamic",
         ["l.lus"] = "locationUpdateScopes",
         ["l.llu"] = "lastLocationUpdate",
+        ["l.li"] = "layerRefIndexes",
         // Location update scope
         ["lus.s"] = "scopeIndex",
         ["lus.t"] = "itemType",
@@ -307,6 +308,12 @@ public static class EventStatusHelper
             // Apply default for isDynamic
             bool? isDynamic = location.IsDynamic == defaultIsDynamic ? null : location.IsDynamic;
 
+            // Convert layer IDs to ref indexes (null = all layers)
+            List<int>? layerRefIndexes = location.LayerIds?
+                .Select(layerId => GetOrAddRef(layerId))
+                .Where(idx => idx >= 0)
+                .ToList();
+
             // Convert empty strings to null, and apply string defaults
             // Returns null if value is empty or matches the default (will be omitted from JSON)
             string? ApplyDefault(string key, string? value)
@@ -354,7 +361,9 @@ public static class EventStatusHelper
                 // Dynamic
                 isDynamic,
                 compactScopes,
-                location.LastLocationUpdate
+                location.LastLocationUpdate,
+                // Layer assignment
+                layerRefIndexes
             ));
         }
 

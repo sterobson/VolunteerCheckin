@@ -410,12 +410,14 @@ public class IncidentFunctions
             sessionToken = req.Cookies["session_token"];
         }
 
-        if (string.IsNullOrWhiteSpace(sessionToken))
+        string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
+
+        if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
         {
             return null;
         }
 
-        return await _claimsService.GetClaimsAsync(sessionToken, eventId);
+        return await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
     }
 
     /// <summary>
@@ -471,7 +473,7 @@ public class IncidentFunctions
             // Find all checkpoints in my areas
             foreach (LocationEntity checkpoint in checkpoints)
             {
-                List<string> areaIds = JsonSerializer.Deserialize<List<string>>(checkpoint.AreaIdsJson) ?? [];
+                List<string> areaIds = checkpoint.GetPayload().AreaIds;
                 if (areaIds.Exists(areaId => leadAreaIds.Contains(areaId, StringComparer.Ordinal)))
                 {
                     checkpointsInMyAreas.Add(checkpoint.RowKey);
@@ -545,7 +547,7 @@ public class IncidentFunctions
                     {
                         if (areaLookup.TryGetValue(leadAreaId, out AreaEntity? area))
                         {
-                            List<RoutePoint> polygon = JsonSerializer.Deserialize<List<RoutePoint>>(area.PolygonJson) ?? [];
+                            List<RoutePoint> polygon = area.GetPayload().Polygon;
                             if (polygon.Count >= 3 && IsPointInPolygon(incident.Latitude.Value, incident.Longitude.Value, polygon))
                             {
                                 inMyArea = true;
@@ -590,7 +592,7 @@ public class IncidentFunctions
             if (checkpoint != null)
             {
                 // Get area names
-                List<string> areaIds = JsonSerializer.Deserialize<List<string>>(checkpoint.AreaIdsJson) ?? [];
+                List<string> areaIds = checkpoint.GetPayload().AreaIds;
                 List<string> areaNames = [];
 
                 if (areaIds.Count > 0)
@@ -650,7 +652,7 @@ public class IncidentFunctions
 
         foreach (AreaEntity area in areas)
         {
-            List<RoutePoint> polygon = JsonSerializer.Deserialize<List<RoutePoint>>(area.PolygonJson) ?? [];
+            List<RoutePoint> polygon = area.GetPayload().Polygon;
             if (polygon.Count >= 3 && IsPointInPolygon(latitude, longitude, polygon))
             {
                 return (area.RowKey, area.Name);

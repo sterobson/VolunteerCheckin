@@ -15,8 +15,8 @@ public static class EntityExtensions
 
     public static EventResponse ToResponse(this EventEntity entity)
     {
-        List<EmergencyContact> emergencyContacts = JsonSerializer.Deserialize<List<EmergencyContact>>(entity.EmergencyContactsJson) ?? [];
-        List<RoutePoint> route = JsonSerializer.Deserialize<List<RoutePoint>>(entity.GpxRouteJson) ?? [];
+        // Get payload (works for both v1 and v2 schemas)
+        EventPayload payload = entity.GetPayload();
 
         return new EventResponse(
             entity.RowKey,
@@ -24,34 +24,38 @@ public static class EntityExtensions
             entity.Description,
             entity.EventDate,
             entity.TimeZoneId,
-            entity.AdminEmail,
-            emergencyContacts,
-            route,
             entity.IsActive,
             entity.CreatedDate,
-            entity.PeopleTerm,
-            entity.CheckpointTerm,
-            entity.AreaTerm,
-            entity.ChecklistTerm,
-            entity.CourseTerm,
-            entity.DefaultCheckpointStyleType,
-            entity.DefaultCheckpointStyleColor,
-            entity.DefaultCheckpointStyleBackgroundShape,
-            entity.DefaultCheckpointStyleBackgroundColor,
-            entity.DefaultCheckpointStyleBorderColor,
-            entity.DefaultCheckpointStyleIconColor,
-            entity.DefaultCheckpointStyleSize,
-            entity.DefaultCheckpointStyleMapRotation,
-            entity.BrandingHeaderGradientStart,
-            entity.BrandingHeaderGradientEnd,
-            entity.BrandingLogoUrl,
-            entity.BrandingLogoPosition,
-            entity.BrandingAccentColor,
-            entity.BrandingPageGradientStart,
-            entity.BrandingPageGradientEnd,
+            // Terminology from payload
+            payload.Terminology.Person,
+            payload.Terminology.Location,
+            payload.Terminology.Area,
+            payload.Terminology.Task,
+            payload.Terminology.Course,
+            // Default checkpoint styles from payload
+            payload.Styling.Locations.DefaultType,
+            payload.Styling.Locations.DefaultColor,
+            payload.Styling.Locations.DefaultBackgroundShape,
+            payload.Styling.Locations.DefaultBackgroundColor,
+            payload.Styling.Locations.DefaultBorderColor,
+            payload.Styling.Locations.DefaultIconColor,
+            payload.Styling.Locations.DefaultSize,
+            payload.Styling.Locations.DefaultMapRotation,
+            // Branding from payload
+            payload.Styling.Branding.HeaderGradientStart,
+            payload.Styling.Branding.HeaderGradientEnd,
+            payload.Styling.Branding.LogoUrl,
+            payload.Styling.Branding.LogoPosition,
+            payload.Styling.Branding.AccentColour,
+            payload.Styling.Branding.PageGradientStart,
+            payload.Styling.Branding.PageGradientEnd,
+            // Route settings (legacy, now on layers - keep for backward compat)
             entity.RouteColor,
             entity.RouteStyle,
-            entity.RouteWeight
+            entity.RouteWeight,
+            // Sample event fields
+            entity.IsSampleEvent,
+            entity.ExpiresAt
         );
     }
 
@@ -77,21 +81,47 @@ public static class EntityExtensions
         IEnumerable<AreaEntity>? areas,
         Dictionary<string, int>? areaCheckpointCounts = null)
     {
-        List<string> areaIds = JsonSerializer.Deserialize<List<string>>(entity.AreaIdsJson) ?? [];
+        // Get payload (works for both v1 and v2 schemas)
+        LocationPayload payload = entity.GetPayload();
+
+        List<string> areaIds = payload.AreaIds;
 
         // Resolve the style from checkpoint -> area -> event hierarchy
         CheckpointStyleResolution resolvedStyle = ResolveCheckpointStyle(
-            entity, areaIds, eventEntity, areas, areaCheckpointCounts);
+            payload, areaIds, eventEntity, areas, areaCheckpointCounts);
 
         // Resolve the terminology from checkpoint -> area -> event hierarchy
         string resolvedPeopleTerm = ResolveCheckpointPeopleTerm(
-            entity, areaIds, eventEntity, areas, areaCheckpointCounts);
+            payload, areaIds, eventEntity, areas, areaCheckpointCounts);
         string resolvedCheckpointTerm = ResolveCheckpointTerm(
-            entity, areaIds, eventEntity, areas, areaCheckpointCounts);
+            payload, areaIds, eventEntity, areas, areaCheckpointCounts);
 
-        // Parse location update scope configurations
-        List<ScopeConfiguration> locationUpdateScopeConfigs =
-            JsonSerializer.Deserialize<List<ScopeConfiguration>>(entity.LocationUpdateScopeJson, Helpers.FunctionHelpers.JsonOptions) ?? [];
+        // Get location update scope configurations from payload
+        List<ScopeConfiguration> locationUpdateScopeConfigs = payload.Dynamic.UpdateScopes;
+
+        // Get layer IDs (null = all layers for mode "all")
+        List<string>? layerIds = payload.LayerIds;
+
+        // Determine layer assignment mode (migration: infer from existing data)
+        string layerAssignmentMode = payload.LayerAssignmentMode;
+        if (string.IsNullOrEmpty(layerAssignmentMode))
+        {
+            // Migration logic: infer mode from existing data
+            if (layerIds == null)
+            {
+                // null LayerIds = was "all layers"
+                layerAssignmentMode = "all";
+            }
+            else
+            {
+                // Has specific layer IDs = was "specific"
+                layerAssignmentMode = "specific";
+            }
+        }
+
+        // HasNearbyRoutes: true if not in auto mode, or if auto mode found layers
+        bool hasNearbyRoutes = layerAssignmentMode != "auto" ||
+            (layerIds?.Count ?? 0) > 0;
 
         return new LocationResponse(
             entity.RowKey,
@@ -102,18 +132,18 @@ public static class EntityExtensions
             entity.Longitude,
             entity.RequiredMarshals,
             entity.CheckedInCount,
-            entity.What3Words,
+            payload.What3Words,
             entity.StartTime,
             entity.EndTime,
             areaIds,
-            entity.StyleType,
-            entity.StyleColor,
-            entity.StyleBackgroundShape,
-            entity.StyleBackgroundColor,
-            entity.StyleBorderColor,
-            entity.StyleIconColor,
-            entity.StyleSize,
-            entity.StyleMapRotation,
+            payload.Style.Type,
+            payload.Style.Color,
+            payload.Style.BackgroundShape,
+            payload.Style.BackgroundColor,
+            payload.Style.BorderColor,
+            payload.Style.IconColor,
+            payload.Style.Size,
+            payload.Style.MapRotation,
             resolvedStyle.Type,
             resolvedStyle.Color,
             resolvedStyle.BackgroundShape,
@@ -122,21 +152,41 @@ public static class EntityExtensions
             resolvedStyle.IconColor,
             resolvedStyle.Size,
             resolvedStyle.MapRotation,
-            entity.PeopleTerm,
-            entity.CheckpointTerm,
+            payload.Terminology.PeopleTerm,
+            payload.Terminology.CheckpointTerm,
             resolvedPeopleTerm,
             resolvedCheckpointTerm,
             entity.IsDynamic,
             locationUpdateScopeConfigs,
-            entity.LastLocationUpdate,
-            entity.LastUpdatedByPersonId
+            payload.Dynamic.LastUpdate,
+            payload.Dynamic.LastUpdatedByPersonId,
+            layerAssignmentMode,
+            layerIds,
+            hasNearbyRoutes
+        );
+    }
+
+    public static LayerResponse ToResponse(this LayerEntity entity, int checkpointCount = 0)
+    {
+        List<RoutePoint> route = JsonSerializer.Deserialize<List<RoutePoint>>(entity.GpxRouteJson) ?? [];
+
+        return new LayerResponse(
+            entity.RowKey,
+            entity.EventId,
+            entity.Name,
+            entity.DisplayOrder,
+            route,
+            entity.RouteColor,
+            entity.RouteStyle,
+            entity.RouteWeight,
+            checkpointCount,
+            entity.CreatedDate
         );
     }
 
     public static AreaResponse ToResponse(this AreaEntity entity, int checkpointCount = 0)
     {
-        List<AreaContact> contacts = JsonSerializer.Deserialize<List<AreaContact>>(entity.ContactsJson) ?? [];
-        List<RoutePoint> polygon = JsonSerializer.Deserialize<List<RoutePoint>>(entity.PolygonJson) ?? [];
+        AreaPayload payload = entity.GetPayload();
 
         return new AreaResponse(
             entity.RowKey,
@@ -144,22 +194,22 @@ public static class EntityExtensions
             entity.Name,
             entity.Description,
             entity.Color,
-            contacts,
-            polygon,
+            payload.Contacts,
+            payload.Polygon,
             entity.IsDefault,
             entity.DisplayOrder,
             checkpointCount,
             entity.CreatedDate,
-            entity.CheckpointStyleType,
-            entity.CheckpointStyleColor,
-            entity.CheckpointStyleBackgroundShape,
-            entity.CheckpointStyleBackgroundColor,
-            entity.CheckpointStyleBorderColor,
-            entity.CheckpointStyleIconColor,
-            entity.CheckpointStyleSize,
-            entity.CheckpointStyleMapRotation,
-            entity.PeopleTerm,
-            entity.CheckpointTerm
+            payload.Style.Type,
+            payload.Style.Color,
+            payload.Style.BackgroundShape,
+            payload.Style.BackgroundColor,
+            payload.Style.BorderColor,
+            payload.Style.IconColor,
+            payload.Style.Size,
+            payload.Style.MapRotation,
+            payload.Terminology.PeopleTerm,
+            payload.Terminology.CheckpointTerm
         );
     }
 
@@ -177,16 +227,6 @@ public static class EntityExtensions
             entity.CheckInLongitude,
             entity.CheckInMethod,
             entity.CheckedInBy
-        );
-    }
-
-    public static UserEventMappingResponse ToResponse(this UserEventMappingEntity entity)
-    {
-        return new UserEventMappingResponse(
-            entity.EventId,
-            entity.UserEmail,
-            entity.Role,
-            entity.CreatedDate
         );
     }
 
@@ -294,20 +334,20 @@ public static class EntityExtensions
     /// Resolves the style type through the hierarchy: checkpoint -> area -> event.
     /// </summary>
     private static string ResolveStyleType(
-        LocationEntity location,
+        LocationPayload payload,
         List<AreaEntity>? sortedMatchedAreas,
-        EventEntity? eventEntity)
+        LocationStylingPayload? eventStyle)
     {
-        if (IsValidIconType(location.StyleType)) return location.StyleType;
+        if (IsValidIconType(payload.Style.Type)) return payload.Style.Type;
 
         if (sortedMatchedAreas != null)
         {
-            AreaEntity? styledArea = sortedMatchedAreas.FirstOrDefault(a => IsValidIconType(a.CheckpointStyleType));
-            if (styledArea != null) return styledArea.CheckpointStyleType;
+            AreaEntity? styledArea = sortedMatchedAreas.FirstOrDefault(a => IsValidIconType(a.GetPayload().Style.Type));
+            if (styledArea != null) return styledArea.GetPayload().Style.Type;
         }
 
-        if (eventEntity != null && IsValidIconType(eventEntity.DefaultCheckpointStyleType))
-            return eventEntity.DefaultCheckpointStyleType;
+        if (eventStyle != null && IsValidIconType(eventStyle.DefaultType))
+            return eventStyle.DefaultType;
 
         return "default";
     }
@@ -321,39 +361,43 @@ public static class EntityExtensions
     /// Each property is resolved independently through the hierarchy.
     /// </summary>
     private static CheckpointStyleResolution ResolveCheckpointStyle(
-        LocationEntity location,
+        LocationPayload payload,
         List<string> areaIds,
         EventEntity? eventEntity,
         IEnumerable<AreaEntity>? areas,
         Dictionary<string, int>? areaCheckpointCounts)
     {
         List<AreaEntity>? sortedMatchedAreas = GetSortedMatchedAreas(areaIds, areas, areaCheckpointCounts);
-        string type = ResolveStyleType(location, sortedMatchedAreas, eventEntity);
+
+        // Get event default styles from payload (not flat properties) for v2 support
+        LocationStylingPayload? eventStyle = eventEntity?.GetPayload().Styling.Locations;
+
+        string type = ResolveStyleType(payload, sortedMatchedAreas, eventStyle);
 
         // Color - use StyleColor for backward compatibility, then StyleBackgroundColor
         string color = ResolveStyleProperty(
-            !string.IsNullOrEmpty(location.StyleBackgroundColor) ? location.StyleBackgroundColor : location.StyleColor,
+            !string.IsNullOrEmpty(payload.Style.BackgroundColor) ? payload.Style.BackgroundColor : payload.Style.Color,
             sortedMatchedAreas,
-            a => !string.IsNullOrEmpty(a.CheckpointStyleBackgroundColor) ? a.CheckpointStyleBackgroundColor : a.CheckpointStyleColor,
-            !string.IsNullOrEmpty(eventEntity?.DefaultCheckpointStyleBackgroundColor) ? eventEntity.DefaultCheckpointStyleBackgroundColor : eventEntity?.DefaultCheckpointStyleColor);
+            a => { AreaStylePayload s = a.GetPayload().Style; return !string.IsNullOrEmpty(s.BackgroundColor) ? s.BackgroundColor : s.Color; },
+            !string.IsNullOrEmpty(eventStyle?.DefaultBackgroundColor) ? eventStyle.DefaultBackgroundColor : eventStyle?.DefaultColor);
 
-        string backgroundShape = ResolveStyleProperty(location.StyleBackgroundShape, sortedMatchedAreas,
-            a => a.CheckpointStyleBackgroundShape, eventEntity?.DefaultCheckpointStyleBackgroundShape);
+        string backgroundShape = ResolveStyleProperty(payload.Style.BackgroundShape, sortedMatchedAreas,
+            a => a.GetPayload().Style.BackgroundShape, eventStyle?.DefaultBackgroundShape);
 
-        string backgroundColor = ResolveStyleProperty(location.StyleBackgroundColor, sortedMatchedAreas,
-            a => a.CheckpointStyleBackgroundColor, eventEntity?.DefaultCheckpointStyleBackgroundColor);
+        string backgroundColor = ResolveStyleProperty(payload.Style.BackgroundColor, sortedMatchedAreas,
+            a => a.GetPayload().Style.BackgroundColor, eventStyle?.DefaultBackgroundColor);
 
-        string borderColor = ResolveStyleProperty(location.StyleBorderColor, sortedMatchedAreas,
-            a => a.CheckpointStyleBorderColor, eventEntity?.DefaultCheckpointStyleBorderColor);
+        string borderColor = ResolveStyleProperty(payload.Style.BorderColor, sortedMatchedAreas,
+            a => a.GetPayload().Style.BorderColor, eventStyle?.DefaultBorderColor);
 
-        string iconColor = ResolveStyleProperty(location.StyleIconColor, sortedMatchedAreas,
-            a => a.CheckpointStyleIconColor, eventEntity?.DefaultCheckpointStyleIconColor);
+        string iconColor = ResolveStyleProperty(payload.Style.IconColor, sortedMatchedAreas,
+            a => a.GetPayload().Style.IconColor, eventStyle?.DefaultIconColor);
 
-        string size = ResolveStyleProperty(location.StyleSize, sortedMatchedAreas,
-            a => a.CheckpointStyleSize, eventEntity?.DefaultCheckpointStyleSize);
+        string size = ResolveStyleProperty(payload.Style.Size, sortedMatchedAreas,
+            a => a.GetPayload().Style.Size, eventStyle?.DefaultSize);
 
-        string mapRotation = ResolveStyleProperty(location.StyleMapRotation, sortedMatchedAreas,
-            a => a.CheckpointStyleMapRotation, eventEntity?.DefaultCheckpointStyleMapRotation);
+        string mapRotation = ResolveStyleProperty(payload.Style.MapRotation, sortedMatchedAreas,
+            a => a.GetPayload().Style.MapRotation, eventStyle?.DefaultMapRotation);
 
         return new CheckpointStyleResolution(type, color, backgroundShape, backgroundColor, borderColor, iconColor, size, mapRotation);
     }
@@ -366,16 +410,16 @@ public static class EntityExtensions
     /// 4. Returns "Marshals" as the default
     /// </summary>
     private static string ResolveCheckpointPeopleTerm(
-        LocationEntity location,
+        LocationPayload payload,
         List<string> areaIds,
         EventEntity? eventEntity,
         IEnumerable<AreaEntity>? areas,
         Dictionary<string, int>? areaCheckpointCounts)
     {
         // 1. If checkpoint has its own terminology, use it
-        if (!string.IsNullOrEmpty(location.PeopleTerm))
+        if (!string.IsNullOrEmpty(payload.Terminology.PeopleTerm))
         {
-            return location.PeopleTerm;
+            return payload.Terminology.PeopleTerm;
         }
 
         // 2. Check areas - prefer area with fewest checkpoints that has terminology
@@ -383,7 +427,7 @@ public static class EntityExtensions
         {
             IEnumerable<AreaEntity> matchedAreas = areas
                 .Where(a => areaIds.Contains(a.RowKey) &&
-                           !string.IsNullOrEmpty(a.PeopleTerm));
+                           !string.IsNullOrEmpty(a.GetPayload().Terminology.PeopleTerm));
 
             // If we have checkpoint counts, sort by count (ascending) to prefer smaller areas
             if (areaCheckpointCounts != null)
@@ -395,14 +439,18 @@ public static class EntityExtensions
             AreaEntity? termArea = matchedAreas.FirstOrDefault();
             if (termArea != null)
             {
-                return termArea.PeopleTerm;
+                return termArea.GetPayload().Terminology.PeopleTerm;
             }
         }
 
-        // 3. Use event default if set
-        if (eventEntity != null && !string.IsNullOrEmpty(eventEntity.PeopleTerm))
+        // 3. Use event default if set (from payload for v2 support)
+        if (eventEntity != null)
         {
-            return eventEntity.PeopleTerm;
+            string eventPeopleTerm = eventEntity.GetPayload().Terminology.Person;
+            if (!string.IsNullOrEmpty(eventPeopleTerm))
+            {
+                return eventPeopleTerm;
+            }
         }
 
         // 4. Return default
@@ -417,16 +465,16 @@ public static class EntityExtensions
     /// 4. Returns "Checkpoint" as the default
     /// </summary>
     private static string ResolveCheckpointTerm(
-        LocationEntity location,
+        LocationPayload payload,
         List<string> areaIds,
         EventEntity? eventEntity,
         IEnumerable<AreaEntity>? areas,
         Dictionary<string, int>? areaCheckpointCounts)
     {
         // 1. If checkpoint has its own terminology, use it
-        if (!string.IsNullOrEmpty(location.CheckpointTerm))
+        if (!string.IsNullOrEmpty(payload.Terminology.CheckpointTerm))
         {
-            return location.CheckpointTerm;
+            return payload.Terminology.CheckpointTerm;
         }
 
         // 2. Check areas - prefer area with fewest checkpoints that has terminology
@@ -434,7 +482,7 @@ public static class EntityExtensions
         {
             IEnumerable<AreaEntity> matchedAreas = areas
                 .Where(a => areaIds.Contains(a.RowKey) &&
-                           !string.IsNullOrEmpty(a.CheckpointTerm));
+                           !string.IsNullOrEmpty(a.GetPayload().Terminology.CheckpointTerm));
 
             // If we have checkpoint counts, sort by count (ascending) to prefer smaller areas
             if (areaCheckpointCounts != null)
@@ -446,20 +494,24 @@ public static class EntityExtensions
             AreaEntity? termArea = matchedAreas.FirstOrDefault();
             if (termArea != null)
             {
-                return termArea.CheckpointTerm;
+                return termArea.GetPayload().Terminology.CheckpointTerm;
             }
         }
 
-        // 3. Use event default if set (singular form)
-        if (eventEntity != null && !string.IsNullOrEmpty(eventEntity.CheckpointTerm))
+        // 3. Use event default if set (from payload for v2 support, singular form)
+        if (eventEntity != null)
         {
-            // Event stores plural form, convert to singular for individual checkpoint
-            string term = eventEntity.CheckpointTerm;
-            if (term.EndsWith("s", StringComparison.OrdinalIgnoreCase))
+            // Event stores plural form in payload.Terminology.Location
+            string term = eventEntity.GetPayload().Terminology.Location;
+            if (!string.IsNullOrEmpty(term))
             {
-                return term[..^1]; // Remove trailing 's' for singular
+                // Convert to singular for individual checkpoint
+                if (term.EndsWith("s", StringComparison.OrdinalIgnoreCase))
+                {
+                    return term[..^1]; // Remove trailing 's' for singular
+                }
+                return term;
             }
-            return term;
         }
 
         // 4. Return default

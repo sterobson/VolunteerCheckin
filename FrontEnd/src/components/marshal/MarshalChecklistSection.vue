@@ -160,6 +160,7 @@
 import { defineProps, defineEmits, computed } from 'vue';
 import { getIcon } from '../../utils/icons';
 import { useTerminology } from '../../composables/useTerminology';
+import { useEventTimeZone } from '../../composables/useEventTimeZone';
 import { sortTasks } from '../../utils/sortingHelpers';
 import GroupedTasksList from '../event-manage/GroupedTasksList.vue';
 
@@ -238,7 +239,14 @@ const props = defineProps({
     type: Function,
     default: () => '',
   },
+  timeZoneId: {
+    type: String,
+    default: 'UTC',
+  },
 });
+
+// Use event timezone for formatting
+const { formatDateTime } = useEventTimeZone(() => props.timeZoneId);
 
 defineEmits(['toggle', 'toggle-item', 'toggle-group']);
 
@@ -367,19 +375,7 @@ const areaOutstandingCount = computed(() => {
   return count;
 });
 
-const formatDateTime = (dateString) => {
-  if (!dateString) return '';
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now - date;
-  const diffHours = diffMs / (1000 * 60 * 60);
-
-  // If within 24 hours, just show time
-  if (diffHours < 24 && diffHours >= 0) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-  return date.toLocaleString();
-};
+// formatDateTime provided by useEventTimeZone composable
 
 const getCompletionText = (item) => {
   if (item.completedByActorName && item.contextOwnerName &&

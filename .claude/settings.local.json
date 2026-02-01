@@ -35,7 +35,13 @@
       "Bash(winget:*)",
       "Bash(powershell.exe -Command \"cd ''C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\Backend''; dotnet build 2>&1\")",
       "Bash(powershell.exe -Command \"cd ''C:\\\\Users\\\\stero\\\\source\\\\repos\\\\VolunteerCheckin\\\\Backend''; dotnet test --no-build 2>&1\")",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "Bash(pwsh -NoProfile -Command \"try { . .\\\\deploy.ps1 -ErrorAction Stop; Write-Host ''Syntax OK'' } catch { Write-Host $_Exception.Message }\")",
+      "Bash(git checkout:*)",
+      "Bash(grep:*)",
+      "Bash(npx eslint:*)",
+      "Bash(dotnet restore:*)",
+      "Bash(git add:*)"
     ]
   }
 }

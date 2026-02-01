@@ -34,6 +34,7 @@
           :route-color="routeColor"
           :route-style="routeStyle"
           :route-weight="routeWeight"
+          :layers="layers"
           :center="{ lat: assignment.location.latitude, lng: assignment.location.longitude }"
           :zoom="16"
           :user-location="userLocation"
@@ -255,6 +256,7 @@ import CheckInToggleButton from '../common/CheckInToggleButton.vue';
 import ContactCard from './ContactCard.vue';
 import NoteCard from './NoteCard.vue';
 import { useTerminology } from '../../composables/useTerminology';
+import { useEventTimeZone } from '../../composables/useEventTimeZone';
 import { calculateDistance } from '../../utils/coordinateUtils';
 import { canMarshalUpdateDynamicLocation } from '../../utils/scopeUtils';
 
@@ -299,6 +301,10 @@ const props = defineProps({
   routeWeight: {
     type: Number,
     default: null,
+  },
+  layers: {
+    type: Array,
+    default: () => [],
   },
   userLocation: {
     type: Object,
@@ -360,7 +366,19 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  timeZoneId: {
+    type: String,
+    default: 'UTC',
+  },
 });
+
+// Use event timezone for formatting times
+const {
+  formatTime,
+  formatTimeRange,
+  formatCheckInTime,
+  formatDateTime,
+} = useEventTimeZone(() => props.timeZoneId);
 
 defineEmits([
   'toggle',
@@ -448,23 +466,7 @@ const getCheckpointIconSvg = (location) => {
   return icons[iconType] || icons.checkpoint;
 };
 
-const formatTimeRange = (start, end) => {
-  const formatTime = (time) => {
-    if (!time) return '';
-    const date = new Date(time);
-    return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  };
-
-  if (start && end) return `${formatTime(start)} - ${formatTime(end)}`;
-  if (start) return `from ${formatTime(start)}`;
-  if (end) return `until ${formatTime(end)}`;
-  return '';
-};
-
-const formatCheckInTime = (time) => {
-  if (!time) return '';
-  return new Date(time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-};
+// formatTimeRange, formatCheckInTime, formatDateTime provided by useEventTimeZone composable
 
 const formatCheckInMethod = (method) => {
   const methods = {
@@ -474,20 +476,6 @@ const formatCheckInMethod = (method) => {
     admin: 'Admin',
   };
   return methods[method] || method;
-};
-
-const formatDateTime = (dateString) => {
-  if (!dateString) return '';
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now - date;
-  const diffHours = diffMs / (1000 * 60 * 60);
-
-  // If within 24 hours, just show time
-  if (diffHours < 24 && diffHours >= 0) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-  return date.toLocaleString();
 };
 </script>
 

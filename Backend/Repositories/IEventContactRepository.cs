@@ -51,4 +51,9 @@ public interface IEventContactRepository
     /// Update display order for multiple contacts
     /// </summary>
     Task UpdateDisplayOrdersAsync(string eventId, Dictionary<string, int> contactDisplayOrders);
+
+    /// <summary>
+    /// Delete all contacts for an event (hard delete)
+    /// </summary>
+    Task DeleteAllByEventAsync(string eventId);
 }

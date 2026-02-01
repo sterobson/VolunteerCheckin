@@ -1,5 +1,6 @@
 import { ref } from 'vue';
 import { locationsApi } from '../services/api';
+import { roundCoordinate } from '../utils/coordinateUtils';
 
 /**
  * Composable for managing dynamic checkpoint location functionality
@@ -73,9 +74,10 @@ export function useDynamicLocation({
 
     try {
       const evtId = eventId.value;
+      // Round coordinates to 6 decimal places before saving
       const payload = {
-        latitude: lat,
-        longitude: lng,
+        latitude: roundCoordinate(lat),
+        longitude: roundCoordinate(lng),
         sourceType,
       };
       if (sourceCheckpointId) {

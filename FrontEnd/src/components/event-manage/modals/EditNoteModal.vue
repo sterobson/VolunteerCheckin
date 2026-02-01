@@ -73,30 +73,16 @@
           </div>
         </div>
 
-        <div class="form-row">
-          <div class="form-group">
-            <label for="displayOrder">Display order:</label>
+        <div class="form-group checkbox-group-inline">
+          <label class="checkbox-label-inline">
             <input
-              id="displayOrder"
-              v-model.number="form.displayOrder"
-              type="number"
-              @input="handleInput"
-              min="0"
+              type="checkbox"
+              v-model="form.isPinned"
+              @change="handleInput"
             />
-            <span class="help-text">Lower numbers appear first</span>
-          </div>
-
-          <div class="form-group checkbox-group-inline">
-            <label class="checkbox-label-inline">
-              <input
-                type="checkbox"
-                v-model="form.isPinned"
-                @change="handleInput"
-              />
-              <span>Pin to top</span>
-            </label>
-            <span class="help-text">Pinned notes always appear at the top</span>
-          </div>
+            <span>Pin to top</span>
+          </label>
+          <span class="help-text">Pinned notes always appear at the top</span>
         </div>
 
       </div>

@@ -108,6 +108,7 @@
 <script setup>
 import { defineProps, defineEmits } from 'vue';
 import { useTerminology } from '../../../composables/useTerminology';
+import { useEventTimeZone } from '../../../composables/useEventTimeZone';
 
 const { termsLower } = useTerminology();
 
@@ -148,14 +149,16 @@ const props = defineProps({
     type: Object,
     default: () => ({}),
   },
+  timeZoneId: {
+    type: String,
+    default: 'UTC',
+  },
 });
 
-defineEmits(['close', 'update-gps', 'toggle-auto-update', 'select-on-map', 'copy-from-checkpoint']);
+// Use event timezone for formatting
+const { formatDateTime } = useEventTimeZone(() => props.timeZoneId);
 
-const formatDateTime = (dateString) => {
-  if (!dateString) return '';
-  return new Date(dateString).toLocaleString();
-};
+defineEmits(['close', 'update-gps', 'toggle-auto-update', 'select-on-map', 'copy-from-checkpoint']);
 
 const truncateDescription = (description, maxLength = 50) => {
   if (!description) return '';

@@ -106,4 +106,12 @@ public class TableStorageNoteRepository : INoteRepository
             }
         }
     }
+
+    public async Task DeleteAllByEventAsync(string eventId)
+    {
+        await foreach (NoteEntity note in _table.QueryAsync<NoteEntity>(n => n.PartitionKey == eventId))
+        {
+            await _table.DeleteEntityAsync(note.PartitionKey, note.RowKey);
+        }
+    }
 }

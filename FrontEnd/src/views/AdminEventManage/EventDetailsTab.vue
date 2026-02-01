@@ -44,7 +44,7 @@
               @change="emitFormChange"
             >
               <option
-                v-for="tz in TIME_ZONES"
+                v-for="tz in timeZoneOptions"
                 :key="tz.value"
                 :value="tz.value"
               >
@@ -65,8 +65,8 @@
 </template>
 
 <script setup>
-import { ref, watch, defineProps, defineEmits } from 'vue';
-import { TIME_ZONES } from '../../constants/timeZones';
+import { ref, watch, computed, defineProps, defineEmits } from 'vue';
+import { getTimeZonesForDate } from '../../constants/timeZones';
 
 const props = defineProps({
   eventData: {
@@ -85,6 +85,9 @@ const emit = defineEmits([
 ]);
 
 const localForm = ref({ ...props.eventData });
+
+// Compute timezone options based on the selected event date
+const timeZoneOptions = computed(() => getTimeZonesForDate(localForm.value.eventDate));
 
 watch(() => props.eventData, (newVal) => {
   localForm.value = { ...newVal };

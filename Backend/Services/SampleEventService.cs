@@ -154,13 +154,14 @@ public class SampleEventService : ISampleEventService
         await CreateAssignmentsAsync(eventId, locations, marshals, areaIdMap);
 
         // Create area leads - one marshal from each area (must be assigned to a checkpoint in that area)
-        await CreateAreaLeadsAsync(eventId, locations, marshals, areaIdMap);
+        // Returns mapping of areaId -> marshalId for use in contact creation
+        Dictionary<string, string> areaLeadMarshalIds = await CreateAreaLeadsAsync(eventId, locations, marshals, areaIdMap);
 
         // Create sample checklist items
         await CreateChecklistItemsAsync(eventId, areaIdMap);
 
         // Create sample contacts (including area lead contacts linked to marshals)
-        await CreateContactsAsync(eventId, locations, marshals, areaIdMap);
+        await CreateContactsAsync(eventId, locations, marshals, areaIdMap, areaLeadMarshalIds);
 
         // Generate an admin magic code for this sample event
         // This will be used to access the admin panel without authentication
@@ -678,14 +679,16 @@ public class SampleEventService : ISampleEventService
     /// <summary>
     /// Creates area lead roles for each non-default area.
     /// Picks a random marshal from those assigned to checkpoints in that area.
+    /// Returns a mapping of areaId -> marshalId for use in contact creation.
     /// </summary>
-    private async Task CreateAreaLeadsAsync(
+    private async Task<Dictionary<string, string>> CreateAreaLeadsAsync(
         string eventId,
         List<LocationEntity> locations,
         List<MarshalEntity> marshals,
         Dictionary<string, string> areaIdMap)
     {
         Random random = new();
+        Dictionary<string, string> areaLeadMarshalIds = new();
 
         // Get all assignments to know which marshals are at which checkpoints
         IEnumerable<AssignmentEntity> allAssignments = await _assignmentRepository.GetByEventAsync(eventId);
@@ -753,6 +756,7 @@ public class SampleEventService : ISampleEventService
             // Pick a random marshal from the candidates
             string selectedMarshalId = candidateMarshalIds[random.Next(candidateMarshalIds.Count)];
             usedMarshalIds.Add(selectedMarshalId);
+            areaLeadMarshalIds[areaId] = selectedMarshalId;
 
             // Find the marshal entity
             MarshalEntity? marshal = marshals.FirstOrDefault(m => m.MarshalId == selectedMarshalId);
@@ -769,7 +773,6 @@ public class SampleEventService : ISampleEventService
                 RowKey = personId,
                 PersonId = personId,
                 Name = marshal.Name,
-                IsSystemAdmin = false,
                 CreatedAt = DateTime.UtcNow
             };
             await _personRepository.AddAsync(person);
@@ -793,6 +796,8 @@ public class SampleEventService : ISampleEventService
             };
             await _eventRoleRepository.AddAsync(areaLeadRole);
         }
+
+        return areaLeadMarshalIds;
     }
 
     private async Task CreateChecklistItemsAsync(string eventId, Dictionary<string, string> areaIdMap)
@@ -982,7 +987,8 @@ public class SampleEventService : ISampleEventService
         string eventId,
         List<LocationEntity> locations,
         List<MarshalEntity> marshals,
-        Dictionary<string, string> areaIdMap)
+        Dictionary<string, string> areaIdMap,
+        Dictionary<string, string> areaLeadMarshalIds)
     {
         Random random = new();
         HashSet<string> usedNames = [];
@@ -1013,12 +1019,13 @@ public class SampleEventService : ISampleEventService
         }
 
         // Create an event director contact
+        string directorContactId = Guid.NewGuid().ToString();
         EventContactEntity directorContact = new()
         {
             PartitionKey = eventId,
-            RowKey = Guid.NewGuid().ToString(),
+            RowKey = directorContactId,
             EventId = eventId,
-            ContactId = Guid.NewGuid().ToString(),
+            ContactId = directorContactId,
             Name = GenerateRandomName(),
             Phone = GenerateFakeUkPhone(),
             RolesJson = JsonSerializer.Serialize(new[] { "EventDirector" }),
@@ -1040,12 +1047,13 @@ public class SampleEventService : ISampleEventService
         await _eventContactRepository.AddAsync(directorContact);
 
         // Create an emergency contact
+        string emergencyContactId = Guid.NewGuid().ToString();
         EventContactEntity emergencyContact = new()
         {
             PartitionKey = eventId,
-            RowKey = Guid.NewGuid().ToString(),
+            RowKey = emergencyContactId,
             EventId = eventId,
-            ContactId = Guid.NewGuid().ToString(),
+            ContactId = emergencyContactId,
             Name = GenerateRandomName(),
             Phone = GenerateFakeUkPhone(),
             RolesJson = JsonSerializer.Serialize(new[] { "EmergencyContact" }),
@@ -1066,12 +1074,13 @@ public class SampleEventService : ISampleEventService
         await _eventContactRepository.AddAsync(emergencyContact);
 
         // Create a medical contact
+        string medicalContactId = Guid.NewGuid().ToString();
         EventContactEntity medicalContact = new()
         {
             PartitionKey = eventId,
-            RowKey = Guid.NewGuid().ToString(),
+            RowKey = medicalContactId,
             EventId = eventId,
-            ContactId = Guid.NewGuid().ToString(),
+            ContactId = medicalContactId,
             Name = GenerateRandomName(),
             Phone = GenerateFakeUkPhone(),
             RolesJson = JsonSerializer.Serialize(new[] { "MedicalLead" }),
@@ -1094,12 +1103,13 @@ public class SampleEventService : ISampleEventService
         // Create a safety officer contact for the south zone only
         if (areaIdMap.TryGetValue("South of the course", out string? southAreaId))
         {
+            string safetyContactId = Guid.NewGuid().ToString();
             EventContactEntity safetyContact = new()
             {
                 PartitionKey = eventId,
-                RowKey = Guid.NewGuid().ToString(),
+                RowKey = safetyContactId,
                 EventId = eventId,
-                ContactId = Guid.NewGuid().ToString(),
+                ContactId = safetyContactId,
                 Name = GenerateRandomName(),
                 Phone = GenerateFakeUkPhone(),
                 RolesJson = JsonSerializer.Serialize(new[] { "SafetyOfficer" }),
@@ -1120,31 +1130,7 @@ public class SampleEventService : ISampleEventService
             await _eventContactRepository.AddAsync(safetyContact);
         }
 
-        // Create area lead contacts - one for each non-default area, linked to a marshal in that area
-        // Get all assignments to know which marshals are at which checkpoints
-        IEnumerable<AssignmentEntity> allAssignments = await _assignmentRepository.GetByEventAsync(eventId);
-        Dictionary<string, List<string>> locationToMarshalIds = allAssignments
-            .GroupBy(a => a.LocationId)
-            .ToDictionary(g => g.Key, g => g.Select(a => a.MarshalId).ToList());
-
-        // Build a map of area ID to checkpoints in that area
-        Dictionary<string, List<LocationEntity>> areaToLocations = new();
-        foreach (LocationEntity location in locations)
-        {
-            LocationPayload payload = location.GetPayload();
-            foreach (string areaId in payload.AreaIds)
-            {
-                if (!areaToLocations.ContainsKey(areaId))
-                {
-                    areaToLocations[areaId] = [];
-                }
-                areaToLocations[areaId].Add(location);
-            }
-        }
-
-        // Track which marshals have been used as area leads
-        HashSet<string> usedMarshalIds = [];
-
+        // Create area lead contacts - use the same marshals that were given the area lead role
         foreach (KeyValuePair<string, string> kvp in areaIdMap)
         {
             string areaName = kvp.Key;
@@ -1156,36 +1142,11 @@ public class SampleEventService : ISampleEventService
                 continue;
             }
 
-            // Find all checkpoints in this area
-            if (!areaToLocations.TryGetValue(areaId, out List<LocationEntity>? areaLocations) || areaLocations.Count == 0)
+            // Use the pre-selected marshal from CreateAreaLeadsAsync
+            if (!areaLeadMarshalIds.TryGetValue(areaId, out string? selectedMarshalId))
             {
                 continue;
             }
-
-            // Collect all marshals assigned to checkpoints in this area
-            List<string> candidateMarshalIds = [];
-            foreach (LocationEntity location in areaLocations)
-            {
-                if (locationToMarshalIds.TryGetValue(location.RowKey, out List<string>? marshalIds))
-                {
-                    foreach (string marshalId in marshalIds)
-                    {
-                        if (!usedMarshalIds.Contains(marshalId) && !candidateMarshalIds.Contains(marshalId))
-                        {
-                            candidateMarshalIds.Add(marshalId);
-                        }
-                    }
-                }
-            }
-
-            if (candidateMarshalIds.Count == 0)
-            {
-                continue;
-            }
-
-            // Pick a random marshal from the candidates
-            string selectedMarshalId = candidateMarshalIds[random.Next(candidateMarshalIds.Count)];
-            usedMarshalIds.Add(selectedMarshalId);
 
             // Find the marshal entity
             MarshalEntity? marshal = marshals.FirstOrDefault(m => m.MarshalId == selectedMarshalId);
@@ -1195,16 +1156,18 @@ public class SampleEventService : ISampleEventService
             }
 
             // Create an area lead contact linked to this marshal
+            string contactId = Guid.NewGuid().ToString();
+            string[] areaLeadRoles = ["AreaLead"];
             EventContactEntity areaLeadContact = new()
             {
                 PartitionKey = eventId,
-                RowKey = Guid.NewGuid().ToString(),
+                RowKey = contactId,
                 EventId = eventId,
-                ContactId = Guid.NewGuid().ToString(),
+                ContactId = contactId,
                 Name = marshal.Name,
                 Phone = GenerateFakeUkPhone(),
                 MarshalId = marshal.MarshalId,
-                RolesJson = JsonSerializer.Serialize(new[] { "AreaLead" }),
+                RolesJson = JsonSerializer.Serialize(areaLeadRoles),
                 ScopeConfigurationsJson = JsonSerializer.Serialize(new[]
                 {
                     new ScopeConfiguration
@@ -1220,6 +1183,12 @@ public class SampleEventService : ISampleEventService
             };
 
             await _eventContactRepository.AddAsync(areaLeadContact);
+
+            // Sync the role and contact details to the linked marshal so both have the same values
+            marshal.RolesJson = JsonSerializer.Serialize(areaLeadRoles);
+            marshal.PhoneNumber = areaLeadContact.Phone;
+            marshal.Email = areaLeadContact.Email ?? string.Empty;
+            await _marshalRepository.UpdateUnconditionalAsync(marshal);
         }
     }
 

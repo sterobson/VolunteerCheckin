@@ -145,7 +145,7 @@ public class SampleEventService : ISampleEventService
         List<LocationEntity> locations = await CreateCheckpointsAsync(eventId, checkpoints, areaIdMap);
 
         // Create notes for specific checkpoints
-        await CreateNotesAsync(eventId, locations);
+        await CreateNotesAsync(eventId, locations, areaIdMap);
 
         // Create 30 marshals with random names (including some surname pairs)
         List<MarshalEntity> marshals = await CreateMarshalsAsync(eventId);
@@ -357,42 +357,87 @@ public class SampleEventService : ISampleEventService
     /// <summary>
     /// Creates notes for specific checkpoints.
     /// </summary>
-    private async Task CreateNotesAsync(string eventId, List<LocationEntity> locations)
+    private async Task CreateNotesAsync(string eventId, List<LocationEntity> locations, Dictionary<string, string> areaIdMap)
     {
+        int displayOrder = 0;
+
         // Find CP6 (the photo checkpoint)
         LocationEntity? cp6 = locations.FirstOrDefault(l => l.Name == "CP6");
-        if (cp6 == null)
+        if (cp6 != null)
         {
-            return;
+            string noteId = Guid.NewGuid().ToString();
+            List<ScopeConfiguration> scopes =
+            [
+                new ScopeConfiguration
+                {
+                    Scope = "EveryoneAtCheckpoints",
+                    ItemType = "Checkpoint",
+                    Ids = [cp6.RowKey]
+                }
+            ];
+
+            NoteEntity note = new()
+            {
+                PartitionKey = eventId,
+                RowKey = noteId,
+                EventId = eventId,
+                NoteId = noteId,
+                Title = "Photography",
+                Content = "There's a bench available to use. Many runners like to try and get jumping photographs, so try to humour them if you can.\n\nRunners making an 'X' with their arms do not wish to have their photos taken, so please do not upload these.",
+                ScopeConfigurationsJson = JsonSerializer.Serialize(scopes),
+                DisplayOrder = displayOrder++,
+                Priority = Constants.NotePriorityNormal,
+                CreatedByName = "System",
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _noteRepository.AddAsync(note);
         }
 
-        string noteId = Guid.NewGuid().ToString();
-        List<ScopeConfiguration> scopes =
-        [
-            new ScopeConfiguration
-            {
-                Scope = "EveryoneAtCheckpoints",
-                ItemType = "Checkpoint",
-                Ids = [cp6.RowKey]
-            }
-        ];
-
-        NoteEntity note = new()
+        // Create a note for all marshals at checkpoints in the Start/Finish area
+        if (areaIdMap.TryGetValue("Start/Finish", out string? startFinishAreaId))
         {
-            PartitionKey = eventId,
-            RowKey = noteId,
-            EventId = eventId,
-            NoteId = noteId,
-            Title = "Photography",
-            Content = "There's a bench available to use. Many runners like to try and get jumping photographs, so try to humour them if you can.\n\nRunners making an 'X' with their arms do not wish to have their photos taken, so please do not upload these.",
-            ScopeConfigurationsJson = JsonSerializer.Serialize(scopes),
-            DisplayOrder = 0,
-            Priority = Constants.NotePriorityNormal,
-            CreatedByName = "System",
-            CreatedAt = DateTime.UtcNow
-        };
+            // Find all checkpoints in the Start/Finish area
+            List<string> startFinishCheckpointIds = locations
+                .Where(l =>
+                {
+                    LocationPayload payload = l.GetPayload();
+                    return payload.AreaIds.Contains(startFinishAreaId);
+                })
+                .Select(l => l.RowKey)
+                .ToList();
 
-        await _noteRepository.AddAsync(note);
+            if (startFinishCheckpointIds.Count > 0)
+            {
+                string noteId = Guid.NewGuid().ToString();
+                List<ScopeConfiguration> scopes =
+                [
+                    new ScopeConfiguration
+                    {
+                        Scope = "EveryoneAtCheckpoints",
+                        ItemType = "Checkpoint",
+                        Ids = startFinishCheckpointIds
+                    }
+                ];
+
+                NoteEntity note = new()
+                {
+                    PartitionKey = eventId,
+                    RowKey = noteId,
+                    EventId = eventId,
+                    NoteId = noteId,
+                    Title = "Start/finish notes",
+                    Content = "As this is a residential area, please do not play music before 9am. You do not need to manage the traffic, we have employed the traffic management company to do that. Some vehicles will still need to leave their driveways, which we will not be able to stop. During the race, the local pub will offer free hot chocolates to all marshals, but please be back at your station before the first runners come through.",
+                    ScopeConfigurationsJson = JsonSerializer.Serialize(scopes),
+                    DisplayOrder = displayOrder++,
+                    Priority = Constants.NotePriorityNormal,
+                    CreatedByName = "System",
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await _noteRepository.AddAsync(note);
+            }
+        }
     }
 
     /// <summary>

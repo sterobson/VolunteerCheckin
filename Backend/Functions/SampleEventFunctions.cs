@@ -227,6 +227,7 @@ public class SampleEventFunctions
             new SampleCheckpoint
             {
                 Name = "Start",
+                Description = "Race start point with timing mat. Ensure runners cross the mat and don't cut the corner.",
                 Latitude = 54.569606,
                 Longitude = -2.862754,
                 AreaName = "Start/Finish",
@@ -237,6 +238,7 @@ public class SampleEventFunctions
             new SampleCheckpoint
             {
                 Name = "CP1",
+                Description = "First turn off the main road onto the fell path. Watch for traffic when directing runners.",
                 Latitude = 54.563762,
                 Longitude = -2.876401,
                 AreaName = "North of the course",
@@ -247,6 +249,7 @@ public class SampleEventFunctions
             new SampleCheckpoint
             {
                 Name = "CP2",
+                Description = "Fell path checkpoint. Ground can be uneven - warn runners if conditions are slippery.",
                 Latitude = 54.557867,
                 Longitude = -2.876101,
                 AreaName = "North of the course",
@@ -256,6 +259,7 @@ public class SampleEventFunctions
             new SampleCheckpoint
             {
                 Name = "CP3",
+                Description = "Gate crossing point. Please ensure the gate is kept closed between runners to keep livestock secure.",
                 Latitude = 54.556200,
                 Longitude = -2.879233,
                 AreaName = "North of the course",
@@ -265,6 +269,7 @@ public class SampleEventFunctions
             new SampleCheckpoint
             {
                 Name = "CP4",
+                Description = "Sharp left turn onto the southern trail. This is a common wrong-turn point - be vigilant!",
                 Latitude = 54.543412,
                 Longitude = -2.874255,
                 AreaName = "South of the course",
@@ -275,6 +280,7 @@ public class SampleEventFunctions
             new SampleCheckpoint
             {
                 Name = "CP5",
+                Description = "Remote checkpoint with limited mobile signal. Use radio for communications.",
                 Latitude = 54.538186,
                 Longitude = -2.870092,
                 AreaName = "South of the course",
@@ -285,6 +291,7 @@ public class SampleEventFunctions
             new SampleCheckpoint
             {
                 Name = "CP6",
+                Description = "Scenic viewpoint and photo opportunity. Runners often stop here briefly.",
                 Latitude = 54.541894,
                 Longitude = -2.855372,
                 AreaName = "South of the course",
@@ -294,6 +301,7 @@ public class SampleEventFunctions
             new SampleCheckpoint
             {
                 Name = "CP7",
+                Description = "Water station. Keep cups stocked and direct runners to the bin for used cups.",
                 Latitude = 54.544781,
                 Longitude = -2.856188,
                 AreaName = "South of the course",
@@ -303,6 +311,7 @@ public class SampleEventFunctions
             new SampleCheckpoint
             {
                 Name = "CP8",
+                Description = "Path narrows here. If runners are bunching up, encourage faster runners to pass safely.",
                 Latitude = 54.547493,
                 Longitude = -2.856445,
                 AreaName = "South of the course",
@@ -313,6 +322,7 @@ public class SampleEventFunctions
             new SampleCheckpoint
             {
                 Name = "CP9",
+                Description = "Rejoin point from the southern loop. Encourage tired runners - they're on the home stretch!",
                 Latitude = 54.559976,
                 Longitude = -2.859149,
                 AreaName = "North of the course",
@@ -322,6 +332,7 @@ public class SampleEventFunctions
             new SampleCheckpoint
             {
                 Name = "CP10",
+                Description = "Road crossing point. Stop traffic to allow runners to cross safely in groups.",
                 Latitude = 54.567702,
                 Longitude = -2.860898,
                 AreaName = "Start/Finish",
@@ -331,6 +342,7 @@ public class SampleEventFunctions
             new SampleCheckpoint
             {
                 Name = "CP11",
+                Description = "Final turn before the finish. Direct runners left towards the finish chute.",
                 Latitude = 54.568647,
                 Longitude = -2.863054,
                 AreaName = "Start/Finish",
@@ -341,7 +353,7 @@ public class SampleEventFunctions
             new SampleCheckpoint
             {
                 Name = "Finish line",
-                Description = "",
+                Description = "Race finish with timing mat and medal collection. Ensure runners cross the mat before collecting medals.",
                 Latitude = 54.568038,
                 Longitude = -2.863913,
                 AreaName = "Start/Finish",

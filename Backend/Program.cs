@@ -89,6 +89,7 @@ builder.Services.AddSingleton<EventService>();
 builder.Services.AddSingleton<IEventService>(sp => sp.GetRequiredService<EventService>());
 builder.Services.AddSingleton<SampleEventService>();
 builder.Services.AddSingleton<ISampleEventService>(sp => sp.GetRequiredService<SampleEventService>());
+builder.Services.AddSingleton<StripeService>();
 
 // Register repositories
 builder.Services.AddSingleton<ILocationRepository, TableStorageLocationRepository>();
@@ -108,5 +109,7 @@ builder.Services.AddSingleton<IIncidentRepository, TableStorageIncidentRepositor
 builder.Services.AddSingleton<IEventDeletionRepository, TableStorageEventDeletionRepository>();
 builder.Services.AddSingleton<IEventRoleDefinitionRepository, TableStorageEventRoleDefinitionRepository>();
 builder.Services.AddSingleton<ILayerRepository, TableStorageLayerRepository>();
+builder.Services.AddSingleton<IPaymentRepository, TableStoragePaymentRepository>();
+builder.Services.AddSingleton<IPendingEventRepository, TableStoragePendingEventRepository>();
 
 await builder.Build().RunAsync();

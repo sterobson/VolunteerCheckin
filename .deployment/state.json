@@ -1,23 +1,32 @@
-﻿{
-    "environments":  {
-                         "production":  {
-                                            "slots":  [
-                                                          "onthedayapp-production-01",
-                                                          "onthedayapp-production-02"
-                                                      ],
-                                            "lastDeployedSlot":  "onthedayapp-production-02",
-                                            "resourceGroup":  "OnTheDayApp-Production",
-                                            "cors":  [
-                                                         "https://portal.azure.com",
-                                                         "https://sterobson.github.io",
-                                                         "https://ambitious-ground-04b5e4603.4.azurestaticapps.net",
-                                                         "https://www.onthedayapp.com",
-                                                         "https://onthedayapp.com"
-                                                     ],
-                                            "frontend":  {
-                                                             "staticWebAppName":  "OnTheDayUi",
-                                                             "url":  "https://onthedayapp.com"
-                                                         }
-                                        }
-                     }
+{
+  "environments": {
+    "production": {
+      "slots": [
+        "onthedayapp-production-01",
+        "onthedayapp-production-02"
+      ],
+      "lastDeployedSlot": "onthedayapp-production-02",
+      "resourceGroup": "OnTheDayApp-Production",
+      "cors": [
+        "https://portal.azure.com",
+        "https://sterobson.github.io",
+        "https://ambitious-ground-04b5e4603.4.azurestaticapps.net",
+        "https://www.onthedayapp.com",
+        "https://onthedayapp.com"
+      ],
+      "frontend": {
+        "staticWebAppName": "OnTheDayUi",
+        "url": "https://onthedayapp.com"
+      }
+    },
+    "testing": {
+      "resourceGroup": "OnTheDayApp-Testing",
+      "slots": [
+        "onthedayapp-testing-01"
+      ],
+      "frontend": {
+        "url": "https://ambitious-stone-03cd89503.4.azurestaticapps.net"
+      }
+    }
+  }
 }

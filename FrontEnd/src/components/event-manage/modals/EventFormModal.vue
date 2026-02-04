@@ -51,6 +51,42 @@
           </option>
         </select>
       </div>
+
+      <!-- Marshal tier selector (only shown when creating, not editing) -->
+      <div v-if="!isEditing && showMarshalTier" class="form-group">
+        <label>{{ peopleTerm }} tier *</label>
+        <p class="tier-description">
+          Base price is &pound;10 and includes up to 10 {{ peopleTermLower }}. Additional {{ peopleTermLower }} are 50p each.
+        </p>
+        <div class="tier-options">
+          <label
+            v-for="tier in tierOptions"
+            :key="tier.value"
+            class="tier-option"
+            :class="{ selected: form.marshalTier === tier.value }"
+          >
+            <input
+              type="radio"
+              v-model="form.marshalTier"
+              :value="tier.value"
+              name="marshalTier"
+            />
+            <span class="tier-label">{{ tier.label }}</span>
+            <span class="tier-price">{{ tier.price }}</span>
+          </label>
+        </div>
+        <div class="custom-tier" v-if="form.marshalTier === 'custom'">
+          <input
+            v-model.number="form.customMarshalTier"
+            type="number"
+            min="10"
+            step="5"
+            class="form-input"
+            placeholder="Enter number of marshals"
+          />
+          <span v-if="customTierPrice" class="custom-price">{{ customTierPrice }}</span>
+        </div>
+      </div>
     </form>
 
     <!-- Action buttons -->
@@ -101,13 +137,44 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  showMarshalTier: {
+    type: Boolean,
+    default: false,
+  },
+  peopleTerm: {
+    type: String,
+    default: 'marshals',
+  },
 });
 
 const emit = defineEmits(['close', 'submit']);
 
-const form = ref({ ...props.eventData });
-const initialFormState = ref(JSON.stringify(props.eventData));
+const form = ref({
+  ...props.eventData,
+  marshalTier: 10,
+  customMarshalTier: 25,
+});
+const initialFormState = ref(JSON.stringify({ ...props.eventData, marshalTier: 10, customMarshalTier: 25 }));
 const showUnsavedConfirm = ref(false);
+
+const peopleTermLower = computed(() => props.peopleTerm.toLowerCase());
+
+const tierOptions = [
+  { value: 10, label: '10', price: '£10' },
+  { value: 25, label: '25', price: '£17.50' },
+  { value: 50, label: '50', price: '£30' },
+  { value: 100, label: '100', price: '£55' },
+  { value: 'custom', label: 'Custom', price: '' },
+];
+
+const customTierPrice = computed(() => {
+  const count = form.value.customMarshalTier;
+  if (!count || count < 10) return '';
+  const base = 1000;
+  const extra = Math.max(0, count - 10) * 50;
+  const total = (base + extra) / 100;
+  return `£${total.toFixed(2)}`;
+});
 
 // Compute timezone options based on the selected event date
 const timeZoneOptions = computed(() => getTimeZonesForDate(form.value.eventDate));
@@ -118,8 +185,8 @@ const isDirty = computed(() => {
 });
 
 watch(() => props.eventData, (newVal) => {
-  form.value = { ...newVal };
-  initialFormState.value = JSON.stringify(newVal);
+  form.value = { ...newVal, marshalTier: form.value.marshalTier, customMarshalTier: form.value.customMarshalTier };
+  initialFormState.value = JSON.stringify(form.value);
 }, { deep: true });
 
 // Reset initial state when modal opens
@@ -131,7 +198,14 @@ watch(() => props.show, (newShow) => {
 });
 
 const handleSubmit = () => {
-  emit('submit', { ...form.value });
+  const data = { ...form.value };
+  // Resolve the actual marshal tier number
+  if (props.showMarshalTier) {
+    data.resolvedMarshalTier = data.marshalTier === 'custom'
+      ? Math.max(10, data.customMarshalTier || 10)
+      : data.marshalTier;
+  }
+  emit('submit', data);
 };
 
 // Called when user attempts to close (X button, click outside, Cancel button)
@@ -241,5 +315,72 @@ const saveAndClose = () => {
 
 .btn-secondary:hover {
   background: var(--bg-hover);
+}
+
+.tier-description {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+
+.tier-options {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.tier-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--border-color, #e0e0e0);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex: 1;
+  min-width: 70px;
+  text-align: center;
+}
+
+.tier-option:hover {
+  border-color: #667eea;
+}
+
+.tier-option.selected {
+  border-color: #667eea;
+  background: rgba(102, 126, 234, 0.08);
+}
+
+.tier-option input[type="radio"] {
+  display: none;
+}
+
+.tier-label {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.tier-price {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+}
+
+.custom-tier {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.custom-tier .form-input {
+  max-width: 200px;
+}
+
+.custom-price {
+  font-weight: 600;
+  color: var(--text-primary);
 }
 </style>

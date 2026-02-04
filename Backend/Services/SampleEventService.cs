@@ -103,6 +103,7 @@ public class SampleEventService : ISampleEventService
             IsActive = true,
             CreatedDate = now,
             IsSampleEvent = true,
+            IsFreeEvent = true,
             ExpiresAt = expiresAt,
             SchemaVersion = EventEntity.CurrentSchemaVersion
         };

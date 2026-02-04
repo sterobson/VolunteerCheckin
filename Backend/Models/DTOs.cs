@@ -74,7 +74,10 @@ public record RoutePoint(
 public record EventSummaryResponse(
     string Id,
     string Name,
-    DateTime EventDate
+    DateTime EventDate,
+    // Payment fields
+    int PaidMarshalTier,
+    bool IsFreeEvent
 );
 
 public record EventResponse(
@@ -114,7 +117,10 @@ public record EventResponse(
     int? RouteWeight,
     // Sample event fields
     bool IsSampleEvent,
-    DateTime? ExpiresAt
+    DateTime? ExpiresAt,
+    // Payment fields
+    int PaidMarshalTier,
+    bool IsFreeEvent
 );
 
 public record CreateLocationRequest(
@@ -1784,4 +1790,75 @@ public record EventPermissionsResponse(
     bool CanModifyEvent,
     bool CanDeleteEvent,
     bool IsReadOnly
+);
+
+// ============================================================================
+// Payment DTOs
+// ============================================================================
+
+/// <summary>
+/// Request to create a Stripe Checkout session for a new event
+/// </summary>
+public record CreateCheckoutSessionRequest(
+    CreateEventRequest EventData,
+    int MarshalTier
+);
+
+/// <summary>
+/// Response containing the Stripe Checkout URL
+/// </summary>
+public record CreateCheckoutSessionResponse(
+    string CheckoutUrl,
+    string SessionId
+);
+
+/// <summary>
+/// Request to create a Stripe Checkout session for upgrading a marshal tier
+/// </summary>
+public record CreateUpgradeSessionRequest(
+    string EventId,
+    int NewMarshalTier
+);
+
+/// <summary>
+/// Response after verifying a Stripe session
+/// </summary>
+public record VerifySessionResponse(
+    bool IsComplete,
+    string? EventId,
+    string? Message
+);
+
+/// <summary>
+/// Payment info for an event
+/// </summary>
+public record EventPaymentInfoResponse(
+    int PaidMarshalTier,
+    int CurrentMarshalCount,
+    bool IsFreeEvent,
+    List<PaymentHistoryItem> PaymentHistory
+);
+
+/// <summary>
+/// A single payment history entry
+/// </summary>
+public record PaymentHistoryItem(
+    string PaymentId,
+    string PaymentType,
+    int MarshalTier,
+    int AmountPence,
+    string Status,
+    DateTime CreatedAt
+);
+
+/// <summary>
+/// Pricing calculation response for the pricing page
+/// </summary>
+public record PricingCalculationResponse(
+    int MarshalCount,
+    int TotalPricePence,
+    int BasePricePence,
+    int AdditionalMarshalsPricePence,
+    int IncludedMarshals,
+    int AdditionalMarshals
 );

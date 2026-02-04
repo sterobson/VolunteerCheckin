@@ -9,7 +9,9 @@ public static class EntityExtensions
         return new EventSummaryResponse(
             entity.RowKey,
             entity.Name,
-            entity.EventDate
+            entity.EventDate,
+            entity.PaidMarshalTier,
+            entity.IsFreeEvent
         );
     }
 
@@ -55,7 +57,10 @@ public static class EntityExtensions
             entity.RouteWeight,
             // Sample event fields
             entity.IsSampleEvent,
-            entity.ExpiresAt
+            entity.ExpiresAt,
+            // Payment fields
+            entity.PaidMarshalTier,
+            entity.IsFreeEvent
         );
     }
 

@@ -39,19 +39,7 @@
         />
       </div>
 
-      <div class="form-group">
-        <label>What3Words (optional)</label>
-        <input
-          v-model="form.what3Words"
-          type="text"
-          class="form-input"
-          placeholder="e.g. filled.count.soap"
-          @input="handleInput"
-        />
-        <small v-if="form.what3Words && !isValidWhat3Words(form.what3Words)" class="form-error">
-          Invalid format. Must be word.word.word (lowercase letters only)
-        </small>
-      </div>
+
 
       <div class="form-group checkbox-group">
         <label class="checkbox-label">
@@ -202,18 +190,6 @@ watch(() => props.show, (newVal) => {
     };
   }
 });
-
-const isValidWhat3Words = (value) => {
-  if (!value) return true;
-
-  // Must be 3 words separated by dots (word.word.word)
-  const parts = value.split('.');
-  if (parts.length !== 3) return false;
-
-  // Each word must be 1-20 lowercase letters
-  const wordRegex = /^[a-z]{1,20}$/;
-  return parts.every(part => wordRegex.test(part));
-};
 
 const formatDateTimeLocal = (date) => {
   const year = date.getFullYear();

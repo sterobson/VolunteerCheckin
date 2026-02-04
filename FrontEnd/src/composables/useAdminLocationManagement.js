@@ -5,7 +5,6 @@
 
 import { ref, computed } from 'vue';
 import { locationsApi, checklistApi, notesApi } from '../services/api';
-import { isValidWhat3Words } from '../utils/validators';
 import { roundCoordinate } from '../utils/coordinateUtils';
 
 export function useAdminLocationManagement(eventId, eventsStore) {
@@ -138,10 +137,6 @@ export function useAdminLocationManagement(eventId, eventsStore) {
    * Save new location via add modal
    */
   const saveNewLocation = async (formData) => {
-    if (!isValidWhat3Words(formData.what3Words)) {
-      throw new Error('Invalid What3Words format. Please use word.word.word');
-    }
-
     // Round coordinates to 6 decimal places before saving
     await eventsStore.createLocation({
       eventId: eventId.value,
@@ -155,10 +150,6 @@ export function useAdminLocationManagement(eventId, eventsStore) {
    * Update or create location via edit modal
    */
   const saveLocation = async (formData) => {
-    if (!isValidWhat3Words(formData.what3Words)) {
-      throw new Error('Invalid What3Words format');
-    }
-
     // Round coordinates to 6 decimal places before saving
     const roundedLat = roundCoordinate(formData.latitude);
     const roundedLng = roundCoordinate(formData.longitude);

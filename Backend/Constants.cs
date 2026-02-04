@@ -120,4 +120,27 @@ public static class Constants
     // Event Contact Error Messages
     public const string ErrorContactNotFound = "Contact not found";
     public const string ErrorNotAuthorizedToManageContacts = "Not authorized to manage contacts";
+
+    // Payment Types
+    public const string PaymentTypeEventCreation = "EventCreation";
+    public const string PaymentTypeMarshalUpgrade = "MarshalUpgrade";
+
+    // Payment Statuses
+    public const string PaymentStatusSucceeded = "Succeeded";
+    public const string PaymentStatusRefunded = "Refunded";
+
+    // Pending Event Statuses
+    public const string PendingStatusPending = "Pending";
+    public const string PendingStatusCompleted = "Completed";
+    public const string PendingStatusExpired = "Expired";
+
+    // Payment Error Messages
+    public const string ErrorMarshalLimitReached = "Marshal limit reached for this event";
+    public const string ErrorMarshalLimitReachedCode = "MARSHAL_LIMIT_REACHED";
+    public const string ErrorPaymentRequired = "Payment required";
+    public const string ErrorInvalidMarshalTier = "Marshal tier must be at least 10";
+    public const string ErrorCannotDowngradeTier = "Cannot downgrade marshal tier";
+
+    // Payment Cleanup
+    public const int PendingEventExpiryHours = 24;
 }

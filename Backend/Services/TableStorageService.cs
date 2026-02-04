@@ -28,6 +28,8 @@ public class TableStorageService
     private const string LayersTable = "Layers";
     private const string SampleEventAdminTable = "SampleEventAdmin";
     private const string EventDeletionsTable = "EventDeletions";
+    private const string PaymentsTable = "Payments";
+    private const string PendingEventsTable = "PendingEvents";
 
     public TableStorageService(string connectionString)
     {
@@ -71,4 +73,6 @@ public class TableStorageService
     public TableClient GetLayersTable() => GetOrCreateTable(LayersTable);
     public TableClient GetSampleEventAdminTable() => GetOrCreateTable(SampleEventAdminTable);
     public TableClient GetEventDeletionsTable() => GetOrCreateTable(EventDeletionsTable);
+    public TableClient GetPaymentsTable() => GetOrCreateTable(PaymentsTable);
+    public TableClient GetPendingEventsTable() => GetOrCreateTable(PendingEventsTable);
 }

@@ -86,6 +86,25 @@ public class MarshalFunctions
                 return new ObjectResult(new { message = "Event admin permission required" }) { StatusCode = 403 };
             }
 
+            // Check marshal limit for paid events
+            EventEntity? eventEntity = await _eventRepository.GetAsync(request.EventId);
+            if (eventEntity != null && !eventEntity.IsFreeEvent && eventEntity.PaidMarshalTier > 0)
+            {
+                IEnumerable<MarshalEntity> existingMarshals = await _marshalRepository.GetByEventAsync(request.EventId);
+                int currentCount = existingMarshals.Count();
+                if (currentCount >= eventEntity.PaidMarshalTier)
+                {
+                    return new ObjectResult(new
+                    {
+                        message = Constants.ErrorMarshalLimitReached,
+                        errorCode = Constants.ErrorMarshalLimitReachedCode,
+                        currentCount,
+                        paidTier = eventEntity.PaidMarshalTier
+                    })
+                    { StatusCode = 402 };
+                }
+            }
+
             // Sanitize inputs
             string sanitizedName = InputSanitizer.SanitizeName(request.Name);
             if (string.IsNullOrWhiteSpace(sanitizedName))
@@ -863,6 +882,31 @@ public class MarshalFunctions
             IEnumerable<MarshalEntity> existingMarshalsList = await _marshalRepository.GetByEventAsync(eventId);
             Dictionary<string, MarshalEntity> existingMarshals = existingMarshalsList
                 .ToDictionary(m => m.Name.ToLower(), m => m);
+
+            // Check marshal limit for paid events
+            EventEntity? eventEntity = await _eventRepository.GetAsync(eventId);
+            if (eventEntity != null && !eventEntity.IsFreeEvent && eventEntity.PaidMarshalTier > 0)
+            {
+                int currentCount = existingMarshals.Count;
+                int newMarshalsInImport = parseResult.Marshals.Count(row =>
+                    !existingMarshals.ContainsKey(row.Name.ToLower()));
+                int totalAfterImport = currentCount + newMarshalsInImport;
+
+                if (totalAfterImport > eventEntity.PaidMarshalTier)
+                {
+                    int remaining = Math.Max(0, eventEntity.PaidMarshalTier - currentCount);
+                    return new ObjectResult(new
+                    {
+                        message = $"Import would exceed marshal limit. You have {currentCount} marshals and are trying to add {newMarshalsInImport}. Your plan allows {eventEntity.PaidMarshalTier}. You can add {remaining} more.",
+                        errorCode = Constants.ErrorMarshalLimitReachedCode,
+                        currentCount,
+                        paidTier = eventEntity.PaidMarshalTier,
+                        newMarshalsInImport,
+                        remaining
+                    })
+                    { StatusCode = 402 };
+                }
+            }
 
             // Preload all locations for efficient lookup during import
             IEnumerable<LocationEntity> existingLocationsList = await _locationRepository.GetByEventAsync(eventId);

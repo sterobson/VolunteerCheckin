@@ -30,20 +30,6 @@
         />
       </div>
 
-      <div class="form-group">
-        <label>What3Words (optional)</label>
-        <input
-          v-model="formData.what3Words"
-          type="text"
-          class="form-input"
-          placeholder="e.g. filled.count.soap"
-          @input="handleInput"
-        />
-        <small v-if="formData.what3Words && !isValidWhat3Words(formData.what3Words)" class="form-error">
-          Invalid format. Must be word.word.word (lowercase letters only)
-        </small>
-      </div>
-
       <div class="form-row">
         <div class="form-group" style="flex: 1;">
           <label>Longitude</label>
@@ -110,7 +96,6 @@
 <script setup>
 import { ref, defineProps, defineEmits, watch } from 'vue';
 import BaseModal from '../../BaseModal.vue';
-import { isValidWhat3Words } from '../../../utils/validators';
 import { useTerminology } from '../../../composables/useTerminology';
 
 const { terms, termsLower } = useTerminology();
@@ -166,10 +151,6 @@ const handleInput = () => {
 };
 
 const handleSubmit = () => {
-  if (!isValidWhat3Words(formData.value.what3Words) && formData.value.what3Words) {
-    alert('Invalid What3Words format.');
-    return;
-  }
   emit('save', formData.value);
 };
 

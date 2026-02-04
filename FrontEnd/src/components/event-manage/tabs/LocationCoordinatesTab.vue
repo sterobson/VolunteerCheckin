@@ -1,20 +1,6 @@
 <template>
   <div class="tab-content">
     <form @submit.prevent="$emit('save')">
-      <div class="form-group">
-        <label>What3Words (optional)</label>
-        <input
-          :value="form.what3Words"
-          @input="handleInput('what3Words', $event.target.value)"
-          type="text"
-          class="form-input"
-          placeholder="e.g. filled.count.soap"
-        />
-        <small v-if="form.what3Words && !isValidWhat3Words(form.what3Words)" class="form-error">
-          Invalid format. Must be word.word.word (lowercase letters only)
-        </small>
-      </div>
-
       <!-- Hide coordinates when dynamic location is enabled -->
       <template v-if="!form.isDynamic">
         <div class="form-row">
@@ -483,13 +469,7 @@ const handleScopeInput = (value) => {
   emit('input');
 };
 
-const isValidWhat3Words = (value) => {
-  if (!value) return true;
-  const parts = value.split('.');
-  if (parts.length !== 3) return false;
-  const wordRegex = /^[a-z]{1,20}$/;
-  return parts.every(part => wordRegex.test(part));
-};
+
 </script>
 
 <style scoped>

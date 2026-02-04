@@ -637,6 +637,24 @@ export const layersApi = {
   },
 };
 
+// Payments API
+export const paymentsApi = {
+  createCheckoutSession: (eventData, marshalTier) =>
+    api.post('/payments/create-checkout-session', { eventData, marshalTier }),
+  verifySession: (sessionId) =>
+    api.post(`/payments/verify-session/${sessionId}`),
+  createUpgradeSession: (eventId, newMarshalTier) =>
+    api.post('/payments/create-upgrade-session', { eventId, newMarshalTier }),
+  getEventPayments: (eventId) =>
+    api.get(`/payments/event/${eventId}`),
+};
+
+// Pricing API (anonymous)
+export const pricingApi = {
+  calculate: (marshalCount) =>
+    api.get('/pricing/calculate', { params: { marshalCount } }),
+};
+
 // Sample Events API (anonymous, no auth required)
 export const sampleEventsApi = {
   // Create a new sample event

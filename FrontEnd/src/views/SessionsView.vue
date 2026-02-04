@@ -202,6 +202,7 @@
       :show="showCreateEvent"
       :event-data="eventForm"
       :is-editing="false"
+      :show-marshal-tier="true"
       @close="closeCreateEventModal"
       @submit="handleCreateEvent"
     />
@@ -272,7 +273,7 @@ import {
   removeSession,
   touchSession
 } from '../services/marshalSessionService';
-import { setAuthContext, eventsApi, sampleEventsApi } from '../services/api';
+import { setAuthContext, eventsApi, sampleEventsApi, paymentsApi } from '../services/api';
 import { useAuthStore } from '../stores/auth';
 import { useEventsStore } from '../stores/events';
 import { useProfileStore } from '../stores/profile';
@@ -671,13 +672,19 @@ const closeCreateEventModal = () => {
 
 const handleCreateEvent = async (formData) => {
   try {
-    await eventsStore.createEvent(formData);
+    const marshalTier = formData.resolvedMarshalTier || 10;
+    // Strip out the tier fields before sending as event data
+    const { marshalTier: _mt, customMarshalTier: _cmt, resolvedMarshalTier: _rmt, ...eventData } = formData;
+
+    // Create a Stripe Checkout session
+    const response = await paymentsApi.createCheckoutSession(eventData, marshalTier);
     closeCreateEventModal();
-    // Refresh admin events list
-    await loadAdminEvents();
+
+    // Redirect to Stripe Checkout
+    window.location.href = response.data.checkoutUrl;
   } catch (error) {
-    console.error('Failed to create event:', error);
-    alert('Failed to create event. Please try again.');
+    console.error('Failed to create checkout session:', error);
+    alert('Failed to start payment. Please try again.');
   }
 };
 

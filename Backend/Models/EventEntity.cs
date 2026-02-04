@@ -34,6 +34,10 @@ public class EventEntity : ITableEntity
     public bool IsSampleEvent { get; set; } = false;
     public DateTime? ExpiresAt { get; set; } = null;
 
+    // Payment properties (queryable - not in payload)
+    public int PaidMarshalTier { get; set; } = 0; // Max marshals allowed (0 = unlimited for free/sample)
+    public bool IsFreeEvent { get; set; } = false; // True for sample/demo events and grandfathered events
+
     // Terminology settings - allows customizing the wording used in the UI
     // Default values match the original application terminology
     public string PeopleTerm { get; set; } = "Marshals";      // People, Marshals, Volunteers, Helpers, Staff
@@ -327,5 +331,11 @@ public class EventEntity : ITableEntity
 
         // Note: Legacy flat fields (terminology, styling, branding) are not explicitly cleared
         // because the repository saves as EventEntityV2 which doesn't include those properties.
+
+        // Grandfather existing events as free (no marshal limit)
+        if (PaidMarshalTier == 0 && !IsFreeEvent && !IsSampleEvent)
+        {
+            IsFreeEvent = true;
+        }
     }
 }

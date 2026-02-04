@@ -651,7 +651,6 @@ import { useAdminLayerManagement } from '../composables/useAdminLayerManagement'
 
 // Utilities
 import { formatDate as formatEventDate, formatDateForInput } from '../utils/dateFormatters';
-import { isValidWhat3Words } from '../utils/validators';
 import { calculateDistance, findLayersNearPoint, roundCoordinate, roundRoutePoints, roundPolygonPoints } from '../utils/coordinateUtils';
 import { getCheckpointsInPolygon } from '../utils/geometryUtils';
 import { cleanOrphanedScopeConfigurations } from '../utils/scopeUtils';
@@ -3057,11 +3056,6 @@ const selectLocation = (location) => {
 };
 
 const handleSaveLocation = async (formData) => {
-  if (!isValidWhat3Words(formData.what3Words)) {
-    alert('Invalid What3Words format. Please use word.word.word (lowercase letters only)');
-    return;
-  }
-
   try {
     await eventsStore.createLocation({
       eventId: route.params.eventId,
@@ -3168,11 +3162,6 @@ const cancelMoveLocation = () => {
 };
 
 const handleUpdateLocation = async (formData) => {
-  if (!isValidWhat3Words(formData.what3Words)) {
-    alert('Invalid What3Words format.');
-    return;
-  }
-
   try {
     const isNewLocation = !selectedLocation.value.id;
 

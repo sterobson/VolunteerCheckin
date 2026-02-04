@@ -21,6 +21,7 @@ const AdminVerify = () => import('../views/AdminVerify.vue');
 const AdminEventManage = () => import('../views/AdminEventManage.vue');
 const MarshalView = () => import('../views/MarshalView.vue');
 const SessionsView = () => import('../views/SessionsView.vue');
+const PaymentSuccess = () => import('../views/PaymentSuccess.vue');
 
 const routes = [
   {
@@ -70,6 +71,15 @@ const routes = [
     name: 'AdminEventManage',
     component: AdminEventManage,
     meta: { requiresAuth: true },
+  },
+  {
+    path: '/payment/success',
+    name: 'PaymentSuccess',
+    component: PaymentSuccess,
+  },
+  {
+    path: '/payment/cancelled',
+    redirect: '/myevents',
   },
   {
     path: '/marshal',

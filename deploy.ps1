@@ -4,7 +4,6 @@
 
 param(
     [Parameter(Mandatory=$false)]
-    [ValidateSet("local", "production")]
     [string]$Environment,
 
     [Parameter(Mandatory=$false)]
@@ -42,7 +41,9 @@ $script:RequiredEnvVars = @(
     "SMTP_HOST",
     "SMTP_PASSWORD",
     "SMTP_PORT",
-    "SMTP_USERNAME"
+    "SMTP_USERNAME",
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET"
 )
 
 # ============================================================================
@@ -543,7 +544,7 @@ function Get-AzureFunctionAppsInResourceGroup($resourceGroup) {
     }
 }
 
-function Verify-AzureResources($envConfig) {
+function Verify-AzureResources($envName, $envConfig) {
     $resourceGroup = $envConfig.resourceGroup
     $slots = @($envConfig.slots)
 
@@ -710,14 +711,14 @@ function Verify-AzureResources($envConfig) {
     Write-Info "Updating deployment state..."
 
     $state = Get-DeploymentState
-    $state.environments.production.resourceGroup = $newResourceGroup
-    $state.environments.production.slots = $newSlots
+    $state.environments.$envName.resourceGroup = $newResourceGroup
+    $state.environments.$envName.slots = $newSlots
     Save-DeploymentState $state
 
     Write-Success "Deployment state updated"
 
     # Return updated config
-    return Get-EnvironmentConfig "production"
+    return Get-EnvironmentConfig $envName
 }
 
 # ============================================================================
@@ -1034,6 +1035,7 @@ function Show-EnvironmentVariables($envName, $envConfig) {
 
     # Build table data
     $tableData = @()
+    $varIndex = 1
     foreach ($varName in $script:RequiredEnvVars) {
         $localVal = $localValues[$varName]
 
@@ -1058,6 +1060,7 @@ function Show-EnvironmentVariables($envName, $envConfig) {
 
         # Build row object (plain text for Spectre table compatibility)
         $rowObj = [ordered]@{
+            "#" = $varIndex
             Setting = $varName
         }
 
@@ -1090,6 +1093,7 @@ function Show-EnvironmentVariables($envName, $envConfig) {
         # Store row color for fallback display
         $rowObj["_Color"] = $rowColor
         $tableData += [PSCustomObject]$rowObj
+        $varIndex++
     }
 
     Write-Host ""
@@ -1099,18 +1103,18 @@ function Show-EnvironmentVariables($envName, $envConfig) {
         $displayData | Format-SpectreTable -Border Rounded -Title "Environment Variables" | Out-Host
     } else {
         Write-Host "Environment Variables" -ForegroundColor Cyan
-        Write-Host ("=" * 100) -ForegroundColor Gray
+        Write-Host ("=" * 105) -ForegroundColor Gray
 
-        $header = "Setting".PadRight(35) + "Local".PadRight(25)
+        $header = "#".PadRight(5) + "Setting".PadRight(35) + "Local".PadRight(25)
         foreach ($slot in $slots) {
             $shortSlot = $slot -replace "onthedayapp-", ""
             $header += $shortSlot.PadRight(20)
         }
         Write-Host $header -ForegroundColor Cyan
-        Write-Host ("-" * 100) -ForegroundColor Gray
+        Write-Host ("-" * 105) -ForegroundColor Gray
 
         foreach ($row in $tableData) {
-            $line = $row.Setting.PadRight(35) + $row.Local.PadRight(25)
+            $line = "$($row.'#')".PadRight(5) + $row.Setting.PadRight(35) + $row.Local.PadRight(25)
             foreach ($slot in $slots) {
                 $shortSlot = $slot -replace "onthedayapp-", ""
                 $line += $row.$shortSlot.PadRight(20)
@@ -1124,7 +1128,7 @@ function Show-EnvironmentVariables($envName, $envConfig) {
             }
         }
 
-        Write-Host ("=" * 100) -ForegroundColor Gray
+        Write-Host ("=" * 105) -ForegroundColor Gray
     }
 
     Write-Host ""
@@ -1142,18 +1146,27 @@ function Show-EnvironmentVariables($envName, $envConfig) {
     }
 }
 
-function Edit-EnvironmentSetting($envName, $context) {
-    $varName = Read-Host "Enter variable name to edit (or press Enter to go back)"
+function Resolve-VarName($userInput) {
+    if ([string]::IsNullOrWhiteSpace($userInput)) { return $null }
 
-    if ([string]::IsNullOrWhiteSpace($varName)) {
-        return
+    # Try as a number first
+    $num = 0
+    if ([int]::TryParse($userInput, [ref]$num)) {
+        if ($num -ge 1 -and $num -le $script:RequiredEnvVars.Count) {
+            return $script:RequiredEnvVars[$num - 1]
+        }
+        return $null
     }
 
-    if ($script:RequiredEnvVars -notcontains $varName) {
-        Write-Warning "Unknown variable: $varName"
-        Write-Gray "Valid variables: $($script:RequiredEnvVars -join ', ')"
-        return
+    # Try as a name (case-insensitive)
+    foreach ($v in $script:RequiredEnvVars) {
+        if ($v -eq $userInput) { return $v }
     }
+    return $null
+}
+
+function Edit-EnvironmentSetting($envName, $context, $resolvedVarName) {
+    $varName = $resolvedVarName
 
     $currentLocal = $context.LocalValues[$varName]
     Write-Host ""
@@ -1238,6 +1251,134 @@ function Edit-EnvironmentSetting($envName, $context) {
             Write-Info "Cancelled"
         }
     }
+}
+
+function Copy-EnvironmentVariables($targetEnvName) {
+    $state = Get-DeploymentState
+    $envNames = @($state.environments.PSObject.Properties.Name | Where-Object { $_ -ne $targetEnvName })
+
+    if ($envNames.Count -eq 0) {
+        Write-Warning "No other environments to copy from."
+        return
+    }
+
+    # Select source environment
+    Write-Host ""
+    Write-Host "Copy from which environment?" -ForegroundColor Cyan
+    for ($i = 0; $i -lt $envNames.Count; $i++) {
+        $displayName = (Get-Culture).TextInfo.ToTitleCase($envNames[$i])
+        Write-Host "  $($i + 1). $displayName" -ForegroundColor White
+    }
+    Write-Host ""
+
+    $srcChoice = Read-Host "Enter choice (or press Enter to cancel)"
+    if ([string]::IsNullOrWhiteSpace($srcChoice)) { return }
+
+    $srcIndex = [int]$srcChoice - 1
+    if ($srcIndex -lt 0 -or $srcIndex -ge $envNames.Count) {
+        Write-Warning "Invalid choice"
+        return
+    }
+    $sourceEnvName = $envNames[$srcIndex]
+
+    # Choose mode
+    Write-Host ""
+    Write-Host "What to copy?" -ForegroundColor Cyan
+    Write-Host "  1. All variables (overwrite existing)" -ForegroundColor White
+    Write-Host "  2. Only variables not set locally" -ForegroundColor White
+    Write-Host ""
+
+    $modeChoice = Read-Host "Enter choice (1-2, or press Enter to cancel)"
+    if ([string]::IsNullOrWhiteSpace($modeChoice)) { return }
+
+    $onlyEmpty = $modeChoice -eq "2"
+
+    # Load values from both environments
+    $sourceValues = @{}
+    $targetValues = @{}
+    foreach ($varName in $script:RequiredEnvVars) {
+        $sourceValues[$varName] = Get-EnvironmentSecret $sourceEnvName $varName
+        $targetValues[$varName] = Get-EnvironmentSecret $targetEnvName $varName
+    }
+
+    # Build proposed changes
+    $proposals = @()
+    foreach ($varName in $script:RequiredEnvVars) {
+        $srcVal = $sourceValues[$varName]
+        $curVal = $targetValues[$varName]
+        $newVal = $curVal
+
+        if (-not [string]::IsNullOrEmpty($srcVal)) {
+            if ($onlyEmpty) {
+                if ([string]::IsNullOrEmpty($curVal)) {
+                    $newVal = $srcVal
+                }
+            } else {
+                $newVal = $srcVal
+            }
+        }
+
+        $proposals += @{
+            Name = $varName
+            Current = $curVal
+            Proposed = $newVal
+            Changed = ($newVal -ne $curVal)
+        }
+    }
+
+    $changeCount = ($proposals | Where-Object { $_.Changed }).Count
+    if ($changeCount -eq 0) {
+        Write-Info "No changes to apply."
+        return
+    }
+
+    # Show comparison table
+    $sourceDisplayName = (Get-Culture).TextInfo.ToTitleCase($sourceEnvName)
+    $targetDisplayName = (Get-Culture).TextInfo.ToTitleCase($targetEnvName)
+
+    Write-Host ""
+    Write-Host "Proposed changes (copying from $sourceDisplayName to $targetDisplayName):" -ForegroundColor Cyan
+    Write-Host ("=" * 105) -ForegroundColor Gray
+
+    $header = "Setting".PadRight(38) + "Current".PadRight(28) + "Proposed".PadRight(28) + "Status"
+    Write-Host $header -ForegroundColor Cyan
+    Write-Host ("-" * 105) -ForegroundColor Gray
+
+    foreach ($p in $proposals) {
+        $curDisplay = if ([string]::IsNullOrEmpty($p.Current)) { "(not set)" } elseif ($p.Current.Length -gt 25) { $p.Current.Substring(0, 22) + "..." } else { $p.Current }
+        $newDisplay = if ([string]::IsNullOrEmpty($p.Proposed)) { "(not set)" } elseif ($p.Proposed.Length -gt 25) { $p.Proposed.Substring(0, 22) + "..." } else { $p.Proposed }
+
+        $line = $p.Name.PadRight(38) + $curDisplay.PadRight(28) + $newDisplay.PadRight(28)
+
+        if ($p.Changed) {
+            $line += "CHANGED"
+            Write-Host $line -ForegroundColor Yellow
+        } else {
+            $line += "-"
+            Write-Host $line -ForegroundColor Gray
+        }
+    }
+
+    Write-Host ("=" * 105) -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "$changeCount variable(s) will be updated." -ForegroundColor Yellow
+    Write-Host ""
+
+    $confirm = Read-Host "Apply these changes? (yes/no)"
+    if ($confirm -ne "yes") {
+        Write-Info "Cancelled."
+        return
+    }
+
+    # Apply
+    foreach ($p in $proposals) {
+        if ($p.Changed) {
+            Set-EnvironmentSecret $targetEnvName $p.Name $p.Proposed
+            Write-Success "  Updated $($p.Name)"
+        }
+    }
+    Write-Host ""
+    Write-Success "Done - $changeCount variable(s) updated locally."
 }
 
 function Manage-Slots($envName, $envConfig) {
@@ -1468,122 +1609,137 @@ function Start-ManagementMode {
     # Ensure Spectre.Console module is available for nice tables
     $null = Ensure-SpectreConsole
 
-    # Get available environments
-    $state = Get-DeploymentState
-    $envNames = @($state.environments.PSObject.Properties.Name)
-
-    # Select environment
-    Write-Host "Select environment:" -ForegroundColor Cyan
-    $index = 1
-    foreach ($env in $envNames) {
-        $displayName = (Get-Culture).TextInfo.ToTitleCase($env)
-        Write-Host "  $index. $displayName" -ForegroundColor White
-        $index++
-    }
-    Write-Host "  $index. Add new environment" -ForegroundColor Green
-    Write-Host ""
-
-    $envChoice = Read-Host "Enter choice (default: 1)"
-    if ([string]::IsNullOrWhiteSpace($envChoice)) { $envChoice = "1" }
-
-    $choiceNum = [int]$envChoice
-    if ($choiceNum -eq $index) {
-        # Add new environment
-        $envName = Add-NewEnvironment
-        if (-not $envName) { return }
-    } elseif ($choiceNum -ge 1 -and $choiceNum -lt $index) {
-        $envName = $envNames[$choiceNum - 1]
-    } else {
-        $envName = $envNames[0]
-    }
-
     # Ensure Azure CLI is logged in
     Ensure-AzureCliLoggedIn
 
-    # Load config
-    $envConfig = Get-EnvironmentConfig $envName
-
-    # Verify resources
-    $envConfig = Verify-AzureResources $envConfig
-
-    # Management loop
+    # Outer loop: environment selection
     while ($true) {
-        # Show slot overview
-        Show-SlotOverview $envName $envConfig
+        # Get available environments (refresh each time in case one was added)
+        $state = Get-DeploymentState
+        $envNames = @($state.environments.PSObject.Properties.Name)
 
-        Write-Host "Options:" -ForegroundColor Cyan
-        Write-Host "  1. View/edit environment variables" -ForegroundColor White
-        Write-Host "  2. Set environment variable on slot" -ForegroundColor White
-        Write-Host "  3. Manage deployment slots" -ForegroundColor White
-        Write-Host "  4. Refresh" -ForegroundColor White
-        Write-Host "  5. Exit" -ForegroundColor White
+        # Select environment
+        Write-Host "Select environment:" -ForegroundColor Cyan
+        $index = 1
+        foreach ($env in $envNames) {
+            $displayName = (Get-Culture).TextInfo.ToTitleCase($env)
+            Write-Host "  $index. $displayName" -ForegroundColor White
+            $index++
+        }
+        Write-Host "  $index. Add new environment" -ForegroundColor Green
+        $exitIndex = $index + 1
+        Write-Host "  $exitIndex. Exit" -ForegroundColor White
         Write-Host ""
 
-        $menuChoice = Read-Host "Enter choice (1-5)"
+        $envChoice = Read-Host "Enter choice (default: 1)"
+        if ([string]::IsNullOrWhiteSpace($envChoice)) { $envChoice = "1" }
 
-        switch ($menuChoice) {
-            "1" {
-                # Environment variables sub-menu
-                while ($true) {
-                    $context = Show-EnvironmentVariables $envName $envConfig
+        $choiceNum = [int]$envChoice
+        if ($choiceNum -eq $exitIndex) {
+            Write-Host ""
+            Write-Info "Exiting management mode."
+            return
+        } elseif ($choiceNum -eq $index) {
+            # Add new environment
+            $envName = Add-NewEnvironment
+            if (-not $envName) { continue }
+        } elseif ($choiceNum -ge 1 -and $choiceNum -lt $index) {
+            $envName = $envNames[$choiceNum - 1]
+        } else {
+            $envName = $envNames[0]
+        }
 
-                    Write-Host "Options:" -ForegroundColor Cyan
-                    Write-Host "  1. Edit a variable" -ForegroundColor White
-                    Write-Host "  2. Push all local values to all slots" -ForegroundColor White
-                    Write-Host "  3. Back" -ForegroundColor White
-                    Write-Host ""
+        # Load config
+        $envConfig = Get-EnvironmentConfig $envName
 
-                    $varChoice = Read-Host "Enter choice (1-3)"
+        # Verify resources
+        $envConfig = Verify-AzureResources $envName $envConfig
 
-                    switch ($varChoice) {
-                        "1" {
-                            Edit-EnvironmentSetting $envName $context
+        # Inner loop: management menu for selected environment
+        $goBack = $false
+        while (-not $goBack) {
+            # Show slot overview
+            Show-SlotOverview $envName $envConfig
+
+            Write-Host "Options:" -ForegroundColor Cyan
+            Write-Host "  1. View/edit environment variables" -ForegroundColor White
+            Write-Host "  2. Set environment variable on slot" -ForegroundColor White
+            Write-Host "  3. Manage deployment slots" -ForegroundColor White
+            Write-Host "  4. Refresh" -ForegroundColor White
+            Write-Host "  5. Back" -ForegroundColor White
+            Write-Host ""
+
+            $menuChoice = Read-Host "Enter choice (1-5)"
+
+            switch ($menuChoice) {
+                "1" {
+                    # Environment variables sub-menu
+                    while ($true) {
+                        $context = Show-EnvironmentVariables $envName $envConfig
+
+                        Write-Host "Enter a variable number to edit it, or:" -ForegroundColor Gray
+                        Write-Host "  97. Push all local values to all slots" -ForegroundColor White
+                        Write-Host "  98. Copy variables from another environment" -ForegroundColor White
+                        Write-Host "  99. Back" -ForegroundColor White
+                        Write-Host ""
+
+                        $varChoice = Read-Host "Choice"
+
+                        if ([string]::IsNullOrWhiteSpace($varChoice) -or $varChoice -eq "99") {
+                            break
                         }
-                        "2" {
+
+                        if ($varChoice -eq "97") {
                             Write-Host ""
-                            Write-Warning "This will update ALL settings on ALL Azure slots with local values."
+                            $slotList = $context.Slots -join ", "
+                            Write-Warning "This will update ALL settings on the following slots with local values:"
+                            Write-Warning "  $slotList"
                             $confirm = Read-Host "Are you sure? (yes/no)"
 
                             if ($confirm -eq "yes") {
                                 foreach ($slot in $context.Slots) {
                                     Write-Info "Updating $slot..."
-                                    foreach ($varName in $script:RequiredEnvVars) {
-                                        $localVal = $context.LocalValues[$varName]
+                                    foreach ($vName in $script:RequiredEnvVars) {
+                                        $localVal = $context.LocalValues[$vName]
                                         if (-not [string]::IsNullOrEmpty($localVal)) {
-                                            $null = Set-AzureFunctionAppSetting $context.ResourceGroup $slot $varName $localVal
+                                            $null = Set-AzureFunctionAppSetting $context.ResourceGroup $slot $vName $localVal
                                         }
                                     }
                                     Write-Success "  $slot updated"
                                 }
                             }
+                            continue
                         }
-                        "3" {
-                            break
+
+                        if ($varChoice -eq "98") {
+                            Copy-EnvironmentVariables $envName
+                            continue
                         }
-                        default {
-                            Write-Warning "Invalid choice"
+
+                        # Try to resolve as variable number or name
+                        $resolved = Resolve-VarName $varChoice
+                        if ($resolved) {
+                            Edit-EnvironmentSetting $envName $context $resolved
+                        } else {
+                            Write-Warning "Unknown variable: $varChoice"
                         }
                     }
-
-                    if ($varChoice -eq "3") { break }
                 }
-            }
-            "2" {
-                Set-SlotEnvVar $envConfig
-            }
-            "3" {
-                $envConfig = Manage-Slots $envName $envConfig
-            }
-            "4" {
-                Write-Info "Refreshing..."
-            }
-            "5" {
-                Write-Host ""
-                Write-Info "Exiting management mode."
-                return
-            }
-            default {
-                Write-Warning "Invalid choice"
+                "2" {
+                    Set-SlotEnvVar $envConfig
+                }
+                "3" {
+                    $envConfig = Manage-Slots $envName $envConfig
+                }
+                "4" {
+                    Write-Info "Refreshing..."
+                }
+                "5" {
+                    $goBack = $true
+                }
+                default {
+                    Write-Warning "Invalid choice"
+                }
             }
         }
     }
@@ -2062,7 +2218,7 @@ function Wait-ForBackendBuild($buildJob) {
 # ============================================================================
 # Production Backend Deployment
 # ============================================================================
-function Deploy-ProductionBackend($envConfig, $slotName, $backendBuildJob, $alsoDeployingFrontend = $false) {
+function Deploy-ProductionBackend($envConfig, $slotName, $backendBuildJob, $envName, $alsoDeployingFrontend = $false) {
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Info "  Deploying Backend to $slotName"
@@ -2074,7 +2230,7 @@ function Deploy-ProductionBackend($envConfig, $slotName, $backendBuildJob, $also
 
     # Sync environment variables (interactive - collects what needs updating)
     # Secrets are shared across all slots in the same environment
-    $envVarUpdates = Sync-EnvironmentVariables $resourceGroup $slotName "production"
+    $envVarUpdates = Sync-EnvironmentVariables $resourceGroup $slotName $envName
 
     # Get expected version before deployment
     $expectedVersion = Get-ExpectedVersion
@@ -2607,18 +2763,27 @@ if (-not $Environment) {
     Write-Host ""
     Write-Host "Choose environment:" -ForegroundColor Cyan
     Write-Host "  1. Local (Start local development servers)" -ForegroundColor White
-    Write-Host "  2. Production (Azure)" -ForegroundColor White
+
+    # Build list of Azure environments from state
+    $state = Get-DeploymentState
+    $azureEnvNames = @($state.environments.PSObject.Properties.Name)
+    for ($i = 0; $i -lt $azureEnvNames.Count; $i++) {
+        $displayName = (Get-Culture).TextInfo.ToTitleCase($azureEnvNames[$i])
+        Write-Host "  $($i + 2). $displayName (Azure)" -ForegroundColor White
+    }
+    $maxChoice = $azureEnvNames.Count + 1
     Write-Host ""
 
-    $envChoice = Read-Host "Enter choice (1-2)"
+    $envChoice = Read-Host "Enter choice (1-$maxChoice)"
+    $envChoiceNum = [int]$envChoice
 
-    switch ($envChoice) {
-        "1" { $Environment = "local" }
-        "2" { $Environment = "production" }
-        default {
-            Write-ErrorMessage "Invalid choice."
-            exit 1
-        }
+    if ($envChoiceNum -eq 1) {
+        $Environment = "local"
+    } elseif ($envChoiceNum -ge 2 -and $envChoiceNum -le $maxChoice) {
+        $Environment = $azureEnvNames[$envChoiceNum - 2]
+    } else {
+        Write-ErrorMessage "Invalid choice."
+        exit 1
     }
 }
 
@@ -2720,7 +2885,7 @@ $deploymentSuccess = $true
 # ============================================================================
 if ($Environment -eq "local") {
     Ensure-LocalDependencies
-} elseif ($Environment -eq "production") {
+} else {
     Ensure-ProductionDependencies
 }
 
@@ -2740,9 +2905,9 @@ if ($Environment -eq "local") {
 }
 
 # ============================================================================
-# Production Deployment
+# Azure Deployment
 # ============================================================================
-if ($Environment -eq "production") {
+if ($Environment -ne "local") {
     # Require clean git state
     Ensure-GitClean
 
@@ -2757,10 +2922,10 @@ if ($Environment -eq "production") {
     Ensure-AzureCliLoggedIn
 
     # Load environment config
-    $envConfig = Get-EnvironmentConfig "production"
+    $envConfig = Get-EnvironmentConfig $Environment
 
     # Verify Azure resources are accessible (offers to update if not)
-    $envConfig = Verify-AzureResources $envConfig
+    $envConfig = Verify-AzureResources $Environment $envConfig
 
     # Select deployment slot
     $selectedSlot = $null
@@ -2800,7 +2965,7 @@ if ($Environment -eq "production") {
         $frontendBuildJob = Start-FrontendBuildJob $envConfig $selectedSlot
 
         # Deploy backend (build job passed in, already running)
-        $backendResult = Deploy-ProductionBackend $envConfig $selectedSlot $backendBuildJob $true
+        $backendResult = Deploy-ProductionBackend $envConfig $selectedSlot $backendBuildJob $Environment $true
         if ($backendResult -eq $false) {
             $deploymentSuccess = $false
             # Cancel frontend job
@@ -2817,7 +2982,7 @@ if ($Environment -eq "production") {
         }
 
     } elseif ($Backend) {
-        $result = Deploy-ProductionBackend $envConfig $selectedSlot $backendBuildJob
+        $result = Deploy-ProductionBackend $envConfig $selectedSlot $backendBuildJob $Environment
         if (-not $result) { $deploymentSuccess = $false }
 
     } elseif ($Frontend) {
@@ -2854,11 +3019,12 @@ if ($deploymentSuccess) {
             $modeLabel = if ($ProductionBuild) { "(production build)" } else { "(dev)" }
             Write-Host "  [OK] Frontend -> http://localhost:$frontendPort $modeLabel" -ForegroundColor Green
         }
-    } elseif ($Environment -eq "production") {
-        $envConfig = Get-EnvironmentConfig "production"
+    } else {
+        $envConfig = Get-EnvironmentConfig $Environment
         $activeSlot = $envConfig.lastDeployedSlot
+        $envDisplayName = (Get-Culture).TextInfo.ToTitleCase($Environment)
 
-        Write-Host "Production deployment:" -ForegroundColor White
+        Write-Host "$envDisplayName deployment:" -ForegroundColor White
         if ($Backend) {
             Write-Host "  [OK] Backend  -> https://$activeSlot.azurewebsites.net/api" -ForegroundColor Green
         }

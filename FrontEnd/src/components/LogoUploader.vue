@@ -83,10 +83,6 @@ const props = defineProps({
 // Get auth headers (same as api.js interceptor)
 function getAuthHeaders() {
   const headers = {};
-  const adminEmail = localStorage.getItem('adminEmail');
-  if (adminEmail) {
-    headers['X-Admin-Email'] = adminEmail;
-  }
   const sessionToken = localStorage.getItem('sessionToken');
   if (sessionToken) {
     headers['Authorization'] = `Bearer ${sessionToken}`;

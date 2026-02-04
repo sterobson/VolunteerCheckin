@@ -272,7 +272,8 @@
 </template>
 
 <script setup>
-import { ref, computed, defineProps, defineEmits, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
+// defineProps, defineEmits are compiler macros - no import needed
 import { areasApi, checklistApi, checkInApi, getOfflineMode, queueOfflineAction } from '../services/api';
 import { useTerminology } from '../composables/useTerminology';
 import { alphanumericCompare } from '../utils/sortUtils';

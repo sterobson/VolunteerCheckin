@@ -162,7 +162,8 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, defineProps, defineEmits, defineExpose } from 'vue';
+import { ref, computed, watch } from 'vue';
+// defineProps, defineEmits, defineExpose are compiler macros - no import needed
 import MapView from '../MapView.vue';
 import MapToolbar from './MapToolbar.vue';
 import MapDrawingControls from './MapDrawingControls.vue';

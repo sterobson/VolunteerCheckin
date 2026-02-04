@@ -21,5 +21,7 @@ public interface IAuthSessionRepository
     Task DeleteAsync(string sessionTokenHash);
     Task RevokeAsync(string sessionTokenHash);
     Task RevokeAllForPersonAsync(string personId);
+    Task DeleteAllByPersonAsync(string personId);
+    Task DeleteAllByEventAsync(string eventId);
     Task DeleteExpiredSessionsAsync();
 }

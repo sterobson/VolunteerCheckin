@@ -51,20 +51,6 @@ export const useProfileStore = defineStore('profile', () => {
     }
   };
 
-  const updatePerson = async (personId, eventId, data) => {
-    loading.value = true;
-    error.value = null;
-    try {
-      const response = await profileApi.updatePerson(personId, eventId, data);
-      return response.data;
-    } catch (err) {
-      error.value = err.response?.data?.message || 'Failed to update person';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
-  };
-
   const clearProfile = () => {
     profile.value = null;
     error.value = null;
@@ -77,7 +63,6 @@ export const useProfileStore = defineStore('profile', () => {
     fetchProfile,
     updateProfile,
     fetchPerson,
-    updatePerson,
     clearProfile,
   };
 });

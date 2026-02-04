@@ -1,5 +1,5 @@
 <template>
-  <div class="admin-event-manage" :style="{ colorScheme }">
+  <div class="admin-event-manage" :class="{ 'read-only-mode': permissionsContext.isReadOnly.value }" :style="{ colorScheme }">
     <DemoBanner v-if="event?.isSampleEvent" :expires-at="event.expiresAt" />
     <header class="header">
       <div class="header-left">
@@ -89,6 +89,7 @@
           :marshals="marshals"
           :assignments="allAssignments"
           :locations="locationStatuses"
+          :role-definitions="roleDefinitions"
           @add-marshal="addNewMarshal"
           @import-marshals="showImportMarshals = true"
           @select-marshal="selectMarshal"
@@ -164,13 +165,19 @@
           v-if="activeTab === 'settings'"
           :event-data="eventDetailsForm"
           :event-id="route.params.eventId"
-          :admins="eventAdmins"
+          :users="eventUsers"
+          :can-manage-users="canManageUsers"
+          :can-manage-owners="canManageOwners"
+          :can-delete-event="canDeleteEvent"
+          :current-person-id="currentPersonId"
           :form-dirty="eventDetailsFormDirty"
           @submit="handleUpdateEvent"
-          @add-admin="showAddAdmin = true"
-          @remove-admin="removeAdmin"
+          @add-user="showAddUser = true"
+          @remove-user="handleRemoveUser"
+          @change-role="handleChangeUserRole"
           @update:form-dirty="markEventDetailsFormDirty"
         />
+
       </div>
     </div>
 
@@ -250,6 +257,15 @@
       @update:isDirty="markFormDirty"
     />
 
+    <AddUserModal
+      :show="showAddUser"
+      :is-dirty="formDirty"
+      :available-roles="eventUsersComposable.availableRolesToAssign.value"
+      @close="closeUserModal"
+      @submit="handleAddUserSubmit"
+      @update:isDirty="markFormDirty"
+    />
+
     <UploadRouteModal
       :show="showUploadRoute"
       :uploading="uploading"
@@ -289,8 +305,9 @@
       :is-dirty="formDirty"
       :validation-errors="marshalValidationErrors"
       :locked-checkpoint-id="lockedCheckpointId"
-      :z-index="lockedCheckpointId ? 1100 : 1000"
+      :z-index="marshalModalZIndex"
       :role-definitions="roleDefinitions"
+      :linked-contact="selectedMarshalLinkedContact"
       @close="closeEditMarshalModal"
       @save="handleSaveMarshal"
       @delete="handleDeleteMarshal"
@@ -588,6 +605,19 @@
       @cancel="handleConfirmModalCancel"
     />
 
+    <DeleteMarshalModal
+      :show="showDeleteMarshalModal"
+      @close="showDeleteMarshalModal = false"
+      @delete="handleDeleteMarshalChoice"
+    />
+
+    <DemoToast
+      :show="demoToasts.currentToast.value != null"
+      :title="demoToasts.currentToast.value?.title || ''"
+      :body="demoToasts.currentToast.value?.body || ''"
+      @dismiss="demoToasts.dismiss"
+      @hide-all="demoToasts.hideAll"
+    />
   </div>
 </template>
 
@@ -612,8 +642,11 @@ import { useAdminChecklistManagement } from '../composables/useAdminChecklistMan
 import { useAdminNoteManagement } from '../composables/useAdminNoteManagement';
 import { useAdminContactManagement } from '../composables/useAdminContactManagement';
 import { useEventAdmins } from '../composables/useEventAdmins';
+import { useEventUsers } from '../composables/useEventUsers';
+import { provideEventPermissions } from '../composables/useEventPermissions';
 import { useImportExport } from '../composables/useImportExport';
 import { useAdminTheme } from '../composables/useAdminTheme';
+import { useDemoToasts } from '../composables/useDemoToasts';
 import { useAdminLayerManagement } from '../composables/useAdminLayerManagement';
 
 // Utilities
@@ -643,6 +676,7 @@ import ResponsiveTabHeader from '../components/ResponsiveTabHeader.vue';
 import ShareLinkModal from '../components/event-manage/modals/ShareLinkModal.vue';
 import MarshalCreatedModal from '../components/event-manage/modals/MarshalCreatedModal.vue';
 import AddAdminModal from '../components/event-manage/modals/AddAdminModal.vue';
+import AddUserModal from '../components/event-manage/modals/AddUserModal.vue';
 import UploadRouteModal from '../components/event-manage/modals/UploadRouteModal.vue';
 import ImportLocationsModal from '../components/event-manage/modals/ImportLocationsModal.vue';
 import ImportMarshalsModal from '../components/event-manage/modals/ImportMarshalsModal.vue';
@@ -657,6 +691,7 @@ import EditNoteModal from '../components/event-manage/modals/EditNoteModal.vue';
 import IncidentDetailModal from '../components/IncidentDetailModal.vue';
 import ReportIncidentModal from '../components/ReportIncidentModal.vue';
 import EditContactModal from '../components/event-manage/modals/EditContactModal.vue';
+import DeleteMarshalModal from '../components/event-manage/modals/DeleteMarshalModal.vue';
 import EditRoleDefinitionModal from '../components/event-manage/modals/EditRoleDefinitionModal.vue';
 import InfoModal from '../components/InfoModal.vue';
 import ConfirmModal from '../components/ConfirmModal.vue';
@@ -669,6 +704,8 @@ import AddLocationModal from '../components/event-manage/modals/AddLocationModal
 import ThemeToggle from '../components/ThemeToggle.vue';
 import AppLogo from '../components/AppLogo.vue';
 import DemoBanner from '../components/DemoBanner.vue';
+import DemoToast from '../components/DemoToast.vue';
+
 
 const route = useRoute();
 const router = useRouter();
@@ -699,8 +736,17 @@ const fullscreenMap = useFullscreenMap();
 // Import/Export composable
 const importExport = useImportExport(eventId);
 
-// Event admins composable
+// Event admins composable (legacy)
 const eventAdminsComposable = useEventAdmins(eventId);
+
+// Event users composable (new role-based system)
+const eventUsersComposable = useEventUsers(eventId);
+
+// Provide permissions to child components
+const permissionsContext = provideEventPermissions(eventUsersComposable.myPermissions);
+
+// Demo toasts
+const demoToasts = useDemoToasts(() => userClaims.value?.personEmail || userClaims.value?.personId || null);
 
 // Theme composable
 const { colorScheme } = useAdminTheme();
@@ -786,9 +832,16 @@ const newlyCreatedMarshalId = ref(null);
 const newlyCreatedMarshalName = ref('');
 const newlyCreatedMarshalEmail = ref('');
 
-// Event admins - use composable state
+// Event admins - use composable state (legacy)
 const eventAdmins = eventAdminsComposable.eventAdmins;
 const showAddAdmin = eventAdminsComposable.showAddAdmin;
+
+// Event users - use composable state (new role-based system)
+const eventUsers = eventUsersComposable.sortedUsers;
+const showAddUser = eventUsersComposable.showAddUser;
+const canManageUsers = eventUsersComposable.canManageUsers;
+const canManageOwners = eventUsersComposable.canManageOwners;
+const canDeleteEvent = eventUsersComposable.canDeleteEvent;
 
 // Import/Export - use composable state
 const showUploadRoute = importExport.showUploadRoute;
@@ -824,6 +877,10 @@ const marshals = ref([]);
 const showEditMarshal = ref(false);
 const selectedMarshal = ref(null);
 const lockedCheckpointId = ref(null);
+const marshalModalOpenedFromAreaModal = ref(false);
+const showDeleteMarshalModal = ref(false);
+const marshalToDelete = ref(null);
+const linkedContactForMarshalToDelete = ref(null);
 const editMarshalModalRef = ref(null);
 const marshalValidationErrors = ref({});
 const editMarshalForm = ref({
@@ -865,7 +922,7 @@ const eventDetailsForm = ref({
   defaultCheckpointStyleMapRotation: '',
   checkpointTerm: 'Checkpoints',
   areaTerm: 'Areas',
-  checklistTerm: 'Checklists',
+  checklistTerm: 'Tasks',
   courseTerm: 'Course',
   defaultCheckpointStyleType: 'default',
   defaultCheckpointStyleColor: '',
@@ -944,6 +1001,9 @@ const pendingAreaForContact = ref(null);
 const prefilledContactName = ref('');
 const prefilledContactMarshalId = ref(null);
 const userClaims = ref(null);
+
+// Current person ID for permission checks
+const currentPersonId = computed(() => userClaims.value?.personId || '');
 
 // Mode switching
 const canSwitchToMarshal = computed(() => {
@@ -1088,6 +1148,26 @@ const selectedMarshalIncidents = computed(() => {
     if (checkpointId && assignedLocationIds.includes(checkpointId)) return true;
     return false;
   }).sort((a, b) => new Date(b.incidentTime || b.createdAt) - new Date(a.incidentTime || a.createdAt));
+});
+
+// Contact linked to the selected marshal (if any)
+const selectedMarshalLinkedContact = computed(() => {
+  if (!selectedMarshal.value) return null;
+  return contacts.value.find(c => c.marshalId === selectedMarshal.value.id) || null;
+});
+
+// Z-index for marshal modal - higher when opened from another modal
+const marshalModalZIndex = computed(() => {
+  // Base z-index is 1000
+  // If opened from checkpoint modal, use 1100
+  // If opened from area modal, use 1200 (area modal is at 1000, contact in area uses 1100)
+  if (marshalModalOpenedFromAreaModal.value) {
+    return 1200;
+  }
+  if (lockedCheckpointId.value) {
+    return 1100;
+  }
+  return 1000;
 });
 
 // Incidents for selected location/checkpoint
@@ -1277,7 +1357,7 @@ const loadEventData = async () => {
         peopleTerm: event.value.peopleTerm || 'Marshals',
         checkpointTerm: event.value.checkpointTerm || 'Checkpoints',
         areaTerm: event.value.areaTerm || 'Areas',
-        checklistTerm: event.value.checklistTerm || 'Checklists',
+        checklistTerm: event.value.checklistTerm || 'Tasks',
         courseTerm: event.value.courseTerm || 'Course',
         defaultCheckpointStyleType: event.value.defaultCheckpointStyleType || 'default',
         defaultCheckpointStyleColor: event.value.defaultCheckpointStyleColor || '',
@@ -1870,6 +1950,21 @@ const handleCreateNewContact = ({ name, area }) => {
 };
 
 const handleEditContactFromArea = (contact) => {
+  // If contact is linked to a marshal, open the marshal modal instead
+  if (contact.marshalId) {
+    const marshal = marshals.value.find(m => m.id === contact.marshalId);
+    if (marshal) {
+      // Merge contact roles into marshal so both sets of roles are shown
+      const contactRoles = contact.roles || [];
+      const marshalRoles = marshal.roles || [];
+      const mergedRoles = [...new Set([...marshalRoles, ...contactRoles])];
+      // Track that we're opening from area modal for z-index calculation
+      marshalModalOpenedFromAreaModal.value = true;
+      selectMarshal({ ...marshal, roles: mergedRoles });
+      return;
+    }
+  }
+
   // Open contact modal without closing area modal - user can return to area modal after editing
   selectedContact.value = contact;
   contactInitialTab.value = 'details';
@@ -2154,6 +2249,19 @@ const handleAddContact = () => {
 };
 
 const handleSelectContact = (contact) => {
+  // If contact is linked to a marshal, open the marshal modal instead
+  if (contact.marshalId) {
+    const marshal = marshals.value.find(m => m.id === contact.marshalId);
+    if (marshal) {
+      // Merge contact roles into marshal so both sets of roles are shown
+      const contactRoles = contact.roles || [];
+      const marshalRoles = marshal.roles || [];
+      const mergedRoles = [...new Set([...marshalRoles, ...contactRoles])];
+      selectMarshal({ ...marshal, roles: mergedRoles });
+      return;
+    }
+  }
+
   selectedContact.value = contact;
   contactInitialTab.value = 'details';
   formDirty.value = false;
@@ -2182,7 +2290,8 @@ const handleSaveContact = async (formData) => {
       newContactId = response.data?.contactId || response.data?.id;
     }
 
-    await loadContacts();
+    // Reload both contacts and marshals since contact phone/email sync to linked marshals (backend handles sync)
+    await Promise.all([loadContacts(), loadMarshals()]);
 
     // If creating a new contact from the area modal context, add it to the pending list
     if (isCreatingNew && hasAreaContext && newContactId && editAreaModalRef.value) {
@@ -2503,6 +2612,47 @@ const removeAdmin = async (userEmail) => {
 
 const closeAdminModal = () => {
   eventAdminsComposable.closeAddAdminModal();
+  formDirty.value = false;
+};
+
+// Event users - use composable methods (new role-based system)
+const loadEventUsers = () => eventUsersComposable.loadEventUsers();
+const loadMyPermissions = () => eventUsersComposable.loadMyPermissions();
+
+const handleAddUserSubmit = async ({ email, role, name }) => {
+  try {
+    await eventUsersComposable.addUser(email, role, name);
+    closeUserModal();
+  } catch (error) {
+    console.error('Failed to add user:', error);
+    alert(error.response?.data?.message || 'Failed to add user. Please try again.');
+  }
+};
+
+const handleRemoveUser = async (personId) => {
+  const user = eventUsers.value.find(u => u.personId === personId);
+  const displayName = user?.userName || user?.userEmail || 'this user';
+  showConfirm('Remove user', `Remove ${displayName} from this event?`, async () => {
+    try {
+      await eventUsersComposable.removeUser(personId);
+    } catch (error) {
+      console.error('Failed to remove user:', error);
+      alert(error.response?.data?.message || 'Failed to remove user. Please try again.');
+    }
+  }, { isDanger: true, confirmText: 'Remove' });
+};
+
+const handleChangeUserRole = async ({ personId, role }) => {
+  try {
+    await eventUsersComposable.updateUserRole(personId, role);
+  } catch (error) {
+    console.error('Failed to update user role:', error);
+    alert(error.response?.data?.message || 'Failed to update user role. Please try again.');
+  }
+};
+
+const closeUserModal = () => {
+  eventUsersComposable.closeAddUserModal();
   formDirty.value = false;
 };
 
@@ -3593,6 +3743,47 @@ const handleSaveMarshal = async (formData) => {
       }
     }
 
+    // Handle contact creation/deletion based on isEventContact flag
+    const hadLinkedContact = !!formData.linkedContactId;
+    const wantsToBeContact = formData.isEventContact;
+
+    if (wantsToBeContact && !hadLinkedContact) {
+      // Create a new contact linked to this marshal
+      await contactsApi.create(route.params.eventId, {
+        name: formData.name,
+        phone: formData.phoneNumber ?? null,
+        email: formData.email ?? null,
+        marshalId: marshalId,
+        roles: formData.roles || [],
+        scopeConfigurations: formData.scopeConfigurations || [],
+        displayOrder: 0,
+        isPinned: false,
+        showInEmergencyInfo: false,
+      });
+    } else if (!wantsToBeContact && hadLinkedContact) {
+      // Delete the linked contact
+      await contactsApi.delete(route.params.eventId, formData.linkedContactId);
+    } else if (wantsToBeContact && hadLinkedContact) {
+      // Contact exists, update it to sync roles, visibility, and contact details
+      // Get the existing contact to preserve displayOrder, isPinned, etc.
+      const linkedContact = contacts.value.find(c => c.contactId === formData.linkedContactId);
+      await contactsApi.update(route.params.eventId, formData.linkedContactId, {
+        name: formData.name,
+        // Phone/email come from formData, not linkedContact (which has stale data before reload)
+        // Use || null to convert empty strings to null, which clears the value in the database
+        phone: formData.phoneNumber || null,
+        email: formData.email || null,
+        roles: formData.roles || [],
+        scopeConfigurations: formData.scopeConfigurations || linkedContact?.scopeConfigurations || [],
+        // Preserve existing contact-specific settings
+        displayOrder: linkedContact?.displayOrder || 0,
+        isPinned: linkedContact?.isPinned || false,
+        showInEmergencyInfo: linkedContact?.showInEmergencyInfo || false,
+        notes: linkedContact?.notes || null,
+        marshalId: linkedContact?.marshalId || null,
+      });
+    }
+
     await loadEventData();
 
     // Update selectedLocation if the checkpoint modal is still open (when editing marshal from checkpoint)
@@ -3661,17 +3852,70 @@ const handleDeleteMarshal = async (marshalId) => {
     return;
   }
 
-  const personTerm = termsLower.value.person;
-  showConfirm(`Delete ${personTerm}`, `Are you sure you want to delete this ${personTerm}?`, async () => {
-    try {
-      await marshalsApi.delete(route.params.eventId, idToDelete);
-      await reloadMarshalsAndStatus();
-      closeEditMarshalModal();
-    } catch (error) {
-      console.error(`Failed to delete ${personTerm}:`, error);
-      alert(`Failed to delete ${personTerm}. Please try again.`);
+  // Check if there's a linked contact
+  const linkedContact = contacts.value.find(c => c.marshalId === idToDelete);
+
+  if (linkedContact) {
+    // Show the multi-option delete modal
+    marshalToDelete.value = idToDelete;
+    linkedContactForMarshalToDelete.value = linkedContact;
+    showDeleteMarshalModal.value = true;
+  } else {
+    // No linked contact, use standard confirm dialog
+    const personTerm = termsLower.value.person;
+    showConfirm(`Delete ${personTerm}`, `Are you sure you want to delete this ${personTerm}?`, async () => {
+      try {
+        await marshalsApi.delete(route.params.eventId, idToDelete);
+        await reloadMarshalsAndStatus();
+        closeEditMarshalModal();
+      } catch (error) {
+        console.error(`Failed to delete ${personTerm}:`, error);
+        alert(`Failed to delete ${personTerm}. Please try again.`);
+      }
+    }, { isDanger: true, confirmText: 'Delete' });
+  }
+};
+
+const handleDeleteMarshalChoice = async (choice) => {
+  const eventIdVal = route.params.eventId;
+  const marshalId = marshalToDelete.value;
+  const contactId = linkedContactForMarshalToDelete.value?.contactId;
+
+  showDeleteMarshalModal.value = false;
+
+  try {
+    if (choice === 'marshal') {
+      // Delete marshal only, but unlink the contact first
+      if (contactId) {
+        await contactsApi.update(eventIdVal, contactId, {
+          ...linkedContactForMarshalToDelete.value,
+          marshalId: null,
+        });
+      }
+      await marshalsApi.delete(eventIdVal, marshalId);
+    } else if (choice === 'contact') {
+      // Delete contact only
+      if (contactId) {
+        await contactsApi.delete(eventIdVal, contactId);
+      }
+    } else if (choice === 'both') {
+      // Delete both - delete contact first, then marshal
+      if (contactId) {
+        await contactsApi.delete(eventIdVal, contactId);
+      }
+      await marshalsApi.delete(eventIdVal, marshalId);
     }
-  }, { isDanger: true, confirmText: 'Delete' });
+
+    await reloadMarshalsAndStatus();
+    await loadContacts();
+    closeEditMarshalModal();
+  } catch (error) {
+    console.error(`Failed to delete:`, error);
+    alert(`Failed to delete. Please try again.`);
+  }
+
+  marshalToDelete.value = null;
+  linkedContactForMarshalToDelete.value = null;
 };
 
 const handleDeleteMarshalFromGrid = (marshal) => {
@@ -3726,6 +3970,7 @@ const closeEditMarshalModal = () => {
   pendingMarshalAssignments.value = [];
   pendingMarshalDeleteAssignments.value = [];
   formDirty.value = false;
+  marshalModalOpenedFromAreaModal.value = false;
 };
 
 // Handle selecting a marshal from within the checkpoint/location modal
@@ -3918,14 +4163,31 @@ onMounted(async () => {
   if (sampleCode) {
     try {
       // Validate the sample code
-      const response = await sampleEventsApi.validate(sampleCode);
-      if (response.data.eventId !== route.params.eventId) {
+      const validateResponse = await sampleEventsApi.validate(sampleCode);
+      if (validateResponse.data.eventId !== route.params.eventId) {
         console.error('Sample code does not match event ID');
         router.push('/');
         return;
       }
-      // Set sample auth context for API calls
-      setAuthContext('sample', route.params.eventId, sampleCode);
+
+      // Login with the sample code to get a real session token
+      const loginResponse = await authApi.sampleLogin(route.params.eventId, sampleCode);
+      if (!loginResponse.data.success) {
+        console.error('Sample login failed:', loginResponse.data.message);
+        router.push('/');
+        return;
+      }
+
+      // Store the session token (same as regular auth)
+      localStorage.setItem('sessionToken', loginResponse.data.sessionToken);
+
+      // Set sample auth context for API calls (no longer needs sampleCode)
+      setAuthContext('sample', route.params.eventId);
+
+      // Remove sample query param from URL (so refreshes don't re-login)
+      const newQuery = { ...route.query };
+      delete newQuery.sample;
+      router.replace({ ...route, query: newQuery });
     } catch (error) {
       console.error('Invalid or expired sample code:', error);
       router.push('/');
@@ -3935,14 +4197,25 @@ onMounted(async () => {
 
   await loadEventData();
 
-  // Fetch user claims to check if user has marshal access (skip for sample events)
-  if (!sampleCode) {
-    try {
-      const claimsResponse = await authApi.getMe(route.params.eventId);
-      userClaims.value = claimsResponse.data;
-    } catch (error) {
-      console.warn('Failed to fetch user claims:', error);
-    }
+  // Fetch user claims to check if user has marshal access
+  try {
+    const claimsResponse = await authApi.getMe(route.params.eventId);
+    userClaims.value = claimsResponse.data;
+  } catch (error) {
+    console.warn('Failed to fetch user claims:', error);
+  }
+
+  // Start demo toasts for sample events (after claims so email is available)
+  if (event.value?.isSampleEvent) {
+    demoToasts.start();
+  }
+
+  // Load user permissions and users list
+  try {
+    await loadMyPermissions();
+    await loadEventUsers();
+  } catch (error) {
+    console.warn('Failed to load user permissions/users:', error);
   }
 
   // Start polling if already on course tab
@@ -4184,5 +4457,73 @@ onUnmounted(() => {
     overflow-x: visible;
     overflow-y: visible;
   }
+}
+
+/* =============================================================================
+   READ-ONLY MODE - Viewers cannot edit anything
+   ============================================================================= */
+
+/* Hide all action buttons (save, delete, add, import, etc.) */
+.read-only-mode :deep(.form-actions),
+.read-only-mode :deep(.btn-save),
+.read-only-mode :deep(.btn-add),
+.read-only-mode :deep(.btn-import),
+.read-only-mode :deep(.btn-delete),
+.read-only-mode :deep(.btn-danger),
+.read-only-mode :deep(.danger-section),
+.read-only-mode :deep(.add-button),
+.read-only-mode :deep(.import-button),
+.read-only-mode :deep(.delete-button),
+.read-only-mode :deep(.action-buttons),
+.read-only-mode :deep(.tab-header .btn),
+.read-only-mode :deep(.users-header .btn),
+.read-only-mode :deep(.list-header .btn) {
+  display: none !important;
+}
+
+/* Disable all form inputs */
+.read-only-mode :deep(input:not([type="search"]):not(.search-input)),
+.read-only-mode :deep(select),
+.read-only-mode :deep(textarea) {
+  pointer-events: none !important;
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Disable drag handles and sortable items */
+.read-only-mode :deep(.drag-handle),
+.read-only-mode :deep(.sortable-handle),
+.read-only-mode :deep([draggable="true"]) {
+  pointer-events: none !important;
+  cursor: default !important;
+}
+
+/* Disable clickable edit items and item actions */
+.read-only-mode :deep(.editable),
+.read-only-mode :deep(.clickable-edit),
+.read-only-mode :deep(.item-actions),
+.read-only-mode :deep(.row-actions),
+.read-only-mode :deep(.user-actions) {
+  pointer-events: none !important;
+  cursor: default !important;
+  opacity: 0.5;
+}
+
+/* Keep search inputs working */
+.read-only-mode :deep(input[type="search"]),
+.read-only-mode :deep(.search-input),
+.read-only-mode :deep(.filter-input) {
+  pointer-events: auto !important;
+  opacity: 1;
+  cursor: text;
+}
+
+/* Keep navigation and view-only interactions working */
+.read-only-mode :deep(.accordion-header),
+.read-only-mode :deep(.tab-button),
+.read-only-mode :deep(.list-item),
+.read-only-mode :deep(.card) {
+  pointer-events: auto;
+  cursor: pointer;
 }
 </style>

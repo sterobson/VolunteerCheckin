@@ -8,15 +8,23 @@ import { computed } from 'vue';
 
 /**
  * Create timezone-aware date formatting functions
- * @param {Ref<string>|string} timeZoneId - The event's timezone (e.g., 'Europe/London')
+ * @param {Ref<string>|string|Function} timeZoneId - The event's timezone (e.g., 'Europe/London')
  * @returns {Object} Formatting functions that use the event's timezone
  */
 export function useEventTimeZone(timeZoneId) {
-  // Get the timezone value (handle both refs and plain strings)
+  // Get the timezone value (handle refs, getter functions, and plain strings)
   const getTimeZone = () => {
-    const tz = typeof timeZoneId === 'object' && timeZoneId.value !== undefined
-      ? timeZoneId.value
-      : timeZoneId;
+    let tz;
+    if (typeof timeZoneId === 'function') {
+      // Getter function (e.g., () => props.timeZoneId)
+      tz = timeZoneId();
+    } else if (typeof timeZoneId === 'object' && timeZoneId.value !== undefined) {
+      // Vue ref
+      tz = timeZoneId.value;
+    } else {
+      // Plain string
+      tz = timeZoneId;
+    }
     return tz || 'UTC';
   };
 

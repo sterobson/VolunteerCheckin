@@ -67,7 +67,8 @@
 </template>
 
 <script setup>
-import { ref, defineProps, defineEmits, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
+// defineProps, defineEmits are compiler macros - no import needed
 import ConfirmModal from './ConfirmModal.vue';
 
 // Get animation duration from CSS variable (default 0.3s)

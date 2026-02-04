@@ -24,11 +24,9 @@ let pendingActionsCallback = null;
 // Auth context tracking - determines which token to use for API calls
 // type: 'admin' | 'marshal' | 'sample' | null
 // eventId: only relevant when type is 'marshal' or 'sample'
-// sampleCode: only relevant when type is 'sample'
 let currentAuthContext = {
   type: null,
-  eventId: null,
-  sampleCode: null
+  eventId: null
 };
 
 /**
@@ -36,15 +34,14 @@ let currentAuthContext = {
  * Call this when entering admin or marshal views
  * @param {'admin'|'marshal'|'sample'|null} type
  * @param {string|null} eventId - Required when type is 'marshal' or 'sample'
- * @param {string|null} sampleCode - Required when type is 'sample'
  */
-export function setAuthContext(type, eventId = null, sampleCode = null) {
-  currentAuthContext = { type, eventId, sampleCode };
+export function setAuthContext(type, eventId = null) {
+  currentAuthContext = { type, eventId };
 }
 
 /**
  * Get the current authentication context
- * @returns {{type: string|null, eventId: string|null, sampleCode: string|null}}
+ * @returns {{type: string|null, eventId: string|null}}
  */
 export function getAuthContext() {
   return { ...currentAuthContext };
@@ -118,27 +115,17 @@ function isServerOrNetworkError(error) {
  */
 function detectAuthContextFromUrl() {
   const hash = window.location.hash || '';
-  const search = window.location.search || '';
 
-  // Check for sample query parameter in either hash or search
-  // Hash routing: #/admin/event/123?sample=abc
-  // History routing: /admin/event/123?sample=abc
-  const hashParams = hash.includes('?') ? new URLSearchParams(hash.split('?')[1]) : null;
-  const searchParams = new URLSearchParams(search);
-  const sampleCode = hashParams?.get('sample') || searchParams.get('sample');
-
-  // Check if on admin routes with sample code - this is a sample event
-  if (hash.includes('/admin/') && sampleCode) {
-    const adminEventMatch = hash.match(/#\/admin\/event\/([^/?]+)/);
-    return {
-      type: 'sample',
-      eventId: adminEventMatch ? adminEventMatch[1] : null,
-      sampleCode
-    };
-  }
-
-  // Check if on admin routes (without sample code)
+  // Check if on admin routes
   if (hash.includes('/admin/')) {
+    // Check if this is a sample event (context is 'sample')
+    if (currentAuthContext.type === 'sample') {
+      const adminEventMatch = hash.match(/#\/admin\/event\/([^/?]+)/);
+      return {
+        type: 'sample',
+        eventId: adminEventMatch ? adminEventMatch[1] : null
+      };
+    }
     return { type: 'admin', eventId: null };
   }
 
@@ -163,6 +150,7 @@ const NO_AUTH_ENDPOINTS = [
   '/auth/request-login',
   '/auth/verify-token',
   '/auth/instant-login',
+  '/auth/sample-login',
 ];
 
 // Add interceptor to include auth headers
@@ -175,13 +163,6 @@ api.interceptors.request.use((config) => {
 
   // Detect context from URL (more reliable than stored context)
   const context = detectAuthContextFromUrl();
-
-  // Include sample event code if in sample mode (use detected context for reliability)
-  const sampleCode = context.sampleCode || currentAuthContext.sampleCode;
-  const isSampleMode = (context.type === 'sample' || currentAuthContext.type === 'sample') && sampleCode;
-  if (isSampleMode) {
-    config.headers['X-Sample-Code'] = sampleCode;
-  }
 
   // Determine which token to use based on auth context
   let token = null;
@@ -201,12 +182,6 @@ api.interceptors.request.use((config) => {
 
   if (token) {
     config.headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  // Add admin email header for admin context requests
-  const adminEmail = localStorage.getItem('adminEmail');
-  if (adminEmail && (context.type === 'admin' || context.type === 'sample' || !context.type)) {
-    config.headers['X-Admin-Email'] = adminEmail;
   }
 
   // Start tracking this request for loading overlay
@@ -442,6 +417,7 @@ export const authApi = {
   instantLogin: (email) => api.post('/auth/instant-login', { email }),
   createAdmin: (email) => api.post('/auth/create-admin', { email }),
   marshalLogin: (eventId, magicCode) => api.post('/auth/marshal-login', { eventId, magicCode }),
+  sampleLogin: (eventId, adminCode) => api.post('/auth/sample-login', { eventId, adminCode }),
   getMe: (eventId) => api.get('/auth/me', { params: { eventId } }),
   logout: () => api.post('/auth/logout'),
 };
@@ -451,13 +427,11 @@ export const profileApi = {
   getProfile: () => api.get('/auth/profile'),
   updateProfile: (data) => api.put('/auth/profile', data),
   getPerson: (personId, eventId) => api.get(`/people/${personId}`, { params: { eventId } }),
-  updatePerson: (personId, eventId, data) => api.put(`/people/${personId}`, data, { params: { eventId } }),
 };
 
 // Events API
 export const eventsApi = {
   create: (data) => api.post('/events', data),
-  getAll: () => api.get('/events'),
   getAllSummary: () => api.get('/events/summary'),
   getById: (id) => api.get(`/events/${id}`),
   update: (id, data) => api.put(`/events/${id}`, data),
@@ -517,11 +491,20 @@ export const checkInApi = {
   adminCheckIn: (eventId, assignmentId) => api.post(`/checkin/admin/${eventId}/${assignmentId}`),
 };
 
-// Event Admins API
+// Event Admins API (legacy - kept for backwards compatibility)
 export const eventAdminsApi = {
   getAdmins: (eventId) => api.get(`/events/${eventId}/admins`),
   addAdmin: (eventId, userEmail) => api.post(`/events/${eventId}/admins`, { userEmail }),
   removeAdmin: (eventId, userEmail) => api.delete(`/events/${eventId}/admins/${userEmail}`),
+};
+
+// Event Users API (new role-based system)
+export const eventUsersApi = {
+  getUsers: (eventId) => api.get(`/events/${eventId}/users`),
+  getMyPermissions: (eventId) => api.get(`/events/${eventId}/my-permissions`),
+  addUser: (eventId, userEmail, role, userName = null) => api.post(`/events/${eventId}/users`, { userEmail, role, userName }),
+  updateUserRole: (eventId, personId, role) => api.put(`/events/${eventId}/users/${personId}`, { role }),
+  removeUser: (eventId, personId) => api.delete(`/events/${eventId}/users/${personId}`),
 };
 
 // Marshals API

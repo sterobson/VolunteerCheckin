@@ -10,14 +10,17 @@ function initializeMarshalSessions() {
   migrateLegacyStorage();
   cleanupOldSessions();
 }
-import Home from '../views/Home.vue';
-import PricingView from '../views/PricingView.vue';
-import AboutView from '../views/AboutView.vue';
-import AdminLogin from '../views/AdminLogin.vue';
-import AdminVerify from '../views/AdminVerify.vue';
-import AdminEventManage from '../views/AdminEventManage.vue';
-import MarshalView from '../views/MarshalView.vue';
-import SessionsView from '../views/SessionsView.vue';
+
+// Lazy-loaded views for code splitting
+// Each view becomes a separate chunk, only downloaded when needed
+const Home = () => import('../views/Home.vue');
+const PricingView = () => import('../views/PricingView.vue');
+const AboutView = () => import('../views/AboutView.vue');
+const AdminLogin = () => import('../views/AdminLogin.vue');
+const AdminVerify = () => import('../views/AdminVerify.vue');
+const AdminEventManage = () => import('../views/AdminEventManage.vue');
+const MarshalView = () => import('../views/MarshalView.vue');
+const SessionsView = () => import('../views/SessionsView.vue');
 
 const routes = [
   {
@@ -100,10 +103,12 @@ router.beforeEach((to, from, next) => {
   initializeMarshalSessions();
 
   const adminEmail = localStorage.getItem('adminEmail');
+  const sessionToken = localStorage.getItem('sessionToken');
   const hasSampleCode = !!to.query.sample;
 
-  // Admin route protection (sample events bypass with ?sample= query param)
-  if (to.meta.requiresAuth && !adminEmail && !hasSampleCode) {
+  // Admin route protection
+  // Allow access if: has adminEmail, has sessionToken, or has sample code in URL
+  if (to.meta.requiresAuth && !adminEmail && !sessionToken && !hasSampleCode) {
     next({ name: 'AdminLogin' });
     return;
   }

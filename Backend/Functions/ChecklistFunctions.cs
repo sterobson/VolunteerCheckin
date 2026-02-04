@@ -64,11 +64,18 @@ public class ChecklistFunctions
                 return new BadRequestObjectResult(new { message = Constants.ErrorInvalidRequest });
             }
 
-            // Authenticate the request
-            UserClaims? claims = await GetClaimsAsync(req, eventId);
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
             if (claims == null)
             {
-                return new UnauthorizedObjectResult(new { message = "Authentication required" });
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
+            {
+                return new UnauthorizedObjectResult(new { message = "You do not have permission to modify this event" });
             }
 
             // Get admin email from authenticated claims
@@ -241,11 +248,18 @@ public class ChecklistFunctions
                 return new BadRequestObjectResult(new { message = Constants.ErrorInvalidRequest });
             }
 
-            // Authenticate the request
-            UserClaims? claims = await GetClaimsAsync(req, eventId);
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
             if (claims == null)
             {
-                return new UnauthorizedObjectResult(new { message = "Authentication required" });
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
+            {
+                return new UnauthorizedObjectResult(new { message = "You do not have permission to modify this event" });
             }
 
             // Get admin email from authenticated claims
@@ -309,6 +323,20 @@ public class ChecklistFunctions
     {
         try
         {
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
+            {
+                return new UnauthorizedObjectResult(new { message = "You do not have permission to modify this event" });
+            }
+
             ChecklistItemEntity? item = await _checklistItemRepository.GetAsync(eventId, itemId);
 
             if (item == null)
@@ -343,6 +371,20 @@ public class ChecklistFunctions
     {
         try
         {
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
+            {
+                return new UnauthorizedObjectResult(new { message = "You do not have permission to modify this event" });
+            }
+
             // Parse request
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
             ReorderChecklistItemsRequest? request = JsonSerializer.Deserialize<ReorderChecklistItemsRequest>(requestBody, FunctionHelpers.JsonOptions);
@@ -414,26 +456,5 @@ public class ChecklistFunctions
                 // Continue anyway - the in-memory list is already updated
             }
         }
-    }
-
-    /// <summary>
-    /// Gets user claims from the request, supporting both session tokens and sample codes.
-    /// </summary>
-    private async Task<UserClaims?> GetClaimsAsync(HttpRequest req, string eventId)
-    {
-        string? sessionToken = req.Headers.Authorization.FirstOrDefault()?.Replace("Bearer ", "", StringComparison.OrdinalIgnoreCase);
-        if (string.IsNullOrWhiteSpace(sessionToken))
-        {
-            sessionToken = req.Cookies["session_token"];
-        }
-
-        string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
-
-        if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
-        {
-            return null;
-        }
-
-        return await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
     }
 }

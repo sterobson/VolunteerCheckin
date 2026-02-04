@@ -475,20 +475,14 @@ public class NoteFunctions
 
     private async Task<UserClaims?> GetClaimsAsync(HttpRequest req, string eventId)
     {
-        string? sessionToken = req.Headers.Authorization.FirstOrDefault()?.Replace("Bearer ", "", StringComparison.OrdinalIgnoreCase);
+        string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
         if (string.IsNullOrWhiteSpace(sessionToken))
-        {
-            sessionToken = req.Cookies["session_token"];
-        }
-
-        string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
-
-        if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
         {
             return null;
         }
 
-        return await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
+        return await _claimsService.GetClaimsAsync(sessionToken, eventId);
     }
 
     private static bool CanManageNotes(UserClaims claims)
@@ -689,7 +683,7 @@ public class NoteFunctions
         {
             // Authenticate - only admins can reorder
             UserClaims? claims = await GetClaimsAsync(req, eventId);
-            if (claims == null || (!claims.IsEventAdmin && !claims.IsSystemAdmin))
+            if (claims == null || !claims.IsEventAdmin)
             {
                 return new UnauthorizedObjectResult(new { message = "Only event admins can reorder notes" });
             }

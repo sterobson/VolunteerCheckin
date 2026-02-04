@@ -120,6 +120,53 @@ public class TableStorageAuthSessionRepository : IAuthSessionRepository
         await Task.WhenAll(revokeTasks);
     }
 
+    public async Task DeleteAllByPersonAsync(string personId)
+    {
+        IEnumerable<AuthSessionEntity> sessions = await GetByPersonAsync(personId);
+
+        foreach (AuthSessionEntity session in sessions)
+        {
+            try
+            {
+                await _table.DeleteEntityAsync(session.PartitionKey, session.RowKey);
+            }
+            catch (RequestFailedException)
+            {
+                // Ignore delete failures
+            }
+        }
+    }
+
+    public async Task DeleteAllByEventAsync(string eventId)
+    {
+        // Query for all sessions associated with this event
+        string filter = $"PartitionKey eq 'SESSION' and EventId eq '{eventId}'";
+        List<AuthSessionEntity> sessions = [];
+        await foreach (AuthSessionEntity session in _table.QueryAsync<AuthSessionEntity>(filter))
+        {
+            sessions.Add(session);
+        }
+
+        // Delete sessions in parallel
+        List<Task> deleteTasks = [];
+        foreach (AuthSessionEntity session in sessions)
+        {
+            deleteTasks.Add(Task.Run(async () =>
+            {
+                try
+                {
+                    await _table.DeleteEntityAsync(session.PartitionKey, session.RowKey);
+                }
+                catch (RequestFailedException)
+                {
+                    // Ignore delete failures (entity may have been deleted by another process)
+                }
+            }));
+        }
+
+        await Task.WhenAll(deleteTasks);
+    }
+
     public async Task DeleteExpiredSessionsAsync()
     {
         DateTime now = DateTime.UtcNow;

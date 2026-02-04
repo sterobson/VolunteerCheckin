@@ -41,7 +41,14 @@
       "Bash(grep:*)",
       "Bash(npx eslint:*)",
       "Bash(dotnet restore:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nMigrate Area table to V2 schema with payload pattern\n\n- Add AreaPayload.cs with Style, Terminology, Contacts, and Polygon\n- Add AreaEntityV2.cs for V2-only columns when saving\n- Update AreaEntity with GetPayload/SetPayload, schema versioning, and auto-migration\n- Update TableStorageAreaRepository with DeleteAndAddAsV2Async pattern\n- Update all code accessing Area properties to use GetPayload\\(\\)\n\nAlso includes various other pending changes:\n- Event, Location schema migrations\n- Layers feature\n- Sample events functionality\n- Map and UI improvements\n- Deploy script updates\n- Removal of deprecated AdminUser and UserEventMapping tables\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd start/finish notes for marshals in sample event\n\nCreate a note visible to all marshals at checkpoints in the Start/Finish\narea with residential area guidelines, traffic management info, and local\npub hot chocolate offer.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)",
+      "Bash(dir /b /o-d \"C:\\\\Users\\\\stero\\\\OneDrive\\\\Pictures\\\\screenshots\\\\*.png\")",
+      "Bash(npx vue-tsc:*)",
+      "Bash(npx vite build)"
     ]
   }
 }

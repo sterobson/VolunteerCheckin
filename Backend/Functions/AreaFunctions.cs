@@ -53,6 +53,20 @@ public class AreaFunctions
             (CreateAreaRequest? request, IActionResult? error) = await FunctionHelpers.TryDeserializeRequestAsync<CreateAreaRequest>(req);
             if (error != null) return error;
 
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, request!.EventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
+            {
+                return new UnauthorizedObjectResult(new { message = "You do not have permission to modify this event" });
+            }
+
             // Validate contacts reference valid marshals (batch load instead of N queries)
             if (request!.Contacts?.Count > 0)
             {
@@ -228,6 +242,20 @@ public class AreaFunctions
             if (error != null) return error;
             if (request == null) return new BadRequestObjectResult(new { message = "Request body is required" });
 
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
+            {
+                return new UnauthorizedObjectResult(new { message = "You do not have permission to modify this event" });
+            }
+
             AreaEntity? areaEntity = await _areaRepository.GetAsync(eventId, areaId);
 
             if (areaEntity == null)
@@ -334,6 +362,20 @@ public class AreaFunctions
     {
         try
         {
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
+            {
+                return new UnauthorizedObjectResult(new { message = "You do not have permission to modify this event" });
+            }
+
             AreaEntity? areaEntity = await _areaRepository.GetAsync(eventId, areaId);
 
             if (areaEntity == null)
@@ -428,6 +470,20 @@ public class AreaFunctions
     {
         try
         {
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
+            {
+                return new UnauthorizedObjectResult(new { message = "You do not have permission to modify this event" });
+            }
+
             await RecalculateCheckpointAreas(eventId);
 
             return new OkObjectResult(new

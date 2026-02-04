@@ -1,5 +1,27 @@
 <template>
   <div class="tab-content roles-tab">
+    <!-- Is Event Contact toggle -->
+    <div class="contact-toggle-section">
+      <div
+        class="role-option contact-toggle"
+        :class="{ selected: isEventContact }"
+        @click="toggleEventContact"
+      >
+        <div class="role-checkbox">
+          <input
+            type="checkbox"
+            :checked="isEventContact"
+            @click.stop
+            @change="toggleEventContact"
+          />
+        </div>
+        <div class="role-info">
+          <span class="role-name">Is event contact</span>
+          <span class="role-description">This {{ termsLower.person }} will appear in the Contacts list and can be assigned visibility scopes</span>
+        </div>
+      </div>
+    </div>
+
     <div v-if="roleDefinitions.length === 0" class="empty-state">
       <p>No roles have been defined for this event yet.</p>
       <p class="help-text">Create roles in the Roles tab to assign them to {{ termsLower.people }}.</p>
@@ -49,9 +71,19 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  isEventContact: {
+    type: Boolean,
+    default: false,
+  },
 });
 
-const emit = defineEmits(['update:roles', 'input']);
+const emit = defineEmits(['update:roles', 'update:isEventContact', 'input']);
+
+// Toggle event contact status
+const toggleEventContact = () => {
+  emit('update:isEventContact', !props.isEventContact);
+  emit('input');
+};
 
 const selectedRoles = computed(() => props.roles || []);
 
@@ -182,5 +214,23 @@ const toggleRole = (roleId) => {
 .help-text {
   font-size: 0.85rem;
   color: var(--text-muted);
+}
+
+.contact-toggle-section {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.contact-toggle .role-info {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.role-description {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-weight: normal;
 }
 </style>

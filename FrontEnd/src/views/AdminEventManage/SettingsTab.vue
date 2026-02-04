@@ -1,21 +1,25 @@
 <template>
   <div class="settings-tab">
     <div class="accordion">
-      <!-- Administrators Section -->
+      <!-- Users Section -->
       <div class="accordion-section">
         <button
           class="accordion-header"
-          :class="{ active: expandedSection === 'admins' }"
-          @click="toggleSection('admins')"
+          :class="{ active: expandedSection === 'users' }"
+          @click="toggleSection('users')"
         >
-          <span class="accordion-title">Administrators ({{ admins.length }})</span>
-          <span class="accordion-icon">{{ expandedSection === 'admins' ? '-' : '+' }}</span>
+          <span class="accordion-title">Users ({{ users.length }})</span>
+          <span class="accordion-icon">{{ expandedSection === 'users' ? '-' : '+' }}</span>
         </button>
-        <div v-if="expandedSection === 'admins'" class="accordion-content">
-          <AdminsList
-            :admins="admins"
-            @add-admin="$emit('add-admin')"
-            @remove-admin="$emit('remove-admin', $event)"
+        <div v-if="expandedSection === 'users'" class="accordion-content">
+          <UsersList
+            :users="users"
+            :can-manage-users="canManageUsers"
+            :can-manage-owners="canManageOwners"
+            :current-person-id="currentPersonId"
+            @add-user="$emit('add-user')"
+            @remove-user="$emit('remove-user', $event)"
+            @change-role="$emit('change-role', $event)"
           />
         </div>
       </div>
@@ -193,8 +197,8 @@
         </div>
       </div>
 
-      <!-- Danger Zone Section -->
-      <div class="accordion-section danger-section">
+      <!-- Danger Zone Section (only for owners) -->
+      <div v-if="canDeleteEvent" class="accordion-section danger-section">
         <button
           class="accordion-header danger-header"
           :class="{ active: expandedSection === 'danger' }"
@@ -281,7 +285,7 @@ import { useAuthStore } from '../../stores/auth';
 import { formatDate as formatEventDate } from '../../utils/dateFormatters';
 import { eventsApi } from '../../services/api';
 import { removeAllSessionsForEvent } from '../../services/marshalSessionService';
-import AdminsList from '../../components/event-manage/lists/AdminsList.vue';
+import UsersList from '../../components/event-manage/lists/UsersList.vue';
 import CheckpointStylePicker from '../../components/CheckpointStylePicker.vue';
 import MarshalModeMockup from '../../components/MarshalModeMockup.vue';
 import { getDefaultBranding } from '../../constants/brandingPresets';
@@ -296,9 +300,25 @@ const props = defineProps({
     type: Object,
     required: true,
   },
-  admins: {
+  users: {
     type: Array,
     default: () => [],
+  },
+  canManageUsers: {
+    type: Boolean,
+    default: false,
+  },
+  canManageOwners: {
+    type: Boolean,
+    default: false,
+  },
+  canDeleteEvent: {
+    type: Boolean,
+    default: false,
+  },
+  currentPersonId: {
+    type: String,
+    default: '',
   },
   formDirty: {
     type: Boolean,
@@ -312,8 +332,9 @@ const props = defineProps({
 
 const emit = defineEmits([
   'submit',
-  'add-admin',
-  'remove-admin',
+  'add-user',
+  'remove-user',
+  'change-role',
   'update:formDirty',
 ]);
 

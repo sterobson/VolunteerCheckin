@@ -87,6 +87,12 @@ public class TableStorageEventContactRepository : IEventContactRepository
         await _table.UpdateEntityAsync(contact, contact.ETag, TableUpdateMode.Replace);
     }
 
+    public async Task UpdateUnconditionalAsync(EventContactEntity contact)
+    {
+        // Use ETag.All to skip optimistic concurrency check
+        await _table.UpdateEntityAsync(contact, ETag.All, TableUpdateMode.Replace);
+    }
+
     public async Task DeleteAsync(string eventId, string contactId)
     {
         EventContactEntity? contact = await GetAsync(eventId, contactId);

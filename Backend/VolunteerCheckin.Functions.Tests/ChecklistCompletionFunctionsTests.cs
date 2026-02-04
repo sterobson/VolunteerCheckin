@@ -71,7 +71,6 @@ public class ChecklistCompletionFunctionsTests
             PersonId: "person123",
             PersonName: "Admin User",
             PersonEmail: AdminEmail,
-            IsSystemAdmin: false,
             EventId: EventId,
             AuthMethod: "SecureEmailLink",
             MarshalId: null,
@@ -79,7 +78,7 @@ public class ChecklistCompletionFunctionsTests
         );
 
         _mockClaimsService
-            .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string>()))
+            .Setup(c => c.GetClaimsAsync(It.IsAny<string?>(), It.IsAny<string>()))
             .ReturnsAsync(adminClaims);
     }
 
@@ -105,7 +104,11 @@ public class ChecklistCompletionFunctionsTests
 
         _mockMarshalRepository
             .Setup(r => r.GetByEventAsync(EventId))
-            .ReturnsAsync(new List<MarshalEntity>());
+            .ReturnsAsync(new List<MarshalEntity> { new() { MarshalId = MarshalId, Name = "Test Marshal" } });
+
+        _mockMarshalRepository
+            .Setup(r => r.GetAsync(EventId, MarshalId))
+            .ReturnsAsync(new MarshalEntity { MarshalId = MarshalId, Name = "Test Marshal" });
 
         _mockEventRoleRepository
             .Setup(r => r.GetByEventAsync(EventId))
@@ -312,7 +315,8 @@ public class ChecklistCompletionFunctionsTests
         IActionResult result = await _functions.CompleteChecklistItem(httpRequest, EventId, ItemId);
 
         // Assert
-        result.ShouldBeOfType<ForbidResult>();
+        ObjectResult objectResult = result.ShouldBeOfType<ObjectResult>();
+        objectResult.StatusCode.ShouldBe(403);
     }
 
     #endregion

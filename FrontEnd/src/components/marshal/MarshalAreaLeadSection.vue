@@ -42,7 +42,8 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits, ref, defineExpose } from 'vue';
+import { ref } from 'vue';
+// defineProps, defineEmits, defineExpose are compiler macros - no import needed
 import { getIcon } from '../../utils/icons';
 import { useTerminology } from '../../composables/useTerminology';
 import AreaLeadSection from '../AreaLeadSection.vue';

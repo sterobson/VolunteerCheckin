@@ -10,16 +10,12 @@
       <span class="demo-text">
         Demo mode - expires in {{ timeRemaining }}
       </span>
-      <button class="demo-cta" @click="handleSignUp">
-        Sign up to keep your event
-      </button>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { useRouter } from 'vue-router';
 
 const props = defineProps({
   expiresAt: {
@@ -28,7 +24,6 @@ const props = defineProps({
   }
 });
 
-const router = useRouter();
 const now = ref(new Date());
 let intervalId = null;
 
@@ -54,10 +49,6 @@ const timeRemaining = computed(() => {
   }
   return `${minutes}m`;
 });
-
-function handleSignUp() {
-  router.push('/?login=true');
-}
 
 onMounted(() => {
   // Update the time every minute
@@ -106,29 +97,7 @@ onUnmounted(() => {
   font-size: 0.9rem;
 }
 
-.demo-cta {
-  background: white;
-  color: #d97706;
-  border: none;
-  padding: 0.35rem 0.75rem;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.demo-cta:hover {
-  background: #fef3c7;
-  transform: translateY(-1px);
-}
-
 @media (max-width: 480px) {
-  .demo-banner-content {
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
   .demo-text {
     font-size: 0.85rem;
   }

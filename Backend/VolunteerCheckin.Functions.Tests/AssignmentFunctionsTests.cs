@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 using VolunteerCheckin.Functions.Functions;
 using VolunteerCheckin.Functions.Models;
 using VolunteerCheckin.Functions.Repositories;
+using VolunteerCheckin.Functions.Services;
 
 namespace VolunteerCheckin.Functions.Tests
 {
@@ -26,6 +27,7 @@ namespace VolunteerCheckin.Functions.Tests
         private Mock<ILocationRepository> _mockLocationRepository = null!;
         private Mock<IAreaRepository> _mockAreaRepository = null!;
         private Mock<IEventRepository> _mockEventRepository = null!;
+        private Mock<ClaimsService> _mockClaimsService = null!;
         private AssignmentFunctions _assignmentFunctions = null!;
 
         [TestInitialize]
@@ -37,6 +39,27 @@ namespace VolunteerCheckin.Functions.Tests
             _mockLocationRepository = new Mock<ILocationRepository>();
             _mockAreaRepository = new Mock<IAreaRepository>();
             _mockEventRepository = new Mock<IEventRepository>();
+            _mockClaimsService = new Mock<ClaimsService>(
+                Mock.Of<IAuthSessionRepository>(),
+                Mock.Of<IPersonRepository>(),
+                Mock.Of<IEventRoleRepository>(),
+                Mock.Of<IMarshalRepository>(),
+                Mock.Of<ISampleEventService>(),
+                Mock.Of<IEventDeletionRepository>()
+            );
+
+            // Setup default claims for authenticated requests
+            _mockClaimsService
+                .Setup(c => c.GetClaimsAsync(It.IsAny<string?>(), It.IsAny<string>()))
+                .ReturnsAsync(new UserClaims(
+                    PersonId: "test-person",
+                    PersonName: "Test User",
+                    PersonEmail: "test@example.com",
+                    EventId: null,
+                    AuthMethod: Constants.AuthMethodSecureEmailLink,
+                    MarshalId: null,
+                    EventRoles: new List<EventRoleInfo> { new(Constants.RoleEventAdmin, new List<string>()) }
+                ));
 
             _assignmentFunctions = new AssignmentFunctions(
                 _mockLogger.Object,
@@ -44,7 +67,8 @@ namespace VolunteerCheckin.Functions.Tests
                 _mockMarshalRepository.Object,
                 _mockLocationRepository.Object,
                 _mockAreaRepository.Object,
-                _mockEventRepository.Object
+                _mockEventRepository.Object,
+                _mockClaimsService.Object
             );
         }
 

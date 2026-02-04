@@ -20,6 +20,7 @@ public class SampleEventService : ISampleEventService
     private readonly IEventContactRepository _eventContactRepository;
     private readonly ILayerRepository _layerRepository;
     private readonly IEventRoleRepository _eventRoleRepository;
+    private readonly IEventRoleDefinitionRepository _eventRoleDefinitionRepository;
     private readonly IPersonRepository _personRepository;
     private readonly INoteRepository _noteRepository;
     private readonly TableStorageService _tableStorageService;
@@ -53,6 +54,7 @@ public class SampleEventService : ISampleEventService
         IEventContactRepository eventContactRepository,
         ILayerRepository layerRepository,
         IEventRoleRepository eventRoleRepository,
+        IEventRoleDefinitionRepository eventRoleDefinitionRepository,
         IPersonRepository personRepository,
         INoteRepository noteRepository,
         TableStorageService tableStorageService,
@@ -67,6 +69,7 @@ public class SampleEventService : ISampleEventService
         _eventContactRepository = eventContactRepository;
         _layerRepository = layerRepository;
         _eventRoleRepository = eventRoleRepository;
+        _eventRoleDefinitionRepository = eventRoleDefinitionRepository;
         _personRepository = personRepository;
         _noteRepository = noteRepository;
         _tableStorageService = tableStorageService;
@@ -112,7 +115,7 @@ public class SampleEventService : ISampleEventService
                 Person = "Marshals",
                 Location = "Checkpoints",
                 Area = "Areas",
-                Task = "Checklists",
+                Task = "Tasks",
                 Course = "Course"
             },
             Styling = new StylingPayload
@@ -160,8 +163,11 @@ public class SampleEventService : ISampleEventService
         // Create sample checklist items
         await CreateChecklistItemsAsync(eventId, areaIdMap);
 
+        // Create role definitions (must be done before assigning roles to contacts/marshals)
+        Dictionary<string, string> roleNameToId = await CreateRoleDefinitionsAsync(eventId);
+
         // Create sample contacts (including area lead contacts linked to marshals)
-        await CreateContactsAsync(eventId, locations, marshals, areaIdMap, areaLeadMarshalIds);
+        await CreateContactsAsync(eventId, marshals, areaIdMap, areaLeadMarshalIds, roleNameToId);
 
         // Generate an admin magic code for this sample event
         // This will be used to access the admin panel without authentication
@@ -395,49 +401,36 @@ public class SampleEventService : ISampleEventService
             await _noteRepository.AddAsync(note);
         }
 
-        // Create a note for all marshals at checkpoints in the Start/Finish area
+        // Create a note for all marshals in the Start/Finish area
         if (areaIdMap.TryGetValue("Start/Finish", out string? startFinishAreaId))
         {
-            // Find all checkpoints in the Start/Finish area
-            List<string> startFinishCheckpointIds = locations
-                .Where(l =>
+            string noteId = Guid.NewGuid().ToString();
+            List<ScopeConfiguration> scopes =
+            [
+                new ScopeConfiguration
                 {
-                    LocationPayload payload = l.GetPayload();
-                    return payload.AreaIds.Contains(startFinishAreaId);
-                })
-                .Select(l => l.RowKey)
-                .ToList();
+                    Scope = "EveryoneInAreas",
+                    ItemType = "Area",
+                    Ids = [startFinishAreaId]
+                }
+            ];
 
-            if (startFinishCheckpointIds.Count > 0)
+            NoteEntity note = new()
             {
-                string noteId = Guid.NewGuid().ToString();
-                List<ScopeConfiguration> scopes =
-                [
-                    new ScopeConfiguration
-                    {
-                        Scope = "EveryoneAtCheckpoints",
-                        ItemType = "Checkpoint",
-                        Ids = startFinishCheckpointIds
-                    }
-                ];
+                PartitionKey = eventId,
+                RowKey = noteId,
+                EventId = eventId,
+                NoteId = noteId,
+                Title = "Start/finish notes",
+                Content = "As this is a residential area, please do not play music before 9am. You do not need to manage the traffic, we have employed the traffic management company to do that. Some vehicles will still need to leave their driveways, which we will not be able to stop. During the race, the local pub will offer free hot chocolates to all marshals, but please be back at your station before the first runners come through.",
+                ScopeConfigurationsJson = JsonSerializer.Serialize(scopes),
+                DisplayOrder = displayOrder++,
+                Priority = Constants.NotePriorityNormal,
+                CreatedByName = "System",
+                CreatedAt = DateTime.UtcNow
+            };
 
-                NoteEntity note = new()
-                {
-                    PartitionKey = eventId,
-                    RowKey = noteId,
-                    EventId = eventId,
-                    NoteId = noteId,
-                    Title = "Start/finish notes",
-                    Content = "As this is a residential area, please do not play music before 9am. You do not need to manage the traffic, we have employed the traffic management company to do that. Some vehicles will still need to leave their driveways, which we will not be able to stop. During the race, the local pub will offer free hot chocolates to all marshals, but please be back at your station before the first runners come through.",
-                    ScopeConfigurationsJson = JsonSerializer.Serialize(scopes),
-                    DisplayOrder = displayOrder++,
-                    Priority = Constants.NotePriorityNormal,
-                    CreatedByName = "System",
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                await _noteRepository.AddAsync(note);
-            }
+            await _noteRepository.AddAsync(note);
         }
     }
 
@@ -983,12 +976,59 @@ public class SampleEventService : ISampleEventService
         }
     }
 
+    /// <summary>
+    /// Creates role definitions for the sample event.
+    /// Returns a mapping of role name to role ID.
+    /// </summary>
+    private async Task<Dictionary<string, string>> CreateRoleDefinitionsAsync(string eventId)
+    {
+        Dictionary<string, string> roleNameToId = new(StringComparer.OrdinalIgnoreCase);
+
+        // Default roles that are auto-created for new events
+        // (Name, IsBuiltIn, CanManageAreaCheckpoints, Notes)
+        (string Name, bool IsBuiltIn, bool CanManageAreaCheckpoints, string Notes)[] defaultRoles =
+        [
+            ("Event director", true, false, "As the event director you have overall responsibility for the event. Marshals and area leads may contact you for major decisions or escalations."),
+            ("Emergency contact", true, false, "As the emergency contact you will be called immediately in the event of a serious incident, injury, or any situation requiring emergency response coordination. Please ensure you are available and reachable throughout the event."),
+            ("Safety officer", true, false, "As the safety officer you are responsible for monitoring course conditions and marshal welfare. Marshals will report any hazards, unsafe conditions, or concerns to you."),
+            ("Medical lead", true, false, "As the medical lead you coordinate first aid and medical response across the event. Marshals will contact you for any medical emergencies or if they need first aid supplies."),
+            ("Logistics", true, false, string.Empty),
+            ("Area lead", true, true, "As the area lead you will be the point of contact for all of the checkpoints in your area. Please make yourself known to your team, and help them ensure their tasks are completed.")
+        ];
+
+        int displayOrder = 0;
+        foreach ((string name, bool isBuiltIn, bool canManageAreaCheckpoints, string notes) in defaultRoles)
+        {
+            string roleId = Guid.NewGuid().ToString();
+            roleNameToId[name] = roleId;
+
+            EventRoleDefinitionEntity roleDefinition = new()
+            {
+                PartitionKey = eventId,
+                RowKey = roleId,
+                EventId = eventId,
+                RoleId = roleId,
+                Name = name,
+                Notes = notes,
+                IsBuiltIn = isBuiltIn,
+                CanManageAreaCheckpoints = canManageAreaCheckpoints,
+                DisplayOrder = displayOrder++,
+                CreatedByPersonId = string.Empty,
+                CreatedAt = DateTime.UtcNow,
+                IsDeleted = false
+            };
+            await _eventRoleDefinitionRepository.AddAsync(roleDefinition);
+        }
+
+        return roleNameToId;
+    }
+
     private async Task CreateContactsAsync(
         string eventId,
-        List<LocationEntity> locations,
         List<MarshalEntity> marshals,
         Dictionary<string, string> areaIdMap,
-        Dictionary<string, string> areaLeadMarshalIds)
+        Dictionary<string, string> areaLeadMarshalIds,
+        Dictionary<string, string> roleNameToId)
     {
         Random random = new();
         HashSet<string> usedNames = [];
@@ -1020,6 +1060,7 @@ public class SampleEventService : ISampleEventService
 
         // Create an event director contact
         string directorContactId = Guid.NewGuid().ToString();
+        string eventDirectorRoleId = roleNameToId["Event director"];
         EventContactEntity directorContact = new()
         {
             PartitionKey = eventId,
@@ -1028,7 +1069,7 @@ public class SampleEventService : ISampleEventService
             ContactId = directorContactId,
             Name = GenerateRandomName(),
             Phone = GenerateFakeUkPhone(),
-            RolesJson = JsonSerializer.Serialize(new[] { "EventDirector" }),
+            RolesJson = JsonSerializer.Serialize(new[] { eventDirectorRoleId }),
             ScopeConfigurationsJson = JsonSerializer.Serialize(new[]
             {
                 new ScopeConfiguration
@@ -1048,6 +1089,7 @@ public class SampleEventService : ISampleEventService
 
         // Create an emergency contact
         string emergencyContactId = Guid.NewGuid().ToString();
+        string emergencyContactRoleId = roleNameToId["Emergency contact"];
         EventContactEntity emergencyContact = new()
         {
             PartitionKey = eventId,
@@ -1056,7 +1098,7 @@ public class SampleEventService : ISampleEventService
             ContactId = emergencyContactId,
             Name = GenerateRandomName(),
             Phone = GenerateFakeUkPhone(),
-            RolesJson = JsonSerializer.Serialize(new[] { "EmergencyContact" }),
+            RolesJson = JsonSerializer.Serialize(new[] { emergencyContactRoleId }),
             ScopeConfigurationsJson = JsonSerializer.Serialize(new[]
             {
                 new ScopeConfiguration
@@ -1075,6 +1117,7 @@ public class SampleEventService : ISampleEventService
 
         // Create a medical contact
         string medicalContactId = Guid.NewGuid().ToString();
+        string medicalLeadRoleId = roleNameToId["Medical lead"];
         EventContactEntity medicalContact = new()
         {
             PartitionKey = eventId,
@@ -1083,7 +1126,7 @@ public class SampleEventService : ISampleEventService
             ContactId = medicalContactId,
             Name = GenerateRandomName(),
             Phone = GenerateFakeUkPhone(),
-            RolesJson = JsonSerializer.Serialize(new[] { "MedicalLead" }),
+            RolesJson = JsonSerializer.Serialize(new[] { medicalLeadRoleId }),
             ScopeConfigurationsJson = JsonSerializer.Serialize(new[]
             {
                 new ScopeConfiguration
@@ -1104,6 +1147,7 @@ public class SampleEventService : ISampleEventService
         if (areaIdMap.TryGetValue("South of the course", out string? southAreaId))
         {
             string safetyContactId = Guid.NewGuid().ToString();
+            string safetyOfficerRoleId = roleNameToId["Safety officer"];
             EventContactEntity safetyContact = new()
             {
                 PartitionKey = eventId,
@@ -1112,7 +1156,7 @@ public class SampleEventService : ISampleEventService
                 ContactId = safetyContactId,
                 Name = GenerateRandomName(),
                 Phone = GenerateFakeUkPhone(),
-                RolesJson = JsonSerializer.Serialize(new[] { "SafetyOfficer" }),
+                RolesJson = JsonSerializer.Serialize(new[] { safetyOfficerRoleId }),
                 ScopeConfigurationsJson = JsonSerializer.Serialize(new[]
                 {
                     new ScopeConfiguration
@@ -1131,6 +1175,7 @@ public class SampleEventService : ISampleEventService
         }
 
         // Create area lead contacts - use the same marshals that were given the area lead role
+        string areaLeadRoleId = roleNameToId["Area lead"];
         foreach (KeyValuePair<string, string> kvp in areaIdMap)
         {
             string areaName = kvp.Key;
@@ -1157,7 +1202,7 @@ public class SampleEventService : ISampleEventService
 
             // Create an area lead contact linked to this marshal
             string contactId = Guid.NewGuid().ToString();
-            string[] areaLeadRoles = ["AreaLead"];
+            string[] areaLeadRoles = [areaLeadRoleId];
             EventContactEntity areaLeadContact = new()
             {
                 PartitionKey = eventId,

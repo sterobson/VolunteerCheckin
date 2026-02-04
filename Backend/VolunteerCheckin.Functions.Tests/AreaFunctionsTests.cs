@@ -58,6 +58,19 @@ namespace VolunteerCheckin.Functions.Tests
                 .Setup(r => r.GetByEventAsync(It.IsAny<string>()))
                 .ReturnsAsync(new List<EventContactEntity>());
 
+            // Setup default claims for authenticated requests
+            _mockClaimsService
+                .Setup(c => c.GetClaimsAsync(It.IsAny<string?>(), It.IsAny<string>()))
+                .ReturnsAsync(new UserClaims(
+                    PersonId: "test-person",
+                    PersonName: "Test User",
+                    PersonEmail: "test@example.com",
+                    EventId: null,
+                    AuthMethod: Constants.AuthMethodSecureEmailLink,
+                    MarshalId: null,
+                    EventRoles: new List<EventRoleInfo> { new(Constants.RoleEventAdmin, new List<string>()) }
+                ));
+
             _areaFunctions = new AreaFunctions(
                 _mockLogger.Object,
                 _mockAreaRepository.Object,

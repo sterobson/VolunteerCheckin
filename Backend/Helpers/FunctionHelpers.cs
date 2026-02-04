@@ -108,32 +108,6 @@ public static class FunctionHelpers
     }
 
     /// <summary>
-    /// Extracts and validates the admin email from the request header.
-    /// Returns the email if present, otherwise returns an error result.
-    /// </summary>
-    public static (string? Email, IActionResult? Error) GetAdminEmailFromHeader(HttpRequest req)
-    {
-        string? adminEmail = req.Headers[Constants.AdminEmailHeader].FirstOrDefault();
-
-        if (string.IsNullOrWhiteSpace(adminEmail))
-        {
-            return (null, new BadRequestObjectResult(new { message = "Admin email header is required" }));
-        }
-
-        return (adminEmail, null);
-    }
-
-    /// <summary>
-    /// Extracts the sample event code from the request header.
-    /// Returns the code if present, otherwise null.
-    /// </summary>
-    public static string? GetSampleCodeFromHeader(HttpRequest req)
-    {
-        string? sampleCode = req.Headers[Constants.SampleCodeHeader].FirstOrDefault();
-        return string.IsNullOrWhiteSpace(sampleCode) ? null : sampleCode;
-    }
-
-    /// <summary>
     /// Extracts pagination parameters from query string.
     /// Returns page number (1-based) and page size (max 100).
     /// </summary>

@@ -372,7 +372,6 @@ namespace VolunteerCheckin.Functions.Tests
                 PersonId: "person-123",
                 PersonName: "Admin User",
                 PersonEmail: "admin@example.com",
-                IsSystemAdmin: false,
                 EventId: eventId,
                 AuthMethod: Constants.AuthMethodSecureEmailLink,
                 MarshalId: null,
@@ -425,7 +424,6 @@ namespace VolunteerCheckin.Functions.Tests
                 PersonId: "person-123",
                 PersonName: "Marshal User",
                 PersonEmail: "marshal@example.com",
-                IsSystemAdmin: false,
                 EventId: "event-123",
                 AuthMethod: Constants.AuthMethodMarshalMagicCode, // Not elevated!
                 MarshalId: "marshal-123",
@@ -467,7 +465,8 @@ namespace VolunteerCheckin.Functions.Tests
             IActionResult result = await _checkInFunctions.AdminCheckIn(httpRequest, "event-123", "assignment-456");
 
             // Assert
-            result.ShouldBeOfType<ForbidResult>();
+            ObjectResult objectResult = result.ShouldBeOfType<ObjectResult>();
+            objectResult.StatusCode.ShouldBe(403);
         }
 
         [TestMethod]
@@ -478,7 +477,6 @@ namespace VolunteerCheckin.Functions.Tests
                 PersonId: "person-123",
                 PersonName: "Regular User",
                 PersonEmail: "user@example.com",
-                IsSystemAdmin: false,
                 EventId: "event-123",
                 AuthMethod: Constants.AuthMethodSecureEmailLink,
                 MarshalId: null,
@@ -520,7 +518,8 @@ namespace VolunteerCheckin.Functions.Tests
             IActionResult result = await _checkInFunctions.AdminCheckIn(httpRequest, "event-123", "assignment-456");
 
             // Assert
-            result.ShouldBeOfType<ForbidResult>();
+            ObjectResult objectResult = result.ShouldBeOfType<ObjectResult>();
+            objectResult.StatusCode.ShouldBe(403);
         }
 
         [TestMethod]
@@ -695,20 +694,19 @@ namespace VolunteerCheckin.Functions.Tests
             string eventId = "event-123";
             string assignmentId = "assignment-456";
 
-            UserClaims systemAdminClaims = new(
+            UserClaims eventAdminClaims = new(
                 PersonId: "person-123",
-                PersonName: "System Admin",
-                PersonEmail: "sysadmin@example.com",
-                IsSystemAdmin: true,
+                PersonName: "Event Admin",
+                PersonEmail: "admin@example.com",
                 EventId: eventId,
                 AuthMethod: Constants.AuthMethodSecureEmailLink,
                 MarshalId: null,
-                EventRoles: new List<EventRoleInfo>() // No explicit event admin role needed
+                EventRoles: new List<EventRoleInfo> { new(Constants.RoleEventAdmin, new List<string>()) }
             );
 
             _mockClaimsService
                 .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), eventId))
-                .ReturnsAsync(systemAdminClaims);
+                .ReturnsAsync(eventAdminClaims);
 
             AssignmentEntity assignment = new()
             {

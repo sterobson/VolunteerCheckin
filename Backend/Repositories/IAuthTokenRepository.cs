@@ -17,5 +17,6 @@ public interface IAuthTokenRepository
     Task<AuthTokenEntity?> GetValidTokenByPersonAndCodeAsync(string personId, string loginCode);
     Task UpdateAsync(AuthTokenEntity token);
     Task DeleteAsync(string tokenHash);
+    Task DeleteAllByPersonAsync(string personId);
     Task DeleteExpiredTokensAsync();
 }

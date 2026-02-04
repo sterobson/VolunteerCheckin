@@ -21,6 +21,9 @@
       <button @click="handleCopyLink" class="btn btn-primary">
         {{ linkCopied ? 'Copied!' : 'Copy' }}
       </button>
+      <button @click="handleOpenInNewTab" class="btn btn-secondary">
+        Open
+      </button>
     </div>
 
     <!-- Action buttons -->
@@ -66,6 +69,10 @@ const handleCopyLink = () => {
       linkCopied.value = false;
     }, 2000);
   }
+};
+
+const handleOpenInNewTab = () => {
+  window.open(props.link, '_blank');
 };
 
 const handleClose = () => {

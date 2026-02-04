@@ -62,5 +62,8 @@ FrontEnd/node_modules/
 
 # Backend local settings
 Backend/local.settings.json
+
+# Local dev process PIDs
+.deployment/*.pid
 */nul
 /nul

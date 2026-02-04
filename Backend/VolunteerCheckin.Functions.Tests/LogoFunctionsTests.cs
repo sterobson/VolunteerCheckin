@@ -25,8 +25,7 @@ public class LogoFunctionsTests
 {
     private Mock<ILogger<LogoFunctions>> _mockLogger = null!;
     private Mock<IEventRepository> _mockEventRepository = null!;
-    private Mock<IPersonRepository> _mockPersonRepository = null!;
-    private Mock<IEventRoleRepository> _mockEventRoleRepository = null!;
+    private Mock<ClaimsService> _mockClaimsService = null!;
     private Mock<BlobStorageService> _mockBlobStorageService = null!;
     private LogoFunctions _functions = null!;
 
@@ -40,8 +39,14 @@ public class LogoFunctionsTests
     {
         _mockLogger = new Mock<ILogger<LogoFunctions>>();
         _mockEventRepository = new Mock<IEventRepository>();
-        _mockPersonRepository = new Mock<IPersonRepository>();
-        _mockEventRoleRepository = new Mock<IEventRoleRepository>();
+        _mockClaimsService = new Mock<ClaimsService>(
+            Mock.Of<IAuthSessionRepository>(),
+            Mock.Of<IPersonRepository>(),
+            Mock.Of<IEventRoleRepository>(),
+            Mock.Of<IMarshalRepository>(),
+            Mock.Of<ISampleEventService>(),
+            Mock.Of<IEventDeletionRepository>()
+        );
 
         // Create mock for BlobStorageService - we need a valid connection string for the constructor
         // but we'll override the virtual methods
@@ -50,37 +55,36 @@ public class LogoFunctionsTests
         _functions = new LogoFunctions(
             _mockLogger.Object,
             _mockEventRepository.Object,
-            _mockPersonRepository.Object,
-            _mockEventRoleRepository.Object,
+            _mockClaimsService.Object,
             _mockBlobStorageService.Object
+        );
+    }
+
+    private UserClaims CreateAdminClaims()
+    {
+        return new UserClaims(
+            PersonId: AdminPersonId,
+            PersonName: "Admin User",
+            PersonEmail: AdminEmail,
+            EventId: EventId,
+            AuthMethod: Constants.AuthMethodSecureEmailLink,
+            MarshalId: null,
+            EventRoles: new List<EventRoleInfo> { new(Constants.RoleEventAdmin, new List<string>()) }
         );
     }
 
     private void SetupAuthorizedUser()
     {
-        _mockPersonRepository
-            .Setup(r => r.GetByEmailAsync(AdminEmail))
-            .ReturnsAsync(new PersonEntity { PersonId = AdminPersonId, Email = AdminEmail });
-
-        _mockEventRoleRepository
-            .Setup(r => r.GetByPersonAndEventAsync(AdminPersonId, EventId))
-            .ReturnsAsync(new List<EventRoleEntity>
-            {
-                new EventRoleEntity
-                {
-                    PersonId = AdminPersonId,
-                    EventId = EventId,
-                    Role = Constants.RoleEventAdmin,
-                    AreaIdsJson = "[]"
-                }
-            });
+        _mockClaimsService
+            .Setup(c => c.GetClaimsAsync(It.IsAny<string?>(), EventId))
+            .ReturnsAsync(CreateAdminClaims());
     }
 
     private void SetupUnauthorizedUser()
     {
-        _mockPersonRepository
-            .Setup(r => r.GetByEmailAsync(AdminEmail))
-            .ReturnsAsync((PersonEntity?)null);
+        _mockClaimsService
+            .Setup(c => c.GetClaimsAsync(It.IsAny<string?>(), EventId))
+            .ReturnsAsync((UserClaims?)null);
     }
 
     private EventEntity CreateEventEntity()
@@ -95,12 +99,15 @@ public class LogoFunctionsTests
         };
     }
 
-    private HttpRequest CreateUploadRequest(string contentType, long contentLength = 1024)
+    private HttpRequest CreateUploadRequest(string contentType, long contentLength = 1024, bool withAuth = true)
     {
         DefaultHttpContext context = new();
         HttpRequest request = context.Request;
 
-        request.Headers["X-Admin-Email"] = AdminEmail;
+        if (withAuth)
+        {
+            request.Headers["Authorization"] = "Bearer valid-session-token";
+        }
         request.ContentType = contentType;
         request.ContentLength = contentLength;
         request.Body = new MemoryStream(new byte[contentLength]);
@@ -201,19 +208,16 @@ public class LogoFunctionsTests
     }
 
     [TestMethod]
-    public async Task UploadEventLogo_NoAdminHeader_ReturnsBadRequest()
+    public async Task UploadEventLogo_NoAuth_ReturnsUnauthorized()
     {
-        // Arrange
-        DefaultHttpContext context = new();
-        HttpRequest request = context.Request;
-        request.ContentType = "image/png";
-        request.Body = new MemoryStream(new byte[1024]);
+        // Arrange - no authorization header
+        HttpRequest request = CreateUploadRequest("image/png", 1024, withAuth: false);
 
         // Act
         IActionResult result = await _functions.UploadEventLogo(request, EventId);
 
         // Assert
-        result.ShouldBeOfType<BadRequestObjectResult>();
+        result.ShouldBeOfType<UnauthorizedObjectResult>();
     }
 
     [TestMethod]
@@ -304,7 +308,7 @@ public class LogoFunctionsTests
 
         DefaultHttpContext context = new();
         HttpRequest request = context.Request;
-        request.Headers["X-Admin-Email"] = AdminEmail;
+        request.Headers["Authorization"] = "Bearer valid-session-token";
         request.ContentType = null;
         request.Body = new MemoryStream(new byte[1024]);
 
@@ -397,7 +401,7 @@ public class LogoFunctionsTests
             .Callback<EventEntity>(e => capturedEntity = e)
             .Returns(Task.CompletedTask);
 
-        HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAdminHeader(AdminEmail);
+        HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth("valid-session-token");
 
         // Act
         IActionResult result = await _functions.DeleteEventLogo(httpRequest, EventId);
@@ -412,7 +416,7 @@ public class LogoFunctionsTests
     }
 
     [TestMethod]
-    public async Task DeleteEventLogo_NoAdminHeader_ReturnsBadRequest()
+    public async Task DeleteEventLogo_NoAuth_ReturnsUnauthorized()
     {
         // Arrange
         HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequest();
@@ -421,7 +425,7 @@ public class LogoFunctionsTests
         IActionResult result = await _functions.DeleteEventLogo(httpRequest, EventId);
 
         // Assert
-        result.ShouldBeOfType<BadRequestObjectResult>();
+        result.ShouldBeOfType<UnauthorizedObjectResult>();
     }
 
     [TestMethod]
@@ -430,7 +434,7 @@ public class LogoFunctionsTests
         // Arrange
         SetupUnauthorizedUser();
 
-        HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAdminHeader(AdminEmail);
+        HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth("invalid-token");
 
         // Act
         IActionResult result = await _functions.DeleteEventLogo(httpRequest, EventId);
@@ -449,7 +453,7 @@ public class LogoFunctionsTests
             .Setup(r => r.GetAsync(EventId))
             .ReturnsAsync((EventEntity?)null);
 
-        HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAdminHeader(AdminEmail);
+        HttpRequest httpRequest = TestHelpers.CreateEmptyHttpRequestWithAuth("valid-session-token");
 
         // Act
         IActionResult result = await _functions.DeleteEventLogo(httpRequest, EventId);

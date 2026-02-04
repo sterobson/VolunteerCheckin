@@ -65,7 +65,6 @@ public class PeopleFunctionsTests
             PersonId: AdminPersonId,
             PersonName: "Admin User",
             PersonEmail: AdminEmail,
-            IsSystemAdmin: false,
             EventId: EventId,
             AuthMethod: Constants.AuthMethodSecureEmailLink,
             MarshalId: null,
@@ -79,7 +78,6 @@ public class PeopleFunctionsTests
             PersonId: PersonId,
             PersonName: PersonName,
             PersonEmail: PersonEmail,
-            IsSystemAdmin: false,
             EventId: EventId,
             AuthMethod: Constants.AuthMethodMarshalMagicCode,
             MarshalId: "marshal123",
@@ -104,7 +102,6 @@ public class PeopleFunctionsTests
             Name = name,
             Email = email,
             Phone = "555-1234",
-            IsSystemAdmin = false,
             CreatedAt = DateTime.UtcNow.AddDays(-30)
         };
     }
@@ -254,7 +251,8 @@ public class PeopleFunctionsTests
         IActionResult result = await _functions.GetPerson(httpRequest, PersonId);
 
         // Assert
-        result.ShouldBeOfType<ForbidResult>();
+        ObjectResult objectResult = result.ShouldBeOfType<ObjectResult>();
+        objectResult.StatusCode.ShouldBe(403);
     }
 
     [TestMethod]
@@ -277,326 +275,6 @@ public class PeopleFunctionsTests
 
         // Assert
         result.ShouldBeOfType<NotFoundObjectResult>();
-    }
-
-    #endregion
-
-    #region UpdatePerson Tests
-
-    [TestMethod]
-    public async Task UpdatePerson_ValidRequest_ReturnsOk()
-    {
-        // Arrange
-        SetupClaimsService(CreateAdminClaims());
-
-        PersonEntity existingPerson = CreatePersonEntity(PersonId, "Old Name", "old@example.com");
-
-        UpdatePersonRequest request = new(
-            Name: "New Name",
-            Email: "new@example.com",
-            Phone: "555-9999"
-        );
-
-        _mockPersonRepository
-            .Setup(r => r.GetAsync(PersonId))
-            .ReturnsAsync(existingPerson);
-
-        _mockPersonRepository
-            .Setup(r => r.GetByEmailAsync("new@example.com"))
-            .ReturnsAsync((PersonEntity?)null);
-
-        PersonEntity? capturedEntity = null;
-        _mockPersonRepository
-            .Setup(r => r.UpdateAsync(It.IsAny<PersonEntity>()))
-            .Callback<PersonEntity>(e => capturedEntity = e)
-            .Returns(Task.CompletedTask);
-
-        HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAuthAndHeaders(
-            request,
-            SessionToken,
-            new Dictionary<string, string>()
-        );
-        httpRequest.QueryString = new QueryString($"?eventId={EventId}");
-
-        // Act
-        IActionResult result = await _functions.UpdatePerson(httpRequest, PersonId);
-
-        // Assert
-        result.ShouldBeOfType<OkObjectResult>();
-        OkObjectResult okResult = (OkObjectResult)result;
-        PersonInfo response = (PersonInfo)okResult.Value!;
-
-        response.Name.ShouldBe("New Name");
-        response.Email.ShouldBe("new@example.com");
-        response.Phone.ShouldBe("555-9999");
-
-        capturedEntity.ShouldNotBeNull();
-        capturedEntity.Name.ShouldBe("New Name");
-        capturedEntity.Email.ShouldBe("new@example.com");
-    }
-
-    [TestMethod]
-    public async Task UpdatePerson_SameEmail_Succeeds()
-    {
-        // Arrange
-        SetupClaimsService(CreateAdminClaims());
-
-        PersonEntity existingPerson = CreatePersonEntity(PersonId, "Old Name", PersonEmail);
-
-        UpdatePersonRequest request = new(
-            Name: "New Name",
-            Email: PersonEmail, // Same email
-            Phone: "555-9999"
-        );
-
-        _mockPersonRepository
-            .Setup(r => r.GetAsync(PersonId))
-            .ReturnsAsync(existingPerson);
-
-        _mockPersonRepository
-            .Setup(r => r.UpdateAsync(It.IsAny<PersonEntity>()))
-            .Returns(Task.CompletedTask);
-
-        HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAuthAndHeaders(
-            request,
-            SessionToken,
-            new Dictionary<string, string>()
-        );
-        httpRequest.QueryString = new QueryString($"?eventId={EventId}");
-
-        // Act
-        IActionResult result = await _functions.UpdatePerson(httpRequest, PersonId);
-
-        // Assert
-        result.ShouldBeOfType<OkObjectResult>();
-    }
-
-    [TestMethod]
-    public async Task UpdatePerson_EmailAlreadyInUse_ReturnsBadRequest()
-    {
-        // Arrange
-        SetupClaimsService(CreateAdminClaims());
-
-        PersonEntity existingPerson = CreatePersonEntity(PersonId, "Old Name", "old@example.com");
-        PersonEntity otherPerson = CreatePersonEntity("other-person", "Other User", "taken@example.com");
-
-        UpdatePersonRequest request = new(
-            Name: "New Name",
-            Email: "taken@example.com",
-            Phone: "555-9999"
-        );
-
-        _mockPersonRepository
-            .Setup(r => r.GetAsync(PersonId))
-            .ReturnsAsync(existingPerson);
-
-        _mockPersonRepository
-            .Setup(r => r.GetByEmailAsync("taken@example.com"))
-            .ReturnsAsync(otherPerson);
-
-        HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAuthAndHeaders(
-            request,
-            SessionToken,
-            new Dictionary<string, string>()
-        );
-        httpRequest.QueryString = new QueryString($"?eventId={EventId}");
-
-        // Act
-        IActionResult result = await _functions.UpdatePerson(httpRequest, PersonId);
-
-        // Assert
-        result.ShouldBeOfType<BadRequestObjectResult>();
-    }
-
-    [TestMethod]
-    public async Task UpdatePerson_NoSessionToken_ReturnsUnauthorized()
-    {
-        // Arrange
-        UpdatePersonRequest request = new(
-            Name: "New Name",
-            Email: "new@example.com",
-            Phone: null
-        );
-
-        HttpRequest httpRequest = TestHelpers.CreateHttpRequest(request);
-        httpRequest.QueryString = new QueryString($"?eventId={EventId}");
-
-        // Act
-        IActionResult result = await _functions.UpdatePerson(httpRequest, PersonId);
-
-        // Assert
-        result.ShouldBeOfType<UnauthorizedObjectResult>();
-    }
-
-    [TestMethod]
-    public async Task UpdatePerson_MissingEventId_ReturnsBadRequest()
-    {
-        // Arrange
-        UpdatePersonRequest request = new(
-            Name: "New Name",
-            Email: "new@example.com",
-            Phone: null
-        );
-
-        HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAuth(request, SessionToken);
-
-        // Act
-        IActionResult result = await _functions.UpdatePerson(httpRequest, PersonId);
-
-        // Assert
-        result.ShouldBeOfType<BadRequestObjectResult>();
-    }
-
-    [TestMethod]
-    public async Task UpdatePerson_NonAdmin_ReturnsForbid()
-    {
-        // Arrange
-        SetupClaimsService(CreateNonAdminClaims());
-
-        UpdatePersonRequest request = new(
-            Name: "New Name",
-            Email: "new@example.com",
-            Phone: null
-        );
-
-        HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAuthAndHeaders(
-            request,
-            SessionToken,
-            new Dictionary<string, string>()
-        );
-        httpRequest.QueryString = new QueryString($"?eventId={EventId}");
-
-        // Act
-        IActionResult result = await _functions.UpdatePerson(httpRequest, PersonId);
-
-        // Assert
-        result.ShouldBeOfType<ForbidResult>();
-    }
-
-    [TestMethod]
-    public async Task UpdatePerson_MissingName_ReturnsBadRequest()
-    {
-        // Arrange
-        SetupClaimsService(CreateAdminClaims());
-
-        UpdatePersonRequest request = new(
-            Name: "",
-            Email: "new@example.com",
-            Phone: null
-        );
-
-        HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAuthAndHeaders(
-            request,
-            SessionToken,
-            new Dictionary<string, string>()
-        );
-        httpRequest.QueryString = new QueryString($"?eventId={EventId}");
-
-        // Act
-        IActionResult result = await _functions.UpdatePerson(httpRequest, PersonId);
-
-        // Assert
-        result.ShouldBeOfType<BadRequestObjectResult>();
-    }
-
-    [TestMethod]
-    public async Task UpdatePerson_InvalidEmail_ReturnsBadRequest()
-    {
-        // Arrange
-        SetupClaimsService(CreateAdminClaims());
-
-        UpdatePersonRequest request = new(
-            Name: "New Name",
-            Email: "not-an-email",
-            Phone: null
-        );
-
-        HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAuthAndHeaders(
-            request,
-            SessionToken,
-            new Dictionary<string, string>()
-        );
-        httpRequest.QueryString = new QueryString($"?eventId={EventId}");
-
-        // Act
-        IActionResult result = await _functions.UpdatePerson(httpRequest, PersonId);
-
-        // Assert
-        result.ShouldBeOfType<BadRequestObjectResult>();
-    }
-
-    [TestMethod]
-    public async Task UpdatePerson_PersonNotFound_ReturnsNotFound()
-    {
-        // Arrange
-        SetupClaimsService(CreateAdminClaims());
-
-        UpdatePersonRequest request = new(
-            Name: "New Name",
-            Email: "new@example.com",
-            Phone: null
-        );
-
-        _mockPersonRepository
-            .Setup(r => r.GetAsync(PersonId))
-            .ReturnsAsync((PersonEntity?)null);
-
-        HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAuthAndHeaders(
-            request,
-            SessionToken,
-            new Dictionary<string, string>()
-        );
-        httpRequest.QueryString = new QueryString($"?eventId={EventId}");
-
-        // Act
-        IActionResult result = await _functions.UpdatePerson(httpRequest, PersonId);
-
-        // Assert
-        result.ShouldBeOfType<NotFoundObjectResult>();
-    }
-
-    [TestMethod]
-    public async Task UpdatePerson_NormalizesEmail()
-    {
-        // Arrange
-        SetupClaimsService(CreateAdminClaims());
-
-        PersonEntity existingPerson = CreatePersonEntity(PersonId, "Old Name", "old@example.com");
-
-        UpdatePersonRequest request = new(
-            Name: "New Name",
-            Email: "NEW@EXAMPLE.COM", // Uppercase (will be normalized to lowercase)
-            Phone: null
-        );
-
-        _mockPersonRepository
-            .Setup(r => r.GetAsync(PersonId))
-            .ReturnsAsync(existingPerson);
-
-        _mockPersonRepository
-            .Setup(r => r.GetByEmailAsync("new@example.com"))
-            .ReturnsAsync((PersonEntity?)null);
-
-        PersonEntity? capturedEntity = null;
-        _mockPersonRepository
-            .Setup(r => r.UpdateAsync(It.IsAny<PersonEntity>()))
-            .Callback<PersonEntity>(e => capturedEntity = e)
-            .Returns(Task.CompletedTask);
-
-        HttpRequest httpRequest = TestHelpers.CreateHttpRequestWithAuthAndHeaders(
-            request,
-            SessionToken,
-            new Dictionary<string, string>()
-        );
-        httpRequest.QueryString = new QueryString($"?eventId={EventId}");
-
-        // Act
-        IActionResult result = await _functions.UpdatePerson(httpRequest, PersonId);
-
-        // Assert
-        result.ShouldBeOfType<OkObjectResult>();
-        capturedEntity.ShouldNotBeNull();
-        capturedEntity.Email.ShouldBe("new@example.com"); // Lowercase and trimmed
     }
 
     #endregion

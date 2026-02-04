@@ -12,20 +12,6 @@ export const useEventsStore = defineStore('events', () => {
   const loading = ref(false);
   const error = ref(null);
 
-  const fetchEvents = async () => {
-    loading.value = true;
-    error.value = null;
-    try {
-      const response = await eventsApi.getAll();
-      events.value = response.data;
-    } catch (err) {
-      error.value = err.message;
-      throw err;
-    } finally {
-      loading.value = false;
-    }
-  };
-
   const fetchEvent = async (eventId) => {
     loading.value = true;
     error.value = null;
@@ -257,7 +243,6 @@ export const useEventsStore = defineStore('events', () => {
     eventStatus,
     loading,
     error,
-    fetchEvents,
     fetchEvent,
     createEvent,
     updateEvent,

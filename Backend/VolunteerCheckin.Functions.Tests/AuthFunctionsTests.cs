@@ -65,7 +65,9 @@ namespace VolunteerCheckin.Functions.Tests
                 _mockClaimsService.Object,
                 _mockPersonRepository.Object,
                 _mockMarshalRepository.Object,
-                _mockRateLimitService.Object
+                _mockRateLimitService.Object,
+                Mock.Of<ISampleEventService>(),
+                Mock.Of<IEventRoleRepository>()
             );
         }
 
@@ -250,7 +252,7 @@ namespace VolunteerCheckin.Functions.Tests
             // Arrange
             _mockAuthService.Setup(a => a.AuthenticateWithMagicCodeAsync(
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()
-            )).ReturnsAsync((true, "session-token", new PersonInfo("person-1", "Test User", "test@example.com", "", false), "marshal-1", null));
+            )).ReturnsAsync((true, "session-token", new PersonInfo("person-1", "Test User", "test@example.com", ""), "marshal-1", null));
 
             MarshalLoginRequest body = new("event-123", "ABC123");
             Microsoft.AspNetCore.Http.HttpRequest request = TestHelpers.CreateHttpRequest(body);
@@ -319,7 +321,6 @@ namespace VolunteerCheckin.Functions.Tests
                 PersonId: "person-123",
                 PersonName: "Test User",
                 PersonEmail: "test@example.com",
-                IsSystemAdmin: false,
                 EventId: null,
                 AuthMethod: Constants.AuthMethodSecureEmailLink,
                 MarshalId: null,
@@ -745,8 +746,7 @@ namespace VolunteerCheckin.Functions.Tests
                 RowKey = personId,
                 PersonId = personId,
                 Name = "Test Marshal",
-                Email = "marshal@test.com",
-                IsSystemAdmin = false
+                Email = "marshal@test.com"
             };
 
             Mock<IAuthTokenRepository> mockTokenRepo = new();
@@ -851,8 +851,7 @@ namespace VolunteerCheckin.Functions.Tests
                 RowKey = personId,
                 PersonId = personId,
                 Name = "Test Marshal",
-                Email = "marshal@test.com",
-                IsSystemAdmin = false
+                Email = "marshal@test.com"
             };
 
             Mock<IAuthSessionRepository> mockSessionRepo = new();
@@ -934,8 +933,7 @@ namespace VolunteerCheckin.Functions.Tests
                 RowKey = personId,
                 PersonId = personId,
                 Name = "Admin User",
-                Email = "admin@test.com",
-                IsSystemAdmin = true
+                Email = "admin@test.com"
             };
 
             Mock<IAuthSessionRepository> mockSessionRepo = new();
@@ -952,7 +950,7 @@ namespace VolunteerCheckin.Functions.Tests
                 .ReturnsAsync(person);
 
             mockRoleRepo.Setup(r => r.GetByPersonAndEventAsync(personId, eventId))
-                .ReturnsAsync(new List<EventRoleEntity>());
+                .ReturnsAsync(new List<EventRoleEntity> { new() { Role = Constants.RoleEventAdmin, AreaIdsJson = "[]" } });
 
             ClaimsService claimsService = new(
                 mockSessionRepo.Object,

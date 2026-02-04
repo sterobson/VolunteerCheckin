@@ -12,6 +12,9 @@
         :title="`Edit ${layer.name}`"
       >
         <span class="layer-pill-name">{{ layer.name }}</span>
+        <svg class="layer-pill-edit-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+        </svg>
       </button>
       <button
         type="button"
@@ -748,6 +751,15 @@ watch(() => props.drawingMode, (newDrawingMode) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.layer-pill-edit-icon {
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.layer-pill:hover .layer-pill-edit-icon {
+  opacity: 1;
 }
 
 .layer-pill-add {

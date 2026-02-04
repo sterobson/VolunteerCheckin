@@ -75,7 +75,6 @@ public class AuthServiceTests
             Name = "Test User",
             Email = email,
             Phone = "555-1234",
-            IsSystemAdmin = false,
             CreatedAt = DateTime.UtcNow.AddDays(-30)
         };
     }

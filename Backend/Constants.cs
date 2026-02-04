@@ -12,10 +12,6 @@ public static class Constants
     // GPS Settings
     public const double CheckInRadiusMeters = 100;
 
-    // Headers
-    public const string AdminEmailHeader = "X-Admin-Email";
-    public const string SampleCodeHeader = "X-Sample-Code";
-
     // Default Area
     public const string DefaultAreaName = "Unassigned";
     public const string DefaultAreaDescription = "Default area for unassigned checkpoints";
@@ -39,6 +35,11 @@ public static class Constants
     public const string ErrorCannotRenameDefaultArea = "Cannot rename the default area";
     public const string ErrorAreaHasCheckpoints = "Cannot delete area that has checkpoints assigned to it";
     public const string ErrorCannotRemoveLastAdmin = "Cannot remove the last admin from an event";
+    public const string ErrorCannotRemoveLastOwner = "Cannot remove the last owner from an event";
+    public const string ErrorCannotRemoveSelf = "Cannot remove yourself from an event";
+    public const string ErrorCannotChangeSelfRole = "Cannot change your own role";
+    public const string ErrorOnlyOwnerCanManageOwners = "Only owners can add or remove other owners";
+    public const string ErrorInvalidRole = "Invalid role specified";
     public const string ErrorEmailRequired = "Email is required";
     public const string ErrorMarshalIdOrNameRequired = "Either MarshalId or MarshalName must be provided";
     public const string ErrorCheckInTooFarAway = "Check-in location is too far from the checkpoint";
@@ -71,6 +72,12 @@ public static class Constants
     public const string ActorTypeAreaLead = "AreaLead";
 
     // Event Roles (what permissions a person has in an event)
+    // New hierarchical roles (Owner > Administrator > Contributor > Viewer)
+    public const string RoleEventOwner = "EventOwner";
+    public const string RoleEventAdministrator = "EventAdministrator";
+    public const string RoleEventContributor = "EventContributor";
+    public const string RoleEventViewer = "EventViewer";
+    // Legacy role (maps to EventOwner for backwards compatibility)
     public const string RoleEventAdmin = "EventAdmin";
     public const string RoleEventAreaAdmin = "EventAreaAdmin";
     public const string RoleEventAreaLead = "EventAreaLead";

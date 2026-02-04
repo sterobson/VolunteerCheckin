@@ -12,7 +12,7 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits } from 'vue';
+// defineProps, defineEmits are compiler macros - no import needed
 
 defineProps({
   show: {

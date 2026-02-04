@@ -54,7 +54,7 @@ public class ContactPermissionService
         }
 
         // Event admins can see and modify everyone
-        if (claims.IsEventAdmin || claims.IsSystemAdmin)
+        if (claims.IsEventAdmin)
         {
             return new ContactPermissions(
                 CanViewAll: true,

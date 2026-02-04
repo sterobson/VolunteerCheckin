@@ -24,6 +24,14 @@ $script:SecretsFilePath = Join-Path $script:SecretsDir "secrets.json"
 $script:SpectreAvailable = $false
 $script:SC = '[/]'  # Spectre Console closing tag
 
+# Window titles for local dev processes
+$script:WindowTitleBackend = "OnTheDay - Backend"
+$script:WindowTitleFrontendDev = "OnTheDay - Frontend (Dev)"
+$script:WindowTitleFrontendPreview = "OnTheDay - Frontend (Preview)"
+
+# PID file directory for tracking spawned windows
+$script:PidDir = Join-Path $PSScriptRoot ".deployment"
+
 # Required environment variables for backend
 $script:RequiredEnvVars = @(
     "AzureWebJobsStorage",
@@ -45,6 +53,30 @@ function Write-Success($message) { Write-Host $message -ForegroundColor Green }
 function Write-Warning($message) { Write-Host $message -ForegroundColor Yellow }
 function Write-ErrorMessage($message) { Write-Host $message -ForegroundColor Red }
 function Write-Gray($message) { Write-Host $message -ForegroundColor Gray }
+
+# ============================================================================
+# Process Management
+# ============================================================================
+function Save-WindowPid($name, $processId) {
+    if (-not (Test-Path $script:PidDir)) { New-Item -ItemType Directory -Path $script:PidDir -Force | Out-Null }
+    $pidFile = Join-Path $script:PidDir "$name.pid"
+    $processId | Out-File -FilePath $pidFile -Force
+}
+
+function Stop-TrackedWindow($name) {
+    $pidFile = Join-Path $script:PidDir "$name.pid"
+    if (Test-Path $pidFile) {
+        $savedPid = [int](Get-Content $pidFile -ErrorAction SilentlyContinue)
+        if ($savedPid) {
+            $proc = Get-Process -Id $savedPid -ErrorAction SilentlyContinue
+            if ($proc) {
+                Write-Gray "  Closing previous $name window (PID $savedPid)"
+                Stop-Process -Id $savedPid -Force -ErrorAction SilentlyContinue
+            }
+        }
+        Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
+    }
+}
 
 # ============================================================================
 # Dependency Management
@@ -1841,6 +1873,7 @@ function Start-LocalBackend {
         Start-Sleep -Seconds 2
         Write-Success "Azure Functions stopped"
     }
+    Stop-TrackedWindow "backend"
 
     # Check for Azurite
     Write-Info "Checking Azurite (Azure Storage Emulator)..."
@@ -1875,7 +1908,8 @@ function Start-LocalBackend {
     }
 
     Write-Info "Starting Azure Functions..."
-    Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-Command", "cd '$backendPath'; func start" -WindowStyle Normal
+    $proc = Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-Command", "`$host.UI.RawUI.WindowTitle = '$($script:WindowTitleBackend)'; cd '$backendPath'; func start" -WindowStyle Normal -PassThru
+    Save-WindowPid "backend" $proc.Id
     Start-Sleep -Seconds 5
 
     $funcRunning = Get-NetTCPConnection -LocalPort 7071 -State Listen -ErrorAction SilentlyContinue
@@ -1889,24 +1923,34 @@ function Start-LocalBackend {
 }
 
 # ============================================================================
-# Local Frontend - Start Dev Server
+# Local Frontend - Start Dev Server or Production Preview
 # ============================================================================
 function Start-LocalFrontend {
+    param(
+        [switch]$ProductionBuild  # If set, build and serve production bundle
+    )
+
+    $mode = if ($ProductionBuild) { "Production Preview" } else { "Dev Server" }
+    $port = if ($ProductionBuild) { 5175 } else { 5174 }
+    $windowTitle = if ($ProductionBuild) { $script:WindowTitleFrontendPreview } else { $script:WindowTitleFrontendDev }
+    $pidName = if ($ProductionBuild) { "frontend-preview" } else { "frontend-dev" }
+
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
-    Write-Info "  Starting Frontend Dev Server"
+    Write-Info "  Starting Frontend $mode"
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Host ""
 
     # Check if already running and stop it
-    $connection = Get-NetTCPConnection -LocalPort 5174 -State Listen -ErrorAction SilentlyContinue
+    $connection = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
     if ($connection) {
-        Write-Warning "Frontend dev server is running on port 5174. Shutting it down..."
+        Write-Warning "Frontend server is running on port $port. Shutting it down..."
         $processId = $connection.OwningProcess
         Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 2
-        Write-Success "Frontend dev server stopped"
+        Write-Success "Frontend server stopped"
     }
+    Stop-TrackedWindow $pidName
 
     $frontendPath = Join-Path $script:ScriptRoot "FrontEnd"
 
@@ -1927,13 +1971,38 @@ function Start-LocalFrontend {
         }
     }
 
-    Write-Info "Starting frontend dev server..."
-    Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-Command", "cd '$frontendPath'; npm run dev -- --port 5174" -WindowStyle Normal
+    if ($ProductionBuild) {
+        # Production build + preview server
+        Write-Info "Building production bundle (with code splitting and Brotli compression)..."
+        Push-Location $frontendPath
+        try {
+            npm run build
+            if ($LASTEXITCODE -ne 0) {
+                Write-ErrorMessage "Failed to build frontend"
+                return $false
+            }
+            Write-Success "Production build complete"
+        } finally {
+            Pop-Location
+        }
+
+        Write-Info "Starting production preview server..."
+        $proc = Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-Command", "`$host.UI.RawUI.WindowTitle = '$windowTitle'; cd '$frontendPath'; npm run preview -- --port $port" -WindowStyle Normal -PassThru
+    } else {
+        # Development server
+        Write-Info "Starting frontend dev server..."
+        $proc = Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-Command", "`$host.UI.RawUI.WindowTitle = '$windowTitle'; cd '$frontendPath'; npm run dev -- --port $port" -WindowStyle Normal -PassThru
+    }
+    Save-WindowPid $pidName $proc.Id
+
     Start-Sleep -Seconds 3
 
-    $viteRunning = Get-NetTCPConnection -LocalPort 5174 -State Listen -ErrorAction SilentlyContinue
+    $viteRunning = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
     if ($viteRunning) {
-        Write-Success "Frontend started on http://localhost:5174"
+        Write-Success "Frontend started on http://localhost:$port"
+        if ($ProductionBuild) {
+            Write-Gray "  (Production build - check Network tab to verify bundle sizes)"
+        }
     } else {
         Write-Warning "Frontend may still be starting. Check the console window."
     }
@@ -2554,34 +2623,94 @@ if (-not $Environment) {
 }
 
 # Ask what to deploy if not specified
+$ProductionBuild = $false
 if (-not $Frontend -and -not $Backend) {
     Write-Host ""
     Write-Warning "What would you like to deploy?"
-    Write-Host "  1. Frontend" -ForegroundColor White
-    Write-Host "  2. Backend" -ForegroundColor White
-    Write-Host "  3. Both" -ForegroundColor White
-    Write-Host ""
 
-    $choice = Read-Host "Enter choice (1/2/3)"
+    if ($Environment -eq "local") {
+        # Local environment - offer dev vs production build for frontend
+        Write-Host "  1. Frontend (dev)" -ForegroundColor White
+        Write-Host "  2. Frontend (production build)" -ForegroundColor Gray
+        Write-Host "  3. Backend" -ForegroundColor White
+        Write-Host "  4. Both (frontend dev + backend)" -ForegroundColor White
+        Write-Host "  5. Both (frontend production build + backend)" -ForegroundColor Gray
+        Write-Host ""
 
-    switch ($choice) {
-        "1" { $Frontend = $true }
-        "2" { $Backend = $true }
-        "3" {
-            $Frontend = $true
-            $Backend = $true
+        $choice = Read-Host "Enter choice (1-5)"
+
+        switch ($choice) {
+            "1" { $Frontend = $true }
+            "2" {
+                $Frontend = $true
+                $ProductionBuild = $true
+            }
+            "3" { $Backend = $true }
+            "4" {
+                $Frontend = $true
+                $Backend = $true
+            }
+            "5" {
+                $Frontend = $true
+                $Backend = $true
+                $ProductionBuild = $true
+            }
+            default {
+                Write-ErrorMessage "Invalid choice."
+                exit 1
+            }
         }
-        default {
-            Write-ErrorMessage "Invalid choice."
-            exit 1
+    } else {
+        # Production environment - standard options
+        Write-Host "  1. Frontend" -ForegroundColor White
+        Write-Host "  2. Backend" -ForegroundColor White
+        Write-Host "  3. Both" -ForegroundColor White
+        Write-Host ""
+
+        $choice = Read-Host "Enter choice (1/2/3)"
+
+        switch ($choice) {
+            "1" { $Frontend = $true }
+            "2" { $Backend = $true }
+            "3" {
+                $Frontend = $true
+                $Backend = $true
+            }
+            default {
+                Write-ErrorMessage "Invalid choice."
+                exit 1
+            }
         }
     }
 }
 
 Write-Host ""
-Write-Info "Environment: $Environment"
-if ($Frontend) { Write-Gray "  - Frontend" }
-if ($Backend) { Write-Gray "  - Backend" }
+Write-Host "========================================" -ForegroundColor Yellow
+Write-Warning "  Confirm deployment"
+Write-Host "========================================" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "Environment: " -NoNewline -ForegroundColor White
+Write-Host "$Environment" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Components:" -ForegroundColor White
+if ($Environment -eq "local") {
+    if ($Frontend) {
+        $frontendMode = if ($ProductionBuild) { "Frontend (production build) -> http://localhost:5175" } else { "Frontend (dev) -> http://localhost:5174" }
+        Write-Host "  - $frontendMode" -ForegroundColor Gray
+    }
+    if ($Backend) { Write-Host "  - Backend -> http://localhost:7071/api" -ForegroundColor Gray }
+} else {
+    if ($Frontend) { Write-Host "  - Frontend -> Azure Static Web Apps" -ForegroundColor Gray }
+    if ($Backend) { Write-Host "  - Backend -> Azure Functions (slot TBD)" -ForegroundColor Gray }
+}
+Write-Host ""
+
+$confirm = Read-Host "Proceed? (Y/n)"
+if ($confirm -and $confirm.ToLower() -ne "y" -and $confirm.ToLower() -ne "yes") {
+    Write-Host ""
+    Write-Warning "Deployment cancelled."
+    exit 0
+}
 Write-Host ""
 
 $deploymentSuccess = $true
@@ -2605,7 +2734,7 @@ if ($Environment -eq "local") {
     }
 
     if ($Frontend -and $deploymentSuccess) {
-        $result = Start-LocalFrontend
+        $result = Start-LocalFrontend -ProductionBuild:$ProductionBuild
         if (-not $result) { $deploymentSuccess = $false }
     }
 }
@@ -2721,7 +2850,9 @@ if ($deploymentSuccess) {
             Write-Host "  [OK] Backend  -> http://localhost:7071/api" -ForegroundColor Green
         }
         if ($Frontend) {
-            Write-Host "  [OK] Frontend -> http://localhost:5174" -ForegroundColor Green
+            $frontendPort = if ($ProductionBuild) { 5175 } else { 5174 }
+            $modeLabel = if ($ProductionBuild) { "(production build)" } else { "(dev)" }
+            Write-Host "  [OK] Frontend -> http://localhost:$frontendPort $modeLabel" -ForegroundColor Green
         }
     } elseif ($Environment -eq "production") {
         $envConfig = Get-EnvironmentConfig "production"

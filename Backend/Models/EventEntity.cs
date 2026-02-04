@@ -39,7 +39,7 @@ public class EventEntity : ITableEntity
     public string PeopleTerm { get; set; } = "Marshals";      // People, Marshals, Volunteers, Helpers, Staff
     public string CheckpointTerm { get; set; } = "Checkpoints"; // Checkpoints, Stations, Locations
     public string AreaTerm { get; set; } = "Areas";           // Areas, Zones
-    public string ChecklistTerm { get; set; } = "Checklists"; // Checklists, Tasks
+    public string ChecklistTerm { get; set; } = "Tasks"; // Tasks, Checklists, Todos, Jobs
     public string CourseTerm { get; set; } = "Course";        // Course, Route, Trail
 
     // Default checkpoint style for this event (shapes only - no content icons at event level)

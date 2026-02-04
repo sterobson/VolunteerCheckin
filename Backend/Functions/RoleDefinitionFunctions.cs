@@ -554,20 +554,14 @@ public class RoleDefinitionFunctions
 
     private async Task<UserClaims?> GetClaimsAsync(HttpRequest req, string eventId)
     {
-        string? sessionToken = req.Headers.Authorization.FirstOrDefault()?.Replace("Bearer ", "", StringComparison.OrdinalIgnoreCase);
+        string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
         if (string.IsNullOrWhiteSpace(sessionToken))
-        {
-            sessionToken = req.Cookies["session_token"];
-        }
-
-        string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
-
-        if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
         {
             return null;
         }
 
-        return await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
+        return await _claimsService.GetClaimsAsync(sessionToken, eventId);
     }
 
     /// <summary>
@@ -696,7 +690,8 @@ public class RoleDefinitionFunctions
             if (needsMigration && newRoles.Count > 0)
             {
                 SetRolesOnContact(contact, newRoles);
-                await _contactRepository.UpdateAsync(contact);
+                // Use unconditional update for migration - avoids conflicts with concurrent requests
+                await _contactRepository.UpdateUnconditionalAsync(contact);
                 contactsMigrated++;
             }
         }
@@ -730,7 +725,8 @@ public class RoleDefinitionFunctions
             if (needsMigration && newRoles.Count > 0)
             {
                 marshal.RolesJson = JsonSerializer.Serialize(newRoles);
-                await _marshalRepository.UpdateAsync(marshal);
+                // Use unconditional update for migration - avoids conflicts with concurrent requests
+                await _marshalRepository.UpdateUnconditionalAsync(marshal);
                 marshalsMigrated++;
             }
         }

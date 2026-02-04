@@ -115,9 +115,25 @@
       v-if="activeTab === 'roles'"
       :roles="form.roles"
       :role-definitions="roleDefinitions"
+      :is-event-contact="form.isEventContact"
       @update:roles="handleUpdateRoles"
+      @update:isEventContact="handleUpdateIsEventContact"
       @input="handleInput"
     />
+
+    <!-- Visibility Tab (only shown when linked to a contact) -->
+    <div v-if="activeTab === 'visibility' && linkedContact" class="tab-content">
+      <ScopeConfigurationEditor
+        v-model="form.scopeConfigurations"
+        :areas="areas"
+        :locations="allLocations"
+        :marshals="allMarshals"
+        :is-editing="true"
+        :exclude-scopes="['OnePerCheckpoint', 'OnePerArea', 'OneLeadPerArea']"
+        header-text="Who can see this contact?"
+        @user-changed="handleInput"
+      />
+    </div>
 
     <!-- Custom footer with left and right aligned buttons -->
     <template #footer>
@@ -173,6 +189,7 @@ import NotesView from '../../NotesView.vue';
 import NotesPreview from '../../NotesPreview.vue';
 import IncidentCard from '../../IncidentCard.vue';
 import CheckInLocationMapModal from '../../common/CheckInLocationMapModal.vue';
+import ScopeConfigurationEditor from '../ScopeConfigurationEditor.vue';
 import { calculateDistance } from '../../../utils/coordinateUtils';
 import { useTerminology } from '../../../composables/useTerminology';
 
@@ -251,6 +268,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  linkedContact: {
+    type: Object,
+    default: null,
+  },
 });
 
 const emit = defineEmits([
@@ -281,6 +302,8 @@ const form = ref({
   phoneNumber: '',
   notes: '',
   roles: [],
+  isEventContact: false,
+  scopeConfigurations: [],
 });
 
 // Map modal state for distance click
@@ -354,8 +377,12 @@ const availableTabs = computed(() => {
   if (props.incidents && props.incidents.length > 0) {
     tabs.push({ value: 'incidents', label: 'Incidents', icon: 'incidents' });
   }
-  // Always show roles tab at the end
+  // Always show roles tab
   tabs.push({ value: 'roles', label: 'Roles', icon: 'roles' });
+  // Show visibility tab when linked to a contact (or becoming one)
+  if (props.linkedContact || form.value.isEventContact) {
+    tabs.push({ value: 'visibility', label: 'Visibility', icon: 'visibility' });
+  }
   return tabs;
 });
 
@@ -408,14 +435,18 @@ const availableLocationsFiltered = computed(() => {
   return props.allLocations.filter(loc => !pendingLocationIds.includes(loc.id));
 });
 
-watch(() => props.marshal, (newVal) => {
-  if (newVal) {
+watch([() => props.marshal, () => props.linkedContact], ([newMarshal, newContact]) => {
+  if (newMarshal) {
     form.value = {
-      name: newVal.name || '',
-      email: newVal.email || '',
-      phoneNumber: newVal.phoneNumber || '',
-      notes: newVal.notes || '',
-      roles: newVal.roles || [],
+      name: newMarshal.name || '',
+      email: newMarshal.email || '',
+      phoneNumber: newMarshal.phoneNumber || '',
+      notes: newMarshal.notes || '',
+      roles: newMarshal.roles || [],
+      isEventContact: !!newContact,
+      scopeConfigurations: newContact?.scopeConfigurations
+        ? JSON.parse(JSON.stringify(newContact.scopeConfigurations))
+        : [],
     };
   } else {
     form.value = {
@@ -424,6 +455,8 @@ watch(() => props.marshal, (newVal) => {
       phoneNumber: '',
       notes: '',
       roles: [],
+      isEventContact: false,
+      scopeConfigurations: [],
     };
   }
 }, { immediate: true, deep: true });
@@ -443,6 +476,8 @@ watch(() => props.show, (newVal) => {
         phoneNumber: '',
         notes: '',
         roles: [],
+        isEventContact: false,
+        scopeConfigurations: [],
       };
     }
     // Clear pending changes in checkpoints tab if it exists
@@ -462,6 +497,10 @@ const updateForm = (newFormData) => {
 
 const handleUpdateRoles = (newRoles) => {
   form.value = { ...form.value, roles: newRoles };
+};
+
+const handleUpdateIsEventContact = (isEventContact) => {
+  form.value = { ...form.value, isEventContact };
 };
 
 const handleInput = () => {
@@ -500,6 +539,8 @@ const handleSave = () => {
     // Include pending new checklist items and notes (for both create and edit modes)
     pendingNewChecklistItems: pendingNewChecklistItems.value,
     pendingNewNotes: pendingNewNotes.value,
+    // Include linked contact info for creating/deleting contact records
+    linkedContactId: props.linkedContact?.contactId || null,
   };
   emit('save', formData);
 };

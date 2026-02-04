@@ -69,20 +69,19 @@ public class MarshalFunctions
 
             // Require authentication (session token or sample code)
             string? sessionToken = FunctionHelpers.GetSessionToken(req);
-            string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
-            if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
+            if (string.IsNullOrWhiteSpace(sessionToken))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
             }
 
-            UserClaims? claims = await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, request.EventId);
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, request.EventId);
             if (claims == null)
             {
                 return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
             }
 
             // Require EventAdmin role to create marshals
-            if (!claims.IsEventAdmin && !claims.IsSystemAdmin)
+            if (!claims.IsEventAdmin)
             {
                 return new ObjectResult(new { message = "Event admin permission required" }) { StatusCode = 403 };
             }
@@ -229,20 +228,19 @@ public class MarshalFunctions
         {
             _logger.LogInformation("GetMarshalsByEvent called for event {EventId}", eventId);
 
-            // Require authentication (session token or sample code)
+            // Require authentication
             string? sessionToken = FunctionHelpers.GetSessionToken(req);
-            string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
-            _logger.LogInformation("Session token present: {SessionTokenPresent}, Sample code present: {SampleCodePresent}",
-                !string.IsNullOrWhiteSpace(sessionToken), !string.IsNullOrWhiteSpace(sampleCode));
+            _logger.LogInformation("Session token present: {SessionTokenPresent}",
+                !string.IsNullOrWhiteSpace(sessionToken));
 
-            if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
+            if (string.IsNullOrWhiteSpace(sessionToken))
             {
-                _logger.LogWarning("No session token or sample code provided");
+                _logger.LogWarning("No session token provided");
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
             }
 
-            UserClaims? claims = await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
-            _logger.LogInformation("Claims resolved: {ClaimsResolved}, IsEventAdmin: {IsEventAdmin}, IsSystemAdmin: {IsSystemAdmin}", claims != null, claims?.IsEventAdmin, claims?.IsSystemAdmin);
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            _logger.LogInformation("Claims resolved: {ClaimsResolved}, IsEventAdmin: {IsEventAdmin}", claims != null, claims?.IsEventAdmin);
             if (claims == null)
             {
                 _logger.LogWarning("Claims returned null - invalid or expired session");
@@ -317,13 +315,12 @@ public class MarshalFunctions
         {
             // Require authentication (session token or sample code)
             string? sessionToken = FunctionHelpers.GetSessionToken(req);
-            string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
-            if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
+            if (string.IsNullOrWhiteSpace(sessionToken))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
             }
 
-            UserClaims? claims = await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
             if (claims == null)
             {
                 return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
@@ -397,13 +394,12 @@ public class MarshalFunctions
         {
             // Require authentication (session token or sample code)
             string? sessionToken = FunctionHelpers.GetSessionToken(req);
-            string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
-            if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
+            if (string.IsNullOrWhiteSpace(sessionToken))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
             }
 
-            UserClaims? claims = await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
             if (claims == null)
             {
                 return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
@@ -449,7 +445,7 @@ public class MarshalFunctions
 
             // Only admins can modify notes and roles (notes may contain sensitive admin-only info)
             List<string>? newRoles = null;
-            if (claims.IsEventAdmin || claims.IsSystemAdmin)
+            if (claims.IsEventAdmin)
             {
                 marshalEntity.Notes = sanitizedNotes;
                 newRoles = request.Roles ?? [];
@@ -463,6 +459,9 @@ public class MarshalFunctions
             {
                 await SyncRolesToLinkedContactAsync(eventId, marshalId, newRoles);
             }
+
+            // Sync phone/email to linked contact
+            await SyncContactDetailsToLinkedContactAsync(eventId, marshalId, marshalEntity.PhoneNumber, marshalEntity.Email);
 
             // Update denormalized name in all assignments
             IEnumerable<AssignmentEntity> assignments = await _assignmentRepository.GetByMarshalAsync(eventId, marshalId);
@@ -532,20 +531,19 @@ public class MarshalFunctions
         {
             // Require authentication (session token or sample code)
             string? sessionToken = FunctionHelpers.GetSessionToken(req);
-            string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
-            if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
+            if (string.IsNullOrWhiteSpace(sessionToken))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
             }
 
-            UserClaims? claims = await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
             if (claims == null)
             {
                 return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
             }
 
             // Require EventAdmin role to delete marshals
-            if (!claims.IsEventAdmin && !claims.IsSystemAdmin)
+            if (!claims.IsEventAdmin)
             {
                 return new ObjectResult(new { message = "Event admin permission required" }) { StatusCode = 403 };
             }
@@ -583,13 +581,12 @@ public class MarshalFunctions
         {
             // Require authentication (session token or sample code)
             string? sessionToken = FunctionHelpers.GetSessionToken(req);
-            string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
-            if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
+            if (string.IsNullOrWhiteSpace(sessionToken))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
             }
 
-            UserClaims? claims = await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
             if (claims == null)
             {
                 return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
@@ -597,7 +594,7 @@ public class MarshalFunctions
 
             // Check permissions: admin, area admin, or area lead for marshal's areas
             bool hasAreaAdminRole = claims.HasRole(Constants.RoleEventAreaAdmin);
-            bool isAdminOrAreaAdmin = claims.IsEventAdmin || claims.IsSystemAdmin || hasAreaAdminRole;
+            bool isAdminOrAreaAdmin = claims.IsEventAdmin || hasAreaAdminRole;
 
             if (!isAdminOrAreaAdmin)
             {
@@ -661,13 +658,12 @@ public class MarshalFunctions
         {
             // Require authentication (session token or sample code)
             string? sessionToken = FunctionHelpers.GetSessionToken(req);
-            string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
-            if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
+            if (string.IsNullOrWhiteSpace(sessionToken))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
             }
 
-            UserClaims? claims = await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
             if (claims == null)
             {
                 return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
@@ -675,7 +671,7 @@ public class MarshalFunctions
 
             // Require at least area admin permission
             bool hasAreaAdminRole = claims.HasRole(Constants.RoleEventAreaAdmin);
-            if (!claims.IsEventAdmin && !claims.IsSystemAdmin && !hasAreaAdminRole)
+            if (!claims.IsEventAdmin && !hasAreaAdminRole)
             {
                 return new ObjectResult(new { message = "Admin permission required" }) { StatusCode = 403 };
             }
@@ -822,20 +818,19 @@ public class MarshalFunctions
         {
             // Require authentication (session token or sample code)
             string? sessionToken = FunctionHelpers.GetSessionToken(req);
-            string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
-            if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
+            if (string.IsNullOrWhiteSpace(sessionToken))
             {
                 return new UnauthorizedObjectResult(new { message = "Authentication required" });
             }
 
-            UserClaims? claims = await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
             if (claims == null)
             {
                 return new UnauthorizedObjectResult(new { message = "Invalid or expired session" });
             }
 
             // Require EventAdmin role to import marshals
-            if (!claims.IsEventAdmin && !claims.IsSystemAdmin)
+            if (!claims.IsEventAdmin)
             {
                 return new ObjectResult(new { message = "Event admin permission required" }) { StatusCode = 403 };
             }
@@ -1076,6 +1071,31 @@ public class MarshalFunctions
 
         _logger.LogInformation("Synced roles from marshal {MarshalId} to linked contact {ContactId} in event {EventId}: {Roles}",
             marshalId, linkedContact.ContactId, eventId, string.Join(", ", roles));
+    }
+
+    /// <summary>
+    /// Syncs phone and email from a marshal to their linked contact.
+    /// When a marshal has phone/email updated and is linked to a contact, the contact's phone/email are updated to match.
+    /// </summary>
+    private async Task SyncContactDetailsToLinkedContactAsync(string eventId, string marshalId, string? phone, string? email)
+    {
+        // Find any contact linked to this marshal
+        IEnumerable<EventContactEntity> contacts = await _contactRepository.GetByEventAsync(eventId);
+        EventContactEntity? linkedContact = contacts.FirstOrDefault(c => c.MarshalId == marshalId && !c.IsDeleted);
+
+        if (linkedContact == null)
+        {
+            return; // No linked contact, nothing to do
+        }
+
+        // Update the contact's phone and email to match the marshal's
+        linkedContact.Phone = phone;
+        linkedContact.Email = email;
+        linkedContact.UpdatedAt = DateTime.UtcNow;
+        await _contactRepository.UpdateAsync(linkedContact);
+
+        _logger.LogInformation("Synced contact details from marshal {MarshalId} to linked contact {ContactId} in event {EventId}",
+            marshalId, linkedContact.ContactId, eventId);
     }
 
     /// <summary>

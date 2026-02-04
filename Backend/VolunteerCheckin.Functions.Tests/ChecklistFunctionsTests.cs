@@ -60,15 +60,14 @@ public class ChecklistFunctionsTests
             PersonId: "person123",
             PersonName: "Admin User",
             PersonEmail: AdminEmail,
-            IsSystemAdmin: false,
             EventId: EventId,
             AuthMethod: "SecureEmailLink",
             MarshalId: null,
-            EventRoles: []
+            EventRoles: new List<EventRoleInfo> { new(Constants.RoleEventAdmin, new List<string>()) }
         );
 
         _mockClaimsService
-            .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string>()))
+            .Setup(c => c.GetClaimsAsync(It.IsAny<string?>(), It.IsAny<string>()))
             .ReturnsAsync(adminClaims);
     }
 

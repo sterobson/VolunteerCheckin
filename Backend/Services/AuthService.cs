@@ -63,7 +63,6 @@ public class AuthService
                 Email = email,
                 Name = string.Empty, // They'll fill this in later
                 Phone = string.Empty,
-                IsSystemAdmin = false,
                 CreatedAt = DateTime.UtcNow
             };
             await _personRepository.AddAsync(person);
@@ -156,8 +155,7 @@ public class AuthService
             person.PersonId,
             person.Name,
             person.Email,
-            person.Phone,
-            person.IsSystemAdmin
+            person.Phone
         );
 
         return (true, sessionToken, personInfo, "Login successful");
@@ -215,7 +213,6 @@ public class AuthService
                 Email = marshal.Email,
                 Name = marshal.Name,
                 Phone = marshal.PhoneNumber,
-                IsSystemAdmin = false,
                 CreatedAt = DateTime.UtcNow
             };
             await _personRepository.AddAsync(person);
@@ -234,8 +231,7 @@ public class AuthService
             person.PersonId,
             person.Name,
             person.Email,
-            person.Phone,
-            person.IsSystemAdmin
+            person.Phone
         );
 
         return (true, sessionToken, personInfo, marshal.MarshalId, "Login successful");
@@ -270,7 +266,6 @@ public class AuthService
                 Email = email,
                 Name = string.Empty,
                 Phone = string.Empty,
-                IsSystemAdmin = false,
                 CreatedAt = DateTime.UtcNow
             };
             await _personRepository.AddAsync(person);
@@ -288,8 +283,7 @@ public class AuthService
             person.PersonId,
             person.Name,
             person.Email,
-            person.Phone,
-            person.IsSystemAdmin
+            person.Phone
         );
 
         return (true, sessionToken, personInfo);
@@ -362,8 +356,7 @@ public class AuthService
             person.PersonId,
             person.Name,
             person.Email,
-            person.Phone,
-            person.IsSystemAdmin
+            person.Phone
         );
 
         return (true, sessionToken, personInfo, "Login successful");

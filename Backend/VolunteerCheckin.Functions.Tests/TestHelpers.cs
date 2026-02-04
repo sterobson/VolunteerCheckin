@@ -58,14 +58,13 @@ namespace VolunteerCheckin.Functions.Tests
         }
 
         /// <summary>
-        /// Creates an HttpRequest with admin email header (deprecated - use CreateHttpRequestWithAuth instead)
+        /// Creates an HttpRequest with auth header (legacy name kept for compatibility)
         /// </summary>
         public static HttpRequest CreateHttpRequestWithAdminHeader(object body, string adminEmail)
         {
-            // Include a fake session token so authenticated endpoints will call the mocked ClaimsService
+            // Include a session token so authenticated endpoints will call the mocked ClaimsService
             return CreateHttpRequestWithHeaders(body, new Dictionary<string, string>
             {
-                { "X-Admin-Email", adminEmail },
                 { "Authorization", "Bearer test-session-token" }
             });
         }
@@ -80,13 +79,13 @@ namespace VolunteerCheckin.Functions.Tests
         }
 
         /// <summary>
-        /// Creates an HttpRequest with admin email header (for GET/DELETE operations)
+        /// Creates an empty HttpRequest with auth header (legacy name kept for compatibility)
         /// </summary>
         public static HttpRequest CreateEmptyHttpRequestWithAdminHeader(string adminEmail)
         {
             DefaultHttpContext context = new();
             HttpRequest request = context.Request;
-            request.Headers["X-Admin-Email"] = adminEmail;
+            request.Headers["Authorization"] = "Bearer test-session-token";
             return request;
         }
 

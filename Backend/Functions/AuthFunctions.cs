@@ -18,6 +18,8 @@ public class AuthFunctions
     private readonly IPersonRepository _personRepository;
     private readonly IMarshalRepository _marshalRepository;
     private readonly RateLimitService _rateLimitService;
+    private readonly ISampleEventService _sampleEventService;
+    private readonly IEventRoleRepository _eventRoleRepository;
 
     public AuthFunctions(
         ILogger<AuthFunctions> logger,
@@ -25,7 +27,9 @@ public class AuthFunctions
         ClaimsService claimsService,
         IPersonRepository personRepository,
         IMarshalRepository marshalRepository,
-        RateLimitService rateLimitService)
+        RateLimitService rateLimitService,
+        ISampleEventService sampleEventService,
+        IEventRoleRepository eventRoleRepository)
     {
         _logger = logger;
         _authService = authService;
@@ -33,6 +37,8 @@ public class AuthFunctions
         _personRepository = personRepository;
         _marshalRepository = marshalRepository;
         _rateLimitService = rateLimitService;
+        _sampleEventService = sampleEventService;
+        _eventRoleRepository = eventRoleRepository;
     }
 
     /// <summary>
@@ -378,6 +384,136 @@ public class AuthFunctions
 #pragma warning restore MA0051
 
     /// <summary>
+    /// Authenticate using a sample event admin code.
+    /// Creates a real session so subsequent requests don't need to pass the code.
+    /// POST /api/auth/sample-login
+    /// Body: { "EventId": "...", "AdminCode": "ABC123" }
+    /// Returns: { "Success": true, "SessionToken": "...", "EventId": "..." }
+    /// </summary>
+#pragma warning disable MA0051
+    [Function("SampleLogin")]
+    public async Task<IActionResult> SampleLogin(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "auth/sample-login")] HttpRequest req)
+    {
+        try
+        {
+            string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+            SampleLoginRequest? request = JsonSerializer.Deserialize<SampleLoginRequest>(requestBody, FunctionHelpers.JsonOptions);
+
+            if (request == null || string.IsNullOrWhiteSpace(request.EventId) || string.IsNullOrWhiteSpace(request.AdminCode))
+            {
+                return new BadRequestObjectResult(new SampleLoginResponse(
+                    Success: false,
+                    SessionToken: null,
+                    EventId: null,
+                    Message: "Event ID and admin code are required"
+                ));
+            }
+
+            // Validate the admin code and get the event it's for
+            string? validEventId = await _sampleEventService.GetEventIdByAdminCodeAsync(request.AdminCode);
+
+            if (validEventId == null)
+            {
+                return new BadRequestObjectResult(new SampleLoginResponse(
+                    Success: false,
+                    SessionToken: null,
+                    EventId: null,
+                    Message: "Invalid or expired sample code"
+                ));
+            }
+
+            if (validEventId != request.EventId)
+            {
+                return new BadRequestObjectResult(new SampleLoginResponse(
+                    Success: false,
+                    SessionToken: null,
+                    EventId: null,
+                    Message: "Sample code does not match this event"
+                ));
+            }
+
+            // Get IP address for audit trail
+            string ipAddress = req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+            // Create a person record for this sample user (if not exists)
+            // Use a consistent ID based on the admin code so we get the same person each time
+            string samplePersonId = $"sample-{request.AdminCode.ToUpperInvariant()}";
+            PersonEntity? person = await _personRepository.GetAsync(samplePersonId);
+
+            if (person == null)
+            {
+                person = new PersonEntity
+                {
+                    PartitionKey = "PERSON",
+                    RowKey = samplePersonId,
+                    PersonId = samplePersonId,
+                    Name = "Sample Event User",
+                    Email = null,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _personRepository.AddAsync(person);
+
+                // Grant EventAdmin role to the sample user for this event
+                // (Using EventAdmin for compatibility with existing permission checks)
+                string roleId = Guid.NewGuid().ToString();
+                EventRoleEntity role = new EventRoleEntity
+                {
+                    PartitionKey = samplePersonId,
+                    RowKey = EventRoleEntity.CreateRowKey(validEventId, roleId),
+                    PersonId = samplePersonId,
+                    EventId = validEventId,
+                    Role = Constants.RoleEventAdmin,
+                    AreaIdsJson = "[]",
+                    GrantedByPersonId = samplePersonId,
+                    GrantedAt = DateTime.UtcNow
+                };
+                await _eventRoleRepository.AddAsync(role);
+            }
+
+            // Create a session for this sample user with admin access to the event
+            string sessionToken = await _claimsService.CreateSessionAsync(
+                personId: samplePersonId,
+                authMethod: Constants.AuthMethodSampleCode,
+                eventId: validEventId,
+                ipAddress: ipAddress
+            );
+
+            // Set session cookie
+            req.HttpContext.Response.Cookies.Append("session", sessionToken, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Strict,
+                MaxAge = TimeSpan.FromHours(Constants.SampleEventLifetimeHours)
+            });
+
+            _logger.LogInformation("Sample login successful for event {EventId}", validEventId);
+
+            return new OkObjectResult(new SampleLoginResponse(
+                Success: true,
+                SessionToken: sessionToken,
+                EventId: validEventId,
+                Message: "Login successful"
+            ));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error with sample login");
+            return new ObjectResult(new SampleLoginResponse(
+                Success: false,
+                SessionToken: null,
+                EventId: null,
+                Message: "An error occurred"
+            ))
+            {
+                StatusCode = 500
+            };
+        }
+    }
+#pragma warning restore MA0051
+
+    /// <summary>
     /// Logout (revoke session).
     /// POST /api/auth/logout
     /// </summary>
@@ -573,8 +709,7 @@ public class AuthFunctions
                 person.PersonId,
                 person.Name,
                 person.Email,
-                person.Phone,
-                person.IsSystemAdmin
+                person.Phone
             );
 
             return new OkObjectResult(personInfo);
@@ -666,8 +801,7 @@ public class AuthFunctions
                 person.PersonId,
                 person.Name,
                 person.Email,
-                person.Phone,
-                person.IsSystemAdmin
+                person.Phone
             );
 
             _logger.LogInformation("Profile updated for person {PersonId}", person.PersonId);

@@ -43,12 +43,6 @@ public class PersonEntity : ITableEntity
     public string Phone { get; set; } = string.Empty;
 
     /// <summary>
-    /// System administrator flag - can access all events
-    /// Requires SecureEmailLink authentication to use
-    /// </summary>
-    public bool IsSystemAdmin { get; set; } = false;
-
-    /// <summary>
     /// When this person was created
     /// </summary>
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

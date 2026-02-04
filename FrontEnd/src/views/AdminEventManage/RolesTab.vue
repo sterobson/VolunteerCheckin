@@ -42,16 +42,12 @@
         @reorder="handleReorder"
       >
         <template #item="{ element: role }">
-          <div
-            class="role-card"
-            :class="{ 'built-in': role.isBuiltIn }"
-          >
+          <div class="role-card">
             <DragHandle v-if="!searchQuery" />
             <div class="role-content" @click="$emit('select-role', role)">
               <div class="role-header">
                 <div class="role-name-row">
                   <strong>{{ role.name }}</strong>
-                  <span v-if="role.isBuiltIn" class="built-in-badge" title="Built-in role">Built-in</span>
                 </div>
                 <div class="role-usage">
                   <span
@@ -261,10 +257,6 @@ const handleReorder = ({ changes }) => {
   box-shadow: var(--shadow-md);
 }
 
-.role-card.built-in {
-  border-left: 4px solid var(--accent-secondary);
-}
-
 .role-content {
   flex: 1;
   cursor: pointer;
@@ -288,17 +280,6 @@ const handleReorder = ({ changes }) => {
 .role-name-row strong {
   font-size: 1rem;
   color: var(--text-primary);
-}
-
-.built-in-badge {
-  padding: 0.15rem 0.5rem;
-  background: var(--accent-secondary-bg, rgba(99, 102, 241, 0.15));
-  color: var(--accent-secondary, #6366f1);
-  border-radius: 4px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 .role-usage {

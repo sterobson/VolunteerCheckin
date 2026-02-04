@@ -122,7 +122,7 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits } from 'vue';
+// defineProps, defineEmits are compiler macros - no import needed
 import { getIcon } from '../../utils/icons';
 import { useTerminology } from '../../composables/useTerminology';
 import { useEventTimeZone } from '../../composables/useEventTimeZone';

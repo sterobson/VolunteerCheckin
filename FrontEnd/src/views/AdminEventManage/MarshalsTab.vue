@@ -11,37 +11,61 @@
         </button>
       </div>
       <div class="status-pills" v-if="marshals.length > 0">
-        <StatusPill
-          variant="neutral"
-          :active="activeFilter === 'all'"
-          @click="setFilter('all')"
-        >
-          Total: {{ marshals.length }}
-        </StatusPill>
-        <StatusPill
-          v-if="unassignedCount > 0 && unassignedCount < marshals.length"
-          variant="warning"
-          :active="activeFilter === 'unassigned'"
-          @click="setFilter('unassigned')"
-        >
-          Unassigned: {{ unassignedCount }}
-        </StatusPill>
-        <StatusPill
-          v-if="checkedInCount > 0 && checkedInCount < marshals.length"
-          variant="success"
-          :active="activeFilter === 'checked-in'"
-          @click="setFilter('checked-in')"
-        >
-          Checked in: {{ checkedInCount }}
-        </StatusPill>
-        <StatusPill
-          v-if="notCheckedInCount > 0 && notCheckedInCount < marshals.length"
-          variant="danger"
-          :active="activeFilter === 'not-checked-in'"
-          @click="setFilter('not-checked-in')"
-        >
-          Not checked in: {{ notCheckedInCount }}
-        </StatusPill>
+        <!-- Status filter pills -->
+        <div class="pill-group">
+          <StatusPill
+            variant="neutral"
+            :active="activeFilter === 'all' && !activeRoleFilter"
+            @click="clearAllFilters"
+          >
+            Total: {{ marshals.length }}
+          </StatusPill>
+          <StatusPill
+            v-if="unassignedCount > 0 && unassignedCount < marshals.length"
+            variant="warning"
+            :active="activeFilter === 'unassigned'"
+            @click="setFilter('unassigned')"
+          >
+            Unassigned: {{ unassignedCount }}
+          </StatusPill>
+          <StatusPill
+            v-if="checkedInCount > 0 && checkedInCount < marshals.length"
+            variant="success"
+            :active="activeFilter === 'checked-in'"
+            @click="setFilter('checked-in')"
+          >
+            Checked in: {{ checkedInCount }}
+          </StatusPill>
+          <StatusPill
+            v-if="notCheckedInCount > 0 && notCheckedInCount < marshals.length"
+            variant="danger"
+            :active="activeFilter === 'not-checked-in'"
+            @click="setFilter('not-checked-in')"
+          >
+            Not checked in: {{ notCheckedInCount }}
+          </StatusPill>
+        </div>
+
+        <!-- Role filter pills - show if there's a mix of roles/no-roles or multiple roles -->
+        <div class="pill-group" v-if="showRoleFilters">
+          <StatusPill
+            v-if="marshalsWithNoRoleCount > 0"
+            variant="neutral"
+            :active="activeRoleFilter === 'none'"
+            @click="setRoleFilter('none')"
+          >
+            No role: {{ marshalsWithNoRoleCount }}
+          </StatusPill>
+          <StatusPill
+            v-for="role in rolesInUse"
+            :key="role.roleId"
+            variant="neutral"
+            :active="activeRoleFilter === role.roleId"
+            @click="setRoleFilter(role.roleId)"
+          >
+            {{ role.name }}: {{ role.count }}
+          </StatusPill>
+        </div>
       </div>
     </div>
 
@@ -52,7 +76,7 @@
           v-model="searchQuery"
           type="text"
           class="search-input"
-          placeholder="Search by name, checkpoint, or description..."
+          placeholder="Search by name, role, or checkpoint..."
         />
       </div>
     </div>
@@ -94,11 +118,14 @@
               <tr
                 v-for="(assignment, index) in getMarshalAssignments(marshal.id)"
                 :key="`${marshal.id}-${assignment.id}`"
-                class="marshal-row"
+                :class="['marshal-row', { 'continuation-row': index > 0 }]"
                 @click="$emit('select-marshal', marshal)"
               >
-                <td v-if="index === 0" :rowspan="getMarshalAssignments(marshal.id).length">
-                  {{ marshal.name }}
+                <td v-if="index === 0" :rowspan="getMarshalAssignments(marshal.id).length" :class="['marshal-name-cell', { 'has-roles': getMarshalRoleNames(marshal).length > 0 }]">
+                  <div class="marshal-name">{{ marshal.name }}</div>
+                  <div v-if="getMarshalRoleNames(marshal).length > 0" class="marshal-roles">
+                    {{ getMarshalRoleNames(marshal).join(', ') }}
+                  </div>
                 </td>
                 <td class="checkpoint-cell">
                   <div class="checkpoint-name">{{ getLocationName(assignment.locationId) }}</div>
@@ -128,12 +155,16 @@
               </tr>
             </template>
             <tr v-else class="marshal-row" @click="$emit('select-marshal', marshal)">
-              <td>{{ marshal.name }}</td>
-              <td class="no-checkpoint-text">No {{ terms.checkpoint.toLowerCase() }} assigned</td>
-              <td>
-                <span class="hide-on-mobile">-</span>
-                <span class="status-icon show-on-mobile no-checkpoint-text">-</span>
+              <td :class="['marshal-name-cell', { 'has-roles': getMarshalRoleNames(marshal).length > 0 }]">
+                <div class="marshal-name">{{ marshal.name }}</div>
+                <div v-if="getMarshalRoleNames(marshal).length > 0" class="marshal-roles">
+                  {{ getMarshalRoleNames(marshal).join(', ') }}
+                </div>
               </td>
+              <td class="no-checkpoint-cell">
+                <span class="no-checkpoint-text">No {{ terms.checkpoint.toLowerCase() }} assigned</span>
+              </td>
+              <td class="status-placeholder hide-on-mobile">-</td>
               <td class="hide-on-mobile last-active-cell">
                 <span v-if="marshal.lastAccessedDate" class="last-active-text">
                   {{ formatRelativeTime(marshal.lastAccessedDate) }}
@@ -194,6 +225,10 @@ const props = defineProps({
   locations: {
     type: Array,
     required: true,
+  },
+  roleDefinitions: {
+    type: Array,
+    default: () => [],
   },
 });
 
@@ -295,10 +330,65 @@ const sortBy = ref('name');
 const sortOrder = ref('asc');
 const searchQuery = ref('');
 const activeFilter = ref('all');
+const activeRoleFilter = ref(null);
 
 const setFilter = (filter) => {
   activeFilter.value = filter;
+  // Don't clear role filter when changing status filter
 };
+
+const setRoleFilter = (roleId) => {
+  if (activeRoleFilter.value === roleId) {
+    activeRoleFilter.value = null; // Toggle off if already selected
+  } else {
+    activeRoleFilter.value = roleId;
+  }
+};
+
+const clearAllFilters = () => {
+  activeFilter.value = 'all';
+  activeRoleFilter.value = null;
+};
+
+// Compute roles that are actually in use by marshals
+const rolesInUse = computed(() => {
+  const roleCounts = new Map();
+
+  for (const marshal of props.marshals) {
+    if (marshal.roles && marshal.roles.length > 0) {
+      for (const roleId of marshal.roles) {
+        roleCounts.set(roleId, (roleCounts.get(roleId) || 0) + 1);
+      }
+    }
+  }
+
+  // Convert to array with role details, sorted alphabetically
+  return Array.from(roleCounts.entries())
+    .map(([roleId, count]) => {
+      const roleDef = props.roleDefinitions.find(rd => rd.roleId === roleId);
+      return {
+        roleId,
+        name: roleDef ? roleDef.name : roleId,
+        count,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+});
+
+// Count marshals with no role assigned
+const marshalsWithNoRoleCount = computed(() => {
+  return props.marshals.filter(m => !m.roles || m.roles.length === 0).length;
+});
+
+// Show role filters if there's variety (some with roles + some without, or multiple different roles)
+const showRoleFilters = computed(() => {
+  const hasMarshalsWithRoles = rolesInUse.value.length > 0;
+  const hasMarshalsWithoutRoles = marshalsWithNoRoleCount.value > 0;
+  const hasMultipleRoles = rolesInUse.value.length > 1;
+
+  // Show if: multiple roles exist, OR there's a mix of role/no-role
+  return hasMultipleRoles || (hasMarshalsWithRoles && hasMarshalsWithoutRoles);
+});
 
 const changeSortColumn = (column) => {
   if (sortBy.value === column) {
@@ -358,6 +448,14 @@ const getMarshalName = (marshalId) => {
   return marshal ? marshal.name : '';
 };
 
+const getMarshalRoleNames = (marshal) => {
+  if (!marshal.roles || marshal.roles.length === 0) return [];
+  return marshal.roles.map(roleId => {
+    const roleDef = props.roleDefinitions.find(rd => rd.roleId === roleId);
+    return roleDef ? roleDef.name : roleId;
+  });
+};
+
 /**
  * Calculate distance from check-in location to checkpoint
  * Returns null if GPS data is not available
@@ -395,7 +493,7 @@ const formatRelativeTime = (dateString) => {
   return date.toLocaleDateString();
 };
 
-// Filtering - by status pill and search query
+// Filtering - by status pill, role filter, and search query
 const filteredMarshals = computed(() => {
   let result = props.marshals;
 
@@ -410,12 +508,21 @@ const filteredMarshals = computed(() => {
     );
   }
 
+  // Filter by role
+  if (activeRoleFilter.value) {
+    if (activeRoleFilter.value === 'none') {
+      result = result.filter(m => !m.roles || m.roles.length === 0);
+    } else {
+      result = result.filter(m => m.roles && m.roles.includes(activeRoleFilter.value));
+    }
+  }
+
   // Filter by search query
   if (searchQuery.value.trim()) {
     const searchTerms = searchQuery.value.toLowerCase().trim().split(/\s+/);
 
     result = result.filter(marshal => {
-      // Build searchable text: marshal name + all checkpoint names + descriptions
+      // Build searchable text: marshal name + roles + all checkpoint names + descriptions
       const assignments = getMarshalAssignments(marshal.id);
       const checkpointTexts = assignments.map(a => {
         const location = getLocation(a.locationId);
@@ -423,7 +530,9 @@ const filteredMarshals = computed(() => {
         return `${location.name || ''} ${location.description || ''}`;
       }).join(' ');
 
-      const searchableText = `${marshal.name} ${checkpointTexts}`.toLowerCase();
+      const roleNames = getMarshalRoleNames(marshal).join(' ');
+
+      const searchableText = `${marshal.name} ${roleNames} ${checkpointTexts}`.toLowerCase();
 
       // All search terms must match
       return searchTerms.every(term => searchableText.includes(term));
@@ -523,6 +632,25 @@ const sortedMarshals = computed(() => {
   flex-wrap: wrap;
 }
 
+.pill-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.pill-group:not(:first-child)::before {
+  content: '';
+  width: 1px;
+  height: 1.25rem;
+  background: var(--border-medium);
+  margin-right: 0.25rem;
+}
+
+.pill-group:empty {
+  display: none;
+}
+
 .filters-section {
   margin-bottom: 1rem;
   padding: 0.75rem 1rem;
@@ -561,6 +689,14 @@ const sortedMarshals = computed(() => {
   border-radius: 8px;
   box-shadow: var(--shadow-md);
   overflow-x: auto;
+}
+
+@media (max-width: 768px) {
+  .marshals-grid {
+    background: transparent;
+    box-shadow: none;
+    overflow-x: visible;
+  }
 }
 
 .marshals-table {
@@ -609,6 +745,21 @@ const sortedMarshals = computed(() => {
 
 .marshal-row:hover {
   background: var(--table-row-hover);
+}
+
+.marshal-name-cell.has-roles {
+  vertical-align: top;
+}
+
+.marshal-name {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.marshal-roles {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
 }
 
 .checkpoint-cell {
@@ -664,19 +815,151 @@ const sortedMarshals = computed(() => {
     display: inline-block;
   }
 
-  .marshals-tab-header {
+  .tab-header {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
+    align-items: stretch;
   }
 
   .button-group {
     width: 100%;
-    flex-direction: column;
+    flex-direction: row;
   }
 
   .button-group button {
-    width: 100%;
+    flex: 1;
+    padding: 0.625rem 0.5rem;
+    font-size: 0.85rem;
+  }
+
+  .status-pills {
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+  }
+
+  .pill-group {
+    flex-wrap: nowrap;
+  }
+
+  .filters-section {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .search-input {
+    max-width: none;
+  }
+
+  /* Card-based layout for mobile */
+  .marshals-table {
+    display: block;
+  }
+
+  .marshals-table thead {
+    display: none;
+  }
+
+  .marshals-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .marshal-row {
+    display: flex;
+    flex-wrap: wrap;
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--card-bg);
+    row-gap: 0.75rem;
+  }
+
+  .marshal-row:hover {
+    background: var(--table-row-hover);
+  }
+
+  .marshals-table td {
+    border-bottom: none;
+    padding: 0;
+  }
+
+  .marshal-name-cell {
+    flex: 1;
+    min-width: 0;
+    padding-right: 0.5rem !important;
+  }
+
+  .marshal-name-cell.has-roles {
+    vertical-align: middle;
+  }
+
+  .marshal-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .marshal-roles {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .check-in-cell {
+    flex-basis: 100%;
+    min-width: auto;
+    display: flex;
+    align-items: center;
+    margin-top: 0.25rem;
+  }
+
+  .checkpoint-cell {
+    flex-basis: 100%;
+    margin-top: 0;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border-light);
+    max-width: none;
+  }
+
+  .checkpoint-description {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  .no-checkpoint-cell {
+    flex-basis: 100%;
+    margin-top: 0.5rem;
+  }
+
+  /* Continuation rows (additional assignments for same marshal) */
+  .continuation-row {
+    margin-top: -0.5rem;
+    border-top: none;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    padding-top: 0.5rem;
+    padding-left: 1rem;
+  }
+
+  .continuation-row .checkpoint-cell {
+    flex-basis: calc(100% - 80px);
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+
+  /* Connect continuation rows to the previous row */
+  .marshal-row:not(.continuation-row) + .continuation-row {
+    border-top: 1px dashed var(--border-light);
+  }
+
+  .marshal-row:not(.continuation-row) {
+    margin-top: 0.5rem;
+  }
+
+  .marshal-row:not(.continuation-row):first-child {
+    margin-top: 0;
   }
 }
 

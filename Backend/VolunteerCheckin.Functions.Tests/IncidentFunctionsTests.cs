@@ -264,7 +264,6 @@ public class IncidentFunctionsTests
             PersonId: personId,
             PersonName: personName,
             PersonEmail: $"{personName.ToLower()}@test.com",
-            IsSystemAdmin: false,
             EventId: EventId,
             AuthMethod: Constants.AuthMethodMarshalMagicCode,
             MarshalId: marshalId,
@@ -274,9 +273,6 @@ public class IncidentFunctionsTests
         _mockClaimsService
             .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), EventId))
             .ReturnsAsync(claims);
-        _mockClaimsService
-            .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string?>(), It.IsAny<string?>(), EventId))
-            .ReturnsAsync(claims);
     }
 
     private void SetupClaimsForAreaLead(string personId, string personName, List<string> areaIds)
@@ -285,7 +281,6 @@ public class IncidentFunctionsTests
             PersonId: personId,
             PersonName: personName,
             PersonEmail: $"{personName.ToLower()}@test.com",
-            IsSystemAdmin: false,
             EventId: EventId,
             AuthMethod: Constants.AuthMethodSecureEmailLink,
             MarshalId: null,
@@ -295,9 +290,6 @@ public class IncidentFunctionsTests
         _mockClaimsService
             .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), EventId))
             .ReturnsAsync(claims);
-        _mockClaimsService
-            .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string?>(), It.IsAny<string?>(), EventId))
-            .ReturnsAsync(claims);
     }
 
     private void SetupClaimsForAdmin(string personId, string personName)
@@ -306,7 +298,6 @@ public class IncidentFunctionsTests
             PersonId: personId,
             PersonName: personName,
             PersonEmail: $"{personName.ToLower()}@test.com",
-            IsSystemAdmin: false,
             EventId: EventId,
             AuthMethod: Constants.AuthMethodSecureEmailLink,
             MarshalId: null,
@@ -315,9 +306,6 @@ public class IncidentFunctionsTests
 
         _mockClaimsService
             .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), EventId))
-            .ReturnsAsync(claims);
-        _mockClaimsService
-            .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string?>(), It.IsAny<string?>(), EventId))
             .ReturnsAsync(claims);
     }
 

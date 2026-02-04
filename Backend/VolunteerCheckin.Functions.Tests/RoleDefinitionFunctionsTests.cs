@@ -485,7 +485,6 @@ public class RoleDefinitionFunctionsTests
             PersonId: "person-1",
             PersonName: "Admin User",
             PersonEmail: "admin@test.com",
-            IsSystemAdmin: false,
             EventId: EventId,
             AuthMethod: Constants.AuthMethodSecureEmailLink,
             MarshalId: null,
@@ -495,10 +494,7 @@ public class RoleDefinitionFunctionsTests
             }
         );
         _mockClaimsService
-            .Setup(c => c.GetClaimsAsync(SessionToken, EventId))
-            .ReturnsAsync(claims);
-        _mockClaimsService
-            .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string?>(), It.IsAny<string?>(), EventId))
+            .Setup(c => c.GetClaimsAsync(It.IsAny<string?>(), EventId))
             .ReturnsAsync(claims);
     }
 

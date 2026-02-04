@@ -82,7 +82,6 @@ public static class PerformanceTestSetup
                 PersonId = personId,
                 Email = email,
                 Name = $"Test User {i}",
-                IsSystemAdmin = false,
                 CreatedAt = DateTime.UtcNow
             };
 

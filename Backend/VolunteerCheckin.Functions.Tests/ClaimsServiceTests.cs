@@ -83,7 +83,7 @@ public class ClaimsServiceTests
         };
     }
 
-    private PersonEntity CreatePerson(string personId = PersonId, bool isSystemAdmin = false)
+    private PersonEntity CreatePerson(string personId = PersonId)
     {
         return new PersonEntity
         {
@@ -92,7 +92,6 @@ public class ClaimsServiceTests
             PersonId = personId,
             Name = "Test User",
             Email = Email,
-            IsSystemAdmin = isSystemAdmin,
             CreatedAt = DateTime.UtcNow.AddDays(-30)
         };
     }
@@ -144,7 +143,6 @@ public class ClaimsServiceTests
         claims.PersonId.ShouldBe(PersonId);
         claims.PersonName.ShouldBe("Test User");
         claims.PersonEmail.ShouldBe(Email);
-        claims.IsSystemAdmin.ShouldBeFalse();
     }
 
     [TestMethod]
@@ -222,11 +220,18 @@ public class ClaimsServiceTests
     }
 
     [TestMethod]
-    public async Task GetClaimsAsync_SystemAdmin_ReturnsIsSystemAdminTrue()
+    public async Task GetClaimsAsync_EventAdmin_ReturnsEventAdminRole()
     {
         // Arrange
         AuthSessionEntity session = CreateValidSession();
-        PersonEntity adminPerson = CreatePerson(isSystemAdmin: true);
+        PersonEntity adminPerson = CreatePerson();
+        EventRoleEntity adminRole = new()
+        {
+            PersonId = PersonId,
+            EventId = EventId,
+            Role = Constants.RoleEventAdmin,
+            AreaIdsJson = "[]"
+        };
 
         _mockSessionRepository
             .Setup(r => r.GetBySessionTokenHashAsync(It.IsAny<string>()))
@@ -239,7 +244,7 @@ public class ClaimsServiceTests
             .ReturnsAsync(adminPerson);
         _mockRoleRepository
             .Setup(r => r.GetByPersonAndEventAsync(PersonId, EventId))
-            .ReturnsAsync([]);
+            .ReturnsAsync(new List<EventRoleEntity> { adminRole });
         _mockMarshalRepository
             .Setup(r => r.GetByEventAsync(EventId))
             .ReturnsAsync([]);
@@ -249,7 +254,7 @@ public class ClaimsServiceTests
 
         // Assert
         claims.ShouldNotBeNull();
-        claims.IsSystemAdmin.ShouldBeTrue();
+        claims.IsEventAdmin.ShouldBeTrue();
     }
 
     [TestMethod]

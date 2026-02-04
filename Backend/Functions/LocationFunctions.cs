@@ -60,6 +60,20 @@ public class LocationFunctions
             (CreateLocationRequest? request, IActionResult? error) = await FunctionHelpers.TryDeserializeRequestAsync<CreateLocationRequest>(req);
             if (error != null) return error;
 
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, request!.EventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
+            {
+                return new UnauthorizedObjectResult(new { message = "You do not have permission to modify this event" });
+            }
+
             // Validate GPS coordinates
             if (!Validators.IsValidCoordinates(request!.Latitude, request.Longitude))
             {
@@ -172,8 +186,7 @@ public class LocationFunctions
             await _locationRepository.AddAsync(locationEntity);
 
             // Get admin email from authenticated claims for audit trail
-            UserClaims? claims = await GetClaimsAsync(req, request.EventId);
-            string adminEmail = claims?.PersonEmail ?? claims?.PersonName ?? "Unknown";
+            string adminEmail = claims.PersonEmail ?? claims.PersonName ?? "Unknown";
 
             // Create pending checklist items and notes scoped to this checkpoint
             await CreatePendingChecklistItems(request.EventId, locationId, request.PendingNewChecklistItems, adminEmail);
@@ -283,6 +296,20 @@ public class LocationFunctions
         {
             (CreateLocationRequest? request, IActionResult? error) = await FunctionHelpers.TryDeserializeRequestAsync<CreateLocationRequest>(req);
             if (error != null) return error;
+
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
+            {
+                return new UnauthorizedObjectResult(new { message = "You do not have permission to modify this event" });
+            }
 
             // Validate GPS coordinates
             if (!Validators.IsValidCoordinates(request!.Latitude, request.Longitude))
@@ -424,6 +451,20 @@ public class LocationFunctions
     {
         try
         {
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
+            {
+                return new UnauthorizedObjectResult(new { message = "You do not have permission to modify this event" });
+            }
+
             // Delete all assignments for this location first to avoid orphaned records
             await _assignmentRepository.DeleteAllByLocationAsync(eventId, locationId);
 
@@ -448,6 +489,20 @@ public class LocationFunctions
     {
         try
         {
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
+            {
+                return new UnauthorizedObjectResult(new { message = "You do not have permission to modify this event" });
+            }
+
             // Get deleteExisting parameter from query string
             bool deleteExisting = req.Query["deleteExisting"].ToString().Equals("true", StringComparison.OrdinalIgnoreCase);
 
@@ -692,6 +747,20 @@ public class LocationFunctions
     {
         try
         {
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
+            {
+                return new UnauthorizedObjectResult(new { message = "You do not have permission to modify this event" });
+            }
+
             string body = await new StreamReader(req.Body).ReadToEndAsync();
             BulkUpdateLocationTimesRequest? request = JsonSerializer.Deserialize<BulkUpdateLocationTimesRequest>(
                 body,
@@ -898,8 +967,8 @@ public class LocationFunctions
 #pragma warning disable MA0051
     private async Task<bool> CanUserUpdateCheckpointLocation(UserClaims claims, LocationEntity checkpoint, string eventId)
     {
-        // Event admins and system admins always have permission
-        if (claims.IsSystemAdmin || claims.IsEventAdmin)
+        // Event admins always have permission
+        if (claims.IsEventAdmin)
         {
             return true;
         }
@@ -1095,26 +1164,5 @@ public class LocationFunctions
             await _noteRepository.AddAsync(noteEntity);
             _logger.LogInformation("Note {NoteId} created for location {LocationId}", noteId, locationId);
         }
-    }
-
-    /// <summary>
-    /// Gets user claims from the request, supporting both session tokens and sample codes.
-    /// </summary>
-    private async Task<UserClaims?> GetClaimsAsync(HttpRequest req, string eventId)
-    {
-        string? sessionToken = req.Headers.Authorization.FirstOrDefault()?.Replace("Bearer ", "", StringComparison.OrdinalIgnoreCase);
-        if (string.IsNullOrWhiteSpace(sessionToken))
-        {
-            sessionToken = req.Cookies["session_token"];
-        }
-
-        string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
-
-        if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
-        {
-            return null;
-        }
-
-        return await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
     }
 }

@@ -68,7 +68,6 @@ namespace VolunteerCheckin.Functions.Tests
                 PersonId: "person-1",
                 PersonName: "Admin User",
                 PersonEmail: "admin@example.com",
-                IsSystemAdmin: false,
                 EventId: "event-123",
                 AuthMethod: Constants.AuthMethodSecureEmailLink,
                 MarshalId: null,
@@ -80,12 +79,7 @@ namespace VolunteerCheckin.Functions.Tests
 
             // Setup claims service to return admin claims for any event
             _mockClaimsService
-                .Setup(c => c.GetClaimsAsync(TestSessionToken, It.IsAny<string>()))
-                .ReturnsAsync(_adminClaims);
-
-            // Also setup GetClaimsWithSampleSupportAsync for endpoints that support sample code auth
-            _mockClaimsService
-                .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string>()))
+                .Setup(c => c.GetClaimsAsync(It.IsAny<string?>(), It.IsAny<string>()))
                 .ReturnsAsync(_adminClaims);
 
             // Setup contact permissions for admin (can view/modify all)

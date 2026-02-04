@@ -1,10 +1,20 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
+import viteCompression from 'vite-plugin-compression'
 
 // https://vite.dev/config/
 export default defineConfig({
   server: {
+    host: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:7071',
+        changeOrigin: true,
+      }
+    }
+  },
+  preview: {
     host: true,
     proxy: {
       '/api': {
@@ -65,7 +75,20 @@ export default defineConfig({
           }
         ]
       }
-    })
+    }),
+    // Pre-compress assets with maximum Brotli compression
+    // Browsers request .br files automatically, Azure SWA serves them if available
+    viteCompression({
+      algorithm: 'brotliCompress',
+      ext: '.br',
+      threshold: 1024, // Only compress files > 1KB
+      compressionOptions: {
+        params: {
+          // Brotli quality level 11 (max) - slow but smallest output
+          0: 11, // BROTLI_PARAM_QUALITY
+        },
+      },
+    }),
   ],
   base: process.env.VITE_BASE_PATH || '/',
 })

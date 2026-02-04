@@ -622,14 +622,7 @@ const loadAdminEvents = async () => {
   adminEventsLoading.value = true;
   try {
     setAuthContext('admin');
-    // Try summary endpoint first, fall back to full endpoint if not available
-    let response;
-    try {
-      response = await eventsApi.getAllSummary();
-    } catch (summaryError) {
-      // Summary endpoint might not exist yet, fall back to full endpoint
-      response = await eventsApi.getAll();
-    }
+    const response = await eventsApi.getAllSummary();
     const events = response.data || [];
     adminEvents.value = events;
     saveAdminEventsCache(events);

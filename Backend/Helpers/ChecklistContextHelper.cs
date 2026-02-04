@@ -342,12 +342,18 @@ public class ChecklistContextHelper
             contextOwnerMarshalId = context.MarshalId;
         }
 
-        // Set ContextOwnerName from the completion record for shared scopes
-        // This enables "on behalf of" display when someone completes a shared task for another person
+        // Set ContextOwnerName from the completion record
+        // This enables "on behalf of" display when someone completes a task for another person
         string? contextOwnerName = null;
         if (isSharedScope && anyCompletionInContext != null && !string.IsNullOrEmpty(anyCompletionInContext.ContextOwnerMarshalName))
         {
+            // For shared scopes, use the completion in context
             contextOwnerName = anyCompletionInContext.ContextOwnerMarshalName;
+        }
+        else if (completion != null && !string.IsNullOrEmpty(completion.ContextOwnerMarshalName))
+        {
+            // For personal/per-marshal scopes (including linked check-in tasks), use the completion's owner name
+            contextOwnerName = completion.ContextOwnerMarshalName;
         }
 
         return new ChecklistItemWithStatus(

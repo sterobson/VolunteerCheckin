@@ -54,6 +54,19 @@ namespace VolunteerCheckin.Functions.Tests
             Mock.Of<IEventDeletionRepository>()
         );
 
+        // Setup default claims for authenticated requests
+        _mockClaimsService
+            .Setup(c => c.GetClaimsAsync(It.IsAny<string?>(), It.IsAny<string>()))
+            .ReturnsAsync(new UserClaims(
+                PersonId: "test-person",
+                PersonName: "Test User",
+                PersonEmail: "test@example.com",
+                EventId: null,
+                AuthMethod: Constants.AuthMethodSecureEmailLink,
+                MarshalId: null,
+                EventRoles: new List<EventRoleInfo> { new(Constants.RoleEventAdmin, new List<string>()) }
+            ));
+
         _locationFunctions = new LocationFunctions(
             _mockLogger.Object,
             _mockLocationRepository.Object,

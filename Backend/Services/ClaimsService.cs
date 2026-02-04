@@ -35,70 +35,19 @@ public class ClaimsService
     }
 
     /// <summary>
-    /// Resolve user claims from a sample event code.
-    /// Grants admin access to the sample event if the code is valid.
+    /// Resolve user claims from a session token.
+    /// This method exists for backwards compatibility - sample users now have real sessions
+    /// after calling /auth/sample-login, so they use GetClaimsAsync like everyone else.
     /// </summary>
-    /// <param name="sampleCode">The sample event admin code</param>
+    /// <param name="sessionToken">The session token</param>
+    /// <param name="sampleCode">Ignored - kept for API compatibility during migration</param>
     /// <param name="eventId">The event being accessed</param>
-    /// <returns>UserClaims if valid, null if invalid/expired or event doesn't match</returns>
-    public virtual async Task<UserClaims?> GetSampleEventClaimsAsync(string sampleCode, string eventId)
+    /// <returns>UserClaims if valid, null if invalid/expired</returns>
+    public virtual Task<UserClaims?> GetClaimsWithSampleSupportAsync(string? sessionToken, string? sampleCode, string eventId)
     {
-        // Check if event is pending deletion
-        if (await _eventDeletionRepository.IsDeletionPendingAsync(eventId))
-        {
-            return null;
-        }
-
-        // Validate the sample code and get the event ID it's for
-        string? validEventId = await _sampleEventService.GetEventIdByAdminCodeAsync(sampleCode);
-
-        if (validEventId == null || validEventId != eventId)
-        {
-            return null;
-        }
-
-        // Return claims granting admin access to this sample event
-        return new UserClaims(
-            PersonId: $"sample-{sampleCode}",
-            PersonName: "Sample Event User",
-            PersonEmail: null,
-            IsSystemAdmin: false,
-            EventId: eventId,
-            AuthMethod: Constants.AuthMethodSampleCode,
-            MarshalId: null,
-            EventRoles: [new EventRoleInfo(Constants.RoleEventAdmin, [])]
-        );
-    }
-
-    /// <summary>
-    /// Resolve user claims from either a sample code or session token.
-    /// Tries sample code first, then falls back to session token.
-    /// </summary>
-    public virtual async Task<UserClaims?> GetClaimsWithSampleSupportAsync(string? sessionToken, string? sampleCode, string eventId)
-    {
-        // Check if event is pending deletion - deny all access
-        if (await _eventDeletionRepository.IsDeletionPendingAsync(eventId))
-        {
-            return null;
-        }
-
-        // Try sample code first
-        if (!string.IsNullOrEmpty(sampleCode))
-        {
-            UserClaims? sampleClaims = await GetSampleEventClaimsAsync(sampleCode, eventId);
-            if (sampleClaims != null)
-            {
-                return sampleClaims;
-            }
-        }
-
-        // Fall back to session token
-        if (!string.IsNullOrEmpty(sessionToken))
-        {
-            return await GetClaimsAsync(sessionToken, eventId);
-        }
-
-        return null;
+        // Sample users now have real sessions after calling /auth/sample-login
+        // Just delegate to GetClaimsAsync
+        return GetClaimsAsync(sessionToken, eventId);
     }
 
     /// <summary>
@@ -138,7 +87,6 @@ public class ClaimsService
             PersonId: person.PersonId,
             PersonName: person.Name,
             PersonEmail: person.Email,
-            IsSystemAdmin: person.IsSystemAdmin,
             EventId: effectiveEventId,
             AuthMethod: session.AuthMethod,
             MarshalId: marshalId,

@@ -81,6 +81,23 @@ public class TableStorageAuthTokenRepository : IAuthTokenRepository
         await _table.DeleteEntityAsync("AUTHTOKEN", tokenHash);
     }
 
+    public async Task DeleteAllByPersonAsync(string personId)
+    {
+        IEnumerable<AuthTokenEntity> tokens = await GetByPersonAsync(personId);
+
+        foreach (AuthTokenEntity token in tokens)
+        {
+            try
+            {
+                await _table.DeleteEntityAsync(token.PartitionKey, token.RowKey);
+            }
+            catch (RequestFailedException)
+            {
+                // Ignore delete failures
+            }
+        }
+    }
+
     public async Task DeleteExpiredTokensAsync()
     {
         DateTime now = DateTime.UtcNow;

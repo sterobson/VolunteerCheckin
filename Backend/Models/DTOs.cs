@@ -646,8 +646,7 @@ public record PersonInfo(
     string PersonId,
     string Name,
     string Email,
-    string Phone,
-    bool IsSystemAdmin
+    string Phone
 );
 
 /// <summary>
@@ -667,7 +666,6 @@ public record UserClaims(
     string PersonId,
     string PersonName,
     string PersonEmail,
-    bool IsSystemAdmin,
     string? EventId,                  // null for cross-event admin sessions, set for event-specific sessions
     string AuthMethod,                // "MarshalMagicCode" or "SecureEmailLink"
     string? MarshalId,                // If they are a marshal in this event
@@ -680,9 +678,75 @@ public record UserClaims(
     public bool HasRole(string role) => EventRoles.Any(r => r.Role == role);
 
     /// <summary>
-    /// Check if user has EventAdmin role
+    /// Check if user has EventAdmin role (legacy)
     /// </summary>
     public bool IsEventAdmin => HasRole(Constants.RoleEventAdmin);
+
+    /// <summary>
+    /// Check if user is an event owner (includes legacy EventAdmin for backwards compatibility)
+    /// </summary>
+    public bool IsEventOwner => HasRole(Constants.RoleEventOwner) || HasRole(Constants.RoleEventAdmin);
+
+    /// <summary>
+    /// Check if user is an event administrator (not owner)
+    /// </summary>
+    public bool IsEventAdministrator => HasRole(Constants.RoleEventAdministrator);
+
+    /// <summary>
+    /// Check if user is an event contributor
+    /// </summary>
+    public bool IsEventContributor => HasRole(Constants.RoleEventContributor);
+
+    /// <summary>
+    /// Check if user is an event viewer
+    /// </summary>
+    public bool IsEventViewer => HasRole(Constants.RoleEventViewer);
+
+    /// <summary>
+    /// Check if user can manage owners (only owners can)
+    /// </summary>
+    public bool CanManageOwners => IsEventOwner;
+
+    /// <summary>
+    /// Check if user can manage other users (owners and administrators can)
+    /// </summary>
+    public bool CanManageUsers => IsEventOwner || IsEventAdministrator;
+
+    /// <summary>
+    /// Check if user can modify event data (checkpoints, areas, marshals, etc.)
+    /// Owners, administrators, and contributors can modify
+    /// </summary>
+    public bool CanModifyEvent => IsEventOwner || IsEventAdministrator || IsEventContributor;
+
+    /// <summary>
+    /// Check if user can delete the event (only owners can)
+    /// </summary>
+    public bool CanDeleteEvent => IsEventOwner;
+
+    /// <summary>
+    /// Check if user has read-only access (viewers only)
+    /// </summary>
+    public bool IsReadOnly => !CanModifyEvent && (IsEventViewer || HasAnyEventRole);
+
+    /// <summary>
+    /// Check if user has any event role
+    /// </summary>
+    public bool HasAnyEventRole => EventRoles.Count > 0;
+
+    /// <summary>
+    /// Get the user's primary role for this event (highest privilege)
+    /// </summary>
+    public string? PrimaryEventRole
+    {
+        get
+        {
+            if (IsEventOwner) return Constants.RoleEventOwner;
+            if (IsEventAdministrator) return Constants.RoleEventAdministrator;
+            if (IsEventContributor) return Constants.RoleEventContributor;
+            if (IsEventViewer) return Constants.RoleEventViewer;
+            return null;
+        }
+    }
 
     /// <summary>
     /// Check if user has EventAreaAdmin role for a specific area
@@ -774,18 +838,27 @@ public record MarshalLoginResponse(
 );
 
 /// <summary>
-/// Request to update current user's profile
+/// Request to login using a sample event admin code
 /// </summary>
-public record UpdateProfileRequest(
-    string Name,
-    string Email,
-    string? Phone
+public record SampleLoginRequest(
+    string EventId,
+    string AdminCode
 );
 
 /// <summary>
-/// Request for admin to update another person's details
+/// Response after sample login (returns session token)
 /// </summary>
-public record UpdatePersonRequest(
+public record SampleLoginResponse(
+    bool Success,
+    string? SessionToken,
+    string? EventId,
+    string? Message
+);
+
+/// <summary>
+/// Request to update current user's profile
+/// </summary>
+public record UpdateProfileRequest(
     string Name,
     string Email,
     string? Phone
@@ -799,7 +872,6 @@ public record PersonDetailsResponse(
     string Name,
     string Email,
     string Phone,
-    bool IsSystemAdmin,
     List<EventRoleInfo> EventRoles,
     DateTime CreatedAt
 );
@@ -1667,4 +1739,49 @@ public record LayerResponse(
     int? RouteWeight,
     int CheckpointCount,
     DateTime CreatedDate
+);
+
+// ============================================================================
+// Event User Management DTOs
+// ============================================================================
+
+/// <summary>
+/// Response for an event user (replaces EventAdminResponse)
+/// </summary>
+public record EventUserResponse(
+    string EventId,
+    string PersonId,
+    string UserEmail,
+    string UserName,
+    string Role,
+    DateTime GrantedAt,
+    string? GrantedByName
+);
+
+/// <summary>
+/// Request to add a new user to an event
+/// </summary>
+public record AddEventUserRequest(
+    string UserEmail,
+    string Role,
+    string? UserName = null
+);
+
+/// <summary>
+/// Request to update a user's role in an event
+/// </summary>
+public record UpdateEventUserRoleRequest(
+    string Role
+);
+
+/// <summary>
+/// Response containing the current user's permissions for an event
+/// </summary>
+public record EventPermissionsResponse(
+    string Role,
+    bool CanManageOwners,
+    bool CanManageUsers,
+    bool CanModifyEvent,
+    bool CanDeleteEvent,
+    bool IsReadOnly
 );

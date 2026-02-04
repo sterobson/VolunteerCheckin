@@ -148,6 +148,9 @@ public class EventContactFunctions
             // Sync roles to the linked marshal if applicable
             await SyncRolesToLinkedMarshalAsync(eventId, request.MarshalId, request.Roles);
 
+            // Sync phone/email to the linked marshal if applicable
+            await SyncContactDetailsToLinkedMarshalAsync(eventId, request.MarshalId, request.Phone, request.Email);
+
             // Sync area lead role if this contact is linked to a marshal and has AreaLead role
             await SyncAreaLeadRoleAsync(eventId, request.MarshalId, request.Roles, scopeConfigs, claims.PersonId);
 
@@ -326,6 +329,9 @@ public class EventContactFunctions
 
             // Sync roles to the linked marshal if applicable
             await SyncRolesToLinkedMarshalAsync(eventId, request.MarshalId, request.Roles);
+
+            // Sync phone/email to the linked marshal if applicable
+            await SyncContactDetailsToLinkedMarshalAsync(eventId, request.MarshalId, request.Phone, request.Email);
 
             // Handle area lead role changes
             List<ScopeConfiguration> scopeConfigs = request.ScopeConfigurations ?? [];
@@ -572,20 +578,14 @@ public class EventContactFunctions
 
     private async Task<UserClaims?> GetClaimsAsync(HttpRequest req, string eventId)
     {
-        string? sessionToken = req.Headers.Authorization.FirstOrDefault()?.Replace("Bearer ", "", StringComparison.OrdinalIgnoreCase);
+        string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
         if (string.IsNullOrWhiteSpace(sessionToken))
-        {
-            sessionToken = req.Cookies["session_token"];
-        }
-
-        string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
-
-        if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
         {
             return null;
         }
 
-        return await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
+        return await _claimsService.GetClaimsAsync(sessionToken, eventId);
     }
 
     /// <summary>
@@ -929,6 +929,31 @@ public class EventContactFunctions
             marshalId, eventId, string.Join(", ", roles));
     }
 
+    /// <summary>
+    /// Syncs phone and email from a contact to its linked marshal.
+    /// When a contact has phone/email and is linked to a marshal, the marshal's phone/email are updated to match.
+    /// </summary>
+    private async Task SyncContactDetailsToLinkedMarshalAsync(string eventId, string? marshalId, string? phone, string? email)
+    {
+        if (string.IsNullOrEmpty(marshalId))
+        {
+            return; // No marshal linked, nothing to do
+        }
+
+        MarshalEntity? marshal = await _marshalRepository.GetAsync(eventId, marshalId);
+        if (marshal == null)
+        {
+            return;
+        }
+
+        // Update the marshal's phone and email to match the contact's
+        marshal.PhoneNumber = phone ?? string.Empty;
+        marshal.Email = email ?? string.Empty;
+        await _marshalRepository.UpdateAsync(marshal);
+
+        _logger.LogInformation("Synced contact details to linked marshal {MarshalId} in event {EventId}", marshalId, eventId);
+    }
+
     #endregion
 
     /// <summary>
@@ -944,7 +969,7 @@ public class EventContactFunctions
         {
             // Authenticate - only admins can reorder
             UserClaims? claims = await GetClaimsAsync(req, eventId);
-            if (claims == null || (!claims.IsEventAdmin && !claims.IsSystemAdmin))
+            if (claims == null || !claims.IsEventAdmin)
             {
                 return new UnauthorizedObjectResult(new { message = "Only event admins can reorder contacts" });
             }

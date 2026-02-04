@@ -13,8 +13,7 @@ public class LogoFunctions
 {
     private readonly ILogger<LogoFunctions> _logger;
     private readonly IEventRepository _eventRepository;
-    private readonly IPersonRepository _personRepository;
-    private readonly IEventRoleRepository _eventRoleRepository;
+    private readonly ClaimsService _claimsService;
     private readonly BlobStorageService _blobStorageService;
 
     private static readonly HashSet<string> _allowedContentTypes = new(StringComparer.OrdinalIgnoreCase)
@@ -32,24 +31,13 @@ public class LogoFunctions
     public LogoFunctions(
         ILogger<LogoFunctions> logger,
         IEventRepository eventRepository,
-        IPersonRepository personRepository,
-        IEventRoleRepository eventRoleRepository,
+        ClaimsService claimsService,
         BlobStorageService blobStorageService)
     {
         _logger = logger;
         _eventRepository = eventRepository;
-        _personRepository = personRepository;
-        _eventRoleRepository = eventRoleRepository;
+        _claimsService = claimsService;
         _blobStorageService = blobStorageService;
-    }
-
-    private async Task<bool> IsUserAuthorizedForEvent(string eventId, string userEmail)
-    {
-        PersonEntity? person = await _personRepository.GetByEmailAsync(userEmail);
-        if (person == null) return false;
-
-        IEnumerable<EventRoleEntity> roles = await _eventRoleRepository.GetByPersonAndEventAsync(person.PersonId, eventId);
-        return roles.Any(r => r.Role == Constants.RoleEventAdmin);
     }
 
     /// <summary>
@@ -91,10 +79,16 @@ public class LogoFunctions
     {
         try
         {
-            (string? adminEmail, IActionResult? headerError) = FunctionHelpers.GetAdminEmailFromHeader(req);
-            if (headerError != null) return headerError;
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
 
-            if (!await IsUserAuthorizedForEvent(eventId, adminEmail!))
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
             {
                 return new UnauthorizedObjectResult(new { message = "You are not authorized to modify this event" });
             }
@@ -165,10 +159,16 @@ public class LogoFunctions
     {
         try
         {
-            (string? adminEmail, IActionResult? headerError) = FunctionHelpers.GetAdminEmailFromHeader(req);
-            if (headerError != null) return headerError;
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
 
-            if (!await IsUserAuthorizedForEvent(eventId, adminEmail!))
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
             {
                 return new UnauthorizedObjectResult(new { message = "You are not authorized to modify this event" });
             }

@@ -385,17 +385,21 @@ public class CheckInFunctions
             }
 
             // Handle linked task completion/uncomplete
+            // Determine actor type and ID based on who is performing the action
+            string actorType = isSelfCheckIn ? Constants.ActorTypeMarshal : Constants.ActorTypeAreaLead;
+            string actorId = isSelfCheckIn ? assignment.MarshalId : claims.PersonId;
+
             List<LinkedTaskCompletedInfo> linkedTasks = [];
             int linkedTasksUncompleted = 0;
             if (wantToCheckIn && !wasCheckedIn)
             {
                 // Check-in: complete linked tasks
-                linkedTasks = await CompleteLinkedTasksAsync(eventId, assignment.MarshalId, assignment.LocationId, checkedInBy);
+                linkedTasks = await CompleteLinkedTasksAsync(eventId, assignment.MarshalId, assignment.LocationId, actorType, actorId, checkedInBy);
             }
             else if (!wantToCheckIn && wasCheckedIn)
             {
                 // Check-out: uncomplete linked tasks
-                linkedTasksUncompleted = await UncompleteLinkedTasksAsync(eventId, assignment.MarshalId, assignment.LocationId, checkedInBy);
+                linkedTasksUncompleted = await UncompleteLinkedTasksAsync(eventId, assignment.MarshalId, assignment.LocationId, actorType, actorId, checkedInBy);
             }
 
             AssignmentResponse response = assignment.ToResponse();
@@ -465,12 +469,12 @@ public class CheckInFunctions
             bool isAuthorized = false;
             string checkInMethod = Constants.CheckInMethodAdmin;
 
-            if (claims.IsEventAdmin || claims.IsSystemAdmin)
+            if (claims.IsEventAdmin)
             {
                 // Admins can check in anyone, but need elevated permissions
                 if (!claims.CanUseElevatedPermissions)
                 {
-                    return new ForbidResult();
+                    return new ObjectResult(new { message = "Forbidden" }) { StatusCode = 403 };
                 }
                 isAuthorized = true;
             }
@@ -494,7 +498,7 @@ public class CheckInFunctions
 
             if (!isAuthorized)
             {
-                return new ForbidResult();
+                return new ObjectResult(new { message = "Forbidden" }) { StatusCode = 403 };
             }
 
             // Determine who is performing the check-in (name if available, else email)
@@ -565,17 +569,23 @@ public class CheckInFunctions
             }
 
             // Handle linked task completion/uncomplete
+            // Determine actor type based on check-in method
+            string actorType = checkInMethod == Constants.CheckInMethodAdmin
+                ? Constants.ActorTypeEventAdmin
+                : Constants.ActorTypeAreaLead;
+            string actorId = claims.PersonId;
+
             List<LinkedTaskCompletedInfo> linkedTasks = [];
             int linkedTasksUncompleted = 0;
             if (assignment.IsCheckedIn && !wasCheckedIn)
             {
                 // Check-in: complete linked tasks
-                linkedTasks = await CompleteLinkedTasksAsync(eventId, assignment.MarshalId, assignment.LocationId, checkedInBy);
+                linkedTasks = await CompleteLinkedTasksAsync(eventId, assignment.MarshalId, assignment.LocationId, actorType, actorId, checkedInBy);
             }
             else if (!assignment.IsCheckedIn && wasCheckedIn)
             {
                 // Check-out: uncomplete linked tasks
-                linkedTasksUncompleted = await UncompleteLinkedTasksAsync(eventId, assignment.MarshalId, assignment.LocationId, checkedInBy);
+                linkedTasksUncompleted = await UncompleteLinkedTasksAsync(eventId, assignment.MarshalId, assignment.LocationId, actorType, actorId, checkedInBy);
             }
 
             AssignmentResponse response = assignment.ToResponse();
@@ -607,7 +617,13 @@ public class CheckInFunctions
     /// Completes all linked checklist items for a marshal at a specific checkpoint.
     /// </summary>
 #pragma warning disable MA0051 // Linked task completion with context building
-    private async Task<List<LinkedTaskCompletedInfo>> CompleteLinkedTasksAsync(string eventId, string marshalId, string checkpointId, string actorName)
+    private async Task<List<LinkedTaskCompletedInfo>> CompleteLinkedTasksAsync(
+        string eventId,
+        string marshalId,
+        string checkpointId,
+        string actorType,
+        string actorId,
+        string actorName)
     {
         List<LinkedTaskCompletedInfo> completedTasks = [];
 
@@ -651,14 +667,14 @@ public class CheckInFunctions
                         marshalId,
                         marshal.Name,
                         checkpointId,
-                        Constants.ActorTypeMarshal,
-                        marshalId,
+                        actorType,
+                        actorId,
                         actorName);
 
                     completedTasks.Add(new LinkedTaskCompletedInfo(item.ItemId, item.Text));
 
-                    _logger.LogInformation("Linked task {ItemId} completed for marshal {MarshalId} at checkpoint {CheckpointId} via check-in",
-                        item.ItemId, marshalId, checkpointId);
+                    _logger.LogInformation("Linked task {ItemId} completed for marshal {MarshalId} at checkpoint {CheckpointId} via check-in by {ActorType}",
+                        item.ItemId, marshalId, checkpointId, actorType);
                 }
             }
         }
@@ -675,7 +691,13 @@ public class CheckInFunctions
     /// <summary>
     /// Uncompletes all linked checklist items for a marshal at a specific checkpoint.
     /// </summary>
-    private async Task<int> UncompleteLinkedTasksAsync(string eventId, string marshalId, string checkpointId, string actorName)
+    private async Task<int> UncompleteLinkedTasksAsync(
+        string eventId,
+        string marshalId,
+        string checkpointId,
+        string actorType,
+        string actorId,
+        string actorName)
     {
         int uncompletedCount = 0;
 
@@ -708,8 +730,8 @@ public class CheckInFunctions
                 {
                     await linkHelper.UncompleteAsync(
                         completion,
-                        Constants.ActorTypeMarshal,
-                        marshalId,
+                        actorType,
+                        actorId,
                         actorName);
 
                     uncompletedCount++;

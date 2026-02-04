@@ -19,7 +19,7 @@ public class TerminologyPayload
     public string Person { get; set; } = "Marshals";
     public string Location { get; set; } = "Checkpoints";
     public string Area { get; set; } = "Areas";
-    public string Task { get; set; } = "Checklists";
+    public string Task { get; set; } = "Tasks";
     public string Course { get; set; } = "Course";
 }
 

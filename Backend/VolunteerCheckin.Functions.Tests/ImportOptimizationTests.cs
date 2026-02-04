@@ -50,6 +50,19 @@ public class ImportOptimizationTests
             Mock.Of<ISampleEventService>(),
             Mock.Of<IEventDeletionRepository>());
 
+        // Setup claims for authenticated requests
+        mockClaimsService
+            .Setup(c => c.GetClaimsAsync(It.IsAny<string?>(), It.IsAny<string>()))
+            .ReturnsAsync(new UserClaims(
+                PersonId: "test-person",
+                PersonName: "Test User",
+                PersonEmail: "test@example.com",
+                                EventId: null,
+                AuthMethod: Constants.AuthMethodSecureEmailLink,
+                MarshalId: null,
+                EventRoles: new List<EventRoleInfo> { new(Constants.RoleEventAdmin, new List<string>()) }
+            ));
+
         // Setup existing marshal that should be found via cache
         MarshalEntity existingMarshal = new()
         {
@@ -137,6 +150,19 @@ public class ImportOptimizationTests
             new Mock<IMarshalRepository>().Object,
             Mock.Of<ISampleEventService>(),
             Mock.Of<IEventDeletionRepository>());
+
+        // Setup claims for authenticated requests
+        mockClaimsService
+            .Setup(c => c.GetClaimsAsync(It.IsAny<string?>(), It.IsAny<string>()))
+            .ReturnsAsync(new UserClaims(
+                PersonId: "test-person",
+                PersonName: "Test User",
+                PersonEmail: "test@example.com",
+                                EventId: null,
+                AuthMethod: Constants.AuthMethodSecureEmailLink,
+                MarshalId: null,
+                EventRoles: new List<EventRoleInfo> { new(Constants.RoleEventAdmin, new List<string>()) }
+            ));
 
         mockLocationRepo
             .Setup(r => r.GetByEventAsync(EventId))
@@ -259,16 +285,15 @@ public class ImportOptimizationTests
 
         // Setup auth
         mockClaimsService
-            .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string>(), It.IsAny<string>(), EventId))
+            .Setup(c => c.GetClaimsAsync(It.IsAny<string?>(), EventId))
             .ReturnsAsync(new UserClaims(
                 PersonId: "person-1",
                 PersonName: "Admin",
                 PersonEmail: "admin@test.com",
-                IsSystemAdmin: true,
                 EventId: EventId,
                 AuthMethod: "SecureEmailLink",
                 MarshalId: null,
-                EventRoles: new List<EventRoleInfo>()));
+                EventRoles: new List<EventRoleInfo> { new(Constants.RoleEventAdmin, new List<string>()) }));
 
         MarshalFunctions functions = new(
             mockLogger.Object,
@@ -346,16 +371,15 @@ public class ImportOptimizationTests
 
         // Setup auth
         mockClaimsService
-            .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string>(), It.IsAny<string>(), EventId))
+            .Setup(c => c.GetClaimsAsync(It.IsAny<string?>(), EventId))
             .ReturnsAsync(new UserClaims(
                 PersonId: "person-1",
                 PersonName: "Admin",
                 PersonEmail: "admin@test.com",
-                IsSystemAdmin: true,
                 EventId: EventId,
                 AuthMethod: "SecureEmailLink",
                 MarshalId: null,
-                EventRoles: new List<EventRoleInfo>()));
+                EventRoles: new List<EventRoleInfo> { new(Constants.RoleEventAdmin, new List<string>()) }));
 
         MarshalFunctions functions = new(
             mockLogger.Object,

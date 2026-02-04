@@ -17,17 +17,20 @@ public class LayerFunctions
     private readonly ILayerRepository _layerRepository;
     private readonly ILocationRepository _locationRepository;
     private readonly IEventRepository _eventRepository;
+    private readonly ClaimsService _claimsService;
 
     public LayerFunctions(
         ILogger<LayerFunctions> logger,
         ILayerRepository layerRepository,
         ILocationRepository locationRepository,
-        IEventRepository eventRepository)
+        IEventRepository eventRepository,
+        ClaimsService claimsService)
     {
         _logger = logger;
         _layerRepository = layerRepository;
         _locationRepository = locationRepository;
         _eventRepository = eventRepository;
+        _claimsService = claimsService;
     }
 
     [Function("CreateLayer")]
@@ -37,6 +40,20 @@ public class LayerFunctions
     {
         try
         {
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
+            {
+                return new UnauthorizedObjectResult(new { message = "You do not have permission to modify this event" });
+            }
+
             (CreateLayerRequest? request, IActionResult? error) = await FunctionHelpers.TryDeserializeRequestAsync<CreateLayerRequest>(req);
             if (error != null) return error;
 
@@ -202,6 +219,20 @@ public class LayerFunctions
     {
         try
         {
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
+            {
+                return new UnauthorizedObjectResult(new { message = "You do not have permission to modify this event" });
+            }
+
             (UpdateLayerRequest? request, IActionResult? error) = await FunctionHelpers.TryDeserializeRequestAsync<UpdateLayerRequest>(req);
             if (error != null) return error;
             if (request == null) return new BadRequestObjectResult(new { message = "Request body is required" });
@@ -253,6 +284,20 @@ public class LayerFunctions
     {
         try
         {
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
+            {
+                return new UnauthorizedObjectResult(new { message = "You do not have permission to modify this event" });
+            }
+
             LayerEntity? layerEntity = await _layerRepository.GetAsync(eventId, layerId);
 
             if (layerEntity == null)
@@ -341,6 +386,20 @@ public class LayerFunctions
     {
         try
         {
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
+            {
+                return new UnauthorizedObjectResult(new { message = "You do not have permission to modify this event" });
+            }
+
             (ReorderLayersRequest? request, IActionResult? error) = await FunctionHelpers.TryDeserializeRequestAsync<ReorderLayersRequest>(req);
             if (error != null) return error;
             if (request == null || request.Items == null || request.Items.Count == 0)
@@ -390,6 +449,20 @@ public class LayerFunctions
     {
         try
         {
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
+            {
+                return new UnauthorizedObjectResult(new { message = "You do not have permission to modify this event" });
+            }
+
             // Get the uploaded file
             if (req.Form.Files.Count == 0)
             {

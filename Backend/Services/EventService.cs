@@ -22,6 +22,8 @@ public class EventService : IEventService
     private readonly IEventRoleRepository _eventRoleRepository;
     private readonly IEventRoleDefinitionRepository _eventRoleDefinitionRepository;
     private readonly IPersonRepository _personRepository;
+    private readonly IAuthSessionRepository _authSessionRepository;
+    private readonly IAuthTokenRepository _authTokenRepository;
     private readonly TableStorageService _tableStorageService;
 
     public EventService(
@@ -39,6 +41,8 @@ public class EventService : IEventService
         IEventRoleRepository eventRoleRepository,
         IEventRoleDefinitionRepository eventRoleDefinitionRepository,
         IPersonRepository personRepository,
+        IAuthSessionRepository authSessionRepository,
+        IAuthTokenRepository authTokenRepository,
         TableStorageService tableStorageService)
     {
         _eventRepository = eventRepository;
@@ -55,6 +59,8 @@ public class EventService : IEventService
         _eventRoleRepository = eventRoleRepository;
         _eventRoleDefinitionRepository = eventRoleDefinitionRepository;
         _personRepository = personRepository;
+        _authSessionRepository = authSessionRepository;
+        _authTokenRepository = authTokenRepository;
         _tableStorageService = tableStorageService;
     }
 
@@ -69,48 +75,51 @@ public class EventService : IEventService
         // 1. Assignments (includes check-in data)
         await _assignmentRepository.DeleteAllByEventAsync(eventId);
 
-        // 2. Checklist completions
+        // 2. Auth sessions (marshal sessions locked to this event)
+        await _authSessionRepository.DeleteAllByEventAsync(eventId);
+
+        // 3. Checklist completions
         await _checklistCompletionRepository.DeleteAllByEventAsync(eventId);
 
-        // 3. Checklist items
+        // 4. Checklist items
         await _checklistItemRepository.DeleteAllByEventAsync(eventId);
 
-        // 4. Incidents
+        // 5. Incidents
         await _incidentRepository.DeleteAllByEventAsync(eventId);
 
-        // 5. Notes
+        // 6. Notes
         await _noteRepository.DeleteAllByEventAsync(eventId);
 
-        // 6. Contacts
+        // 7. Contacts
         await _eventContactRepository.DeleteAllByEventAsync(eventId);
 
-        // 7. Locations
+        // 8. Locations
         await _locationRepository.DeleteAllByEventAsync(eventId);
 
-        // 8. Marshals
+        // 9. Marshals
         await _marshalRepository.DeleteAllByEventAsync(eventId);
 
-        // 9. Areas
+        // 10. Areas
         await _areaRepository.DeleteAllByEventAsync(eventId);
 
-        // 10. Layers
+        // 11. Layers
         await _layerRepository.DeleteAllByEventAsync(eventId);
 
-        // 11. Event roles - collect PersonIds first, then delete roles, then clean up orphaned people
+        // 12. Event roles - collect PersonIds first, then delete roles, then clean up orphaned people
         IEnumerable<EventRoleEntity> eventRoles = await _eventRoleRepository.GetByEventAsync(eventId);
         HashSet<string> personIdsInEvent = new(eventRoles.Select(r => r.PersonId).Where(id => !string.IsNullOrEmpty(id)));
         await _eventRoleRepository.DeleteAllByEventAsync(eventId);
 
-        // 12. Event role definitions (custom role types for this event)
+        // 13. Event role definitions (custom role types for this event)
         await _eventRoleDefinitionRepository.DeleteAllByEventAsync(eventId);
 
-        // 13. Clean up orphaned people (those with no roles in any other event)
+        // 14. Clean up orphaned people (those with no roles in any other event)
         await DeleteOrphanedPeopleAsync(personIdsInEvent, eventId);
 
-        // 14. Sample event admin entry (if this was a sample event)
+        // 15. Sample event admin entry (if this was a sample event)
         await DeleteSampleEventAdminByEventIdAsync(eventId);
 
-        // 15. Finally, the event itself (may already be deleted if DeleteEventRecordImmediateAsync was called)
+        // 16. Finally, the event itself (may already be deleted if DeleteEventRecordImmediateAsync was called)
         try
         {
             await _eventRepository.DeleteAsync(eventId);
@@ -152,19 +161,19 @@ public class EventService : IEventService
                     continue; // Person has roles elsewhere, keep them
                 }
 
-                // Get the person to check if they're a system admin
+                // Get the person to verify they exist
                 PersonEntity? person = await _personRepository.GetAsync(personId);
                 if (person == null)
                 {
                     continue; // Person doesn't exist
                 }
 
-                if (person.IsSystemAdmin)
-                {
-                    continue; // Never delete system admins
-                }
+                // Person has no roles in any event - delete them
+                // First delete their auth sessions and tokens
+                await _authSessionRepository.DeleteAllByPersonAsync(personId);
+                await _authTokenRepository.DeleteAllByPersonAsync(personId);
 
-                // Person has no roles in any event and is not a system admin - delete them
+                // Then delete the person (also deletes PersonEmailIndex)
                 await _personRepository.DeleteAsync(personId);
             }
             catch (Azure.RequestFailedException)

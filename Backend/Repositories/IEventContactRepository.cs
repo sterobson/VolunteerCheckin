@@ -38,6 +38,12 @@ public interface IEventContactRepository
     Task UpdateAsync(EventContactEntity contact);
 
     /// <summary>
+    /// Update an existing contact without optimistic concurrency check.
+    /// Use for migrations or non-critical updates where race conditions are acceptable.
+    /// </summary>
+    Task UpdateUnconditionalAsync(EventContactEntity contact);
+
+    /// <summary>
     /// Delete a contact (soft delete)
     /// </summary>
     Task DeleteAsync(string eventId, string contactId);

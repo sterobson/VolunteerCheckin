@@ -40,6 +40,7 @@ const termMappings = {
   checklist: {
     'Checklists': { singular: 'Checklist', plural: 'Checklists' },
     'Tasks': { singular: 'Task', plural: 'Tasks' },
+    'Todos': { singular: 'Todo', plural: 'Todos' },
     'Jobs': { singular: 'Job', plural: 'Jobs' },
   },
   course: {
@@ -57,7 +58,7 @@ export const terminologyOptions = {
   people: ['Drivers', 'Helpers', 'Marshals', 'People', 'Pilots', 'Staff', 'Stewards', 'Team members', 'Volunteers'],
   checkpoint: ['Aid stations', 'Checkpoints', 'Feed stations', 'Locations', 'Person points', 'Stations', 'Water stations'],
   area: ['Areas', 'Regions', 'Zones'],
-  checklist: ['Checklists', 'Jobs', 'Tasks'],
+  checklist: ['Checklists', 'Jobs', 'Tasks', 'Todos'],
   course: ['Course', 'Path', 'Route', 'Track', 'Trail'],
 };
 
@@ -145,7 +146,7 @@ export function setTerminology(event) {
     people: event.peopleTerm || 'Marshals',
     checkpoint: event.checkpointTerm || 'Checkpoints',
     area: event.areaTerm || 'Areas',
-    checklist: event.checklistTerm || 'Checklists',
+    checklist: event.checklistTerm || 'Tasks',
     course: event.courseTerm || 'Course',
   };
 }

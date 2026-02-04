@@ -82,7 +82,7 @@ public class ChecklistCompletionFunctions
             if (!ChecklistScopeHelper.CanMarshalCompleteItem(item, context, checkpointLookup))
             {
                 _logger.LogWarning("Marshal {MarshalId} attempted to complete checklist item {ItemId} without permission", request.MarshalId, itemId);
-                return new ForbidResult();
+                return new ObjectResult(new { message = "Forbidden" }) { StatusCode = 403 };
             }
 
             // Get marshal details for denormalization (context owner)
@@ -165,8 +165,11 @@ public class ChecklistCompletionFunctions
 
             // Get claims for admin identification (supports both session tokens and sample codes)
             UserClaims? claims = await GetClaimsAsync(req, eventId);
-            bool isAdmin = claims?.IsEventAdmin == true || claims?.IsSystemAdmin == true;
-            string? adminEmail = isAdmin ? (claims!.PersonEmail ?? claims.PersonName) : null;
+            bool isAdmin = claims?.IsEventAdmin == true;
+            // Use PersonName if PersonEmail is empty (handles sample users with no email)
+            string? adminIdentifier = isAdmin
+                ? (string.IsNullOrWhiteSpace(claims!.PersonEmail) ? claims.PersonName : claims.PersonEmail)
+                : null;
 
             if (!string.IsNullOrWhiteSpace(request.ActorMarshalId))
             {
@@ -182,12 +185,12 @@ public class ChecklistCompletionFunctions
                 actorId = request.ActorMarshalId;
                 actorName = actorMarshal.Name;
             }
-            else if (!string.IsNullOrWhiteSpace(adminEmail))
+            else if (!string.IsNullOrWhiteSpace(adminIdentifier))
             {
                 // Admin is completing this on behalf of the marshal (no ActorMarshalId provided)
                 actorType = Constants.ActorTypeEventAdmin;
-                actorId = adminEmail;
-                actorName = adminEmail;
+                actorId = adminIdentifier;
+                actorName = adminIdentifier;
             }
             else
             {
@@ -385,8 +388,11 @@ public class ChecklistCompletionFunctions
 
             // Get claims for admin identification (supports both session tokens and sample codes)
             UserClaims? claims = await GetClaimsAsync(req, eventId);
-            bool isAdmin = claims?.IsEventAdmin == true || claims?.IsSystemAdmin == true;
-            string? adminEmail = isAdmin ? (claims!.PersonEmail ?? claims.PersonName) : null;
+            bool isAdmin = claims?.IsEventAdmin == true;
+            // Use PersonName if PersonEmail is empty (handles sample users with no email)
+            string? adminIdentifier = isAdmin
+                ? (string.IsNullOrWhiteSpace(claims!.PersonEmail) ? claims.PersonName : claims.PersonEmail)
+                : null;
 
             if (!string.IsNullOrWhiteSpace(request.ActorMarshalId))
             {
@@ -402,12 +408,12 @@ public class ChecklistCompletionFunctions
                 actorId = request.ActorMarshalId;
                 actorName = actorMarshal.Name;
             }
-            else if (!string.IsNullOrWhiteSpace(adminEmail))
+            else if (!string.IsNullOrWhiteSpace(adminIdentifier))
             {
                 // Admin is uncompleting this (no ActorMarshalId provided)
                 actorType = Constants.ActorTypeEventAdmin;
-                actorId = adminEmail;
-                actorName = adminEmail;
+                actorId = adminIdentifier;
+                actorName = adminIdentifier;
             }
             else
             {
@@ -922,19 +928,13 @@ public class ChecklistCompletionFunctions
     /// </summary>
     private async Task<UserClaims?> GetClaimsAsync(HttpRequest req, string eventId)
     {
-        string? sessionToken = req.Headers.Authorization.FirstOrDefault()?.Replace("Bearer ", "", StringComparison.OrdinalIgnoreCase);
+        string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
         if (string.IsNullOrWhiteSpace(sessionToken))
-        {
-            sessionToken = req.Cookies["session_token"];
-        }
-
-        string? sampleCode = FunctionHelpers.GetSampleCodeFromHeader(req);
-
-        if (string.IsNullOrWhiteSpace(sessionToken) && string.IsNullOrWhiteSpace(sampleCode))
         {
             return null;
         }
 
-        return await _claimsService.GetClaimsWithSampleSupportAsync(sessionToken, sampleCode, eventId);
+        return await _claimsService.GetClaimsAsync(sessionToken, eventId);
     }
 }

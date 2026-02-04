@@ -20,6 +20,7 @@ public class AssignmentFunctions
     private readonly ILocationRepository _locationRepository;
     private readonly IAreaRepository _areaRepository;
     private readonly IEventRepository _eventRepository;
+    private readonly ClaimsService _claimsService;
 
     public AssignmentFunctions(
         ILogger<AssignmentFunctions> logger,
@@ -27,7 +28,8 @@ public class AssignmentFunctions
         IMarshalRepository marshalRepository,
         ILocationRepository locationRepository,
         IAreaRepository areaRepository,
-        IEventRepository eventRepository)
+        IEventRepository eventRepository,
+        ClaimsService claimsService)
     {
         _logger = logger;
         _assignmentRepository = assignmentRepository;
@@ -35,6 +37,7 @@ public class AssignmentFunctions
         _locationRepository = locationRepository;
         _areaRepository = areaRepository;
         _eventRepository = eventRepository;
+        _claimsService = claimsService;
     }
 
 #pragma warning disable MA0051
@@ -50,6 +53,20 @@ public class AssignmentFunctions
             if (request == null)
             {
                 return new BadRequestObjectResult(new { message = "Invalid request" });
+            }
+
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, request.EventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
+            {
+                return new UnauthorizedObjectResult(new { message = "You do not have permission to modify this event" });
             }
 
             string marshalId;
@@ -180,6 +197,20 @@ public class AssignmentFunctions
     {
         try
         {
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
+            {
+                return new UnauthorizedObjectResult(new { message = "You do not have permission to modify this event" });
+            }
+
             await _assignmentRepository.DeleteAsync(eventId, assignmentId);
 
             _logger.LogInformation("Assignment deleted: {AssignmentId}", assignmentId);
@@ -200,6 +231,20 @@ public class AssignmentFunctions
     {
         try
         {
+            // Check authorization via claims (supports sample codes)
+            string? sessionToken = FunctionHelpers.GetSessionToken(req);
+
+            UserClaims? claims = await _claimsService.GetClaimsAsync(sessionToken, eventId);
+            if (claims == null)
+            {
+                return new UnauthorizedObjectResult(new { message = Constants.ErrorNotAuthorized });
+            }
+
+            if (!claims.CanModifyEvent)
+            {
+                return new UnauthorizedObjectResult(new { message = "You do not have permission to modify this event" });
+            }
+
             // Get all assignments and locations for the event
             Task<IEnumerable<AssignmentEntity>> assignmentsTask = _assignmentRepository.GetByEventAsync(eventId);
             Task<IEnumerable<LocationEntity>> locationsTask = _locationRepository.GetByEventAsync(eventId);

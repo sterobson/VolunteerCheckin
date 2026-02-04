@@ -44,7 +44,6 @@ namespace VolunteerCheckin.Functions.Tests
                 PersonId: "person-1",
                 PersonName: "Admin User",
                 PersonEmail: "admin@example.com",
-                IsSystemAdmin: false,
                 EventId: eventId,
                 AuthMethod: Constants.AuthMethodSecureEmailLink,
                 MarshalId: null,
@@ -52,30 +51,6 @@ namespace VolunteerCheckin.Functions.Tests
                 {
                     new EventRoleInfo(Constants.RoleEventAdmin, new List<string>())
                 }
-            );
-
-            // Act
-            ContactPermissions permissions = await _service.GetContactPermissionsAsync(claims, eventId);
-
-            // Assert
-            permissions.CanViewAll.ShouldBeTrue();
-            permissions.CanModifyAll.ShouldBeTrue();
-        }
-
-        [TestMethod]
-        public async Task GetContactPermissions_SystemAdmin_CanViewAndModifyAll()
-        {
-            // Arrange
-            string eventId = "event-123";
-            UserClaims claims = new(
-                PersonId: "person-1",
-                PersonName: "System Admin",
-                PersonEmail: "sysadmin@example.com",
-                IsSystemAdmin: true,
-                EventId: eventId,
-                AuthMethod: Constants.AuthMethodSecureEmailLink,
-                MarshalId: null,
-                EventRoles: new List<EventRoleInfo>()
             );
 
             // Act
@@ -97,7 +72,6 @@ namespace VolunteerCheckin.Functions.Tests
                 PersonId: "person-1",
                 PersonName: "Marshal User",
                 PersonEmail: "marshal@example.com",
-                IsSystemAdmin: false,
                 EventId: eventId,
                 AuthMethod: Constants.AuthMethodMarshalMagicCode,
                 MarshalId: marshalId,
@@ -145,7 +119,6 @@ namespace VolunteerCheckin.Functions.Tests
                 PersonId: "person-1",
                 PersonName: "Marshal User",
                 PersonEmail: "marshal@example.com",
-                IsSystemAdmin: false,
                 EventId: eventId,
                 AuthMethod: Constants.AuthMethodMarshalMagicCode,
                 MarshalId: marshalId,
@@ -231,7 +204,6 @@ namespace VolunteerCheckin.Functions.Tests
                 PersonId: "person-1",
                 PersonName: "Area Lead",
                 PersonEmail: "lead@example.com",
-                IsSystemAdmin: false,
                 EventId: eventId,
                 AuthMethod: Constants.AuthMethodMarshalMagicCode,
                 MarshalId: areaLeadMarshalId,

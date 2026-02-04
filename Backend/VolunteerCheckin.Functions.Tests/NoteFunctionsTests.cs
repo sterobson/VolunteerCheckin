@@ -79,7 +79,6 @@ public class NoteFunctionsTests
             PersonId: PersonId,
             PersonName: PersonName,
             PersonEmail: AdminEmail,
-            IsSystemAdmin: false,
             EventId: EventId,
             AuthMethod: Constants.AuthMethodSecureEmailLink,
             MarshalId: null,
@@ -93,7 +92,6 @@ public class NoteFunctionsTests
             PersonId: PersonId,
             PersonName: PersonName,
             PersonEmail: AdminEmail,
-            IsSystemAdmin: false,
             EventId: EventId,
             AuthMethod: Constants.AuthMethodSecureEmailLink,
             MarshalId: MarshalId,
@@ -107,7 +105,6 @@ public class NoteFunctionsTests
             PersonId: PersonId,
             PersonName: PersonName,
             PersonEmail: "marshal@test.com",
-            IsSystemAdmin: false,
             EventId: EventId,
             AuthMethod: Constants.AuthMethodMarshalMagicCode,
             MarshalId: MarshalId,
@@ -118,10 +115,7 @@ public class NoteFunctionsTests
     private void SetupClaimsService(UserClaims? claims)
     {
         _mockClaimsService
-            .Setup(c => c.GetClaimsAsync(It.IsAny<string>(), It.IsAny<string?>()))
-            .ReturnsAsync(claims);
-        _mockClaimsService
-            .Setup(c => c.GetClaimsWithSampleSupportAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string>()))
+            .Setup(c => c.GetClaimsAsync(It.IsAny<string?>(), It.IsAny<string?>()))
             .ReturnsAsync(claims);
     }
 
@@ -907,7 +901,6 @@ public class NoteFunctionsTests
             PersonId: PersonId,
             PersonName: PersonName,
             PersonEmail: AdminEmail,
-            IsSystemAdmin: false,
             EventId: EventId,
             AuthMethod: Constants.AuthMethodSecureEmailLink,
             MarshalId: null, // Admin without marshal assignment
@@ -960,7 +953,6 @@ public class NoteFunctionsTests
             PersonId: PersonId,
             PersonName: PersonName,
             PersonEmail: "user@test.com",
-            IsSystemAdmin: false,
             EventId: EventId,
             AuthMethod: Constants.AuthMethodSecureEmailLink,
             MarshalId: null, // No marshal ID

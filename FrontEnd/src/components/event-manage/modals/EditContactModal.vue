@@ -549,9 +549,9 @@ const handleSave = () => {
   const data = {
     roles: form.value.roles,
     name: form.value.name.trim(),
-    phone: form.value.phone?.trim() || null,
-    email: form.value.email?.trim() || null,
-    notes: form.value.notes?.trim() || null,
+    phone: form.value.phone?.trim() ?? null,
+    email: form.value.email?.trim() ?? null,
+    notes: form.value.notes?.trim() ?? null,
     marshalId: form.value.marshalId || null,
     showInEmergencyInfo: form.value.showInEmergencyInfo,
     displayOrder: form.value.displayOrder || 0,

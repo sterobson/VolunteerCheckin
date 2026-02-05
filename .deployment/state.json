@@ -5,7 +5,7 @@
         "onthedayapp-production-01",
         "onthedayapp-production-02"
       ],
-      "lastDeployedSlot": "onthedayapp-production-02",
+      "lastDeployedSlot": "onthedayapp-testing-01",
       "resourceGroup": "OnTheDayApp-Production",
       "cors": [
         "https://portal.azure.com",

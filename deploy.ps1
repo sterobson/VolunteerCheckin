@@ -2365,7 +2365,7 @@ function Deploy-ProductionBackend($envConfig, $slotName, $backendBuildJob, $envN
 # ============================================================================
 # Production Frontend Deployment
 # ============================================================================
-function Deploy-ProductionFrontend($envConfig, $backendSlot) {
+function Deploy-ProductionFrontend($envConfig, $backendSlot, $envName) {
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Info "  Deploying Frontend to Azure Static Web Apps"
@@ -2544,7 +2544,10 @@ function Deploy-ProductionFrontend($envConfig, $backendSlot) {
 
     # Track which backend the frontend points to
     $state = Get-DeploymentState
-    $state.environments.production.frontendPointsTo = $backendSlot
+    if (-not $state.environments.$envName.PSObject.Properties['frontendPointsTo']) {
+        $state.environments.$envName | Add-Member -NotePropertyName 'frontendPointsTo' -NotePropertyValue $null
+    }
+    $state.environments.$envName.frontendPointsTo = $backendSlot
     Save-DeploymentState $state
 
     return $true
@@ -2586,7 +2589,7 @@ function Start-FrontendBuildJob($envConfig, $backendSlot) {
     return $job
 }
 
-function Deploy-FrontendFromBuildJob($envConfig, $backendSlot, $buildJob) {
+function Deploy-FrontendFromBuildJob($envConfig, $backendSlot, $buildJob, $envName) {
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Info "  Deploying Frontend to Azure Static Web Apps"
@@ -2722,7 +2725,10 @@ function Deploy-FrontendFromBuildJob($envConfig, $backendSlot, $buildJob) {
 
     # Track which backend the frontend points to
     $state = Get-DeploymentState
-    $state.environments.production.frontendPointsTo = $backendSlot
+    if (-not $state.environments.$envName.PSObject.Properties['frontendPointsTo']) {
+        $state.environments.$envName | Add-Member -NotePropertyName 'frontendPointsTo' -NotePropertyValue $null
+    }
+    $state.environments.$envName.frontendPointsTo = $backendSlot
     Save-DeploymentState $state
 
     return $true
@@ -3000,7 +3006,7 @@ if ($Environment -ne "local") {
             if ($backendResult -eq "frontend-only") {
                 $deploymentSuccess = $false
             }
-            $frontendResult = Deploy-FrontendFromBuildJob $envConfig $selectedSlot $frontendBuildJob
+            $frontendResult = Deploy-FrontendFromBuildJob $envConfig $selectedSlot $frontendBuildJob $Environment
             if (-not $frontendResult) { $deploymentSuccess = $false }
         }
 
@@ -3009,7 +3015,7 @@ if ($Environment -ne "local") {
         if (-not $result) { $deploymentSuccess = $false }
 
     } elseif ($Frontend) {
-        $result = Deploy-ProductionFrontend $envConfig $selectedSlot
+        $result = Deploy-ProductionFrontend $envConfig $selectedSlot $Environment
         if (-not $result) { $deploymentSuccess = $false }
     }
 }

@@ -349,14 +349,16 @@ function Set-EnvironmentSecret($envName, $varName, $value) {
     Save-StoredSecrets $secrets
 }
 
-function Get-SwaDeploymentToken {
+function Get-SwaDeploymentToken($envName) {
     $secrets = Get-StoredSecrets
-    return $secrets["swa-deployment-token"]
+    $key = "swa-deployment-token-$envName"
+    return $secrets[$key]
 }
 
-function Set-SwaDeploymentToken($token) {
+function Set-SwaDeploymentToken($envName, $token) {
     $secrets = Get-StoredSecrets
-    $secrets["swa-deployment-token"] = $token
+    $key = "swa-deployment-token-$envName"
+    $secrets[$key] = $token
     Save-StoredSecrets $secrets
 }
 
@@ -2404,11 +2406,12 @@ function Deploy-ProductionFrontend($envConfig, $backendSlot, $envName) {
         }
     }
 
-    # Get deployment token
-    $deploymentToken = Get-SwaDeploymentToken
+    # Get deployment token for this environment
+    $displayEnvName = (Get-Culture).TextInfo.ToTitleCase($envName)
+    $deploymentToken = Get-SwaDeploymentToken $envName
 
     if (-not $deploymentToken) {
-        Write-Warning "Deployment token not found."
+        Write-Warning "Deployment token not found for $displayEnvName environment."
         Write-Host ""
         Write-Host "How would you like to provide the token?" -ForegroundColor Cyan
         Write-Host "  1. Fetch automatically from Azure (requires Azure CLI)" -ForegroundColor White
@@ -2421,7 +2424,7 @@ function Deploy-ProductionFrontend($envConfig, $backendSlot, $envName) {
             "1" {
                 Ensure-AzureCliLoggedIn
 
-                Write-Info "Fetching deployment token from Azure..."
+                Write-Info "Fetching deployment token from Azure for $displayEnvName..."
                 $ErrorActionPreference = "Continue"
                 $deploymentToken = az staticwebapp secrets list `
                     --name $staticWebAppName `
@@ -2435,7 +2438,7 @@ function Deploy-ProductionFrontend($envConfig, $backendSlot, $envName) {
                     return $false
                 }
 
-                Write-Success "Deployment token retrieved"
+                Write-Success "Deployment token retrieved for $displayEnvName"
             }
             "2" {
                 Write-Host ""
@@ -2454,9 +2457,9 @@ function Deploy-ProductionFrontend($envConfig, $backendSlot, $envName) {
             }
         }
 
-        # Save token
-        $null = Set-SwaDeploymentToken $deploymentToken
-        Write-Success "Deployment token saved"
+        # Save token for this environment
+        $null = Set-SwaDeploymentToken $envName $deploymentToken
+        Write-Success "Deployment token saved for $displayEnvName"
     }
 
     # Verify backend is healthy before deploying frontend
@@ -2625,11 +2628,12 @@ function Deploy-FrontendFromBuildJob($envConfig, $backendSlot, $buildJob, $envNa
 
     $null = Remove-Job $buildJob -Force -ErrorAction SilentlyContinue
 
-    # Get deployment token
-    $deploymentToken = Get-SwaDeploymentToken
+    # Get deployment token for this environment
+    $displayEnvName = (Get-Culture).TextInfo.ToTitleCase($envName)
+    $deploymentToken = Get-SwaDeploymentToken $envName
 
     if (-not $deploymentToken) {
-        Write-Warning "Deployment token not found."
+        Write-Warning "Deployment token not found for $displayEnvName environment."
         Write-Host ""
         Write-Host "How would you like to provide the token?" -ForegroundColor Cyan
         Write-Host "  1. Fetch automatically from Azure" -ForegroundColor White
@@ -2642,7 +2646,7 @@ function Deploy-FrontendFromBuildJob($envConfig, $backendSlot, $buildJob, $envNa
             "1" {
                 Ensure-AzureCliLoggedIn
 
-                Write-Info "Fetching deployment token from Azure..."
+                Write-Info "Fetching deployment token from Azure for $displayEnvName..."
                 $ErrorActionPreference = "Continue"
                 $deploymentToken = az staticwebapp secrets list `
                     --name $staticWebAppName `
@@ -2656,7 +2660,7 @@ function Deploy-FrontendFromBuildJob($envConfig, $backendSlot, $buildJob, $envNa
                     return $false
                 }
 
-                Write-Success "Deployment token retrieved"
+                Write-Success "Deployment token retrieved for $displayEnvName"
             }
             "2" {
                 Write-Host ""
@@ -2675,8 +2679,9 @@ function Deploy-FrontendFromBuildJob($envConfig, $backendSlot, $buildJob, $envNa
             }
         }
 
-        $null = Set-SwaDeploymentToken $deploymentToken
-        Write-Success "Deployment token saved"
+        # Save token for this environment
+        $null = Set-SwaDeploymentToken $envName $deploymentToken
+        Write-Success "Deployment token saved for $displayEnvName"
     }
 
     # Verify backend is healthy
@@ -2724,12 +2729,17 @@ function Deploy-FrontendFromBuildJob($envConfig, $backendSlot, $buildJob, $envNa
     Write-Gray "URL: $frontendUrl"
 
     # Track which backend the frontend points to
-    $state = Get-DeploymentState
-    if (-not $state.environments.$envName.PSObject.Properties['frontendPointsTo']) {
-        $state.environments.$envName | Add-Member -NotePropertyName 'frontendPointsTo' -NotePropertyValue $null
+    try {
+        $state = Get-DeploymentState
+        if (-not $state.environments.$envName.PSObject.Properties['frontendPointsTo']) {
+            $state.environments.$envName | Add-Member -NotePropertyName 'frontendPointsTo' -NotePropertyValue $null
+        }
+        $state.environments.$envName.frontendPointsTo = $backendSlot
+        Save-DeploymentState $state
+    } catch {
+        Write-Warning "Failed to update state file: $($_.Exception.Message)"
+        # Don't fail deployment for state tracking issues
     }
-    $state.environments.$envName.frontendPointsTo = $backendSlot
-    Save-DeploymentState $state
 
     return $true
 }

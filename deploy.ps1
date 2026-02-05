@@ -1489,6 +1489,106 @@ function Manage-Slots($envName, $envConfig) {
     }
 }
 
+function Configure-FrontendSettings($envName, $envConfig) {
+    $displayEnvName = (Get-Culture).TextInfo.ToTitleCase($envName)
+
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host "  Frontend Settings for $displayEnvName" -ForegroundColor Cyan
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host ""
+
+    # Ensure frontend object exists
+    if (-not $envConfig.frontend) {
+        $envConfig | Add-Member -NotePropertyName 'frontend' -NotePropertyValue @{} -Force
+    }
+
+    $currentUrl = $envConfig.frontend.url
+    $currentSwaName = $envConfig.frontend.staticWebAppName
+
+    Write-Host "Current settings:" -ForegroundColor Cyan
+    Write-Host "  1. Static Web App name: $(if ($currentSwaName) { $currentSwaName } else { '(not set)' })" -ForegroundColor White
+    Write-Host "  2. Frontend URL: $(if ($currentUrl) { $currentUrl } else { '(not set)' })" -ForegroundColor White
+    Write-Host ""
+    Write-Host "  3. Back" -ForegroundColor White
+    Write-Host ""
+
+    $choice = Read-Host "Enter setting number to edit (1-3)"
+
+    switch ($choice) {
+        "1" {
+            Write-Host ""
+            Write-Host "Enter the Static Web App name from Azure Portal" -ForegroundColor Cyan
+            Write-Host "(e.g., 'OnTheDayUi' or 'OnTheDayUi-Testing')" -ForegroundColor Gray
+            if ($currentSwaName) {
+                Write-Host "Current value: $currentSwaName" -ForegroundColor Gray
+            }
+            Write-Host ""
+            $newValue = Read-Host "Static Web App name"
+
+            if (-not [string]::IsNullOrWhiteSpace($newValue)) {
+                $state = Get-DeploymentState
+                if (-not $state.environments.$envName.frontend) {
+                    $state.environments.$envName | Add-Member -NotePropertyName 'frontend' -NotePropertyValue @{} -Force
+                }
+                if ($state.environments.$envName.frontend -is [PSCustomObject]) {
+                    if (-not $state.environments.$envName.frontend.PSObject.Properties['staticWebAppName']) {
+                        $state.environments.$envName.frontend | Add-Member -NotePropertyName 'staticWebAppName' -NotePropertyValue $null
+                    }
+                    $state.environments.$envName.frontend.staticWebAppName = $newValue
+                } else {
+                    $state.environments.$envName.frontend = @{
+                        staticWebAppName = $newValue
+                        url = $currentUrl
+                    }
+                }
+                Save-DeploymentState $state
+                $envConfig = Get-EnvironmentConfig $envName
+                Write-Success "Static Web App name updated to: $newValue"
+            }
+        }
+        "2" {
+            Write-Host ""
+            Write-Host "Enter the frontend URL" -ForegroundColor Cyan
+            Write-Host "(e.g., 'https://ambitious-stone-03cd89503.4.azurestaticapps.net')" -ForegroundColor Gray
+            if ($currentUrl) {
+                Write-Host "Current value: $currentUrl" -ForegroundColor Gray
+            }
+            Write-Host ""
+            $newValue = Read-Host "Frontend URL"
+
+            if (-not [string]::IsNullOrWhiteSpace($newValue)) {
+                $state = Get-DeploymentState
+                if (-not $state.environments.$envName.frontend) {
+                    $state.environments.$envName | Add-Member -NotePropertyName 'frontend' -NotePropertyValue @{} -Force
+                }
+                if ($state.environments.$envName.frontend -is [PSCustomObject]) {
+                    if (-not $state.environments.$envName.frontend.PSObject.Properties['url']) {
+                        $state.environments.$envName.frontend | Add-Member -NotePropertyName 'url' -NotePropertyValue $null
+                    }
+                    $state.environments.$envName.frontend.url = $newValue
+                } else {
+                    $state.environments.$envName.frontend = @{
+                        staticWebAppName = $currentSwaName
+                        url = $newValue
+                    }
+                }
+                Save-DeploymentState $state
+                $envConfig = Get-EnvironmentConfig $envName
+                Write-Success "Frontend URL updated to: $newValue"
+            }
+        }
+        "3" {
+            # Back - do nothing
+        }
+        default {
+            Write-Warning "Invalid choice"
+        }
+    }
+
+    return $envConfig
+}
+
 function Set-SlotEnvVar($envConfig) {
     $slots = @($envConfig.slots)
 
@@ -1668,11 +1768,12 @@ function Start-ManagementMode {
             Write-Host "  1. View/edit environment variables" -ForegroundColor White
             Write-Host "  2. Set environment variable on slot" -ForegroundColor White
             Write-Host "  3. Manage deployment slots" -ForegroundColor White
-            Write-Host "  4. Refresh" -ForegroundColor White
-            Write-Host "  5. Back to environment selection" -ForegroundColor White
+            Write-Host "  4. Configure frontend settings" -ForegroundColor White
+            Write-Host "  5. Refresh" -ForegroundColor White
+            Write-Host "  6. Back to environment selection" -ForegroundColor White
             Write-Host ""
 
-            $menuChoice = Read-Host "Enter choice (1-5)"
+            $menuChoice = Read-Host "Enter choice (1-6)"
 
             switch ($menuChoice) {
                 "1" {
@@ -1735,9 +1836,12 @@ function Start-ManagementMode {
                     $envConfig = Manage-Slots $envName $envConfig
                 }
                 "4" {
-                    Write-Info "Refreshing..."
+                    $envConfig = Configure-FrontendSettings $envName $envConfig
                 }
                 "5" {
+                    Write-Info "Refreshing..."
+                }
+                "6" {
                     $goBack = $true
                 }
                 default {
@@ -2424,7 +2528,15 @@ function Deploy-ProductionFrontend($envConfig, $backendSlot, $envName) {
             "1" {
                 Ensure-AzureCliLoggedIn
 
+                if (-not $staticWebAppName) {
+                    Write-ErrorMessage "Static Web App name not configured for $displayEnvName environment."
+                    Write-Gray "Add 'staticWebAppName' to frontend config in .deployment/state.json"
+                    return $false
+                }
+
                 Write-Info "Fetching deployment token from Azure for $displayEnvName..."
+                Write-Gray "  Static Web App: $staticWebAppName"
+                Write-Gray "  Resource Group: $resourceGroup"
                 $ErrorActionPreference = "Continue"
                 $deploymentToken = az staticwebapp secrets list `
                     --name $staticWebAppName `
@@ -2435,6 +2547,9 @@ function Deploy-ProductionFrontend($envConfig, $backendSlot, $envName) {
 
                 if ($tokenResult -ne 0 -or -not $deploymentToken -or $deploymentToken -like "*ERROR*") {
                     Write-ErrorMessage "Failed to fetch deployment token"
+                    if ($deploymentToken) {
+                        Write-Gray "Azure CLI output: $deploymentToken"
+                    }
                     return $false
                 }
 
@@ -2646,7 +2761,15 @@ function Deploy-FrontendFromBuildJob($envConfig, $backendSlot, $buildJob, $envNa
             "1" {
                 Ensure-AzureCliLoggedIn
 
+                if (-not $staticWebAppName) {
+                    Write-ErrorMessage "Static Web App name not configured for $displayEnvName environment."
+                    Write-Gray "Add 'staticWebAppName' to frontend config in .deployment/state.json"
+                    return $false
+                }
+
                 Write-Info "Fetching deployment token from Azure for $displayEnvName..."
+                Write-Gray "  Static Web App: $staticWebAppName"
+                Write-Gray "  Resource Group: $resourceGroup"
                 $ErrorActionPreference = "Continue"
                 $deploymentToken = az staticwebapp secrets list `
                     --name $staticWebAppName `
@@ -2657,6 +2780,9 @@ function Deploy-FrontendFromBuildJob($envConfig, $backendSlot, $buildJob, $envNa
 
                 if ($tokenResult -ne 0 -or -not $deploymentToken -or $deploymentToken -like "*ERROR*") {
                     Write-ErrorMessage "Failed to fetch deployment token"
+                    if ($deploymentToken) {
+                        Write-Gray "Azure CLI output: $deploymentToken"
+                    }
                     return $false
                 }
 

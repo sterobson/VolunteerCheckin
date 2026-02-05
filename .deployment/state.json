@@ -25,7 +25,8 @@
         "onthedayapp-testing-01"
       ],
       "frontend": {
-        "url": "https://ambitious-stone-03cd89503.4.azurestaticapps.net"
+        "url": "https://ambitious-stone-03cd89503.4.azurestaticapps.net",
+        "staticWebAppName": "OnTheDayApp-Testing"
       },
       "frontendPointsTo": "onthedayapp-testing-01"
     }

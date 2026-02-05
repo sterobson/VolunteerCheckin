@@ -1619,7 +1619,8 @@ function Start-ManagementMode {
         $envNames = @($state.environments.PSObject.Properties.Name)
 
         # Select environment
-        Write-Host "Select environment:" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "Which environment would you like to manage?" -ForegroundColor Cyan
         $index = 1
         foreach ($env in $envNames) {
             $displayName = (Get-Culture).TextInfo.ToTitleCase($env)
@@ -1627,17 +1628,16 @@ function Start-ManagementMode {
             $index++
         }
         Write-Host "  $index. Add new environment" -ForegroundColor Green
-        $exitIndex = $index + 1
-        Write-Host "  $exitIndex. Exit" -ForegroundColor White
+        $backIndex = $index + 1
+        Write-Host "  $backIndex. Back" -ForegroundColor White
         Write-Host ""
 
         $envChoice = Read-Host "Enter choice (default: 1)"
         if ([string]::IsNullOrWhiteSpace($envChoice)) { $envChoice = "1" }
 
         $choiceNum = [int]$envChoice
-        if ($choiceNum -eq $exitIndex) {
+        if ($choiceNum -eq $backIndex) {
             Write-Host ""
-            Write-Info "Exiting management mode."
             return
         } elseif ($choiceNum -eq $index) {
             # Add new environment
@@ -1661,12 +1661,13 @@ function Start-ManagementMode {
             # Show slot overview
             Show-SlotOverview $envName $envConfig
 
-            Write-Host "Options:" -ForegroundColor Cyan
+            $displayEnvName = (Get-Culture).TextInfo.ToTitleCase($envName)
+            Write-Host "What would you like to do with $displayEnvName`?" -ForegroundColor Cyan
             Write-Host "  1. View/edit environment variables" -ForegroundColor White
             Write-Host "  2. Set environment variable on slot" -ForegroundColor White
             Write-Host "  3. Manage deployment slots" -ForegroundColor White
             Write-Host "  4. Refresh" -ForegroundColor White
-            Write-Host "  5. Back" -ForegroundColor White
+            Write-Host "  5. Back to environment selection" -ForegroundColor White
             Write-Host ""
 
             $menuChoice = Read-Host "Enter choice (1-5)"
@@ -1836,6 +1837,8 @@ function Test-BackendVersion($slotName, $expectedVersion, $maxRetries = 10) {
         "Origin" = "https://portal.azure.com"
     }
 
+    $hadDnsError = $false
+
     for ($i = 1; $i -le $maxRetries; $i++) {
         Write-Gray "  Attempt $i of $maxRetries..."
 
@@ -1859,7 +1862,11 @@ function Test-BackendVersion($slotName, $expectedVersion, $maxRetries = 10) {
 
             Write-Warning "  Version mismatch, waiting for deployment to complete..."
         } catch {
-            Write-Gray "  Request failed: $($_.Exception.Message)"
+            $errorMessage = $_.Exception.Message
+            Write-Gray "  Request failed: $errorMessage"
+            if ($errorMessage -match "No such host is known|could not be resolved") {
+                $hadDnsError = $true
+            }
         }
 
         if ($i -lt $maxRetries) {
@@ -1868,6 +1875,12 @@ function Test-BackendVersion($slotName, $expectedVersion, $maxRetries = 10) {
     }
 
     Write-ErrorMessage "Backend version verification failed after $maxRetries attempts."
+    if ($hadDnsError) {
+        Write-Host ""
+        Write-Warning "Hint: The hostname '$slotName.azurewebsites.net' could not be resolved."
+        Write-Warning "Azure may have assigned a longer default domain with random characters."
+        Write-Warning "Check the Azure Portal for the actual hostname and update your slot configuration."
+    }
     return $false
 }
 
@@ -2734,28 +2747,38 @@ $Action = $null
 if ($Environment) {
     $Action = "deploy"
 } else {
-    # Ask for action first
-    Write-Host "Choose action:" -ForegroundColor Cyan
-    Write-Host "  1. Deploy" -ForegroundColor White
-    Write-Host "  2. Manage environment settings" -ForegroundColor White
-    Write-Host ""
+    # Main action loop - allows returning from management mode
+    while ($true) {
+        # Ask for action first
+        Write-Host "Choose action:" -ForegroundColor Cyan
+        Write-Host "  1. Deploy" -ForegroundColor White
+        Write-Host "  2. Manage environment settings" -ForegroundColor White
+        Write-Host "  3. Exit" -ForegroundColor White
+        Write-Host ""
 
-    $actionChoice = Read-Host "Enter choice (1-2)"
+        $actionChoice = Read-Host "Enter choice (1-3)"
 
-    switch ($actionChoice) {
-        "1" { $Action = "deploy" }
-        "2" { $Action = "manage" }
-        default {
-            Write-ErrorMessage "Invalid choice."
-            exit 1
+        switch ($actionChoice) {
+            "1" { $Action = "deploy"; break }
+            "2" {
+                Start-ManagementMode
+                # When management mode returns, loop back to action choice
+                Write-Host ""
+                continue
+            }
+            "3" {
+                Write-Host ""
+                Write-Info "Goodbye!"
+                exit 0
+            }
+            default {
+                Write-ErrorMessage "Invalid choice."
+                Write-Host ""
+                continue
+            }
         }
+        break
     }
-}
-
-# Handle manage action
-if ($Action -eq "manage") {
-    Start-ManagementMode
-    exit 0
 }
 
 # Ask for environment if not provided (deploy action)

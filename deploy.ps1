@@ -1509,7 +1509,6 @@ function Configure-FrontendSettings($envName, $envConfig) {
     Write-Host "Current settings:" -ForegroundColor Cyan
     Write-Host "  1. Static Web App name: $(if ($currentSwaName) { $currentSwaName } else { '(not set)' })" -ForegroundColor White
     Write-Host "  2. Frontend URL: $(if ($currentUrl) { $currentUrl } else { '(not set)' })" -ForegroundColor White
-    Write-Host ""
     Write-Host "  3. Back" -ForegroundColor White
     Write-Host ""
 
@@ -1767,7 +1766,7 @@ function Start-ManagementMode {
             Write-Host "What would you like to do with $displayEnvName`?" -ForegroundColor Cyan
             Write-Host "  1. View/edit environment variables" -ForegroundColor White
             Write-Host "  2. Set environment variable on slot" -ForegroundColor White
-            Write-Host "  3. Manage deployment slots" -ForegroundColor White
+            Write-Host "  3. Manage backend deployment slots" -ForegroundColor White
             Write-Host "  4. Configure frontend settings" -ForegroundColor White
             Write-Host "  5. Refresh" -ForegroundColor White
             Write-Host "  6. Back to environment selection" -ForegroundColor White

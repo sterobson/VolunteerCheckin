@@ -2923,7 +2923,7 @@ if ($Environment) {
 }
 
 # Ask for environment if not provided (deploy action)
-if (-not $Environment) {
+while (-not $Environment) {
     Write-Host ""
     Write-Host "Choose environment:" -ForegroundColor Cyan
     Write-Host "  1. Local (Start local development servers)" -ForegroundColor White
@@ -2935,19 +2935,56 @@ if (-not $Environment) {
         $displayName = (Get-Culture).TextInfo.ToTitleCase($azureEnvNames[$i])
         Write-Host "  $($i + 2). $displayName (Azure)" -ForegroundColor White
     }
-    $maxChoice = $azureEnvNames.Count + 1
+    $backChoice = $azureEnvNames.Count + 2
+    Write-Host "  $backChoice. Back" -ForegroundColor White
     Write-Host ""
 
+    $maxChoice = $backChoice
     $envChoice = Read-Host "Enter choice (1-$maxChoice)"
     $envChoiceNum = [int]$envChoice
 
     if ($envChoiceNum -eq 1) {
         $Environment = "local"
-    } elseif ($envChoiceNum -ge 2 -and $envChoiceNum -le $maxChoice) {
+    } elseif ($envChoiceNum -eq $backChoice) {
+        # Go back to action selection
+        Write-Host ""
+        $Action = $null
+        # Re-prompt for action
+        while ($true) {
+            Write-Host "Choose action:" -ForegroundColor Cyan
+            Write-Host "  1. Deploy" -ForegroundColor White
+            Write-Host "  2. Manage environment settings" -ForegroundColor White
+            Write-Host "  3. Exit" -ForegroundColor White
+            Write-Host ""
+
+            $actionChoice = Read-Host "Enter choice (1-3)"
+
+            switch ($actionChoice) {
+                "1" { $Action = "deploy"; break }
+                "2" {
+                    Start-ManagementMode
+                    Write-Host ""
+                    continue
+                }
+                "3" {
+                    Write-Host ""
+                    Write-Info "Goodbye!"
+                    exit 0
+                }
+                default {
+                    Write-ErrorMessage "Invalid choice."
+                    Write-Host ""
+                    continue
+                }
+            }
+            break
+        }
+        continue
+    } elseif ($envChoiceNum -ge 2 -and $envChoiceNum -le $azureEnvNames.Count + 1) {
         $Environment = $azureEnvNames[$envChoiceNum - 2]
     } else {
         Write-ErrorMessage "Invalid choice."
-        exit 1
+        continue
     }
 }
 
